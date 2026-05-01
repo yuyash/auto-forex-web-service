@@ -11,20 +11,17 @@ from datetime import UTC, datetime, timedelta
 from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
-from types import SimpleNamespace
 from typing import List, cast
-
-from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import EventContext, StrategyResult
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import EventScope, EventType, TaskStatus, TaskType
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.events.handler import CycleResolutionError  # noqa: F401 — used in handle_events
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
-from apps.trading.order import OrderService, OrderServiceError
+from apps.trading.order import OrderService
 from apps.trading.services.runtime_metrics import (
     RuntimeMetricsTracker,
     config_decimal,
@@ -32,16 +29,30 @@ from apps.trading.services.runtime_metrics import (
 )
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.diagnostics import ExecutionDiagnostics
+from apps.trading.tasks.drain import TaskDrainCoordinator, record_final_stop_metrics
 from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
 from apps.trading.tasks.event_processor import TaskEventProcessor
+from apps.trading.tasks.event_persistence import persist_strategy_events
+from apps.trading.tasks.event_replay import (
+    EventReplayExecutor,
+    classify_replay_event,
+    event_already_applied,
+    mark_event_processed,
+    mark_event_processing_error,
+)
 from apps.trading.tasks.market_session import is_forex_market_closed
 from apps.trading.tasks.market_idle import MarketIdleCoordinator
+from apps.trading.tasks.metric_resume import (
+    RuntimeMetricResumeCoordinator,
+    to_decimal_metric,
+    to_int_metric,
+)
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
-from apps.trading.utils import format_money, quote_to_account_rate
+from apps.trading.utils import format_money
 
 logger: Logger = getLogger(name=__name__)
 
@@ -147,6 +158,8 @@ class TaskExecutor:
             tracemalloc_enabled=self._tracemalloc_enabled,
         )
         self._market_idle = MarketIdleCoordinator(task=task, task_type=self.task_type)
+        self._drain = TaskDrainCoordinator(self)
+        self._metric_resume = RuntimeMetricResumeCoordinator(self)
 
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
@@ -304,73 +317,13 @@ class TaskExecutor:
         Args:
             events: List of events to save
         """
-        if not events:
-            return []
-
-        from apps.trading.models import StrategyEventRecord, TradingEvent
-
-        trading_records: List[TradingEvent] = []
-        strategy_records: list[StrategyEventRecord] = []
         strategy_type = str(getattr(self.task.config, "strategy_type", "") or "")
-
-        for seq, event in enumerate(events):
-            event.sequence_number = seq
-            event_type = str(getattr(getattr(event, "event_type", None), "value", event.event_type))
-            event_scope = EventType.scope_of(event_type)
-            execution_event_type = EventType.execution_event_type_for(event_type)
-            requires_execution = EventType.requires_execution(event_type)
-
-            if requires_execution:
-                if execution_event_type != event_type:
-                    details = event.to_dict()
-                    details["strategy_event_type"] = event_type
-                    details["event_type"] = execution_event_type
-                    trading_record = TradingEvent.from_event(
-                        event=event,
-                        context=self.event_context,
-                        execution_id=self.task.execution_id,
-                        strategy_type=strategy_type,
-                    )
-                    trading_record.event_type = execution_event_type
-                    trading_record.severity = "info"
-                    trading_record.description = str(details)
-                    trading_record.details = details
-                    trading_records.append(trading_record)
-                else:
-                    trading_records.append(
-                        TradingEvent.from_event(
-                            event=event,
-                            context=self.event_context,
-                            execution_id=self.task.execution_id,
-                            strategy_type=strategy_type,
-                        )
-                    )
-
-            if event_scope == EventScope.TASK.value and not requires_execution:
-                trading_records.append(
-                    TradingEvent.from_event(
-                        event=event,
-                        context=self.event_context,
-                        execution_id=self.task.execution_id,
-                        strategy_type=strategy_type,
-                    )
-                )
-            elif event_scope == EventScope.STRATEGY.value:
-                strategy_records.append(
-                    StrategyEventRecord.from_event(
-                        event=event,
-                        context=self.event_context,
-                        execution_id=self.task.execution_id,
-                        strategy_type=strategy_type,
-                    )
-                )
-
-        if trading_records:
-            TradingEvent.objects.bulk_create(trading_records)
-        if strategy_records:
-            StrategyEventRecord.objects.bulk_create(strategy_records)
-
-        return trading_records
+        return persist_strategy_events(
+            events=events,
+            context=self.event_context,
+            execution_id=self.task.execution_id,
+            strategy_type=strategy_type,
+        )
 
     def execute(self) -> None:
         """Execute the task."""
@@ -592,229 +545,28 @@ class TaskExecutor:
     # ------------------------------------------------------------------
 
     def _handle_drain_pre_batch(self, loop: ExecutionLoopState) -> bool:
-        """Advance the drain state machine. Returns True when execution should stop."""
-        if self.task_type != TaskType.TRADING:
-            return False
-        task = cast(TradingTask, self.task)
-        task.refresh_from_db(fields=["status"])
-        if task.status != TaskStatus.DRAINING:
-            return False
-
-        from apps.trading.services.drain import DrainCandidate, DrainPolicy
-
-        drain_marker = self._read_drain_marker(loop)
-        now = dj_timezone.now()
-        if drain_marker is None:
-            drain_marker = now
-            self._record_drain_marker(loop, drain_marker)
-
-        duration_hours = int(getattr(task, "drain_duration_hours", 0) or 0)
-        duration_minutes_override = self._read_drain_duration_minutes_override(loop)
-        policy = DrainPolicy(
-            drain_started_at=drain_marker,
-            duration_hours=duration_hours,
-            duration_minutes=duration_minutes_override,
-        )
-
-        open_positions = self.order_service.get_open_positions(instrument=self.instrument)
-        candidates: list[DrainCandidate] = []
-        for position in open_positions:
-            unrealized = getattr(position, "unrealized_pnl", None)
-            try:
-                unrealized_dec = (
-                    unrealized if isinstance(unrealized, Decimal) else Decimal(str(unrealized))
-                )
-            except (TypeError, ValueError, InvalidOperation):
-                unrealized_dec = Decimal("0")
-            candidates.append(
-                DrainCandidate(
-                    position_id=str(position.pk),
-                    current_unrealized_pnl=unrealized_dec,
-                )
-            )
-
-        decision = policy.evaluate(now=now, open_positions=candidates)
-
-        for position_id in decision.close_position_ids:
-            self._close_position_during_drain(position_id)
-
-        if decision.should_finalize:
-            logger.info(
-                "Drain complete - task_id=%s, reason=%s",
-                task.pk,
-                decision.finalize_reason,
-            )
-            loop.stopped_early = True
-            loop.stop_reason = decision.finalize_reason or "drain_complete"
-            self._record_drain_marker(loop, None)
-            self._clear_drain_duration_minutes_override(loop)
-            return True
-
-        return False
+        return self._drain.handle_pre_batch(loop)
 
     def _close_position_during_drain(self, position_id: str) -> None:
-        """Close a single position; errors are logged and swallowed."""
-        from apps.trading.models import Position
-
-        try:
-            position = Position.objects.get(pk=position_id, is_open=True)
-        except Position.DoesNotExist:  # pragma: no cover - race with close
-            return
-        try:
-            self.order_service.close_position(position=position)
-        except OrderServiceError as exc:
-            logger.warning(
-                "Drain close failed - position_id=%s, error=%s",
-                position_id,
-                exc,
-            )
+        self._drain.close_position_during_drain(position_id)
 
     def _close_all_positions_on_stop_if_requested(self, loop: ExecutionLoopState) -> None:
-        """Close every open position when ``sell_on_stop`` was requested.
-
-        Called once, at the start of ``_finalize_execution``, right before the
-        strategy's on_stop hook runs.  Applies to both live trading and
-        backtest tasks.  Each close goes through ``OrderService`` so the
-        correct broker-vs-simulated behaviour applies (OANDA market close
-        for trading, tick-priced close for backtest).
-        """
-        self.task.refresh_from_db(fields=["sell_on_stop"])
-        if not getattr(self.task, "sell_on_stop", False):
-            return
-
-        open_positions = self.order_service.get_open_positions(instrument=self.instrument)
-        if not open_positions:
-            logger.info(
-                "sell_on_stop requested but no open positions - task_id=%s",
-                self.task.pk,
-            )
-            return
-
-        logger.info(
-            "Closing %d open position(s) on stop - task_id=%s",
-            len(open_positions),
-            self.task.pk,
-        )
-        for position in open_positions:
-            closed_units = abs(position.units)
-            override_price = None
-            tick_timestamp = None
-            if self.task_type == TaskType.BACKTEST:
-                tick_timestamp = loop.state.last_tick_timestamp
-                if position.direction == "long":
-                    override_price = loop.state.last_tick_bid
-                else:
-                    override_price = loop.state.last_tick_ask
-
-            try:
-                closed_position, realized_delta, _order = self.order_service.close_position(
-                    position=position,
-                    override_price=(
-                        Decimal(str(override_price)) if override_price is not None else None
-                    ),
-                    tick_timestamp=tick_timestamp,
-                )
-            except OrderServiceError as exc:
-                logger.warning(
-                    "sell_on_stop close failed - task_id=%s, position_id=%s, error=%s",
-                    self.task.pk,
-                    getattr(position, "pk", None),
-                    exc,
-                )
-                continue
-
-            loop.state.current_balance = Decimal(str(loop.state.current_balance)) + realized_delta
-
-            exit_px = closed_position.exit_price or (
-                Decimal(str(override_price)) if override_price is not None else Decimal("0")
-            )
-            quote_delta = exit_px - Decimal(str(position.entry_price))
-            if position.direction == "short":
-                quote_delta = -quote_delta
-            self._runtime_metrics.record_position_closed(
-                realized_delta,
-                realized_pnl_quote=quote_delta * Decimal(str(closed_units)),
-            )
-
-        self._refresh_open_positions_cache()
-        self._record_final_stop_metrics(loop)
+        self._drain.close_all_positions_on_stop_if_requested(loop)
 
     def _record_final_stop_metrics(self, loop: ExecutionLoopState) -> None:
-        """Refresh the final metrics snapshot after stop-time position closes."""
-        if (
-            loop.state.last_tick_timestamp is None
-            or loop.state.last_tick_bid is None
-            or loop.state.last_tick_ask is None
-            or loop.state.last_tick_price is None
-        ):
-            return
-
-        tick = SimpleNamespace(
-            timestamp=loop.state.last_tick_timestamp,
-            bid=loop.state.last_tick_bid,
-            ask=loop.state.last_tick_ask,
-            mid=loop.state.last_tick_price,
-        )
-        self._update_common_metrics(loop.state, tick)
-        self._buffer_tick_metrics(loop.state, tick)
+        record_final_stop_metrics(self, loop)
 
     def _record_drain_marker(self, loop: ExecutionLoopState, started_at: datetime | None) -> None:
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        if started_at is None:
-            strategy_state.pop("_drain_started_at", None)
-        else:
-            strategy_state["_drain_started_at"] = started_at.isoformat()
-        loop.state.strategy_state = strategy_state
-        try:
-            loop.state.save(update_fields=["strategy_state", "updated_at"])
-        except Exception:  # pragma: no cover
-            logger.debug("Failed to persist drain marker", exc_info=True)
+        self._drain.record_drain_marker(loop, started_at)
 
     def _read_drain_marker(self, loop: ExecutionLoopState) -> datetime | None:
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        raw = strategy_state.get("_drain_started_at")
-        if not raw:
-            return None
-        try:
-            return datetime.fromisoformat(str(raw))
-        except ValueError:
-            return None
+        return self._drain.read_drain_marker(loop)
 
     def _read_drain_duration_minutes_override(self, loop: ExecutionLoopState) -> int | None:
-        """Return the per-stop drain duration override in minutes, if any.
-
-        The value is written by the lifecycle command when the user passes
-        ``drain_duration_minutes`` on the stop request. ``None`` means
-        "fall back to the task's configured drain_duration_hours".
-        """
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        raw = strategy_state.get("_drain_duration_minutes_override")
-        if raw is None:
-            return None
-        try:
-            value = int(raw)
-        except (TypeError, ValueError):
-            return None
-        return value if value > 0 else None
+        return self._drain.read_drain_duration_minutes_override(loop)
 
     def _clear_drain_duration_minutes_override(self, loop: ExecutionLoopState) -> None:
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        if "_drain_duration_minutes_override" not in strategy_state:
-            return
-        strategy_state.pop("_drain_duration_minutes_override", None)
-        loop.state.strategy_state = strategy_state
-        try:
-            loop.state.save(update_fields=["strategy_state", "updated_at"])
-        except Exception:  # pragma: no cover
-            logger.debug("Failed to clear drain duration minutes override", exc_info=True)
+        self._drain.clear_drain_duration_minutes_override(loop)
 
     # ------------------------------------------------------------------
     # Market-aware idle (trading + backtest)
@@ -1097,211 +849,18 @@ class TaskExecutor:
         self._runtime_metrics.sync_open_positions(positions)
 
     def _restore_metric_counters(self, *, state: ExecutionState) -> None:
-        """Restore cumulative metric counters for resumed executions.
-
-        Prefer the persisted runtime metrics on ``ExecutionState`` so
-        pause/resume keeps continuity. Fall back to DB aggregation when
-        metrics are unavailable (legacy rows).
-        """
-        from django.db.models import Case, F, Sum, Value, When
-
-        from apps.trading.models.positions import Position
-        from apps.trading.models.trades import Trade
-
-        account_currency = getattr(self.task, "account_currency", "") or getattr(
-            getattr(self.task, "oanda_account", None), "currency", ""
-        )
-        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-        persisted_metrics = (
-            strategy_state.get("metrics") if isinstance(strategy_state.get("metrics"), dict) else {}
-        )
-
-        if persisted_metrics:
-            realized_pnl = self._to_decimal_metric(persisted_metrics.get("realized_pnl"))
-            realized_pnl_quote = self._to_decimal_metric(
-                persisted_metrics.get("realized_pnl_quote")
-            )
-            if realized_pnl_quote == Decimal("0") and realized_pnl != Decimal("0"):
-                last_mid = self._to_decimal_metric(state.last_tick_price)
-                conversion = quote_to_account_rate(
-                    self.instrument,
-                    last_mid if last_mid > 0 else Decimal("1"),
-                    str(account_currency or ""),
-                )
-                if conversion > 0:
-                    realized_pnl_quote = realized_pnl / conversion
-
-            self._runtime_metrics.restore_counters(
-                realized_pnl=realized_pnl,
-                realized_pnl_quote=realized_pnl_quote,
-                total_trades=self._to_int_metric(persisted_metrics.get("total_trades")),
-                closed_positions=self._to_int_metric(persisted_metrics.get("closed_positions")),
-                winning_trades=self._to_int_metric(persisted_metrics.get("winning_trades")),
-                losing_trades=self._to_int_metric(persisted_metrics.get("losing_trades")),
-            )
-            return
-
-        base_filter: dict = {
-            "task_type": self.task_type.value,
-            "task_id": str(self.task.pk),
-        }
-        if self.task.execution_id:
-            base_filter["execution_id"] = self.task.execution_id
-
-        abs_units = Case(When(units__lt=0, then=-F("units")), default=F("units"))
-
-        closed_qs = Position.objects.filter(**base_filter, is_open=False).exclude(
-            exit_price__isnull=True
-        )
-        agg = closed_qs.aggregate(
-            realized_pnl=Sum(
-                Case(
-                    When(direction="long", then=(F("exit_price") - F("entry_price")) * abs_units),
-                    When(direction="short", then=(F("entry_price") - F("exit_price")) * abs_units),
-                    default=Value(Decimal("0")),
-                )
-            ),
-            winning=Sum(
-                Case(
-                    When(
-                        direction="long",
-                        then=Case(
-                            When(exit_price__gt=F("entry_price"), then=Value(1)),
-                            default=Value(0),
-                        ),
-                    ),
-                    When(
-                        direction="short",
-                        then=Case(
-                            When(exit_price__lt=F("entry_price"), then=Value(1)),
-                            default=Value(0),
-                        ),
-                    ),
-                    default=Value(0),
-                )
-            ),
-            losing=Sum(
-                Case(
-                    When(
-                        direction="long",
-                        then=Case(
-                            When(exit_price__lt=F("entry_price"), then=Value(1)),
-                            default=Value(0),
-                        ),
-                    ),
-                    When(
-                        direction="short",
-                        then=Case(
-                            When(exit_price__gt=F("entry_price"), then=Value(1)),
-                            default=Value(0),
-                        ),
-                    ),
-                    default=Value(0),
-                )
-            ),
-        )
-
-        realized_pnl_quote = agg["realized_pnl"] or Decimal("0")
-        last_mid = self._to_decimal_metric(state.last_tick_price)
-        conversion = quote_to_account_rate(
-            self.instrument,
-            last_mid if last_mid > 0 else Decimal("1"),
-            str(account_currency or ""),
-        )
-        realized_pnl = realized_pnl_quote * conversion if conversion > 0 else realized_pnl_quote
-
-        self._runtime_metrics.restore_counters(
-            realized_pnl=realized_pnl,
-            realized_pnl_quote=realized_pnl_quote,
-            total_trades=Trade.objects.filter(
-                **base_filter, execution_method="open_position"
-            ).count(),
-            closed_positions=closed_qs.count(),
-            winning_trades=agg["winning"] or 0,
-            losing_trades=agg["losing"] or 0,
-        )
+        self._metric_resume.restore_counters(state=state)
 
     def _validate_resume_metrics_continuity(self, *, state: ExecutionState) -> None:
-        """Warn when resumed state deviates from the latest persisted metrics snapshot."""
-        from apps.trading.models import ExecutionMetricAggregate
-
-        try:
-            aggregate = (
-                ExecutionMetricAggregate.objects.filter(
-                    task_type=self.task_type.value,
-                    task_id=self.task.pk,
-                    execution_id=self.task.execution_id,
-                )
-                .only("latest_metrics", "continuity_warnings")
-                .first()
-            )
-        except Exception:  # pragma: no cover - best-effort in non-DB unit tests
-            logger.debug(
-                "Skipping resume continuity check (aggregate lookup unavailable)",
-                exc_info=True,
-            )
-            return
-        if not aggregate or not isinstance(aggregate.latest_metrics, dict):
-            return
-
-        warnings: list[dict[str, object]] = []
-        state_metrics = (
-            state.strategy_state.get("metrics")
-            if isinstance(state.strategy_state, dict)
-            and isinstance(state.strategy_state.get("metrics"), dict)
-            else {}
-        )
-        prev_balance = self._to_decimal_metric(aggregate.latest_metrics.get("current_balance"))
-        resumed_balance = self._to_decimal_metric(state_metrics.get("current_balance"))
-        if prev_balance > 0 and resumed_balance > 0:
-            delta_ratio = abs((resumed_balance - prev_balance) / prev_balance)
-            if delta_ratio >= Decimal("0.10"):
-                warning = {
-                    "kind": "resume_balance_jump",
-                    "previous_balance": str(prev_balance),
-                    "resumed_balance": str(resumed_balance),
-                    "delta_ratio": str(delta_ratio),
-                }
-                warnings.append(warning)
-                logger.warning(
-                    "Resume continuity warning - task_id=%s, execution_id=%s, payload=%s",
-                    self.task.pk,
-                    self.task.execution_id,
-                    warning,
-                )
-
-        if warnings:
-            existing = (
-                aggregate.continuity_warnings
-                if isinstance(aggregate.continuity_warnings, list)
-                else []
-            )
-            aggregate.continuity_warnings = [*existing, *warnings][-20:]
-            aggregate.save(update_fields=["continuity_warnings", "updated_at"])
+        self._metric_resume.validate_continuity(state=state)
 
     @staticmethod
     def _to_decimal_metric(value: object) -> Decimal:
-        """Parse metric payload values into Decimal safely."""
-        if isinstance(value, Decimal):
-            return value
-        if value in (None, ""):
-            return Decimal("0")
-        try:
-            return Decimal(str(value))
-        except (InvalidOperation, TypeError, ValueError):
-            return Decimal("0")
+        return to_decimal_metric(value)
 
     @staticmethod
     def _to_int_metric(value: object) -> int:
-        """Parse metric payload values into int safely."""
-        if isinstance(value, int):
-            return value
-        if value in (None, ""):
-            return 0
-        try:
-            return int(str(value))
-        except (TypeError, ValueError):
-            return 0
+        return to_int_metric(value)
 
     def _update_common_metrics(self, state: ExecutionState, tick) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
@@ -1351,16 +910,7 @@ class TaskExecutor:
 
     @staticmethod
     def _classify_replay_event(trading_event: TradingEvent) -> str:
-        """Classify replayed events by potential PnL impact."""
-        trade_impacting = {
-            "open_position",
-            "close_position",
-            "rebuild_position",
-            "volatility_lock",
-            "volatility_hedge_neutralize",
-            "margin_protection",
-        }
-        return "trade-impacting" if trading_event.event_type in trade_impacting else "lifecycle"
+        return classify_replay_event(trading_event)
 
     def _event_already_applied(
         self,
@@ -1368,93 +918,19 @@ class TaskExecutor:
         trading_event: TradingEvent,
         state: ExecutionState,
     ) -> bool:
-        """Best-effort idempotency guard for resumed event replay."""
-        from apps.trading.events import (
-            ClosePositionEvent,
-            MarginProtectionEvent,
-            OpenPositionEvent,
-            StrategyEvent,
-            VolatilityHedgeNeutralizeEvent,
-            VolatilityLockEvent,
+        return event_already_applied(
+            cast(EventReplayExecutor, self),
+            trading_event=trading_event,
+            state=state,
         )
-        from apps.trading.models import Position
-
-        strategy_event = StrategyEvent.from_dict(trading_event.details)
-        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-
-        if isinstance(strategy_event, OpenPositionEvent):
-            entry_id = strategy_event.entry_id
-            if entry_id is None:
-                return False
-            open_entries = strategy_state.get("open_entries")
-            if not isinstance(open_entries, list):
-                return False
-            for entry in open_entries:
-                if not isinstance(entry, dict):
-                    continue
-                try:
-                    current_entry_id = int(entry.get("entry_id", -1))
-                except (TypeError, ValueError):
-                    continue
-                if current_entry_id != int(entry_id):
-                    continue
-                position_id = str(entry.get("position_id") or "").strip()
-                if not position_id:
-                    return False
-                exists = Position.objects.filter(
-                    id=position_id,
-                    task_type=self.task_type.value,
-                    task_id=self.task.pk,
-                    execution_id=self.task.execution_id,
-                    is_open=True,
-                ).exists()
-                return bool(exists)
-            return False
-
-        if isinstance(strategy_event, ClosePositionEvent):
-            position_id = str(strategy_event.position_id or "").strip()
-            if not position_id:
-                return False
-            return not Position.objects.filter(
-                id=position_id,
-                task_type=self.task_type.value,
-                task_id=self.task.pk,
-                execution_id=self.task.execution_id,
-                is_open=True,
-            ).exists()
-
-        if isinstance(strategy_event, (VolatilityLockEvent, MarginProtectionEvent)):
-            return not Position.objects.filter(
-                task_type=self.task_type.value,
-                task_id=self.task.pk,
-                execution_id=self.task.execution_id,
-                instrument=self.instrument,
-                is_open=True,
-            ).exists()
-
-        if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
-            return False
-
-        return False
 
     @staticmethod
     def _mark_event_processed(trading_event: TradingEvent) -> None:
-        update_data = {
-            "is_processed": True,
-            "processed_at": dj_timezone.now(),
-            "processing_error": "",
-        }
-        type(trading_event).objects.filter(pk=trading_event.pk).update(**update_data)
-        trading_event.is_processed = True
-        trading_event.processed_at = update_data["processed_at"]
-        trading_event.processing_error = ""
+        mark_event_processed(trading_event)
 
     @staticmethod
     def _mark_event_processing_error(trading_event: TradingEvent, message: str) -> None:
-        type(trading_event).objects.filter(pk=trading_event.pk).update(
-            processing_error=str(message)[:4000]
-        )
-        trading_event.processing_error = str(message)[:4000]
+        mark_event_processing_error(trading_event, message)
 
     def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
         """Record strategy metrics into the minute-level aggregator."""

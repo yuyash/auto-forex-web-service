@@ -16,6 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import OrderingConfig, normalize_ordering, sort_records
 from apps.market.models import OandaAccounts
 from apps.market.views.account_helpers import get_user_default_account
 
@@ -45,6 +46,12 @@ _GRANULARITY_SECONDS: dict[str, int] = {
     "W": 604800,
     "M": 2592000,
 }
+
+CANDLE_ORDERING = OrderingConfig(
+    fields={"time": "time", "timestamp": "time"},
+    default="time",
+    tie_breakers=(),
+)
 
 
 class OandaCandleFetchError(Exception):
@@ -137,7 +144,15 @@ class CandleDataView(APIView):
         parameters=[
             OpenApiParameter(name="instrument", type=str, required=True),
             OpenApiParameter(name="granularity", type=str, required=False, default="H1"),
-            OpenApiParameter(name="count", type=int, required=False, default=100),
+            OpenApiParameter(
+                name="count",
+                type=int,
+                required=False,
+                default=100,
+                description="Deprecated alias for page_size.",
+            ),
+            OpenApiParameter(name="page_size", type=int, required=False, default=100),
+            OpenApiParameter(name="ordering", type=str, required=False),
             OpenApiParameter(name="from_time", type=str, required=False),
             OpenApiParameter(name="to_time", type=str, required=False),
             OpenApiParameter(name="before", type=str, required=False),
@@ -199,12 +214,14 @@ class CandleDataView(APIView):
             )
 
         granularity = request.query_params.get("granularity", "H1")
-        count_raw = request.query_params.get("count", "100")
+        count_raw = request.query_params.get("page_size") or request.query_params.get(
+            "count", "100"
+        )
         try:
             count_int = int(count_raw)
-            if count_int < 1:
+            if count_int < 1 or count_int >= 10000:
                 return {}, Response(
-                    {"error": "count must be greater than or equal to 1"},
+                    {"error": "count/page_size must be between 1 and 9999"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except ValueError:
@@ -215,6 +232,7 @@ class CandleDataView(APIView):
 
         from_time = request.query_params.get("from_time")
         to_time = request.query_params.get("to_time")
+        ordering = normalize_ordering(request.query_params.get("ordering"), CANDLE_ORDERING)
 
         if from_time or to_time:
             try:
@@ -247,6 +265,7 @@ class CandleDataView(APIView):
             "before": request.query_params.get("before"),
             "after": request.query_params.get("after"),
             "account_id": request.query_params.get("account_id"),
+            "ordering": ordering,
         }, None
 
     # ------------------------------------------------------------------
@@ -284,7 +303,11 @@ class CandleDataView(APIView):
             )
 
             raw_candles = self._dispatch_fetch(api_context, params)
-            candles_data = _parse_candles(raw_candles)
+            candles_data = sort_records(
+                _parse_candles(raw_candles),
+                params.get("ordering"),
+                CANDLE_ORDERING,
+            )
 
             return Response(
                 {"instrument": instrument, "granularity": granularity, "candles": candles_data},

@@ -131,7 +131,9 @@
     "live": "LIVE",
     "liveAccount": "LIVE ACCOUNT",
     "total": "Total",
-    "parameters": "Parameters"
+    "parameters": "Parameters",
+    "strategySnapshot": "Strategy Snapshot",
+    "pageSize": "Page size"
   },
   "messages": {
     "loading": "Loading...",

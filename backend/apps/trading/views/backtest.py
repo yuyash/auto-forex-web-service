@@ -16,7 +16,7 @@ from apps.trading.serializers.backtest import (
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
 )
-from apps.trading.views.task_base import TaskViewSetBase
+from apps.trading.views.task_base import TASK_LIST_PARAMETERS, TaskViewSetBase
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -37,7 +37,7 @@ def _integrity_constraint_id(exc: IntegrityError) -> str:
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Trading"]),
+    list=extend_schema(tags=["Trading"], parameters=TASK_LIST_PARAMETERS),
     create=extend_schema(tags=["Trading"], responses={201: BacktestTaskSerializer}),
     retrieve=extend_schema(tags=["Trading"], responses={200: BacktestTaskSerializer}),
     update=extend_schema(tags=["Trading"], responses={200: BacktestTaskSerializer}),

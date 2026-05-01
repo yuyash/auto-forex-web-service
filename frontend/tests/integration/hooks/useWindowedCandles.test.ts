@@ -195,4 +195,39 @@ describe('useWindowedCandles', () => {
     expect(result.current.candles).toHaveLength(2);
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
+
+  it('paginates large candle time ranges', async () => {
+    mockGet.mockImplementation(async (_path, query) => ({
+      candles: [
+        {
+          time: String(query?.from_time),
+          open: 1,
+          high: 1,
+          low: 1,
+          close: 1,
+        },
+      ],
+    }));
+
+    const { result } = renderHook(() =>
+      useWindowedCandles({
+        instrument: 'USD_JPY',
+        granularity: 'M1',
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-08T00:00:00Z',
+        initialLoadMode: 'full-range',
+        initialCount: 10,
+        edgeCount: 10,
+      })
+    );
+
+    await waitFor(() => expect(result.current.isInitialLoading).toBe(false));
+
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockGet.mock.calls.map(([, query]) => query?.from_time)).toEqual([
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-04T11:19:00.000Z',
+      '2026-01-07T22:38:00.000Z',
+    ]);
+  });
 });

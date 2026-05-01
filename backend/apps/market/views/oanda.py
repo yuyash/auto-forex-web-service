@@ -2,13 +2,19 @@
 
 from logging import Logger, getLogger
 
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import (
+    OrderingConfig,
+    apply_queryset_ordering,
+    invalid_query_param,
+    parse_datetime_param,
+)
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OandaAccountsSerializer
 from apps.market.services.accounts import (
@@ -17,37 +23,52 @@ from apps.market.services.accounts import (
     update_oanda_account,
 )
 from apps.market.services.oanda import OandaService
+from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
 
-
-OandaAccountDetailResponseSerializer = inline_serializer(
-    "OandaAccountDetailResponse",
+OANDA_ACCOUNT_ORDERING = OrderingConfig(
     fields={
-        "id": serializers.IntegerField(),
-        "account_id": serializers.CharField(),
-        "api_type": serializers.CharField(),
-        "jurisdiction": serializers.CharField(),
-        "currency": serializers.CharField(),
-        "balance": serializers.CharField(required=False),
-        "margin_used": serializers.CharField(required=False),
-        "margin_available": serializers.CharField(required=False),
-        "is_active": serializers.BooleanField(),
-        "is_default": serializers.BooleanField(),
-        "created_at": serializers.DateTimeField(),
-        "updated_at": serializers.DateTimeField(),
-        "unrealized_pnl": serializers.CharField(required=False),
-        "nav": serializers.CharField(required=False),
-        "open_trade_count": serializers.IntegerField(required=False),
-        "open_position_count": serializers.IntegerField(required=False),
-        "pending_order_count": serializers.IntegerField(required=False),
-        "hedging_enabled": serializers.BooleanField(required=False),
-        "position_mode": serializers.CharField(required=False),
-        "oanda_account": serializers.DictField(required=False),
-        "live_data": serializers.BooleanField(required=False),
-        "live_data_error": serializers.CharField(required=False),
+        "id": "id",
+        "account_id": "account_id",
+        "api_type": "api_type",
+        "currency": "currency",
+        "balance": "balance",
+        "is_active": "is_active",
+        "is_default": "is_default",
+        "created_at": "created_at",
+        "updated_at": "updated_at",
     },
+    default="-created_at",
 )
+
+
+class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Schema serializer for OANDA account responses with optional live snapshot fields."""
+
+    id = serializers.IntegerField()
+    account_id = serializers.CharField()
+    api_type = serializers.CharField()
+    jurisdiction = serializers.CharField()
+    currency = serializers.CharField()
+    balance = serializers.CharField(required=False)
+    margin_used = serializers.CharField(required=False)
+    margin_available = serializers.CharField(required=False)
+    is_active = serializers.BooleanField()
+    is_default = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    unrealized_pnl = serializers.CharField(required=False)
+    nav = serializers.CharField(required=False)
+    open_trade_count = serializers.IntegerField(required=False)
+    open_position_count = serializers.IntegerField(required=False)
+    pending_order_count = serializers.IntegerField(required=False)
+    hedging_enabled = serializers.BooleanField(required=False)
+    position_mode = serializers.CharField(required=False)
+    oanda_account = serializers.DictField(required=False)
+    live_data = serializers.BooleanField(required=False)
+    live_data_error = serializers.CharField(required=False)
+
 
 OandaAccountUpdateRequestSerializer = inline_serializer(
     "OandaAccountUpdateRequest",
@@ -126,21 +147,60 @@ class OandaAccountView(APIView):
 
     permission_classes = [IsAuthenticated]
     serializer_class = OandaAccountsSerializer
+    pagination_class = StandardPagination
 
     @extend_schema(
         operation_id="market_accounts_list",
         tags=["Market"],
-        responses={200: OandaAccountsSerializer(many=True)},
+        parameters=[
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
+            OpenApiParameter(name="ordering", type=str, required=False),
+            OpenApiParameter(name="search", type=str, required=False),
+            OpenApiParameter(name="created_from", type=str, required=False),
+            OpenApiParameter(name="created_to", type=str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "OandaAccountPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": OandaAccountDetailResponseSerializer(many=True),
+                },
+            )
+        },
     )
     def get(self, request: Request) -> Response:
-        accounts = (
-            OandaAccounts.objects.filter(user_id=request.user.id)
-            .select_related("user")
-            .order_by("-created_at")
+        created_from = parse_datetime_param(
+            request.query_params.get("created_from"),
+            field_name="created_from",
         )
-        serializer = self.serializer_class(accounts, many=True)
+        created_to = parse_datetime_param(
+            request.query_params.get("created_to"),
+            field_name="created_to",
+        )
+        if created_from and created_to and created_from > created_to:
+            raise invalid_query_param("created_from must be earlier than or equal to created_to")
+        accounts = OandaAccounts.objects.filter(user_id=request.user.id).select_related("user")
+        search = request.query_params.get("search")
+        if search:
+            accounts = accounts.filter(account_id__icontains=search)
+        if created_from:
+            accounts = accounts.filter(created_at__gte=created_from)
+        if created_to:
+            accounts = accounts.filter(created_at__lte=created_to)
+        accounts = apply_queryset_ordering(
+            accounts,
+            request.query_params.get("ordering"),
+            OANDA_ACCOUNT_ORDERING,
+        )
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(accounts, request)
+        serializer = self.serializer_class(page, many=True)
         response_data = list(serializer.data)
-        for account, account_data in zip(accounts, response_data, strict=False):
+        for account, account_data in zip(page, response_data, strict=False):
             try:
                 _apply_live_account_snapshot(account=account, response_data=account_data)
             except Exception as e:
@@ -161,7 +221,7 @@ class OandaAccountView(APIView):
                 "count": accounts.count(),
             },
         )
-        return Response(response_data, status=status.HTTP_200_OK)
+        return paginator.get_paginated_response(response_data)
 
     @extend_schema(
         operation_id="market_accounts_create",

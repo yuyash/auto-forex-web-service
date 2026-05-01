@@ -165,7 +165,8 @@ export const queryKeys = {
       taskType: string,
       taskId: string,
       executionRunId?: string,
-      cycleId?: string
+      cycleId?: string,
+      params?: Record<string, unknown>
     ) =>
       [
         ...queryKeys.taskResources.all,
@@ -174,6 +175,7 @@ export const queryKeys = {
         'strategy-events',
         executionRunId ?? null,
         cycleId ?? null,
+        params ?? null,
       ] as const,
     logComponents: (
       taskType: string,

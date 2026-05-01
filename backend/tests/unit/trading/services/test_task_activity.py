@@ -292,3 +292,129 @@ def test_trades_query_count_stays_bounded(django_assert_num_queries):
 
     assert total == 1
     assert rows[0]["pnl"] == Decimal("100.000")
+
+
+@pytest.mark.django_db
+def test_trades_ordering_is_applied_before_pagination():
+    task = BacktestTaskFactory()
+    base_time = datetime(2026, 1, 1, tzinfo=UTC)
+    prices = [Decimal("150.000"), Decimal("151.000"), Decimal("149.000")]
+    for index, price in enumerate(prices):
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=base_time,
+            sequence_number=index,
+            direction=Direction.LONG,
+            units=1000,
+            instrument="USD_JPY",
+            price=price,
+            execution_method="open_position",
+        )
+
+    rows, total, page, page_size = TaskActivityQueryService().trades(
+        request=_request("/tasks/1/trades/?ordering=-price&page=2&page_size=1"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert total == 3
+    assert page == 2
+    assert page_size == 1
+    assert rows[0]["price"] == Decimal("150.000")
+
+
+@pytest.mark.django_db
+def test_positions_ordering_supports_computed_realized_pnl():
+    task = BacktestTaskFactory()
+    base_time = datetime(2026, 1, 1, tzinfo=UTC)
+    low = Position.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        instrument="USD_JPY",
+        direction=Direction.LONG,
+        units=1000,
+        entry_price=Decimal("150.000"),
+        entry_time=base_time,
+        exit_price=Decimal("150.010"),
+        exit_time=base_time,
+        is_open=False,
+    )
+    high = Position.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        instrument="USD_JPY",
+        direction=Direction.LONG,
+        units=1000,
+        entry_price=Decimal("150.000"),
+        entry_time=base_time,
+        exit_price=Decimal("150.100"),
+        exit_time=base_time,
+        is_open=False,
+    )
+
+    queryset, _query = TaskActivityQueryService().positions_queryset(
+        request=_request("/tasks/1/positions/?ordering=-realized_pnl"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert list(queryset.values_list("id", flat=True)) == [high.id, low.id]
+
+
+@pytest.mark.django_db
+def test_orders_ordering_is_applied_to_queryset():
+    task = BacktestTaskFactory()
+    Order.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        instrument="USD_JPY",
+        order_type=OrderType.MARKET,
+        direction=Direction.LONG,
+        units=1000,
+        status=OrderStatus.FILLED,
+    )
+    larger = Order.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        instrument="USD_JPY",
+        order_type=OrderType.MARKET,
+        direction=Direction.LONG,
+        units=3000,
+        status=OrderStatus.FILLED,
+    )
+
+    queryset = TaskActivityQueryService().orders_queryset(
+        request=_request("/tasks/1/orders/?ordering=-units"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert queryset.first().id == larger.id
+
+
+@pytest.mark.django_db
+def test_logs_ordering_is_applied_to_queryset():
+    task = BacktestTaskFactory()
+    for component in ("zeta", "alpha"):
+        TaskLog.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            level=LogLevel.INFO,
+            component=component,
+            message=component,
+        )
+
+    queryset = TaskActivityQueryService().logs_queryset(
+        request=_request("/tasks/1/logs/?ordering=component"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert list(queryset.values_list("component", flat=True)) == ["alpha", "zeta"]

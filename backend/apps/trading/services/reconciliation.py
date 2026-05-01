@@ -50,13 +50,6 @@ class ReconciliationReport:
         return bool(self.blockers)
 
 
-def _safe_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
 def _safe_decimal(value: Any, default: str = "0") -> Decimal:
     try:
         return Decimal(str(value))

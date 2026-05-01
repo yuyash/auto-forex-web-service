@@ -1,5 +1,6 @@
 """Position views."""
 
+from datetime import datetime
 from decimal import Decimal
 from logging import Logger, getLogger
 
@@ -10,6 +11,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import (
+    OrderingConfig,
+    invalid_query_param,
+    parse_datetime_param,
+    sort_records,
+)
 from apps.market.models import OandaAccounts
 from apps.market.serializers import PositionSerializer
 from apps.market.services.compliance import ComplianceViolationError
@@ -23,6 +30,24 @@ from apps.market.views.account_helpers import get_user_accounts
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
+
+MARKET_POSITION_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "instrument": "instrument",
+        "direction": "direction",
+        "units": "units",
+        "entry_price": "entry_price",
+        "unrealized_pnl": "unrealized_pnl",
+        "open_time": "open_time",
+        "close_time": "close_time",
+        "state": "state",
+        "status": "status",
+        "account_name": "account_name",
+        "account_db_id": "account_db_id",
+    },
+    default="-open_time",
+)
 
 
 class MarketPositionListItemSerializer(serializers.Serializer):  # pylint: disable=abstract-method
@@ -40,6 +65,34 @@ class MarketPositionListItemSerializer(serializers.Serializer):  # pylint: disab
     account_name = serializers.CharField()
     account_db_id = serializers.IntegerField()
     status = serializers.CharField()
+
+
+def _filter_positions_by_overlap(
+    positions: list[dict],
+    *,
+    range_from: datetime | None,
+    range_to: datetime | None,
+) -> list[dict]:
+    if range_from is None and range_to is None:
+        return positions
+    filtered: list[dict] = []
+    for position in positions:
+        open_time = parse_datetime_param(
+            str(position.get("open_time") or ""),
+            field_name="open_time",
+        )
+        close_time = parse_datetime_param(
+            str(position.get("close_time") or ""),
+            field_name="close_time",
+        )
+        if open_time is None:
+            continue
+        if range_to and open_time > range_to:
+            continue
+        if range_from and close_time is not None and close_time < range_from:
+            continue
+        filtered.append(position)
+    return filtered
 
 
 class PositionView(APIView):
@@ -68,6 +121,11 @@ class PositionView(APIView):
             OpenApiParameter(name="account_id", type=int, required=False),
             OpenApiParameter(name="instrument", type=str, required=False),
             OpenApiParameter(name="status", type=str, required=False, default="open"),
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
+            OpenApiParameter(name="ordering", type=str, required=False),
+            OpenApiParameter(name="range_from", type=str, required=False),
+            OpenApiParameter(name="range_to", type=str, required=False),
         ],
         responses={
             200: inline_serializer(
@@ -208,6 +266,16 @@ class PositionView(APIView):
         account_id = request.query_params.get("account_id")
         instrument = request.query_params.get("instrument")
         position_status = request.query_params.get("status", "open").lower()
+        range_from = parse_datetime_param(
+            request.query_params.get("range_from") or request.query_params.get("timestamp_from"),
+            field_name="range_from",
+        )
+        range_to = parse_datetime_param(
+            request.query_params.get("range_to") or request.query_params.get("timestamp_to"),
+            field_name="range_to",
+        )
+        if range_from and range_to and range_from > range_to:
+            raise invalid_query_param("range_from must be earlier than or equal to range_to")
 
         # Validate status parameter
         if position_status not in ["open", "closed", "all"]:
@@ -281,8 +349,16 @@ class PositionView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # Sort by open time (newest first)
-        all_positions.sort(key=lambda x: str(x.get("open_time") or ""), reverse=True)
+        all_positions = _filter_positions_by_overlap(
+            all_positions,
+            range_from=range_from,
+            range_to=range_to,
+        )
+        all_positions = sort_records(
+            all_positions,
+            request.query_params.get("ordering"),
+            MARKET_POSITION_ORDERING,
+        )
 
         logger.info(
             "Positions retrieved from OANDA",

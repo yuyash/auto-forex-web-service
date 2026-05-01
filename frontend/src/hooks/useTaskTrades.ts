@@ -52,7 +52,7 @@ interface UseTaskTradesOptions {
   cycleId?: string;
   /** Filter trades by trade ID prefix (e.g. first 8 chars of UUID). */
   tradeId?: string;
-  ordering?: 'asc' | 'desc';
+  ordering?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   /** Filter trades with timestamp >= this value. */
@@ -119,7 +119,7 @@ export const useTaskTrades = ({
   pageSize = 100,
   cycleId,
   tradeId,
-  ordering = 'asc',
+  ordering = '-timestamp',
   since,
   timestampFrom,
   timestampTo,

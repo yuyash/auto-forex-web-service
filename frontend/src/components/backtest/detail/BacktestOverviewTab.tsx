@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
+import { StrategySnapshotSummary } from '../../tasks/detail/StrategySnapshotSummary';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildBacktestTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -11,6 +12,7 @@ import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
+import type { StrategySnapshotResponse } from '../../../types/strategyVisualization';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
@@ -31,6 +33,9 @@ interface BacktestOverviewTabProps {
   strategies: Strategy[];
   pnlCurrency: string;
   latestMetrics?: MetricPoint | null;
+  strategySnapshot?: StrategySnapshotResponse | null;
+  strategySnapshotLoading?: boolean;
+  strategySnapshotError?: Error | null;
   timezone: string;
   language?: string;
   isViewingHistorical?: boolean;
@@ -54,6 +59,9 @@ export function BacktestOverviewTab({
   strategies,
   pnlCurrency,
   latestMetrics,
+  strategySnapshot,
+  strategySnapshotLoading,
+  strategySnapshotError,
   timezone,
   language,
   isViewingHistorical = false,
@@ -408,6 +416,14 @@ export function BacktestOverviewTab({
               summary={summary}
             />
           </Box>
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <StrategySnapshotSummary
+            snapshot={strategySnapshot ?? null}
+            isLoading={strategySnapshotLoading}
+            error={strategySnapshotError}
+          />
         </Grid>
 
         <Grid size={{ xs: 12 }}>

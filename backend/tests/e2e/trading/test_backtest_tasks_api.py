@@ -126,7 +126,9 @@ class TestBacktestTasks:
         assert events_resp.status_code == 200
 
         # ── Metrics ───────────────────────────────────────────────────────
-        metrics_resp = authenticated_client.get(f"/api/trading/tasks/backtest/{task_id}/metrics/")
+        metrics_resp = authenticated_client.get(
+            f"/api/trading/tasks/backtest/{task_id}/strategy/metrics/"
+        )
         assert metrics_resp.status_code == 200
         assert "results" in metrics_resp.data
         assert "count" in metrics_resp.data
@@ -162,7 +164,9 @@ class TestBacktestTasks:
             "orders",
             "summary",
             "executions",
-            "metrics",
+            "strategy/snapshot",
+            "strategy/history",
+            "strategy/metrics",
         ):
             resp = authenticated_client.get(f"/api/trading/tasks/backtest/{task_id}/{endpoint}/")
             assert resp.status_code == 200, f"{endpoint} returned {resp.status_code}"

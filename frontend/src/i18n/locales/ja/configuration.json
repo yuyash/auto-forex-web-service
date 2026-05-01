@@ -11,7 +11,13 @@
   "filters": {
     "searchConfigurations": "設定を検索...",
     "strategyType": "戦略タイプ",
-    "allTypes": "すべてのタイプ"
+    "allTypes": "すべてのタイプ",
+    "sortBy": "並び替え",
+    "newestFirst": "新しい順",
+    "oldestFirst": "古い順",
+    "nameAZ": "名前（A-Z）",
+    "nameZA": "名前（Z-A）",
+    "recentlyUpdated": "最近更新"
   },
   "empty": {
     "noConfigurationsFound": "設定が見つかりません",

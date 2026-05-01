@@ -24,6 +24,8 @@ from apps.market.enums import MarketEventSeverity, MarketEventType
 from apps.market.models import OandaAccounts, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
+from apps.market.services.oanda_dry_run import OandaDryRunSimulator
+from apps.market.services import oanda_parsing
 from apps.market.services.oanda_transport import OandaOrderTransport
 from apps.market.services.oanda_types import (
     AccountDetails,
@@ -101,9 +103,9 @@ class OandaService:
         self.event_service = MarketEventService()
         self._account_resource_cache: dict[str, Any] | None = None
 
-        # Dry-run state
-        self._dry_run_order_counter = 0
-        self._dry_run_positions: dict[str, Position] = {}
+        self._dry_run_simulator = OandaDryRunSimulator(account)
+        # Backward-compatible attribute used by older tests and debug tools.
+        self._dry_run_positions = self._dry_run_simulator.positions
 
         # Only initialize API connections if we have an account
         # In dry-run mode without an account, we skip all API calls
@@ -161,22 +163,7 @@ class OandaService:
 
     @staticmethod
     def _make_jsonable(value: Any) -> Any:
-        if value is None or isinstance(value, (str, int, float, bool)):
-            return value
-
-        if isinstance(value, Decimal):
-            return str(value)
-
-        if isinstance(value, datetime):
-            return value.isoformat()
-
-        if isinstance(value, dict):
-            return {str(k): OandaService._make_jsonable(v) for k, v in value.items()}
-
-        if isinstance(value, (list, tuple, set)):
-            return [OandaService._make_jsonable(v) for v in value]
-
-        return str(value)
+        return oanda_parsing.make_jsonable(value)
 
     @staticmethod
     def make_jsonable(value: Any) -> Any:
@@ -184,53 +171,15 @@ class OandaService:
 
     @staticmethod
     def _response_field(response: Any, field_name: str) -> Any:
-        value = getattr(response, field_name, None)
-        if value is not None:
-            return value
-
-        body = getattr(response, "body", None)
-        if isinstance(body, dict):
-            return body.get(field_name)
-
-        return None
+        return oanda_parsing.response_field(response, field_name)
 
     @staticmethod
     def _object_field(value: Any, field_name: str) -> Any:
-        if value is None:
-            return None
-        if isinstance(value, dict):
-            return value.get(field_name)
-        return getattr(value, field_name, None)
+        return oanda_parsing.object_field(value, field_name)
 
     @staticmethod
     def _account_object_to_dict(account_data: Any) -> dict[str, Any]:
-        if account_data is None:
-            return {}
-
-        if isinstance(account_data, dict):
-            return account_data
-
-        properties = getattr(account_data, "_properties", None)
-        if isinstance(properties, dict):
-            return dict(properties)
-
-        as_dict = getattr(account_data, "dict", None)
-        if callable(as_dict):
-            try:
-                maybe_dict = as_dict()
-                if isinstance(maybe_dict, dict):
-                    return maybe_dict
-            except Exception as exc:  # nosec B110
-                # Log conversion failure but continue with fallback
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.debug("Failed to convert account data using .dict(): %s", exc)
-
-        try:
-            return dict(vars(account_data))
-        except Exception:
-            return {"value": str(account_data)}
+        return oanda_parsing.account_object_to_dict(account_data)
 
     def get_account_resource(self, *, refresh: bool = False) -> dict[str, Any]:
         """Fetch the raw OANDA account resource as a dict.
@@ -403,7 +352,11 @@ class OandaService:
         """
         # Dry-run mode: simulate position close
         if self.dry_run:
-            return self._simulate_position_close(position, units, override_price=override_price)
+            return self._dry_run_simulator.simulate_position_close(
+                position,
+                units,
+                override_price=override_price,
+            )
 
         # Require account for live trading
         if self.account is None:
@@ -477,6 +430,19 @@ class OandaService:
                 "Error closing position",
                 internal_detail=str(e),
             ) from e
+
+    def _simulate_position_close(
+        self,
+        position: Position,
+        units: Decimal | None = None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        """Backward-compatible wrapper around the dry-run simulator."""
+        return self._dry_run_simulator.simulate_position_close(
+            position,
+            units,
+            override_price=override_price,
+        )
 
     def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
         assert self.account is not None, "Account not initialized"
@@ -557,7 +523,7 @@ class OandaService:
 
         # Dry-run mode: simulate order execution
         if self.dry_run:
-            return self._simulate_market_order(
+            return self._dry_run_simulator.simulate_market_order(
                 request, direction, abs_units, override_price=override_price
             )
 
@@ -1303,19 +1269,7 @@ class OandaService:
 
     @staticmethod
     def _as_pending_order(order: Order) -> PendingOrder:
-        return PendingOrder(
-            order_id=order.order_id,
-            instrument=order.instrument,
-            order_type=order.order_type,
-            direction=order.direction,
-            units=order.units,
-            price=order.price,
-            state=OrderState.PENDING,
-            time_in_force=order.time_in_force,
-            create_time=order.create_time,
-            fill_time=order.fill_time,
-            cancel_time=order.cancel_time,
-        )
+        return oanda_parsing.as_pending_order(order)
 
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
         assert self.api is not None, "API client not initialized"
@@ -1337,141 +1291,24 @@ class OandaService:
     def _format_position(
         self, instrument: str, direction: OrderDirection, pos_data: dict[str, Any]
     ) -> Position:
-        """
-        Format OANDA position data to standard format.
-
-        Args:
-            instrument: Currency pair
-            direction: 'long' or 'short'
-            pos_data: OANDA position data
-
-        Returns:
-            Formatted position dictionary
-        """
-        units = Decimal(str(pos_data.get("units", "0")))
-        avg_price = Decimal(str(pos_data.get("averagePrice", "0")))
-        unrealized_pl = Decimal(str(pos_data.get("unrealizedPL", "0")))
-
-        # Get trade IDs for this position
-        trade_ids = pos_data.get("tradeIDs", [])
-
-        return Position(
+        return oanda_parsing.format_position(
             instrument=instrument,
             direction=direction,
-            units=abs(units),
-            average_price=avg_price,
-            unrealized_pnl=unrealized_pl,
-            trade_ids=[str(t) for t in trade_ids],
+            pos_data=pos_data,
             account_id=str(self.account.account_id) if self.account else "",
         )
 
     def _parse_iso_datetime(self, value: Any) -> datetime | None:
-        if not value:
-            return None
-        if isinstance(value, datetime):
-            return value
-        value_str = str(value)
-        # OANDA timestamps commonly end with 'Z'
-        if value_str.endswith("Z"):
-            value_str = value_str[:-1] + "+00:00"
-        try:
-            return datetime.fromisoformat(value_str)
-        except ValueError:
-            return None
+        return oanda_parsing.parse_iso_datetime(value)
 
     def _parse_order(self, order: Any) -> Order:
-        raw_type = str(self._object_field(order, "type") or "").upper()
-        order_type = {
-            "MARKET": OrderType.MARKET,
-            "LIMIT": OrderType.LIMIT,
-            "STOP": OrderType.STOP,
-        }.get(raw_type, OrderType.MARKET)
-
-        units_signed = self._to_decimal(self._object_field(order, "units")) or Decimal("0")
-        direction = (
-            OrderDirection.LONG
-            if units_signed > 0
-            else OrderDirection.SHORT
-            if units_signed < 0
-            else OrderDirection.LONG
-        )
-        units_abs = abs(units_signed)
-        price = self._to_decimal(self._object_field(order, "price"))
-
-        create_time = self._parse_iso_datetime(self._object_field(order, "createTime"))
-        fill_time = self._parse_iso_datetime(self._object_field(order, "filledTime"))
-        cancel_time = self._parse_iso_datetime(self._object_field(order, "cancelledTime"))
-        state = OrderState.from_raw(self._object_field(order, "state"))
-        time_in_force_raw = self._object_field(order, "timeInForce")
-        time_in_force = str(time_in_force_raw) if time_in_force_raw else None
-
-        order_id = str(self._object_field(order, "id") or "")
-        instrument = str(self._object_field(order, "instrument") or "")
-
-        if order_type == OrderType.LIMIT:
-            return LimitOrder(
-                order_id=order_id,
-                instrument=instrument,
-                order_type=order_type,
-                direction=direction,
-                units=units_abs,
-                price=price,
-                state=state,
-                time_in_force=time_in_force,
-                create_time=create_time,
-                fill_time=fill_time,
-                cancel_time=cancel_time,
-            )
-        if order_type == OrderType.STOP:
-            return StopOrder(
-                order_id=order_id,
-                instrument=instrument,
-                order_type=order_type,
-                direction=direction,
-                units=units_abs,
-                price=price,
-                state=state,
-                time_in_force=time_in_force,
-                create_time=create_time,
-                fill_time=fill_time,
-                cancel_time=cancel_time,
-            )
-        return MarketOrder(
-            order_id=order_id,
-            instrument=instrument,
-            order_type=order_type,
-            direction=direction,
-            units=units_abs,
-            price=price,
-            state=state,
-            time_in_force=time_in_force,
-            create_time=create_time,
-            fill_time=fill_time,
-            cancel_time=cancel_time,
-        )
+        return oanda_parsing.parse_order(order)
 
     def _parse_transaction(self, txn: dict[str, Any]) -> Transaction:
-        return Transaction(
-            transaction_id=str(txn.get("id", "")),
-            time=self._parse_iso_datetime(txn.get("time")),
-            type=str(txn.get("type", "")),
-            instrument=str(txn.get("instrument")) if txn.get("instrument") else None,
-            units=self._to_decimal(txn.get("units")),
-            price=self._to_decimal(txn.get("price")),
-            pl=self._to_decimal(txn.get("pl")),
-            account_balance=self._to_decimal(txn.get("accountBalance")),
-        )
+        return oanda_parsing.parse_transaction(txn)
 
     def _to_decimal(self, value: Any) -> Decimal | None:
-        if value is None:
-            return None
-        value_str = str(value)
-        if value_str == "":
-            return None
-        try:
-            return Decimal(value_str)
-        except Exception:  # pylint: disable=broad-exception-caught
-            return None
+        return oanda_parsing.to_decimal(value)
 
     def _validate_compliance(self, order_request: dict[str, Any]) -> None:
         # Skip compliance checks if no account (dry-run only mode)
@@ -1497,172 +1334,3 @@ class OandaService:
             )
 
             raise ComplianceViolationError(error_message)
-
-    def _simulate_market_order(
-        self,
-        request: MarketOrderRequest,
-        direction: OrderDirection,
-        abs_units: Decimal,
-        override_price: Decimal | None = None,
-    ) -> MarketOrder:
-        """Simulate market order execution for dry-run mode."""
-        from apps.market.models import TickData as TickDataModel
-
-        self._dry_run_order_counter += 1
-        order_id = f"DRY-{self._dry_run_order_counter}"
-        trade_id = f"DRY-TRADE-{self._dry_run_order_counter}"
-        now = datetime.now(UTC)
-
-        # Use override price if provided (e.g. from strategy event entry_price)
-        if override_price is not None:
-            fill_price = override_price
-        else:
-            # Get latest tick data for the instrument to simulate fill price
-            try:
-                latest_tick = (
-                    TickDataModel.objects.filter(instrument=request.instrument)
-                    .order_by("-timestamp")
-                    .first()
-                )
-                if latest_tick:
-                    # Use bid for sells, ask for buys
-                    fill_price = (
-                        latest_tick.ask if direction == OrderDirection.LONG else latest_tick.bid
-                    )
-                else:
-                    # Fallback to a reasonable default if no tick data
-                    fill_price = Decimal("1.0000")
-            except Exception:
-                fill_price = Decimal("1.0000")
-
-        # Update dry-run position tracking
-        position_key = f"{request.instrument}_{direction.value}"
-        account_id = str(self.account.account_id) if self.account else "DRY-RUN-ACCOUNT"
-
-        if position_key in self._dry_run_positions:
-            existing = self._dry_run_positions[position_key]
-            # Update weighted average price
-            total_units = existing.units + abs_units
-            new_avg_price = (
-                existing.average_price * existing.units + fill_price * abs_units
-            ) / total_units
-            self._dry_run_positions[position_key] = Position(
-                instrument=request.instrument,
-                direction=direction,
-                units=total_units,
-                average_price=new_avg_price,
-                unrealized_pnl=Decimal("0"),
-                trade_ids=[order_id],
-                account_id=account_id,
-            )
-        else:
-            self._dry_run_positions[position_key] = Position(
-                instrument=request.instrument,
-                direction=direction,
-                units=abs_units,
-                average_price=fill_price,
-                unrealized_pnl=Decimal("0"),
-                trade_ids=[order_id],
-                account_id=account_id,
-            )
-
-        logger.info(
-            "[DRY-RUN] Market order simulated: %s %s %s @ %s",
-            direction.value,
-            abs_units,
-            request.instrument,
-            fill_price,
-        )
-
-        return MarketOrder(
-            order_id=order_id,
-            instrument=str(request.instrument),
-            order_type=OrderType.MARKET,
-            direction=direction,
-            units=abs_units,
-            price=fill_price,
-            state=OrderState.FILLED,
-            time_in_force="FOK",
-            create_time=now,
-            fill_time=now,
-            trade_id=trade_id,
-        )
-
-    def _simulate_position_close(
-        self,
-        position: Position,
-        units: Decimal | None,
-        override_price: Decimal | None = None,
-    ) -> MarketOrder:
-        """Simulate position close for dry-run mode."""
-        from apps.market.models import TickData as TickDataModel
-
-        self._dry_run_order_counter += 1
-        order_id = f"DRY-CLOSE-{self._dry_run_order_counter}"
-        now = datetime.now(UTC)
-
-        # Use override price if provided (e.g. from strategy event exit_price)
-        if override_price is not None:
-            close_price = override_price
-        else:
-            # Get latest tick data for close price
-            try:
-                latest_tick = (
-                    TickDataModel.objects.filter(instrument=position.instrument)
-                    .order_by("-timestamp")
-                    .first()
-                )
-                if latest_tick:
-                    # Use opposite side for closing: bid for long close, ask for short close
-                    close_price = (
-                        latest_tick.bid
-                        if position.direction == OrderDirection.LONG
-                        else latest_tick.ask
-                    )
-                else:
-                    close_price = Decimal("1.0000")
-            except Exception:
-                close_price = Decimal("1.0000")
-
-        # Determine closed units even when the position is not tracked locally.
-        close_units = position.units if units is None else min(units, position.units)
-
-        # Update dry-run position tracking
-        position_key = f"{position.instrument}_{position.direction.value}"
-        if position_key in self._dry_run_positions:
-            if close_units >= position.units:
-                # Close entire position
-                del self._dry_run_positions[position_key]
-            else:
-                # Partial close
-                remaining_units = position.units - close_units
-                self._dry_run_positions[position_key] = Position(
-                    instrument=position.instrument,
-                    direction=position.direction,
-                    units=remaining_units,
-                    average_price=position.average_price,
-                    unrealized_pnl=Decimal("0"),
-                    trade_ids=position.trade_ids,
-                    account_id=position.account_id,
-                )
-
-        logger.info(
-            "[DRY-RUN] Position close simulated: %s %s %s @ %s",
-            position.direction.value,
-            close_units,
-            position.instrument,
-            close_price,
-        )
-
-        return MarketOrder(
-            order_id=order_id,
-            instrument=position.instrument,
-            order_type=OrderType.MARKET,
-            direction=position.direction,
-            units=close_units,
-            price=close_price,
-            state=OrderState.FILLED,
-            time_in_force="FOK",
-            create_time=now,
-            fill_time=now,
-        )

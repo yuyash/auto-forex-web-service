@@ -44,6 +44,11 @@ export const configurationsApi = {
           page_size: params?.page_size,
           search: params?.search,
           strategy_type: params?.strategy_type,
+          ordering: params?.ordering,
+          created_from: params?.created_from,
+          created_to: params?.created_to,
+          updated_from: params?.updated_from,
+          updated_to: params?.updated_to,
         }
       )
     );

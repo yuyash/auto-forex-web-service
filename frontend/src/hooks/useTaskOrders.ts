@@ -43,6 +43,7 @@ interface UseTaskOrdersOptions {
   orderId?: string;
   page?: number;
   pageSize?: number;
+  ordering?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   /** Filter orders with submitted_at >= this value. */
@@ -83,13 +84,14 @@ export const useTaskOrders = ({
   orderId,
   page = 1,
   pageSize = 100,
+  ordering = '-submitted_at',
   since,
   timestampFrom,
   timestampTo,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${orderId ?? ''}-${page}-${pageSize}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${orderId ?? ''}-${ordering}-${page}-${pageSize}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}`;
   const {
     items: orders,
     totalCount,
@@ -121,6 +123,7 @@ export const useTaskOrders = ({
       }
       if (timestampFrom) params.timestamp_from = timestampFrom;
       if (timestampTo) params.timestamp_to = timestampTo;
+      if (ordering) params.ordering = ordering;
       return params;
     },
     getLatestCursor: getLatestUpdatedAt,

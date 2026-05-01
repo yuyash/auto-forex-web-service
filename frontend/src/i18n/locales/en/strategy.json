@@ -12,7 +12,6 @@
   },
   "types": {
     "snowball": "Snowball Strategy",
-    "adaptive_net": "Adaptive Net Strategy",
     "trendFollowing": "Trend Following",
     "maCrossover": "MA Crossover",
     "breakout": "Breakout",
@@ -26,8 +25,7 @@
     "newsSpike": "News/Spike"
   },
   "descriptions": {
-    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side.",
-    "adaptive_net": "US-compatible net-position strategy that combines pluggable metrics into a target net exposure."
+    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side."
   },
   "parameters": {
     "lotSize": "Lot Size",
@@ -76,92 +74,5 @@
     "invalidOption": "Invalid option selected",
     "formErrors": "Please fix the errors below before proceeding.",
     "linkedCountZero": "Set the related field first to configure per-step values."
-  },
-  "adaptiveNet": {
-    "noState": "Adaptive Net state will appear after the strategy processes market data.",
-    "directions": {
-      "flat": "Flat",
-      "netLong": "Net Long",
-      "netShort": "Net Short"
-    },
-    "summary": {
-      "currentNet": "Current Net",
-      "targetNet": "Target Net",
-      "nextOrder": "Next Order",
-      "openPosition": "Open Position",
-      "noRebalance": "No rebalance",
-      "deltaToTarget": "Delta to target",
-      "noPosition": "No position"
-    },
-    "prediction": {
-      "title": "Prediction",
-      "description": "Weighted metric output converted into target net exposure.",
-      "longProbability": "Long {{value}}",
-      "shortProbability": "Short {{value}}",
-      "riskMultiplier": "Risk x{{value}}",
-      "directionalEdge": "Directional Edge",
-      "decisionConfidence": "Decision Confidence",
-      "directionalEdgeHelp": "Directional edge is the normalized long-vs-short advantage: -1 is strong short, 0 is neutral, and +1 is strong long."
-    },
-    "metrics": {
-      "title": "Metrics",
-      "description": "Normalized strategy metrics used by the decision engine. Direction score is [-1, +1], confidence is [0, 1], and size multiplier is [0, 1].",
-      "count": "{{count}} metrics",
-      "window": "{{count}} ticks / {{duration}}",
-      "publishCount": "{{count}} metric publishes",
-      "warmingUp": "Metrics are warming up.",
-      "score": "score {{value}}",
-      "confidence": "conf {{value}}",
-      "sizeMultiplier": "size x{{value}}"
-    },
-    "charts": {
-      "noHistory": "Time-series data will appear after at least two rebalance decisions.",
-      "metricScores": "Normalized metric direction scores",
-      "metricConfidence": "Metric confidence",
-      "prediction": "Directional edge and confidence",
-      "decision": "Net exposure and order size"
-    },
-    "metricNames": {
-      "regime": "Regime",
-      "trend_momentum": "Trend Momentum",
-      "mean_reversion": "Mean Reversion",
-      "risk_condition": "Risk Condition",
-      "inventory_exposure": "Inventory Exposure",
-      "timesfm_forecast": "TimesFM Forecast"
-    },
-    "metricReasons": {
-      "regime": "Regime favors directional exposure when trend strength is persistent.",
-      "trend_momentum": "Recent directional move normalized by realized noise.",
-      "mean_reversion": "Distance from rolling mean converted to contrarian pressure.",
-      "risk_condition": "Spread and execution cost gate.",
-      "inventory_exposure": "Existing net exposure penalizes adding in the same direction.",
-      "timesfm_forecast": "Neutral placeholder until a TimesFM forecast provider is connected."
-    },
-    "decision": {
-      "title": "Rebalance Decision",
-      "description": "Compares the prediction with current net exposure and resolves the final direction and order size.",
-      "elapsed": "Since Decision",
-      "direction": "Order Direction",
-      "ticks": "{{count}} ticks",
-      "actions": {
-        "hold": "Hold",
-        "increase": "Increase",
-        "reduce": "Reduce",
-        "reverse": "Reverse"
-      }
-    },
-    "orderDirections": {
-      "buy": "Buy",
-      "sell": "Sell",
-      "hold": "Hold"
-    },
-    "position": {
-      "deltaNet": "Net Position Delta",
-      "absoluteNet": "Absolute Net Position",
-      "averageEntry": "Average Entry",
-      "beforeAfterNet": "{{before}} → {{after}}",
-      "deltaAbs": "absolute delta {{value}}",
-      "beforeAverageEntry": "before {{value}}"
-    }
   }
 }

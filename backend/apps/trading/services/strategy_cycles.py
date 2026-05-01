@@ -25,6 +25,9 @@ class StrategyCyclesService:
         execution_id: UUID | str | None,
         cycle_id: str | None = None,
         include_trades: bool | None = None,
+        ledger_page: int = 1,
+        ledger_page_size: int = 25,
+        ledger_ordering: str = "-timestamp",
     ) -> dict[str, Any]:
         from apps.trading.models.trades import Trade
 
@@ -170,31 +173,9 @@ def _public_strategy_state(
     strategy_state: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """Expose visualization-safe strategy state for non-grid strategy pages."""
-    if strategy_type != "adaptive_net" or not isinstance(strategy_state, dict):
+    if not isinstance(strategy_state, dict):
         return None
-    allowed_keys = {
-        "current_net_units",
-        "target_net_units",
-        "open_units",
-        "open_direction",
-        "open_position_id",
-        "latest_decision",
-        "metric_signals",
-        "published_metric_signals",
-        "published_metric_names",
-        "last_metric_publish_tick",
-        "last_metric_publish_at",
-        "metric_publish_count",
-        "last_decision_metric_publish_count",
-        "last_decision_at",
-        "latest_position_transition",
-        "decision_history",
-        "last_price",
-        "last_spread_pips",
-        "last_fill_price",
-        "previous_net_units",
-    }
-    return {key: strategy_state.get(key) for key in allowed_keys if key in strategy_state}
+    return None
 
 
 def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:

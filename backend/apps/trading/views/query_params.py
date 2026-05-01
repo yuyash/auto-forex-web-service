@@ -14,7 +14,6 @@ from rest_framework.request import Request
 
 from apps.trading.views.pagination import (
     ActivityPagination,
-    MetricsPagination,
     TradePositionPagination,
 )
 
@@ -88,7 +87,9 @@ class QueryFieldSpec:
                 raise _invalid_query_param(f"{self.name} must be one of: {', '.join(self.choices)}")
             return normalized
         if self.kind == "string":
-            return value or ""
+            if value is not None:
+                return value
+            return self.default if isinstance(self.default, str) else ""
         raise ValueError(f"Unsupported query field kind: {self.kind}")
 
 
@@ -203,27 +204,38 @@ ROOT_ENTRY_ID_SPEC = QueryFieldSpec(
     kind="int",
     help_text="Optional root entry group filter.",
 )
-UNTIL_SPEC = QueryFieldSpec(
-    name="until",
-    kind="datetime",
-    help_text="RFC3339 upper-bound timestamp (exclusive).",
-)
-INTERVAL_SPEC = QueryFieldSpec(
-    name="interval",
+LEDGER_PAGE_SPEC = QueryFieldSpec(
+    name="ledger_page",
     kind="int",
     default=1,
-    max_value=1440,
-    help_text=(
-        "Aggregation interval in minutes. Default 1. When greater than 1, "
-        "returns one point per N-minute window."
-    ),
+    help_text="Net grid ledger page number (1-based).",
 )
-METRIC_KEYS_SPEC = QueryFieldSpec(
-    name="metric_keys",
-    kind="string",
-    default="",
-    allow_blank=True,
-    help_text="Optional comma-separated metric keys to include in each metrics object.",
+LEDGER_PAGE_SIZE_SPEC = QueryFieldSpec(
+    name="ledger_page_size",
+    kind="int",
+    default=25,
+    max_value=200,
+    help_text="Net grid ledger rows per page. Default 25, maximum 200.",
+)
+LEDGER_ORDERING_SPEC = QueryFieldSpec(
+    name="ledger_ordering",
+    kind="choice",
+    default="-timestamp",
+    choices=(
+        "-timestamp",
+        "timestamp",
+        "-action",
+        "action",
+        "-units_delta",
+        "units_delta",
+        "-filled_price",
+        "filled_price",
+        "-net_units_after",
+        "net_units_after",
+        "-realized_pnl",
+        "realized_pnl",
+    ),
+    help_text="Net grid ledger ordering field. Prefix with '-' for descending.",
 )
 LEVEL_SPEC = QueryFieldSpec(
     name="level",
@@ -254,6 +266,13 @@ ORDER_ID_SPEC = QueryFieldSpec(
     kind="string",
     allow_blank=True,
     help_text="Optional order ID prefix filter.",
+)
+ORDERING_SPEC = QueryFieldSpec(
+    name="ordering",
+    kind="string",
+    default="",
+    allow_blank=True,
+    help_text="Sort field. Prefix with '-' for descending.",
 )
 TIMESTAMP_FROM_SPEC = QueryFieldSpec(
     name="timestamp_from",
@@ -346,10 +365,6 @@ ACTIVITY_PAGE_SIZE_SPEC = _page_size_spec(
     default=ActivityPagination.page_size,
     max_value=ActivityPagination.max_page_size,
 )
-METRICS_PAGE_SIZE_SPEC = _page_size_spec(
-    default=MetricsPagination.page_size,
-    max_value=MetricsPagination.max_page_size,
-)
 TRADE_POSITION_PAGE_SIZE_SPEC = _page_size_spec(
     default=TradePositionPagination.page_size,
     max_value=TradePositionPagination.max_page_size,
@@ -362,10 +377,13 @@ TRADES_DIRECTION_SPEC = QueryFieldSpec(
 )
 TRADES_ORDERING_SPEC = QueryFieldSpec(
     name="ordering",
-    kind="choice",
-    default="asc",
-    choices=("asc", "desc"),
-    help_text="Trade ordering by timestamp/sequence_number.",
+    kind="string",
+    default="-timestamp",
+    allow_blank=True,
+    help_text=(
+        "Trade ordering field. Prefix with '-' for descending. "
+        "Legacy values 'asc' and 'desc' are accepted for timestamp ordering."
+    ),
 )
 TRADE_TIMESTAMP_FROM_SPEC = QueryFieldSpec(
     name="timestamp_from",
@@ -389,7 +407,6 @@ POSITIONS_RANGE_TO_SPEC = QueryFieldSpec(
 )
 
 ACTIVITY_PAGINATION_GROUP = _query_spec_group(PAGE_SPEC, ACTIVITY_PAGE_SIZE_SPEC)
-METRICS_PAGINATION_GROUP = _query_spec_group(PAGE_SPEC, METRICS_PAGE_SIZE_SPEC)
 TRADE_POSITION_PAGINATION_GROUP = _query_spec_group(
     PAGE_SPEC,
     TRADE_POSITION_PAGE_SIZE_SPEC,
@@ -398,11 +415,6 @@ EXECUTION_SCOPED_ACTIVITY_GROUP = _query_spec_group(
     EXECUTION_ID_SPEC,
     SINCE_SPEC,
     *ACTIVITY_PAGINATION_GROUP,
-)
-EXECUTION_SCOPED_METRICS_GROUP = _query_spec_group(
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    *METRICS_PAGINATION_GROUP,
 )
 EXECUTION_SCOPED_TRADE_POSITION_GROUP = _query_spec_group(
     EXECUTION_ID_SPEC,
@@ -465,38 +477,6 @@ def _execution_scoped_group(
     )
 
 
-RUNTIME_QUERY_GROUP_REGISTRY = {
-    "activity_pagination": lambda: QueryGroupSpec(
-        name="ActivityPaginationRuntimeQueryGroup",
-        specs=ACTIVITY_PAGINATION_GROUP,
-    ),
-    "metrics_pagination": lambda: QueryGroupSpec(
-        name="MetricsPaginationRuntimeQueryGroup",
-        specs=METRICS_PAGINATION_GROUP,
-    ),
-    "trade_position_pagination": lambda: QueryGroupSpec(
-        name="TradePositionPaginationRuntimeQueryGroup",
-        specs=TRADE_POSITION_PAGINATION_GROUP,
-    ),
-    "position_filters": lambda: QueryGroupSpec(
-        name="PositionFiltersRuntimeQueryGroup",
-        specs=(POSITION_STATUS_SPEC, DIRECTION_SPEC, INCLUDE_TRADE_IDS_SPEC),
-    ),
-    "execution_scoped_activity": lambda: QueryGroupSpec(
-        name="ExecutionScopedActivityRuntimeQueryGroup",
-        specs=EXECUTION_SCOPED_ACTIVITY_GROUP,
-    ),
-    "execution_scoped_metrics": lambda: QueryGroupSpec(
-        name="ExecutionScopedMetricsRuntimeQueryGroup",
-        specs=EXECUTION_SCOPED_METRICS_GROUP,
-    ),
-    "execution_scoped_trade_position": lambda: QueryGroupSpec(
-        name="ExecutionScopedTradePositionRuntimeQueryGroup",
-        specs=EXECUTION_SCOPED_TRADE_POSITION_GROUP,
-    ),
-}
-
-
 def _invalid_query_param(detail: str) -> ValidationError:
     return ValidationError({"code": "invalid_query_param", "detail": detail})
 
@@ -535,11 +515,6 @@ QUERY_GROUP_SPECS = {
         specs=EXECUTION_SCOPED_ACTIVITY_GROUP,
         description="OpenAPI serializer for execution-scoped task query parameters.",
     ),
-    "metrics": QueryGroupSpec(
-        name="MetricsQueryParamsSchemaSerializer",
-        specs=(*EXECUTION_SCOPED_METRICS_GROUP, UNTIL_SPEC, INTERVAL_SPEC, METRIC_KEYS_SPEC),
-        description="OpenAPI serializer for metrics query parameters.",
-    ),
     "logs": QueryGroupSpec(
         name="LogsQueryParamsSchemaSerializer",
         specs=(
@@ -549,6 +524,7 @@ QUERY_GROUP_SPECS = {
             POSITION_ID_SPEC,
             TIMESTAMP_FROM_SPEC,
             TIMESTAMP_TO_SPEC,
+            ORDERING_SPEC,
         ),
         description="OpenAPI serializer for logs query parameters.",
     ),
@@ -567,12 +543,19 @@ QUERY_GROUP_SPECS = {
             SCOPE_SPEC,
             CREATED_FROM_SPEC,
             CREATED_TO_SPEC,
+            ORDERING_SPEC,
         ),
         description="OpenAPI serializer for task events query parameters.",
     ),
     "strategy_events": QueryGroupSpec(
         name="StrategyEventsQueryParamsSchemaSerializer",
-        specs=(EXECUTION_ID_SPEC, ROOT_ENTRY_ID_SPEC),
+        specs=(
+            EXECUTION_ID_SPEC,
+            ROOT_ENTRY_ID_SPEC,
+            LEDGER_PAGE_SPEC,
+            LEDGER_PAGE_SIZE_SPEC,
+            LEDGER_ORDERING_SPEC,
+        ),
         description="OpenAPI serializer for strategy event visualization parameters.",
         base=QueryParamsSerializer,
     ),
@@ -600,6 +583,7 @@ QUERY_GROUP_SPECS = {
             POSITIONS_RANGE_FROM_SPEC,
             POSITIONS_RANGE_TO_SPEC,
             POSITION_ID_SPEC,
+            ORDERING_SPEC,
         ),
         description="OpenAPI serializer for positions query parameters.",
     ),
@@ -609,11 +593,6 @@ QUERY_GROUP_SPECS = {
         description="OpenAPI serializer for position lifecycle query parameters.",
         base=QueryParamsSerializer,
     ),
-    "trend_replay": QueryGroupSpec(
-        name="TrendReplayQueryParamsSchemaSerializer",
-        specs=(*EXECUTION_SCOPED_TRADE_POSITION_GROUP, RANGE_FROM_SPEC, RANGE_TO_SPEC),
-        description="OpenAPI serializer for trend replay parameters.",
-    ),
     "orders": QueryGroupSpec(
         name="OrdersQueryParamsSchemaSerializer",
         specs=(
@@ -622,6 +601,9 @@ QUERY_GROUP_SPECS = {
             ORDER_TYPE_SPEC,
             DIRECTION_SPEC,
             ORDER_ID_SPEC,
+            TIMESTAMP_FROM_SPEC,
+            TIMESTAMP_TO_SPEC,
+            ORDERING_SPEC,
         ),
         description="OpenAPI serializer for orders query parameters.",
     ),
@@ -653,7 +635,6 @@ ENDPOINT_QUERY_SPECS = {
     endpoint: EndpointQuerySpec(endpoint=endpoint, group_key=endpoint)
     for endpoint in (
         "execution_scoped",
-        "metrics",
         "logs",
         "log_components",
         "events",
@@ -661,7 +642,6 @@ ENDPOINT_QUERY_SPECS = {
         "trades",
         "positions",
         "position_lifecycle",
-        "trend_replay",
         "orders",
         "summary",
         "executions",
@@ -747,17 +727,6 @@ def _build_date_range_query(
     )
 
 
-def _validate_optional_datetime_range(
-    *,
-    start: datetime | None,
-    end: datetime | None,
-    start_name: str,
-    end_name: str,
-) -> None:
-    if start and end and start > end:
-        raise _invalid_query_param(f"{start_name} must be earlier than or equal to {end_name}")
-
-
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
         parsed = parse_datetime(value)
@@ -801,7 +770,6 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
 
 
 ExecutionScopedQueryParamsSchemaSerializer = _build_query_serializer_alias("execution_scoped")
-MetricsQueryParamsSchemaSerializer = _build_query_serializer_alias("metrics")
 LogsQueryParamsSchemaSerializer = _build_query_serializer_alias("logs")
 LogComponentsQueryParamsSchemaSerializer = _build_query_serializer_alias("log_components")
 EventsQueryParamsSchemaSerializer = _build_query_serializer_alias("events")
@@ -809,7 +777,6 @@ StrategyEventsQueryParamsSchemaSerializer = _build_query_serializer_alias("strat
 TradesQueryParamsSchemaSerializer = _build_query_serializer_alias("trades")
 PositionsQueryParamsSchemaSerializer = _build_query_serializer_alias("positions")
 PositionLifecycleQueryParamsSchemaSerializer = _build_query_serializer_alias("position_lifecycle")
-TrendReplayQueryParamsSchemaSerializer = _build_query_serializer_alias("trend_replay")
 OrdersQueryParamsSchemaSerializer = _build_query_serializer_alias("orders")
 SummaryQueryParamsSchemaSerializer = _build_query_serializer_alias("summary")
 ExecutionsQueryParamsSchemaSerializer = _build_query_serializer_alias("executions")
@@ -905,6 +872,7 @@ class PositionQuery:
     include_trade_ids: bool
     range: DateRangeQuery
     position_id: str
+    ordering: str
 
     @classmethod
     def from_request(
@@ -934,6 +902,7 @@ class PositionQuery:
                 group_name="positions_range",
             ),
             position_id=cast(str, parsed["position_id"]).strip(),
+            ordering=cast(str, parsed["ordering"]),
         )
 
 
@@ -960,52 +929,13 @@ class PositionLifecycleQueryParams:
 
 
 @dataclass(frozen=True)
-class MetricsQueryParams:
-    execution: ExecutionScopedQuery
-    until: datetime | None
-    interval: int
-    metric_keys: tuple[str, ...]
-
-    @classmethod
-    def from_request(
-        cls,
-        request: Request,
-        *,
-        default_execution_id: UUID | None,
-        default_page_size: int,
-        max_page_size: int,
-    ) -> MetricsQueryParams:
-        parsed = _parse_endpoint_group("metrics", request)
-        execution = _build_execution_scoped_query(
-            request,
-            default_execution_id=default_execution_id,
-            default_page_size=default_page_size,
-            max_page_size=max_page_size,
-        )
-        until = cast(datetime | None, parsed["until"])
-        _validate_optional_datetime_range(
-            start=execution.since,
-            end=until,
-            start_name="since",
-            end_name="until",
-        )
-        return cls(
-            execution=execution,
-            until=until,
-            interval=max(1, cast(int | None, parsed["interval"]) or 1),
-            metric_keys=tuple(
-                key.strip() for key in str(parsed["metric_keys"] or "").split(",") if key.strip()
-            ),
-        )
-
-
-@dataclass(frozen=True)
 class LogsQueryParams:
     execution: ExecutionScopedQuery
     levels: list[str]
     components: list[str]
     position_id: str
     timestamp_range: DateRangeQuery
+    ordering: str
 
     @classmethod
     def from_request(
@@ -1017,8 +947,10 @@ class LogsQueryParams:
         max_page_size: int,
     ) -> LogsQueryParams:
         parsed = _parse_endpoint_group("logs", request)
-        level_param = cast(str, parsed["level"])
-        component_param = cast(str, parsed["component"])
+        level_param = cast(str, parsed["level"]) or request.query_params.get("levels", "")
+        component_param = cast(str, parsed["component"]) or request.query_params.get(
+            "components", ""
+        )
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -1035,6 +967,7 @@ class LogsQueryParams:
                 end_key="timestamp_to",
                 group_name="timestamp",
             ),
+            ordering=cast(str, parsed["ordering"]),
         )
 
 
@@ -1045,6 +978,7 @@ class EventsQueryParams:
     severity: str
     scope: str
     created_range: DateRangeQuery
+    ordering: str
 
     @classmethod
     def from_request(
@@ -1073,6 +1007,7 @@ class EventsQueryParams:
                 end_key="created_to",
                 group_name="created",
             ),
+            ordering=cast(str, parsed["ordering"]),
         )
 
 
@@ -1104,7 +1039,7 @@ class TradesQueryParams:
             ),
             cycle_id=cast(UUID | None, parsed["cycle_id"]),
             direction=cast(str, parsed["direction"]),
-            ordering=cast(str, parsed["ordering"]) or "asc",
+            ordering=cast(str, parsed["ordering"]) or "-timestamp",
             timestamp_range=_build_date_range_query(
                 request,
                 start_key="timestamp_from",
@@ -1122,6 +1057,8 @@ class OrdersQueryParams:
     order_type: str
     direction: str
     order_id: str
+    timestamp_range: DateRangeQuery
+    ordering: str
 
     @classmethod
     def from_request(
@@ -1144,6 +1081,13 @@ class OrdersQueryParams:
             order_type=cast(str, parsed["order_type"]),
             direction=cast(str, parsed["direction"]),
             order_id=cast(str, parsed["order_id"]).strip(),
+            timestamp_range=_build_date_range_query(
+                request,
+                start_key="timestamp_from",
+                end_key="timestamp_to",
+                group_name="timestamp",
+            ),
+            ordering=cast(str, parsed["ordering"]),
         )
 
 
@@ -1168,6 +1112,9 @@ class LogComponentsQueryParams:
 class StrategyEventsQueryParams:
     execution_id: UUID | None
     root_entry_id: int | None
+    ledger_page: int
+    ledger_page_size: int
+    ledger_ordering: str
 
     @classmethod
     def from_request(
@@ -1181,6 +1128,9 @@ class StrategyEventsQueryParams:
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
             root_entry_id=root_entry_id,
+            ledger_page=cast(int, parsed["ledger_page"]),
+            ledger_page_size=cast(int, parsed["ledger_page_size"]),
+            ledger_ordering=cast(str, parsed["ledger_ordering"]) or "-timestamp",
         )
 
 
@@ -1234,32 +1184,3 @@ class ExecutionDetailQueryParams:
     def from_request(cls, request: Request) -> ExecutionDetailQueryParams:
         parsed = _parse_endpoint_group("execution_detail", request)
         return cls(include_metrics=cast(bool, parsed["include_metrics"]))
-
-
-@dataclass(frozen=True)
-class TrendReplayQueryParams:
-    execution: ExecutionScopedQuery
-    range: DateRangeQuery
-
-    @classmethod
-    def from_request(
-        cls,
-        request: Request,
-        *,
-        default_execution_id: UUID | None,
-        default_page_size: int,
-        max_page_size: int,
-    ) -> TrendReplayQueryParams:
-        return cls(
-            execution=_build_execution_scoped_query(
-                request,
-                default_execution_id=default_execution_id,
-                default_page_size=default_page_size,
-                max_page_size=max_page_size,
-            ),
-            range=_build_date_range_query(
-                request,
-                start_key="range_from",
-                end_key="range_to",
-            ),
-        )

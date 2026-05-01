@@ -279,7 +279,6 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         config = attrs.get("config") or getattr(self.instance, "config", None)
         if not config:
             raise serializers.ValidationError({"config": "Strategy configuration is required"})
-
         is_valid, error_message = config.validate_parameters()
         if not is_valid:
             raise serializers.ValidationError({"config": error_message})

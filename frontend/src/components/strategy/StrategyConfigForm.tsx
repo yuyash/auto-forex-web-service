@@ -15,6 +15,7 @@ import {
   Stack,
   Tooltip,
   IconButton,
+  Button,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +23,7 @@ import type {
   ConfigSchema,
   ConfigProperty,
   StrategyConfig,
+  ConfigPreset,
 } from '../../types/strategy';
 import { orderConfigFieldTuples } from '../../utils/configFieldOrder';
 import {
@@ -83,6 +85,17 @@ const StrategyConfigForm = ({
         | undefined;
       if (langDescriptions?.[value]) return langDescriptions[value];
       return prop.enum_descriptions?.[value];
+    },
+    [i18n.language]
+  );
+
+  const localizedPresetField = useCallback(
+    (
+      preset: ConfigPreset,
+      field: 'label' | 'description'
+    ): string | undefined => {
+      const langKey = `${field}_${i18n.language}` as keyof ConfigPreset;
+      return (preset[langKey] as string | undefined) ?? preset[field];
     },
     [i18n.language]
   );
@@ -330,6 +343,13 @@ const StrategyConfigForm = ({
     }
 
     onChange(updatedConfig);
+  };
+
+  const handlePresetApply = (preset: ConfigPreset) => {
+    onChange({
+      ...config,
+      ...preset.parameters,
+    });
   };
 
   const setJsonFieldError = (fieldName: string, message: string | null) => {
@@ -863,6 +883,34 @@ const StrategyConfigForm = ({
 
   return (
     <Box>
+      {configSchema.presets && configSchema.presets.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            {t('presets.title', { defaultValue: 'Presets' })}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            {configSchema.presets.map((preset) => (
+              <Tooltip
+                key={preset.id}
+                title={localizedPresetField(preset, 'description') ?? ''}
+                arrow
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={disabled}
+                    onClick={() => handlePresetApply(preset)}
+                  >
+                    {localizedPresetField(preset, 'label') ?? preset.id}
+                  </Button>
+                </span>
+              </Tooltip>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
       {showValidation && hasErrors && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {t('validation.formErrors', {

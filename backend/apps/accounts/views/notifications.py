@@ -4,15 +4,34 @@ from logging import Logger, getLogger
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import (
+    OrderingConfig,
+    apply_queryset_ordering,
+    invalid_query_param,
+    parse_datetime_param,
+)
 from apps.accounts.models import UserNotification
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
+
+NOTIFICATION_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "title": "title",
+        "severity": "severity",
+        "timestamp": "timestamp",
+        "read": "is_read",
+        "notification_type": "notification_type",
+    },
+    default="-timestamp",
+)
 
 
 class UserNotificationListView(APIView):
@@ -26,6 +45,11 @@ class UserNotificationListView(APIView):
         tags=["Accounts"],
         parameters=[
             OpenApiParameter(name="unread_only", type=bool, required=False),
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
+            OpenApiParameter(name="ordering", type=str, required=False),
+            OpenApiParameter(name="timestamp_from", type=str, required=False),
+            OpenApiParameter(name="timestamp_to", type=str, required=False),
         ],
         responses={
             200: inline_serializer(
@@ -65,10 +89,31 @@ class UserNotificationListView(APIView):
 
             unread_only = request.query_params.get("unread_only")
             unread_only_bool = str(unread_only).lower() in {"1", "true", "yes"}
+            timestamp_from = parse_datetime_param(
+                request.query_params.get("timestamp_from"),
+                field_name="timestamp_from",
+            )
+            timestamp_to = parse_datetime_param(
+                request.query_params.get("timestamp_to"),
+                field_name="timestamp_to",
+            )
+            if timestamp_from and timestamp_to and timestamp_from > timestamp_to:
+                raise invalid_query_param(
+                    "timestamp_from must be earlier than or equal to timestamp_to"
+                )
 
-            queryset = UserNotification.objects.filter(user_id=user_id).order_by("-timestamp")
+            queryset = UserNotification.objects.filter(user_id=user_id)
             if unread_only_bool:
                 queryset = queryset.filter(is_read=False)
+            if timestamp_from:
+                queryset = queryset.filter(timestamp__gte=timestamp_from)
+            if timestamp_to:
+                queryset = queryset.filter(timestamp__lte=timestamp_to)
+            queryset = apply_queryset_ordering(
+                queryset,
+                request.query_params.get("ordering"),
+                NOTIFICATION_ORDERING,
+            )
 
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(queryset, request)
@@ -88,6 +133,8 @@ class UserNotificationListView(APIView):
             ]
             return paginator.get_paginated_response(data)
 
+        except ValidationError:
+            raise
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Failed to list user notifications: %s", exc, exc_info=True)
             return Response(

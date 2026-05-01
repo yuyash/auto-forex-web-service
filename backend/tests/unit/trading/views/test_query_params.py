@@ -11,7 +11,6 @@ from rest_framework.test import APIRequestFactory
 
 from apps.trading.views.pagination import (
     ActivityPagination,
-    MetricsPagination,
     TradePositionPagination,
 )
 from apps.trading.views.query_params import (
@@ -21,14 +20,12 @@ from apps.trading.views.query_params import (
     ExecutionsQueryParamsSchemaSerializer,
     LogComponentsQueryParams,
     LogsQueryParams,
-    MetricsQueryParams,
     OrdersQueryParams,
     PositionQuery,
     StrategyEventsQueryParams,
     SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
     TradesQueryParams,
-    TrendReplayQueryParams,
 )
 
 factory = APIRequestFactory()
@@ -39,33 +36,12 @@ def _request(query: str = "") -> Request:
     return Request(django_request)
 
 
-def test_metrics_query_params_parses_execution_pagination_and_interval():
-    execution_id = uuid4()
-    request = _request(
-        f"?execution_id={execution_id}&since=2026-01-01T00:00:00Z&until=2026-01-02T00:00:00Z"
-        "&interval=15&page=2&page_size=25"
-    )
-
-    query = MetricsQueryParams.from_request(
-        request,
-        default_execution_id=None,
-        default_page_size=MetricsPagination.page_size,
-        max_page_size=MetricsPagination.max_page_size,
-    )
-
-    assert query.execution.execution_id == execution_id
-    assert query.execution.pagination.page == 2
-    assert query.execution.pagination.page_size == 25
-    assert query.interval == 15
-    assert query.until is not None
-
-
 def test_logs_query_params_splits_levels_components_and_range():
     execution_id = uuid4()
     request = _request(
         f"?execution_id={execution_id}&level=info,error&component=strategy,executor"
         "&position_id=pos-1&timestamp_from=2026-01-01T00:00:00Z"
-        "&timestamp_to=2026-01-01T01:00:00Z"
+        "&timestamp_to=2026-01-01T01:00:00Z&ordering=component"
     )
 
     query = LogsQueryParams.from_request(
@@ -81,6 +57,7 @@ def test_logs_query_params_splits_levels_components_and_range():
     assert query.position_id == "pos-1"
     assert query.timestamp_range.start is not None
     assert query.timestamp_range.end is not None
+    assert query.ordering == "component"
 
 
 def test_events_query_params_defaults_scope_to_all():
@@ -157,7 +134,9 @@ def test_position_query_parses_filters_and_overlap_range():
 
 def test_strategy_events_query_params_uses_default_execution_id():
     default_execution_id = uuid4()
-    request = _request("?root_entry_id=42")
+    request = _request(
+        "?root_entry_id=42&ledger_page=3&ledger_page_size=50&ledger_ordering=-realized_pnl"
+    )
 
     query = StrategyEventsQueryParams.from_request(
         request,
@@ -166,6 +145,9 @@ def test_strategy_events_query_params_uses_default_execution_id():
 
     assert query.execution_id == default_execution_id
     assert query.root_entry_id == 42
+    assert query.ledger_page == 3
+    assert query.ledger_page_size == 50
+    assert query.ledger_ordering == "-realized_pnl"
 
 
 def test_log_components_query_params_uses_default_execution_id():
@@ -209,27 +191,6 @@ def test_execution_detail_query_params_defaults_metrics_false():
     query = ExecutionDetailQueryParams.from_request(_request())
 
     assert query.include_metrics is False
-
-
-def test_trend_replay_query_params_parse_range_and_pagination():
-    execution_id = uuid4()
-    request = _request(
-        f"?execution_id={execution_id}&range_from=2026-01-01T00:00:00Z"
-        "&range_to=2026-01-01T01:00:00Z&page=2&page_size=20"
-    )
-
-    query = TrendReplayQueryParams.from_request(
-        request,
-        default_execution_id=None,
-        default_page_size=TradePositionPagination.page_size,
-        max_page_size=TradePositionPagination.max_page_size,
-    )
-
-    assert query.execution.execution_id == execution_id
-    assert query.execution.pagination.page == 2
-    assert query.execution.pagination.page_size == 20
-    assert query.range.start is not None
-    assert query.range.end is not None
 
 
 def test_summary_schema_serializer_exposes_execution_id_field_metadata():
@@ -295,15 +256,6 @@ def test_position_query_reject_invalid_cycle_id():
 @pytest.mark.parametrize(
     ("query_class", "kwargs", "query"),
     [
-        (
-            MetricsQueryParams,
-            {
-                "default_execution_id": None,
-                "default_page_size": MetricsPagination.page_size,
-                "max_page_size": MetricsPagination.max_page_size,
-            },
-            "?since=2026-01-02T00:00:00Z&until=2026-01-01T00:00:00Z",
-        ),
         (
             LogsQueryParams,
             {

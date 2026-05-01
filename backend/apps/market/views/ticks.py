@@ -1,20 +1,32 @@
 """Tick data views."""
 
-from datetime import datetime
 from logging import Logger, getLogger
 
 from django.db.models import Max, Min
-from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import (
+    OrderingConfig,
+    apply_queryset_ordering,
+    invalid_query_param,
+    normalize_ordering,
+    parse_datetime_param,
+)
 from apps.market.models import TickData
 
 logger: Logger = getLogger(name=__name__)
+
+TICK_ORDERING = OrderingConfig(
+    fields={"timestamp": "timestamp"},
+    default="timestamp",
+    tie_breakers=(),
+)
 
 
 class TickDataView(APIView):
@@ -38,6 +50,12 @@ class TickDataView(APIView):
                 name="limit",
                 type=int,
                 required=False,
+                description="Deprecated alias for page_size (1-5000, default 5000)",
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                required=False,
                 description="Page size (1-5000, default 5000)",
             ),
             OpenApiParameter(
@@ -45,6 +63,12 @@ class TickDataView(APIView):
                 type=str,
                 required=False,
                 description="Cursor returned by previous response for pagination",
+            ),
+            OpenApiParameter(
+                name="ordering",
+                type=str,
+                required=False,
+                description="timestamp or -timestamp",
             ),
         ],
         responses={
@@ -76,7 +100,9 @@ class TickDataView(APIView):
         from_time = request.query_params.get("from_time")
         to_time = request.query_params.get("to_time")
         cursor = request.query_params.get("cursor")
-        limit_raw = request.query_params.get("limit", "5000")
+        limit_raw = request.query_params.get("page_size") or request.query_params.get(
+            "limit", "5000"
+        )
 
         if not instrument:
             return Response(
@@ -99,31 +125,32 @@ class TickDataView(APIView):
 
         try:
             queryset = TickData.objects.filter(instrument=instrument)
+            ordering = normalize_ordering(request.query_params.get("ordering"), TICK_ORDERING)
+            descending = ordering.startswith("-")
+            from_dt = parse_datetime_param(from_time, field_name="from_time")
+            to_dt = parse_datetime_param(to_time, field_name="to_time")
+            if from_dt and to_dt and from_dt > to_dt:
+                raise invalid_query_param("from_time must be earlier than or equal to to_time")
 
-            if from_time:
-                from_dt = datetime.fromisoformat(from_time.replace("Z", "+00:00"))
-                if timezone.is_naive(from_dt):
-                    from_dt = timezone.make_aware(from_dt)
+            if from_dt:
                 queryset = queryset.filter(timestamp__gte=from_dt)
 
-            if to_time:
-                to_dt = datetime.fromisoformat(to_time.replace("Z", "+00:00"))
-                if timezone.is_naive(to_dt):
-                    to_dt = timezone.make_aware(to_dt)
+            if to_dt:
                 queryset = queryset.filter(timestamp__lte=to_dt)
 
             # Cursor-based pagination: cursor is an ISO-8601 timestamp
             if cursor:
-                cursor_dt = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
-                if timezone.is_naive(cursor_dt):
-                    cursor_dt = timezone.make_aware(cursor_dt)
-                queryset = queryset.filter(timestamp__gt=cursor_dt)
+                cursor_dt = parse_datetime_param(cursor, field_name="cursor")
+                cursor_filter = "timestamp__lt" if descending else "timestamp__gt"
+                queryset = queryset.filter(**{cursor_filter: cursor_dt})
 
             # Fetch limit+1 to determine if there is a next page
             ticks = list(
-                queryset.order_by("timestamp").values(
-                    "instrument", "timestamp", "bid", "ask", "mid"
-                )[: limit + 1]
+                apply_queryset_ordering(
+                    queryset,
+                    request.query_params.get("ordering"),
+                    TICK_ORDERING,
+                ).values("instrument", "timestamp", "bid", "ask", "mid")[: limit + 1]
             )
 
             has_next = len(ticks) > limit
@@ -152,11 +179,8 @@ class TickDataView(APIView):
                     "ticks": results,
                 }
             )
-        except ValueError:
-            return Response(
-                {"error": "Invalid time format"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        except ValidationError:
+            raise
         except Exception as exc:
             logger.error("Error fetching ticks: %s", exc, exc_info=True)
             return Response(

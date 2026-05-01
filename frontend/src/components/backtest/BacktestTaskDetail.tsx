@@ -62,8 +62,10 @@ import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
+import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabs';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
+import { useStrategySnapshot } from '../../hooks/useStrategyData';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
@@ -118,8 +120,6 @@ export const BacktestTaskDetail: React.FC = () => {
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs.map((t) => t.id);
-  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -139,6 +139,12 @@ export const BacktestTaskDetail: React.FC = () => {
   const { strategies } = useStrategies();
   const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
+  const effectiveVisibleTabs = useMemo(
+    () => visibleTabsForStrategy(visibleTabs, task?.strategy_type),
+    [task?.strategy_type, visibleTabs]
+  );
+  const visibleTabIds = effectiveVisibleTabs.map((tab) => tab.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -178,6 +184,18 @@ export const BacktestTaskDetail: React.FC = () => {
   );
 
   const { summary: s } = overviewSummary;
+  const overviewStrategySnapshot = useStrategySnapshot({
+    taskId,
+    taskType: TaskType.BACKTEST,
+    executionRunId: effectiveExecutionId,
+    enabled: Boolean(taskId) && activeTabId === 'overview',
+    refetchInterval:
+      !isViewingHistorical &&
+      activeTabId === 'overview' &&
+      shouldPollTaskStatus(currentStatus)
+        ? statusPollingIntervalMs
+        : false,
+  });
 
   const [metricsInterval, setMetricsInterval] = useState(0);
   const [metricsSince, setMetricsSince] = useState('');
@@ -415,7 +433,7 @@ export const BacktestTaskDetail: React.FC = () => {
       <Paper sx={taskDetailLayout.tabPaper}>
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={visibleTabs}
+          visibleTabs={effectiveVisibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}
@@ -439,6 +457,9 @@ export const BacktestTaskDetail: React.FC = () => {
               strategies={strategies}
               pnlCurrency={pnlCurrency}
               latestMetrics={metricsResult.latest}
+              strategySnapshot={overviewStrategySnapshot.data ?? null}
+              strategySnapshotLoading={overviewStrategySnapshot.isLoading}
+              strategySnapshotError={overviewStrategySnapshot.error}
               timezone={timezone}
               language={language}
               isViewingHistorical={isViewingHistorical}

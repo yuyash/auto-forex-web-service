@@ -13,6 +13,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.trading.views.strategy_data_mixin import TaskStrategyDataMixin
 from apps.trading.views.throttles import TaskDataRateThrottle
 
 from apps.trading.serializers.events import (
@@ -25,11 +26,9 @@ from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
-from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.services.task_metrics import (
     paginated_envelope as _paginated_envelope,
 )
-from apps.trading.services.task_metrics import TaskMetricsQueryService
 from apps.trading.views.query_params import (
     ExecutionDetailQueryParams,
     ExecutionDetailQueryParamsSchemaSerializer,
@@ -38,7 +37,6 @@ from apps.trading.views.query_params import (
     EventsQueryParamsSchemaSerializer,
     LogComponentsQueryParamsSchemaSerializer,
     LogsQueryParamsSchemaSerializer,
-    MetricsQueryParamsSchemaSerializer,
     OrdersQueryParamsSchemaSerializer,
     PositionLifecycleQueryParams,
     PositionLifecycleQueryParamsSchemaSerializer,
@@ -48,8 +46,6 @@ from apps.trading.views.query_params import (
     SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
     TradesQueryParamsSchemaSerializer,
-    TrendReplayQueryParams,
-    TrendReplayQueryParamsSchemaSerializer,
 )
 from apps.trading.views.pagination import (
     ActivityPagination,
@@ -57,84 +53,10 @@ from apps.trading.views.pagination import (
 )
 
 
-class TaskSubResourceMixin:
+class TaskSubResourceMixin(TaskStrategyDataMixin):
     """Mixin providing paginated logs / events / trades actions."""
 
     task_type_label: str
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[MetricsQueryParamsSchemaSerializer],
-        responses={
-            200: inline_serializer(
-                "TaskMetricsResponse",
-                fields={
-                    "count": serializers.IntegerField(),
-                    "next": serializers.CharField(allow_null=True),
-                    "previous": serializers.CharField(allow_null=True),
-                    "data_source": serializers.CharField(),
-                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
-                    "consistency_warnings": serializers.ListField(
-                        child=serializers.JSONField(), required=False
-                    ),
-                    "results": serializers.ListField(
-                        child=inline_serializer(
-                            "TaskMetricPoint",
-                            fields={
-                                "t": serializers.IntegerField(),
-                                "metrics": serializers.DictField(),
-                            },
-                        )
-                    ),
-                },
-            )
-        },
-        description="Retrieve paginated time-series metrics for the task.",
-    )
-    @action(
-        detail=True, methods=["get"], url_path="metrics", throttle_classes=[TaskDataRateThrottle]
-    )
-    def metrics(self, request: Request, pk: int | None = None) -> Response:
-        task = self.get_object()  # type: ignore[attr-defined]
-        payload = TaskMetricsQueryService().list_metrics(
-            request=request,
-            task=task,
-            task_type_label=self.task_type_label,
-        )
-        return Response(payload)
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[MetricsQueryParamsSchemaSerializer],
-        responses={
-            200: inline_serializer(
-                "TaskLatestMetricResponse",
-                fields={
-                    "data_source": serializers.CharField(),
-                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
-                    "consistency_warnings": serializers.ListField(
-                        child=serializers.JSONField(), required=False
-                    ),
-                    "result": serializers.JSONField(allow_null=True),
-                },
-            )
-        },
-        description="Retrieve the latest time-series metric point for the task.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="latest-metrics",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def latest_metrics(self, request: Request, pk: int | None = None) -> Response:
-        task = self.get_object()  # type: ignore[attr-defined]
-        payload = TaskMetricsQueryService().latest_metric(
-            request=request,
-            task=task,
-            task_type_label=self.task_type_label,
-        )
-        return Response(payload)
 
     @extend_schema(
         tags=["Trading"],
@@ -256,6 +178,9 @@ class TaskSubResourceMixin:
             task_type=self.task_type_label,
             execution_id=query.execution_id,
             cycle_id=cycle_id,
+            ledger_page=query.ledger_page,
+            ledger_page_size=query.ledger_page_size,
+            ledger_ordering=query.ledger_ordering,
         )
         return Response(response)
 
@@ -367,53 +292,6 @@ class TaskSubResourceMixin:
                 {"code": "invalid_query_param", "detail": "Invalid query parameters."}
             ) from exc
         return Response(payload)
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[TrendReplayQueryParamsSchemaSerializer],
-        responses={200: TaskTrendReplaySerializer},
-        description="Retrieve chart-oriented trades and positions for task trend replay.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="trend-replay",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def trend_replay(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.services.trend_replay import (
-            DEFAULT_TREND_REPLAY_PAGE_SIZE,
-            MAX_TREND_REPLAY_PAGE_SIZE,
-            TrendReplayQuery,
-            build_trend_replay_payload,
-        )
-
-        task = self.get_object()  # type: ignore[attr-defined]
-        query = TrendReplayQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=DEFAULT_TREND_REPLAY_PAGE_SIZE,
-            max_page_size=MAX_TREND_REPLAY_PAGE_SIZE,
-        )
-
-        payload = build_trend_replay_payload(
-            TrendReplayQuery(
-                task_type=self.task_type_label,
-                task_id=str(task.pk),
-                execution_id=(
-                    str(query.execution.execution_id)
-                    if query.execution.execution_id is not None
-                    else None
-                ),
-                range_from=query.range.start,
-                range_to=query.range.end,
-                since=query.execution.since,
-                page=query.execution.pagination.page,
-                page_size=query.execution.pagination.page_size,
-            )
-        )
-        serializer = TaskTrendReplaySerializer(payload)
-        return Response(serializer.data)
 
     # ------------------------------------------------------------------
     # orders (with incremental fetching via `since`)

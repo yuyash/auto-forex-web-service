@@ -40,6 +40,16 @@ export interface ConfigSchema {
   display_name?: string;
   properties: Record<string, ConfigProperty>;
   required?: string[];
+  presets?: ConfigPreset[];
+}
+
+export interface ConfigPreset {
+  id: string;
+  label: string;
+  description?: string;
+  parameters: StrategyConfig;
+  [localizedKey: `label_${string}`]: string | undefined;
+  [localizedKey2: `description_${string}`]: string | undefined;
 }
 
 export interface DependsOnCondition {

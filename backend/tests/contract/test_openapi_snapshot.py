@@ -21,9 +21,9 @@ def test_openapi_snapshot_contains_core_trading_paths() -> None:
     paths = payload.get("paths", {})
     required_paths = {
         "/api/trading/tasks/backtest/",
-        "/api/trading/tasks/backtest/{id}/metrics/",
+        "/api/trading/tasks/backtest/{id}/strategy/metrics/",
         "/api/trading/tasks/trading/",
-        "/api/trading/tasks/trading/{id}/metrics/",
+        "/api/trading/tasks/trading/{id}/strategy/metrics/",
         "/api/trading/strategy-configs/",
     }
     missing = sorted(required_paths - set(paths.keys()))

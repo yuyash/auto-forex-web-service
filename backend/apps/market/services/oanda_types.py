@@ -180,6 +180,10 @@ class Transaction:
     price: Decimal | None = None
     pl: Decimal | None = None
     account_balance: Decimal | None = None
+    order_id: str | None = None
+    trade_id: str | None = None
+    reason: str | None = None
+    raw: dict[str, Any] | None = None
 
 
 class OandaAPIError(Exception):

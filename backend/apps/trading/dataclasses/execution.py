@@ -22,6 +22,8 @@ class EventExecutionResult:
 
     realized_pnl_delta: Decimal = Decimal("0")
     realized_pnl_delta_quote: Decimal = Decimal("0")
+    execution_price: Decimal | None = None
+    executed_units: int = 0
     entry_binding: EntryExecutionBinding | None = None
     position_ids: tuple[str, ...] = ()
     order_ids: tuple[str, ...] = ()

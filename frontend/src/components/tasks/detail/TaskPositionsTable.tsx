@@ -27,10 +27,7 @@ import {
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
-import {
-  useTaskPositions,
-  type TaskPosition,
-} from '../../../hooks/useTaskPositions';
+import type { TaskPosition } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import type { TaskType } from '../../../types/common';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -51,8 +48,14 @@ import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { TaskPositionViewHeader } from './TaskPositionViewHeader';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
+import { useTaskPositionData } from './useTaskPositionData';
 import { useTaskPositionViewMode } from './useTaskPositionViewMode';
 import { useStrategies } from '../../../hooks/useStrategies';
+import {
+  createClosedPositionCopyExtractors,
+  createGenericPositionCopyExtractors,
+  createOpenPositionCopyExtractors,
+} from './taskPositionCopyExtractors';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -86,27 +89,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   // --- View mode ---
   const { viewMode, handleViewModeChange } = useTaskPositionViewMode();
 
-  // --- Pagination state (byStatus mode — 4 tables) ---
-  const [closedLongPage, setClosedLongPage] = useState(0);
-  const [closedShortPage, setClosedShortPage] = useState(0);
-  const [openLongPage, setOpenLongPage] = useState(0);
-  const [openShortPage, setOpenShortPage] = useState(0);
-  const rpp = 10;
-  const [closedLongRpp, setClosedLongRpp] = useState(rpp);
-  const [closedShortRpp, setClosedShortRpp] = useState(rpp);
-  const [openLongRpp, setOpenLongRpp] = useState(rpp);
-  const [openShortRpp, setOpenShortRpp] = useState(rpp);
-
-  // --- Pagination state (byDirection mode — 2 tables) ---
-  const [longPage, setLongPage] = useState(0);
-  const [shortPage, setShortPage] = useState(0);
-  const [longRpp, setLongRpp] = useState(rpp);
-  const [shortRpp, setShortRpp] = useState(rpp);
-
-  // --- Pagination state (all mode — 1 table) ---
-  const [allPage, setAllPage] = useState(0);
-  const [allRpp, setAllRpp] = useState(25);
-
   // --- Reload state ---
   const [reloading, setReloading] = useState<Record<string, boolean>>({});
 
@@ -138,161 +120,31 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const shortSel = useTableRowSelection();
   const allSel = useTableRowSelection();
 
-  // --- Data fetching ---
-  // byStatus mode: 4 queries (only active when viewMode === 'byStatus')
   const {
-    positions: closedLongPos,
-    totalCount: closedLongTotal,
-    isLoading: cl1,
-    error: ce1,
-    refresh: rCL,
-  } = useTaskPositions({
+    closedLong,
+    closedShort,
+    openLong,
+    openShort,
+    long,
+    short,
+    all,
+    isLoading,
+    error,
+    sortField,
+    sortOrder,
+    handleSortChange,
+    resetPages,
+  } = useTaskPositionData({
     taskId,
     taskType,
     executionRunId,
-    status: 'closed',
-    direction: 'long',
-    page: closedLongPage + 1,
-    pageSize: closedLongRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
+    enableRealTimeUpdates,
+    viewMode,
+    effectiveCycleId,
+    effectivePositionId,
     rangeFrom,
     rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
-  const {
-    positions: closedShortPos,
-    totalCount: closedShortTotal,
-    isLoading: cl2,
-    error: ce2,
-    refresh: rCS,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    status: 'closed',
-    direction: 'short',
-    page: closedShortPage + 1,
-    pageSize: closedShortRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
-  });
-  const {
-    positions: openLongPos,
-    totalCount: openLongTotal,
-    isLoading: cl3,
-    error: ce3,
-    refresh: rOL,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    status: 'open',
-    direction: 'long',
-    page: openLongPage + 1,
-    pageSize: openLongRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
-  });
-  const {
-    positions: openShortPos,
-    totalCount: openShortTotal,
-    isLoading: cl4,
-    error: ce4,
-    refresh: rOS,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    status: 'open',
-    direction: 'short',
-    page: openShortPage + 1,
-    pageSize: openShortRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
-  });
-
-  // byDirection mode: 2 queries
-  const {
-    positions: longPos,
-    totalCount: longTotal,
-    isLoading: ld1,
-    error: le1,
-    refresh: rLong,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    direction: 'long',
-    page: longPage + 1,
-    pageSize: longRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
-  });
-  const {
-    positions: shortPos,
-    totalCount: shortTotal,
-    isLoading: ld2,
-    error: le2,
-    refresh: rShort,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    direction: 'short',
-    page: shortPage + 1,
-    pageSize: shortRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
-  });
-
-  // all mode: 1 query
-  const {
-    positions: allPos,
-    totalCount: allTotal,
-    isLoading: ad1,
-    error: ae1,
-    refresh: rAll,
-  } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    page: allPage + 1,
-    pageSize: allRpp,
-    cycleId: effectiveCycleId || undefined,
-    positionId: effectivePositionId || undefined,
-    rangeFrom,
-    rangeTo,
-    enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
-  });
-
-  const isLoading =
-    viewMode === 'byStatus'
-      ? cl1 || cl2 || cl3 || cl4
-      : viewMode === 'byDirection'
-        ? ld1 || ld2
-        : ad1;
-  const error =
-    viewMode === 'byStatus'
-      ? ce1 || ce2 || ce3 || ce4
-      : viewMode === 'byDirection'
-        ? le1 || le2
-        : ae1;
 
   // --- PnL summary ---
   const {
@@ -1003,160 +855,18 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     };
 
   // --- Copy value extractors for each view mode ---
-  const closedExtractors = (
-    dir: 'long' | 'short'
-  ): CopyValueExtractors<TaskPosition> => ({
-    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
-    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
-    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
-    exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
-    instrument: (r) => r.instrument ?? '-',
-    units: (r) => formatAppNumber(Math.abs(r.units)),
-    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
-    retracement_count: (r) =>
-      r.retracement_count != null ? String(r.retracement_count) : '-',
-    entry_price: (r) =>
-      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
-    exit_price: (r) =>
-      r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-',
-    planned_exit_price: (r) =>
-      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
-    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
-    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
-    pips: (r) => {
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-      if (ep != null && xp != null && pipSize) {
-        const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-        if (Number.isFinite(pips)) return formatPrice(pips, 1);
-      }
-      return '-';
-    },
-    realized_pnl: (r) => {
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-      if (ep != null && xp != null) {
-        const u = Math.abs(r.units ?? 0);
-        const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
-        return formatAppNumber(val, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-      }
-      return '-';
-    },
-    close_reason: (r) => r.close_reason ?? '-',
-    stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
-    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
-  });
-
-  const openExtractors = (
-    dir: 'long' | 'short'
-  ): CopyValueExtractors<TaskPosition> => ({
-    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
-    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
-    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
-    instrument: (r) => r.instrument ?? '-',
-    units: (r) => formatAppNumber(Math.abs(r.units)),
-    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
-    retracement_count: (r) =>
-      r.retracement_count != null ? String(r.retracement_count) : '-',
-    entry_price: (r) =>
-      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
-    planned_exit_price: (r) =>
-      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
-    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
-    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
-    pips: (r) => {
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      if (currentPrice != null && ep != null && pipSize) {
-        const pips =
-          (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-        if (Number.isFinite(pips)) return formatPrice(pips, 1);
-      }
-      return '-';
-    },
-    unrealized_pnl: (r) => {
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      if (currentPrice != null && ep != null) {
-        const u = Math.abs(r.units ?? 0);
-        const val =
-          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
-        return formatAppNumber(val, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-      }
-      return '-';
-    },
-    stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
-    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
-  });
-
-  const genericExtractors: CopyValueExtractors<TaskPosition> = {
-    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
-    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
-    direction: (r) => r.direction ?? '-',
-    is_open: (r) => (r.is_open ? 'Open' : 'Closed'),
-    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
-    exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
-    instrument: (r) => r.instrument ?? '-',
-    units: (r) => formatAppNumber(Math.abs(r.units)),
-    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
-    retracement_count: (r) =>
-      r.retracement_count != null ? String(r.retracement_count) : '-',
-    entry_price: (r) =>
-      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
-    exit_price: (r) =>
-      r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-',
-    planned_exit_price: (r) =>
-      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
-    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
-    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
-    pips: (r) => {
-      const dir = r.direction;
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-      if (ep != null && xp != null && pipSize) {
-        const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-        if (Number.isFinite(pips)) return formatPrice(pips, 1);
-      }
-      if (r.is_open && currentPrice != null && ep != null && pipSize) {
-        const pips =
-          (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-        if (Number.isFinite(pips)) return formatPrice(pips, 1);
-      }
-      return '-';
-    },
-    pnl: (r) => {
-      const dir = r.direction;
-      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-      const u = Math.abs(r.units ?? 0);
-      if (!r.is_open && ep != null && xp != null) {
-        return formatAppNumber(dir === 'long' ? (xp - ep) * u : (ep - xp) * u, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-      }
-      if (r.is_open && currentPrice != null && ep != null) {
-        return formatAppNumber(
-          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u,
-          {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }
-        );
-      }
-      return '-';
-    },
-    close_reason: (r) => r.close_reason ?? '-',
-    stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
-    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
+  const copyExtractorOptions = {
+    currentPrice,
+    pipSize,
+    formatTimestamp,
+    formatPrice,
   };
+  const closedExtractors = (dir: 'long' | 'short') =>
+    createClosedPositionCopyExtractors(dir, copyExtractorOptions);
+  const openExtractors = (dir: 'long' | 'short') =>
+    createOpenPositionCopyExtractors(dir, copyExtractorOptions);
+  const genericExtractors =
+    createGenericPositionCopyExtractors(copyExtractorOptions);
 
   // --- Render a pair of Long/Short tables (used by byStatus mode) ---
   const renderPair = (
@@ -1267,8 +977,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               allPageSelected={longSelObj.isAllPageSelected(longIds)}
               indeterminate={longSelObj.isIndeterminate(longIds)}
               onToggleAll={makeToggleAll(longSelObj, longIds)}
-              defaultOrderBy="entry_time"
-              defaultOrder="desc"
+              sortMode="server"
+              orderBy={sortField}
+              order={sortOrder}
+              onSortChange={handleSortChange}
               fillEmptyRows
             />
             <TablePagination
@@ -1344,8 +1056,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               allPageSelected={shortSelObj.isAllPageSelected(shortIds)}
               indeterminate={shortSelObj.isIndeterminate(shortIds)}
               onToggleAll={makeToggleAll(shortSelObj, shortIds)}
-              defaultOrderBy="entry_time"
-              defaultOrder="desc"
+              sortMode="server"
+              orderBy={sortField}
+              order={sortOrder}
+              onSortChange={handleSortChange}
               fillEmptyRows
             />
             <TablePagination
@@ -1437,7 +1151,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           positionIdFilter={positionIdFilter}
           onPositionIdFilterChange={(value) => {
             setPositionIdFilter(value);
-            setAllPage(0);
+            resetPages();
           }}
           hasPositionIdFilter={hasPositionIdFilter}
           isPositionIdFilterValid={isPositionIdFilterValid}
@@ -1445,11 +1159,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           dateTo={dateTo}
           onDateFromChange={(value) => {
             setDateFrom(value);
-            setAllPage(0);
+            resetPages();
           }}
           onDateToChange={(value) => {
             setDateTo(value);
-            setAllPage(0);
+            resetPages();
           }}
         />
         <DataTable
@@ -1468,8 +1182,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           allPageSelected={selObj.isAllPageSelected(ids)}
           indeterminate={selObj.isIndeterminate(ids)}
           onToggleAll={makeToggleAll(selObj, ids)}
-          defaultOrderBy="entry_time"
-          defaultOrder="desc"
+          sortMode="server"
+          orderBy={sortField}
+          order={sortOrder}
+          onSortChange={handleSortChange}
           fillEmptyRows
         />
         <TablePagination
@@ -1501,27 +1217,27 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     {
       key: 'long',
       label: t('tables.positions.longPositions'),
-      data: longPos,
-      total: longTotal,
+      data: long.positions,
+      total: long.totalCount,
       selection: longSel,
-      page: longPage,
-      setPage: setLongPage,
-      rowsPerPage: longRpp,
-      setRowsPerPage: setLongRpp,
-      refresh: rLong,
+      page: long.page,
+      setPage: long.setPage,
+      rowsPerPage: long.rowsPerPage,
+      setRowsPerPage: long.setRowsPerPage,
+      refresh: long.refresh,
       columns: filteredDirCols('long'),
     },
     {
       key: 'short',
       label: t('tables.positions.shortPositions'),
-      data: shortPos,
-      total: shortTotal,
+      data: short.positions,
+      total: short.totalCount,
       selection: shortSel,
-      page: shortPage,
-      setPage: setShortPage,
-      rowsPerPage: shortRpp,
-      setRowsPerPage: setShortRpp,
-      refresh: rShort,
+      page: short.page,
+      setPage: short.setPage,
+      rowsPerPage: short.rowsPerPage,
+      setRowsPerPage: short.setRowsPerPage,
+      refresh: short.refresh,
       columns: filteredDirCols('short'),
     },
   ];
@@ -1529,23 +1245,23 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     {
       key: 'closed',
       label: t('tables.positions.closedPositions'),
-      longData: closedLongPos,
-      longTotal: closedLongTotal,
+      longData: closedLong.positions,
+      longTotal: closedLong.totalCount,
       longSelection: closedLongSel,
-      longPage: closedLongPage,
-      setLongPage: setClosedLongPage,
-      longRowsPerPage: closedLongRpp,
-      setLongRowsPerPage: setClosedLongRpp,
-      longRefresh: rCL,
+      longPage: closedLong.page,
+      setLongPage: closedLong.setPage,
+      longRowsPerPage: closedLong.rowsPerPage,
+      setLongRowsPerPage: closedLong.setRowsPerPage,
+      longRefresh: closedLong.refresh,
       longReloadKey: 'cl',
-      shortData: closedShortPos,
-      shortTotal: closedShortTotal,
+      shortData: closedShort.positions,
+      shortTotal: closedShort.totalCount,
       shortSelection: closedShortSel,
-      shortPage: closedShortPage,
-      setShortPage: setClosedShortPage,
-      shortRowsPerPage: closedShortRpp,
-      setShortRowsPerPage: setClosedShortRpp,
-      shortRefresh: rCS,
+      shortPage: closedShort.page,
+      setShortPage: closedShort.setPage,
+      shortRowsPerPage: closedShort.rowsPerPage,
+      setShortRowsPerPage: closedShort.setRowsPerPage,
+      shortRefresh: closedShort.refresh,
       shortReloadKey: 'cs',
       columns: filteredClosedCols,
       pnlLabel: t('tables.positions.totalRealizedPnl'),
@@ -1556,23 +1272,23 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     {
       key: 'open',
       label: t('tables.positions.openPositions'),
-      longData: openLongPos,
-      longTotal: openLongTotal,
+      longData: openLong.positions,
+      longTotal: openLong.totalCount,
       longSelection: openLongSel,
-      longPage: openLongPage,
-      setLongPage: setOpenLongPage,
-      longRowsPerPage: openLongRpp,
-      setLongRowsPerPage: setOpenLongRpp,
-      longRefresh: rOL,
+      longPage: openLong.page,
+      setLongPage: openLong.setPage,
+      longRowsPerPage: openLong.rowsPerPage,
+      setLongRowsPerPage: openLong.setRowsPerPage,
+      longRefresh: openLong.refresh,
       longReloadKey: 'ol',
-      shortData: openShortPos,
-      shortTotal: openShortTotal,
+      shortData: openShort.positions,
+      shortTotal: openShort.totalCount,
       shortSelection: openShortSel,
-      shortPage: openShortPage,
-      setShortPage: setOpenShortPage,
-      shortRowsPerPage: openShortRpp,
-      setShortRowsPerPage: setOpenShortRpp,
-      shortRefresh: rOS,
+      shortPage: openShort.page,
+      setShortPage: openShort.setPage,
+      shortRowsPerPage: openShort.rowsPerPage,
+      setShortRowsPerPage: openShort.setRowsPerPage,
+      shortRefresh: openShort.refresh,
       shortReloadKey: 'os',
       columns: filteredOpenCols,
       pnlLabel: t('tables.positions.totalUnrealizedPnl'),
@@ -1595,14 +1311,14 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         viewMode={viewMode}
         all={renderSingleTable(
           t('tables.positions.allPositions'),
-          allPos,
-          allTotal,
+          all.positions,
+          all.totalCount,
           allSel,
-          allPage,
-          setAllPage,
-          allRpp,
-          setAllRpp,
-          rAll,
+          all.page,
+          all.setPage,
+          all.rowsPerPage,
+          all.setRowsPerPage,
+          all.refresh,
           'all',
           filteredAllCols(),
           genericExtractors,

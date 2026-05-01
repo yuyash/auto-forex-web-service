@@ -12,7 +12,6 @@
   },
   "types": {
     "snowball": "スノーボール戦略",
-    "adaptive_net": "アダプティブ・ネット戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
     "breakout": "ブレイクアウト",
@@ -26,8 +25,7 @@
     "newsSpike": "ニュース/スパイク"
   },
   "descriptions": {
-    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。",
-    "adaptive_net": "プラグイン式メトリクスを統合し、目標ネット建玉にリバランスする米国口座対応戦略。"
+    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。"
   },
   "parameters": {
     "lotSize": "ロットサイズ",
@@ -76,92 +74,5 @@
     "invalidOption": "無効なオプションが選択されています",
     "formErrors": "以下のエラーを修正してから続行してください。",
     "linkedCountZero": "段別の値を設定するには、先に関連フィールドを設定してください。"
-  },
-  "adaptiveNet": {
-    "noState": "戦略がマーケットデータを処理すると、Adaptive Netの状態が表示されます。",
-    "directions": {
-      "flat": "フラット",
-      "netLong": "ネットロング",
-      "netShort": "ネットショート"
-    },
-    "summary": {
-      "currentNet": "現在ネット建玉",
-      "targetNet": "目標ネット建玉",
-      "nextOrder": "次の注文",
-      "openPosition": "保有ポジション",
-      "noRebalance": "リバランスなし",
-      "deltaToTarget": "目標との差分",
-      "noPosition": "ポジションなし"
-    },
-    "prediction": {
-      "title": "予測",
-      "description": "重み付けしたメトリクス出力を目標ネット建玉に変換します。",
-      "longProbability": "ロング {{value}}",
-      "shortProbability": "ショート {{value}}",
-      "riskMultiplier": "リスク x{{value}}",
-      "directionalEdge": "方向エッジ",
-      "decisionConfidence": "判断信頼度",
-      "directionalEdgeHelp": "方向エッジはロング優位性とショート優位性の差を正規化した値です。-1 は強いショート、0 は中立、+1 は強いロングを示します。"
-    },
-    "metrics": {
-      "title": "メトリクス",
-      "description": "判断エンジンが使用する正規化済みメトリクスです。方向スコアは [-1, +1]、信頼度は [0, 1]、サイズ倍率は [0, 1] です。",
-      "count": "{{count}} 件のメトリクス",
-      "window": "{{count}} ticks / {{duration}}",
-      "publishCount": "メトリクス公開 {{count}} 回",
-      "warmingUp": "メトリクスはウォームアップ中です。",
-      "score": "スコア {{value}}",
-      "confidence": "信頼度 {{value}}",
-      "sizeMultiplier": "サイズ x{{value}}"
-    },
-    "charts": {
-      "noHistory": "2回以上のリバランス判断後に時系列データが表示されます。",
-      "metricScores": "正規化メトリクス方向スコア",
-      "metricConfidence": "メトリクス信頼度",
-      "prediction": "方向エッジと判断信頼度",
-      "decision": "ネット建玉と注文量"
-    },
-    "metricNames": {
-      "regime": "レジーム",
-      "trend_momentum": "トレンド・モメンタム",
-      "mean_reversion": "平均回帰",
-      "risk_condition": "リスク状態",
-      "inventory_exposure": "保有量リスク",
-      "timesfm_forecast": "TimesFM予測"
-    },
-    "metricReasons": {
-      "regime": "トレンド強度が持続している場合、方向性のある建玉を優先します。",
-      "trend_momentum": "直近の方向性のある値動きを実現ノイズで正規化します。",
-      "mean_reversion": "ローリング平均からの距離を逆張り圧力に変換します。",
-      "risk_condition": "スプレッドと執行コストで取引リスクを制御します。",
-      "inventory_exposure": "既存のネット建玉が同方向への追加を抑制します。",
-      "timesfm_forecast": "TimesFM予測プロバイダ接続までは中立のプレースホルダーです。"
-    },
-    "decision": {
-      "title": "リバランス判断",
-      "description": "予測結果を現在ネット建玉と比較し、最終的な目標方向と注文量を決めます。",
-      "elapsed": "前回判断から",
-      "direction": "注文方向",
-      "ticks": "{{count}} ticks",
-      "actions": {
-        "hold": "維持",
-        "increase": "追加",
-        "reduce": "縮小",
-        "reverse": "反転"
-      }
-    },
-    "orderDirections": {
-      "buy": "買い",
-      "sell": "売り",
-      "hold": "維持"
-    },
-    "position": {
-      "deltaNet": "ネット建玉差分",
-      "absoluteNet": "絶対ネット建玉",
-      "averageEntry": "平均取得価格",
-      "beforeAfterNet": "{{before}} → {{after}}",
-      "deltaAbs": "絶対差分 {{value}}",
-      "beforeAverageEntry": "変更前 {{value}}"
-    }
   }
 }

@@ -1,5 +1,6 @@
 """Order views."""
 
+from datetime import datetime
 from logging import Logger, getLogger
 from typing import Any
 
@@ -15,6 +16,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.querying import (
+    OrderingConfig,
+    invalid_query_param,
+    parse_datetime_param,
+    sort_records,
+)
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OrderSerializer
 from apps.market.services.compliance import ComplianceViolationError
@@ -32,6 +39,57 @@ from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
 
+MARKET_ORDER_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "instrument": "instrument",
+        "type": "type",
+        "direction": "direction",
+        "units": "units",
+        "price": "price",
+        "state": "state",
+        "time_in_force": "time_in_force",
+        "create_time": "create_time",
+        "fill_time": "fill_time",
+        "cancel_time": "cancel_time",
+        "take_profit": "take_profit",
+        "stop_loss": "stop_loss",
+        "account_name": "account_name",
+        "account_db_id": "account_db_id",
+    },
+    default="-create_time",
+)
+
+
+def _string_or_none(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _filter_orders_by_created_at(
+    orders: list[dict],
+    *,
+    created_from: datetime | None,
+    created_to: datetime | None,
+) -> list[dict]:
+    if created_from is None and created_to is None:
+        return orders
+    filtered: list[dict] = []
+    for order in orders:
+        create_time = parse_datetime_param(
+            str(order.get("create_time") or ""),
+            field_name="create_time",
+        )
+        if create_time is None:
+            continue
+        if created_from and create_time < created_from:
+            continue
+        if created_to and create_time > created_to:
+            continue
+        filtered.append(order)
+    return filtered
+
 
 def _format_order_dict(order_obj: Any, account: OandaAccounts | None = None) -> dict:
     """Format an order-like object into a consistent API response dict."""
@@ -47,6 +105,8 @@ def _format_order_dict(order_obj: Any, account: OandaAccounts | None = None) -> 
         "create_time": order_obj.create_time.isoformat() if order_obj.create_time else None,
         "fill_time": order_obj.fill_time.isoformat() if order_obj.fill_time else None,
         "cancel_time": order_obj.cancel_time.isoformat() if order_obj.cancel_time else None,
+        "take_profit": _string_or_none(getattr(order_obj, "take_profit", None)),
+        "stop_loss": _string_or_none(getattr(order_obj, "stop_loss", None)),
     }
     if account is not None:
         data["account_name"] = account.account_id
@@ -68,6 +128,10 @@ class MarketOrderSerializer(serializers.Serializer):  # pylint: disable=abstract
     create_time = serializers.DateTimeField(allow_null=True)
     fill_time = serializers.DateTimeField(allow_null=True)
     cancel_time = serializers.DateTimeField(allow_null=True)
+    take_profit = serializers.CharField(allow_null=True, required=False)
+    stop_loss = serializers.CharField(allow_null=True, required=False)
+    account_name = serializers.CharField(required=False)
+    account_db_id = serializers.IntegerField(required=False)
 
 
 class OrderView(APIView):
@@ -100,6 +164,11 @@ class OrderView(APIView):
             OpenApiParameter(name="account_id", type=int, required=False),
             OpenApiParameter(name="instrument", type=str, required=False),
             OpenApiParameter(name="status", type=str, required=False, default="all"),
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
+            OpenApiParameter(name="ordering", type=str, required=False),
+            OpenApiParameter(name="timestamp_from", type=str, required=False),
+            OpenApiParameter(name="timestamp_to", type=str, required=False),
         ],
         responses={
             200: inline_serializer(
@@ -127,6 +196,19 @@ class OrderView(APIView):
         account_id = request.query_params.get("account_id")
         instrument = request.query_params.get("instrument")
         order_status = request.query_params.get("status", "all").lower()
+        created_from = parse_datetime_param(
+            request.query_params.get("timestamp_from")
+            or request.query_params.get("create_time_from"),
+            field_name="timestamp_from",
+        )
+        created_to = parse_datetime_param(
+            request.query_params.get("timestamp_to") or request.query_params.get("create_time_to"),
+            field_name="timestamp_to",
+        )
+        if created_from and created_to and created_from > created_to:
+            raise invalid_query_param(
+                "timestamp_from must be earlier than or equal to timestamp_to"
+            )
 
         accounts, err = get_user_accounts(request, account_id)
         if err is not None:
@@ -174,8 +256,16 @@ class OrderView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # Sort by create_time (newest first)
-        all_orders.sort(key=lambda x: str(x.get("create_time") or ""), reverse=True)
+        all_orders = _filter_orders_by_created_at(
+            all_orders,
+            created_from=created_from,
+            created_to=created_to,
+        )
+        all_orders = sort_records(
+            all_orders,
+            request.query_params.get("ordering"),
+            MARKET_ORDER_ORDERING,
+        )
 
         # Paginate in-memory list
         paginator = self.pagination_class()

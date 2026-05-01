@@ -62,7 +62,7 @@ def _assert_invalid_query_param(response, detail: str) -> None:
 
 @pytest.mark.django_db
 class TestMetrics:
-    """GET /api/trading/tasks/backtest/{id}/metrics/"""
+    """GET /api/trading/tasks/backtest/{id}/strategy/metrics/"""
 
     def test_with_data(self):
         task = _make_task()
@@ -78,20 +78,20 @@ class TestMetrics:
                 metrics={"margin_ratio": str(Decimal("0.05") + Decimal(str(i)) / 100)},
             )
 
-        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 3
-        assert response.data["data_source"] == "db_raw"
+        assert response.data["data_source"] == "strategy_metrics"
         assert len(response.data["results"]) == 3
 
     def test_without_data(self):
         task = _make_task()
         client = _auth_client(task.user)
 
-        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
-        assert response.data["data_source"] == "db_raw"
+        assert response.data["data_source"] == "strategy_metrics"
         assert response.data["results"] == []
 
     def test_interval_metrics_with_null_execution_id(self):
@@ -111,12 +111,12 @@ class TestMetrics:
             )
 
         response = client.get(
-            f"/api/trading/tasks/backtest/{task.pk}/metrics/",
-            {"interval": 2, "page_size": 500},
+            f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/",
+            {"granularity": "2", "page_size": 500},
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
-        assert response.data["data_source"] in {"db_window_last", "db_window_last_python"}
+        assert response.data["data_source"] == "strategy_metrics"
         assert len(response.data["results"]) == 1
 
 
@@ -390,6 +390,60 @@ class TestEvents:
         assert response.data["cycles"][0]["position_ids"] == []
         assert response.data["cycles"][0]["trades"] == []
         assert response.data["summary"]["cycle_count"] == 1
+
+    def test_strategy_data_endpoints_split_snapshot_history_and_metrics(self):
+        task = _make_task(strategy_type="snowball")
+        client = _auth_client(task.user)
+        base = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            current_balance=Decimal("10000"),
+            last_tick_timestamp=base + timedelta(minutes=1),
+            strategy_state={
+                "protection_level": "normal",
+                "cycles": [],
+                "account_balance": "10000",
+                "account_nav": "10000",
+            },
+        )
+        TradingEvent.objects.create(
+            event_type="strategy_tick",
+            severity="info",
+            description="strategy tick",
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            strategy_type="snowball",
+            event_timestamp=base,
+            details={"source": "test"},
+        )
+        Metrics.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=base,
+            metrics={"margin_ratio": "0.1", "current_balance": "10000"},
+        )
+
+        snapshot = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/snapshot/")
+        history = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy/history/",
+            {"category": "event", "page_size": 10},
+        )
+        metrics = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/",
+            {"granularity": "M1", "metric_keys": "margin_ratio"},
+        )
+
+        assert snapshot.status_code == status.HTTP_200_OK
+        assert snapshot.data["snapshot"]["state"]["protection_level"] == "normal"
+        assert history.status_code == status.HTTP_200_OK
+        assert history.data["results"][0]["source"] == "trading_event"
+        assert metrics.status_code == status.HTTP_200_OK
+        assert metrics.data["results"][0]["metrics"] == {"margin_ratio": "0.1"}
+        assert metrics.data["ohlc_layers"]["price_series"] == []
 
     def test_strategy_events_include_snowball_grid_state(self):
         task = _make_task(strategy_type="snowball")
@@ -1470,52 +1524,3 @@ class TestExecutions:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["metrics"]["total_trades"] == 7
         assert response.data["metrics"]["winning_trades"] == 5
-
-
-@pytest.mark.django_db
-class TestTrendReplay:
-    """GET /api/trading/tasks/backtest/{id}/trend-replay/"""
-
-    def test_returns_windowed_trades_and_positions(self):
-        task = _make_task()
-        client = _auth_client(task.user)
-        base_time = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
-
-        position = Position.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            instrument="USD_JPY",
-            direction="long",
-            units=1000,
-            entry_price=Decimal("150.000"),
-            entry_time=base_time,
-            is_open=True,
-        )
-        trade = Trade.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            instrument="USD_JPY",
-            direction="long",
-            units=1000,
-            price=Decimal("150.010"),
-            execution_method="market_entry",
-            timestamp=base_time + timedelta(minutes=1),
-            position=position,
-        )
-
-        response = client.get(
-            f"/api/trading/tasks/backtest/{task.pk}/trend-replay/",
-            {
-                "range_from": base_time.isoformat(),
-                "range_to": (base_time + timedelta(minutes=2)).isoformat(),
-            },
-        )
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["meta"]["mode"] == "windowed"
-        assert response.data["meta"]["returned_trades"] == 1
-        assert len(response.data["trades"]) == 1
-        assert len(response.data["positions"]) == 1
-        assert response.data["trades"][0]["id"] == str(trade.id)
-        assert response.data["positions"][0]["trade_ids"] == [str(trade.id)]

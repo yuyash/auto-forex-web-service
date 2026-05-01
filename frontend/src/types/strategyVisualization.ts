@@ -77,89 +77,123 @@ export interface StrategyCyclesResponse {
     cycle_statuses?: boolean;
     grid?: boolean;
   };
-  strategy_state?: AdaptiveNetStrategyState | null;
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
   last_tick_timestamp: string | null;
 }
 
-export interface AdaptiveNetMetricSignal {
-  name: string;
-  direction_score: string;
-  confidence: string;
-  size_multiplier: string;
-  reason?: string;
+export interface StrategySnapshotCard {
+  id: string;
+  label_key?: string | null;
+  value: unknown;
 }
 
-export interface AdaptiveNetDecision {
-  target_net_units: number;
-  order_units: number;
-  probability_long: string;
-  probability_short: string;
-  edge: string;
-  confidence: string;
-  risk_multiplier: string;
-  metric_signals: AdaptiveNetMetricSignal[];
-  reason?: string;
+export interface StrategySnapshotResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  timestamp?: string | null;
+  snapshot: {
+    status?: string | null;
+    cards: StrategySnapshotCard[];
+    state: Record<string, unknown>;
+  };
 }
 
-export interface AdaptiveNetDecisionHistoryPoint {
-  timestamp: string;
-  current_net_units: number;
-  target_net_units: number;
-  order_units: number;
-  action: 'hold' | 'increase' | 'reduce' | 'reverse' | string;
-  edge: string;
-  confidence: string;
-  probability_long: string;
-  probability_short: string;
-  risk_multiplier: string;
-  metric_signals: AdaptiveNetMetricSignal[];
-  position_transition?: AdaptiveNetPositionTransition | null;
+export interface StrategyHistoryEntry {
+  id: string;
+  timestamp?: string | null;
+  t?: number | null;
+  source: string;
+  category: string;
+  action?: string | null;
+  label?: string | null;
+  severity?: string | null;
+  details: Record<string, unknown>;
 }
 
-export interface AdaptiveNetPositionTransition {
-  timestamp: string;
-  order_direction: 'buy' | 'sell' | 'hold' | string;
-  order_units: number;
-  order_abs_units: number;
-  order_price: string;
-  position_before_net_units: number;
-  position_before_abs_units: number;
-  position_before_avg_entry_price?: string | null;
-  position_after_net_units: number;
-  position_after_abs_units: number;
-  position_after_avg_entry_price?: string | null;
-  position_delta_net_units: number;
-  position_delta_abs_units: number;
-  action: 'hold' | 'increase' | 'reduce' | 'reverse' | string;
+export interface StrategyHistoryResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  count: number;
+  next: string | null;
+  previous: string | null;
+  page: number;
+  page_size: number;
+  ordering: string;
+  granularity: string;
+  results: StrategyHistoryEntry[];
 }
 
-export interface AdaptiveNetStrategyState {
-  current_net_units?: number;
-  target_net_units?: number;
-  open_units?: number;
-  open_direction?: string;
-  open_position_id?: string | null;
-  latest_decision?: AdaptiveNetDecision | null;
-  metric_signals?: AdaptiveNetMetricSignal[];
-  published_metric_signals?: AdaptiveNetMetricSignal[];
-  published_metric_names?: string[];
-  decision_history?: AdaptiveNetDecisionHistoryPoint[];
-  latest_position_transition?: AdaptiveNetPositionTransition | null;
-  metric_publish_count?: number;
-  last_metric_publish_tick?: number;
-  last_metric_publish_at?: string | null;
-  last_decision_metric_publish_count?: number;
-  last_decision_at?: string | null;
-  last_price?: string;
-  last_spread_pips?: string;
-  last_fill_price?: string | null;
-  previous_net_units?: number;
-  lookback_points?: number;
-  window_seconds?: number;
-  window_started_at?: string | null;
-  last_rebalance_at?: string | null;
-  rebalance_tick_delta?: number;
-  rebalance_elapsed_seconds?: number | null;
+export interface StrategyMetricsResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  count: number;
+  next: string | null;
+  previous: string | null;
+  page: number;
+  page_size: number;
+  ordering: string;
+  granularity: string;
+  data_source: string;
+  resume_cursor_timestamp: string | null;
+  consistency_warnings: Array<Record<string, unknown>>;
+  ohlc_layers?: StrategyOhlcLayers | null;
+  results: Array<{
+    t: number;
+    timestamp?: string;
+    metrics: Record<string, unknown>;
+  }>;
+}
+
+export type StrategyOhlcLineStyle =
+  | 'solid'
+  | 'dashed'
+  | 'dotted'
+  | 'large_dashed'
+  | 'sparse_dotted'
+  | number;
+
+export interface StrategyOhlcPoint {
+  time: string | number;
+  value: number | string;
+}
+
+export interface StrategyOhlcPriceSeries {
+  id: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  line_style?: StrategyOhlcLineStyle;
+  points: StrategyOhlcPoint[];
+}
+
+export interface StrategyOhlcBandPoint {
+  time: string | number;
+  from: number | string;
+  to: number | string;
+}
+
+export interface StrategyOhlcPriceBandSeries {
+  id: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  points: StrategyOhlcBandPoint[];
+}
+
+export interface StrategyOhlcLayers {
+  price_series: StrategyOhlcPriceSeries[];
+  price_band_series: StrategyOhlcPriceBandSeries[];
+  pagination?: {
+    count: number;
+    page: number;
+    page_size: number;
+    ordering: string;
+    granularity?: string | null;
+    since?: string | null;
+    until?: string | null;
+  };
 }

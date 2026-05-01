@@ -130,11 +130,10 @@ class TestStrategyType:
 
     def test_values(self):
         assert StrategyType.SNOWBALL == "snowball"
-        assert StrategyType.ADAPTIVE_NET == "adaptive_net"
         assert StrategyType.CUSTOM == "custom"
 
     def test_choices_count(self):
-        assert len(StrategyType.choices) == 3
+        assert len(StrategyType.choices) == 2
 
 
 class TestLogLevel:

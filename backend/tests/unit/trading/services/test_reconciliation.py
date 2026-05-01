@@ -16,7 +16,6 @@ from apps.trading.services.reconciliation import (
     ReconciliationReport,
     TradingResumeReconciler,
     _safe_decimal,
-    _safe_int,
 )
 from apps.trading.services.oanda_retry import is_retryable_oanda_error
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
@@ -132,21 +131,6 @@ def _no_retry_sleep(monkeypatch):
 
 
 # ── Tests for helper functions ──────────────────────────────────────
-
-
-class TestSafeInt:
-    def test_valid_int(self):
-        assert _safe_int(42) == 42
-
-    def test_string_int(self):
-        assert _safe_int("7") == 7
-
-    def test_none_returns_default(self):
-        assert _safe_int(None) == 0
-        assert _safe_int(None, 5) == 5
-
-    def test_invalid_returns_default(self):
-        assert _safe_int("abc", 99) == 99
 
 
 class TestSafeDecimal:
