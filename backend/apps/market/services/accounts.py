@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.market.models import OandaAccounts
@@ -42,6 +43,14 @@ SNAPSHOT_REFRESH_STATUS_UPDATE_FIELDS = [
 ]
 
 
+ACTIVE_SNAPSHOT_REFRESH_STATUSES = frozenset(
+    {
+        OandaAccounts.SnapshotRefreshStatus.QUEUED,
+        OandaAccounts.SnapshotRefreshStatus.RUNNING,
+    }
+)
+
+
 def create_oanda_account(serializer: OandaAccountsSerializer) -> OandaAccounts:
     """Persist a new OANDA account from a validated serializer."""
     return serializer.save()
@@ -58,11 +67,19 @@ def delete_oanda_account(account: OandaAccounts) -> None:
 
 
 def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
-    """Queue an asynchronous refresh for a single OANDA account snapshot."""
+    """Queue or reuse an asynchronous refresh for a single OANDA account snapshot."""
     from apps.market.tasks.accounts import refresh_oanda_account_snapshots
 
     task_id = str(uuid4())
-    mark_oanda_account_snapshot_refresh_queued(account, task_id)
+    with transaction.atomic():
+        locked_account = OandaAccounts.objects.select_for_update().get(pk=account.pk)
+        if has_active_oanda_account_snapshot_refresh(locked_account):
+            _copy_snapshot_refresh_state(source=locked_account, target=account)
+            return locked_account.snapshot_refresh_task_id
+
+        mark_oanda_account_snapshot_refresh_queued(locked_account, task_id)
+        _copy_snapshot_refresh_state(source=locked_account, target=account)
+
     try:
         refresh_oanda_account_snapshots.apply_async(
             kwargs={"account_id": account.pk},
@@ -81,6 +98,24 @@ def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
         )
         raise
     return task_id
+
+
+def has_active_oanda_account_snapshot_refresh(account: OandaAccounts) -> bool:
+    """Return whether a manual refresh is already queued or running."""
+    return (
+        bool(account.snapshot_refresh_task_id)
+        and account.snapshot_refresh_status in ACTIVE_SNAPSHOT_REFRESH_STATUSES
+    )
+
+
+def _copy_snapshot_refresh_state(
+    *,
+    source: OandaAccounts,
+    target: OandaAccounts,
+) -> None:
+    target.snapshot_refresh_task_id = source.snapshot_refresh_task_id
+    target.snapshot_refresh_status = source.snapshot_refresh_status
+    target.snapshot_refresh_error = source.snapshot_refresh_error
 
 
 def mark_oanda_account_snapshot_refresh_queued(

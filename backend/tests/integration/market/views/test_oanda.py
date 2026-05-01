@@ -289,6 +289,28 @@ class TestOandaAccountSnapshotRefreshView:
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
 
     @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
+    def test_post_reuses_active_snapshot_refresh(self, mock_apply_async: Any, user: Any) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-019",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-active",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["id"] == account.pk
+        assert response.data["task_id"] == "task-active"
+        assert response.data["status"] == "running"
+        mock_apply_async.assert_not_called()
+
+    @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
     def test_post_rejects_inactive_account(self, mock_apply_async: Any, user: Any) -> None:
         account = OandaAccounts.objects.create(
             user=user,

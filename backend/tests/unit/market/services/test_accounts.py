@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.utils import timezone
 
+from apps.market.enums import ApiType
+from apps.market.models import OandaAccounts
 from apps.market.services.accounts import (
     apply_cached_oanda_account_snapshot,
     create_oanda_account,
@@ -45,9 +47,14 @@ class TestMarketAccountService:
 
         account.delete.assert_called_once_with()
 
-    def test_enqueue_oanda_account_snapshot_refresh_queues_market_task(self) -> None:
-        account = MagicMock()
-        account.pk = 123
+    @pytest.mark.django_db
+    def test_enqueue_oanda_account_snapshot_refresh_queues_market_task(self, user) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-101",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+        )
 
         with (
             patch(
@@ -59,21 +66,38 @@ class TestMarketAccountService:
 
         assert task_id == "task-123"
         assert account.snapshot_refresh_task_id == "task-123"
-        assert account.snapshot_refresh_status == "queued"
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
         assert account.snapshot_refresh_error == ""
-        account.save.assert_called_once_with(
-            update_fields=[
-                "snapshot_refresh_task_id",
-                "snapshot_refresh_status",
-                "snapshot_refresh_error",
-                "updated_at",
-            ]
-        )
         apply_async.assert_called_once_with(
-            kwargs={"account_id": 123},
+            kwargs={"account_id": account.pk},
             queue="market",
             task_id="task-123",
         )
+        account.refresh_from_db()
+        assert account.snapshot_refresh_task_id == "task-123"
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
+
+    @pytest.mark.django_db
+    def test_enqueue_oanda_account_snapshot_refresh_reuses_active_task(self, user) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-102",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-active",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+        )
+
+        with patch(
+            "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+        ) as apply_async:
+            task_id = enqueue_oanda_account_snapshot_refresh(account)
+
+        assert task_id == "task-active"
+        apply_async.assert_not_called()
+        account.refresh_from_db()
+        assert account.snapshot_refresh_task_id == "task-active"
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.RUNNING
 
     def test_apply_cached_snapshot_marks_missing_snapshot_stale(self) -> None:
         account = MagicMock()
