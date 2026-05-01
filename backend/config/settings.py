@@ -44,6 +44,12 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+TRUSTED_PROXY_CIDRS = [
+    cidr.strip()
+    for cidr in os.getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").split(",")
+    if cidr.strip()
+]
+
 
 # Application definition
 

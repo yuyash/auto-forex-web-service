@@ -21,6 +21,7 @@ class TestAuthLogin:
         assert "user" in resp.data
         assert resp.cookies["access_token"].value
         assert resp.cookies["refresh_token"].value
+        assert resp.cookies["csrftoken"].value
         user = resp.data["user"]
         assert "id" in user
         assert "email" in user

@@ -24,7 +24,7 @@ class TestUserLogoutView:
 
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
-        request = self.factory.post("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 198.51.100.1")
+        request = self.factory.post("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 127.0.0.1")
 
         ip = get_client_ip(request)
 

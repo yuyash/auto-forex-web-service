@@ -8,6 +8,8 @@ from rest_framework.test import APIRequestFactory
 
 from apps.accounts.views.refresh import TokenRefreshView
 
+CSRF_TOKEN = "a" * 32
+
 
 class TestTokenRefreshView:
     """Unit tests for TokenRefreshView."""
@@ -61,7 +63,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE="refresh_token=valid_refresh_token",
+            HTTP_COOKIE=f"refresh_token=valid_refresh_token; csrftoken={CSRF_TOKEN}",
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         view = TokenRefreshView.as_view()
 
@@ -90,13 +93,28 @@ class TestTokenRefreshView:
         assert response.cookies["refresh_token"].value == "new_refresh_token"
         assert response.cookies["access_token"].value == "new_access_token"
 
+    def test_post_cookie_refresh_without_csrf_is_rejected(self) -> None:
+        """Test refresh-token cookies are not accepted without CSRF."""
+        request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE="refresh_token=valid_refresh_token",
+        )
+        view = TokenRefreshView.as_view()
+
+        response = view(request)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
     def test_post_invalid_refresh_token_clears_cookie(self) -> None:
         """Test invalid refresh token clears the cookie."""
         request = self.factory.post(
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE="refresh_token=invalid_token",
+            HTTP_COOKIE=f"refresh_token=invalid_token; csrftoken={CSRF_TOKEN}",
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         view = TokenRefreshView.as_view()
 

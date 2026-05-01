@@ -7,12 +7,14 @@ from django.conf import settings
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
 from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.auth import enforce_csrf
 from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.utils.cookies import clear_auth_cookies, set_auth_cookies
@@ -58,6 +60,10 @@ class TokenRefreshView(APIView):
                 "TokenRefreshError",
                 fields={"error": serializers.CharField()},
             ),
+            403: inline_serializer(
+                "TokenRefreshForbidden",
+                fields={"error": serializers.CharField()},
+            ),
         },
         description=(
             "Exchange the HTTP-only refresh-token cookie for a new access + refresh cookie pair."
@@ -74,6 +80,19 @@ class TokenRefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             return clear_auth_cookies(response)
+
+        try:
+            enforce_csrf(request)
+        except PermissionDenied:
+            logger.warning(
+                "Refresh token rejected due to CSRF failure from %s",
+                get_client_ip(request),
+            )
+            get_token(cast(HttpRequest, request._request))
+            return Response(
+                {"error": "CSRF verification failed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         ip_address = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")

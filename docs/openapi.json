@@ -146,6 +146,16 @@
                             }
                         },
                         "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenRefreshForbidden"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -10616,6 +10626,17 @@
                 "description": "* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
             },
             "TokenRefreshError": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "TokenRefreshForbidden": {
                 "type": "object",
                 "properties": {
                     "error": {

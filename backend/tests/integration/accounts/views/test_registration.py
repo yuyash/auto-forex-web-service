@@ -27,7 +27,9 @@ class TestUserRegistrationView:
             "password": "TestPass123!",
             "password_confirm": "TestPass123!",
         }
-        request = self.factory.post("/api/auth/register", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/register", data, content_type="application/json"
+        )
 
         with patch("apps.accounts.views.registration.AccountEmailService") as mock_email:
             mock_email.return_value.send_verification_email.return_value = True
@@ -48,7 +50,9 @@ class TestUserRegistrationView:
             "password": "TestPass123!",
             "password_confirm": "TestPass123!",
         }
-        request = self.factory.post("/api/auth/register", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/register", data, content_type="application/json"
+        )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
@@ -71,7 +75,9 @@ class TestUserRegistrationView:
             "password": "TestPass123!",
             "password_confirm": "TestPass123!",
         }
-        request = self.factory.post("/api/auth/register", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/register", data, content_type="application/json"
+        )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -84,7 +90,9 @@ class TestUserRegistrationView:
             "password": "TestPass123!",
             "password_confirm": "DifferentPass123!",
         }
-        request = self.factory.post("/api/auth/register", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/register", data, content_type="application/json"
+        )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST

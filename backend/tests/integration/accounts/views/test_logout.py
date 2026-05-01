@@ -36,7 +36,7 @@ class TestUserLogoutView:
         # Generate token
         token = JWTService().generate_token(user)
 
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
         request.user = user
         request.session = type("Session", (), {"session_key": "test_session"})()
@@ -49,14 +49,14 @@ class TestUserLogoutView:
 
     def test_logout_missing_token(self) -> None:
         """Test logout without token."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         response = self.view(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_logout_invalid_token(self) -> None:
         """Test logout with invalid token."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer invalid_token"
         response = self.view(request)
 
@@ -64,7 +64,7 @@ class TestUserLogoutView:
 
     def test_logout_invalid_header_format(self) -> None:
         """Test logout with invalid authorization header format."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "InvalidFormat token"
         response = self.view(request)
 
@@ -92,7 +92,9 @@ class TestUserLogoutView:
         refresh_b = jwt_service.create_refresh_token(user, session=session_b)
         token = jwt_service.generate_token(user)
 
-        request = self.factory.post("/api/auth/logout", HTTP_COOKIE=f"refresh_token={refresh_a}")
+        request = self.factory.post(
+            "/api/accounts/auth/logout", HTTP_COOKIE=f"refresh_token={refresh_a}"
+        )
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
         request.user = user
         request.session = type("Session", (), {"session_key": "session-a"})()

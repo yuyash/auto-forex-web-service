@@ -14,6 +14,7 @@ from rest_framework.exceptions import ErrorDetail
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.request_logging import get_request_id
 
 logger: Logger = getLogger(__name__)
@@ -152,8 +153,7 @@ def build_request_log_context(request: HttpRequest) -> dict[str, Any]:
         "username": getattr(user, "username", None)
         if getattr(user, "is_authenticated", False)
         else None,
-        "client_ip": request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-        or request.META.get("REMOTE_ADDR", ""),
+        "client_ip": get_client_ip(request),
         "user_agent": request.META.get("HTTP_USER_AGENT", ""),
         "view_name": getattr(resolver_match, "view_name", None),
         "route": getattr(resolver_match, "route", None),
