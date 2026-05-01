@@ -164,14 +164,60 @@ class TaskService:
         )
 
     @staticmethod
-    def _get_task_and_type(task_id: UUID) -> tuple[BacktestTask | TradingTask, str]:
+    def _resolve_user_id(user: Any | None) -> Any | None:
+        if user is None:
+            return None
+        if isinstance(user, int):
+            return user
+        return getattr(user, "pk", getattr(user, "id", None))
+
+    @classmethod
+    def _task_lookup_kwargs(cls, task_id: UUID, user: Any | None) -> dict[str, Any]:
+        lookup: dict[str, Any] = {"pk": task_id}
+        if user is None:
+            return lookup
+
+        user_id = cls._resolve_user_id(user)
+        if user_id is None:
+            raise TaskValidationError("Task does not exist or is not accessible")
+        lookup["user_id"] = user_id
+        return lookup
+
+    @classmethod
+    def _ensure_task_owned_by_user(
+        cls,
+        task: BacktestTask | TradingTask,
+        user: Any | None,
+    ) -> None:
+        if user is None:
+            return
+
+        user_id = cls._resolve_user_id(user)
+        task_user_id = getattr(task, "user_id", None)
+        if task_user_id is None:
+            task_user = getattr(task, "user", None)
+            task_user_id = cls._resolve_user_id(task_user)
+
+        if user_id is None or task_user_id != user_id:
+            raise TaskValidationError("Task does not exist or is not accessible")
+
+    @classmethod
+    def _get_task_and_type(
+        cls,
+        task_id: UUID,
+        *,
+        user: Any | None = None,
+    ) -> tuple[BacktestTask | TradingTask, str]:
+        lookup = cls._task_lookup_kwargs(task_id, user)
         try:
-            return BacktestTask.objects.get(pk=task_id), "backtest"
+            return BacktestTask.objects.get(**lookup), "backtest"
         except BacktestTask.DoesNotExist:
             try:
-                return TradingTask.objects.get(pk=task_id), "trading"
+                return TradingTask.objects.get(**lookup), "trading"
             except TradingTask.DoesNotExist as exc:
-                raise TaskLookupError(f"Task with id {task_id} does not exist") from exc
+                raise TaskLookupError(
+                    f"Task with id {task_id} does not exist or is not accessible"
+                ) from exc
 
     @staticmethod
     def _get_task_model(task_type: str):
@@ -295,7 +341,12 @@ class TaskService:
             description=description,
         )
 
-    def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
+    def start_task(
+        self,
+        task: BacktestTask | TradingTask,
+        *,
+        user: Any | None = None,
+    ) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
         Sets task status to STARTING and submits to Celery queue.
@@ -313,6 +364,7 @@ class TaskService:
         """
 
         try:
+            self._ensure_task_owned_by_user(task, user)
             return self.commands.start(task)
 
         except TaskServiceError:
@@ -385,6 +437,7 @@ class TaskService:
         mode: str = "graceful",
         *,
         drain_duration_minutes: int | None = None,
+        user: Any | None = None,
     ) -> bool:
         """Stop a running task.
 
@@ -406,7 +459,18 @@ class TaskService:
         """
 
         try:
-            return self.commands.stop(task_id, mode, drain_duration_minutes=drain_duration_minutes)
+            if user is None:
+                return self.commands.stop(
+                    task_id,
+                    mode,
+                    drain_duration_minutes=drain_duration_minutes,
+                )
+            return self.commands.stop(
+                task_id,
+                mode,
+                drain_duration_minutes=drain_duration_minutes,
+                user=user,
+            )
         except TaskValidationError:
             # Re-raise ValueError as-is (already logged)
             raise
@@ -423,7 +487,7 @@ class TaskService:
             )
             raise ValueError(f"Failed to stop task: {str(e)}") from e
 
-    def pause_task(self, task_id: UUID) -> bool:
+    def pause_task(self, task_id: UUID, *, user: Any | None = None) -> bool:
         """Pause a running task.
 
         Sets task status to PAUSED. The task can be resumed later.
@@ -441,7 +505,10 @@ class TaskService:
         logger.info("Pausing task", extra={"task_id": str(task_id)})
 
         try:
-            self.commands.pause(task_id)
+            if user is None:
+                self.commands.pause(task_id)
+            else:
+                self.commands.pause(task_id, user=user)
 
             logger.info(
                 "Task paused successfully",
@@ -459,7 +526,7 @@ class TaskService:
             )
             raise ValueError(f"Failed to pause task: {str(e)}") from e
 
-    def cancel_task(self, task_id: UUID) -> bool:
+    def cancel_task(self, task_id: UUID, *, user: Any | None = None) -> bool:
         """Cancel a running task immediately.
 
         Revokes the Celery task and updates status to STOPPED.
@@ -478,7 +545,10 @@ class TaskService:
         logger.info("Cancelling task", extra={"task_id": str(task_id)})
 
         try:
-            cancelled = self.commands.cancel(task_id)
+            if user is None:
+                cancelled = self.commands.cancel(task_id)
+            else:
+                cancelled = self.commands.cancel(task_id, user=user)
             if not cancelled:
                 return False
 
@@ -501,6 +571,8 @@ class TaskService:
     def restart_task(
         self,
         task_id: UUID,
+        *,
+        user: Any | None = None,
     ) -> BacktestTask | TradingTask:
         """Restart a task from the beginning, clearing all execution data.
 
@@ -520,7 +592,9 @@ class TaskService:
         logger.info(f"[SERVICE:RESTART] Restarting task - task_id={task_id}")
 
         try:
-            return self.commands.restart(task_id)
+            if user is None:
+                return self.commands.restart(task_id)
+            return self.commands.restart(task_id, user=user)
 
         except TaskValidationError:
             raise
@@ -534,6 +608,8 @@ class TaskService:
     def resume_task(
         self,
         task_id: UUID,
+        *,
+        user: Any | None = None,
     ) -> BacktestTask | TradingTask:
         """Resume a paused task, preserving execution context.
 
@@ -554,7 +630,10 @@ class TaskService:
         logger.info("Resuming task", extra={"task_id": str(task_id)})
 
         try:
-            task = self.commands.resume(task_id)
+            if user is None:
+                task = self.commands.resume(task_id)
+            else:
+                task = self.commands.resume(task_id, user=user)
             logger.info("Task resumed, resubmitting", extra={"task_id": str(task_id)})
             return task
 

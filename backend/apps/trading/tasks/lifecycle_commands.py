@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from logging import Logger
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
@@ -185,6 +185,7 @@ class TaskLifecycleCommands:
         mode: str = "graceful",
         *,
         drain_duration_minutes: int | None = None,
+        user: Any | None = None,
     ) -> bool:
         self.logger.info(
             "[SERVICE:STOP] Stopping task - task_id=%s, mode=%s, drain_duration_minutes=%s",
@@ -196,7 +197,7 @@ class TaskLifecycleCommands:
             stop_mode = StopMode(mode)
         except ValueError as exc:
             raise ValueError(f"Invalid stop mode: {mode}") from exc
-        task, task_type = self.service._get_task_and_type(task_id)
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         is_backtest = task_type == "backtest"
         task_name = (
             "trading.tasks.run_backtest_task" if is_backtest else "trading.tasks.run_trading_task"
@@ -312,8 +313,8 @@ class TaskLifecycleCommands:
         )
         return True
 
-    def pause(self, task_id: UUID) -> bool:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def pause(self, task_id: UUID, *, user: Any | None = None) -> bool:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         previous_status = task.status
 
         # Pause is only supported for backtest tasks.  Trading tasks should
@@ -360,8 +361,8 @@ class TaskLifecycleCommands:
         )
         return True
 
-    def cancel(self, task_id: UUID) -> bool:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def cancel(self, task_id: UUID, *, user: Any | None = None) -> bool:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         if task.status not in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.PAUSED]:
             self.logger.warning(
                 "Task not in cancellable state",
@@ -385,8 +386,13 @@ class TaskLifecycleCommands:
         )
         return True
 
-    def restart(self, task_id: UUID) -> BacktestTask | TradingTask:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def restart(
+        self,
+        task_id: UUID,
+        *,
+        user: Any | None = None,
+    ) -> BacktestTask | TradingTask:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         self._assert_transition_allowed(
             command="restart",
             task_status=task.status,
@@ -395,7 +401,10 @@ class TaskLifecycleCommands:
         previous_status = task.status
         if task.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
             try:
-                self.service.stop_task(task_id)
+                if user is None:
+                    self.service.stop_task(task_id)
+                else:
+                    self.service.stop_task(task_id, user=user)
                 self.adapters.sleep(1)
                 task.refresh_from_db()
             except Exception as exc:  # pragma: no cover - defensive logging path
@@ -439,10 +448,17 @@ class TaskLifecycleCommands:
             kind="task_restart_requested",
             description="Task restart requested",
         )
-        return self.service.start_task(task)
+        if user is None:
+            return self.service.start_task(task)
+        return self.service.start_task(task, user=user)
 
-    def resume(self, task_id: UUID) -> BacktestTask | TradingTask:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def resume(
+        self,
+        task_id: UUID,
+        *,
+        user: Any | None = None,
+    ) -> BacktestTask | TradingTask:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         model_class = self.service._get_task_model(task_type)
         is_trading = task_type == "trading"
 

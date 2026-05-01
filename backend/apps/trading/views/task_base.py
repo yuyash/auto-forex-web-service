@@ -290,7 +290,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
             )
 
         try:
-            started = self.task_service.start_task(task)
+            started = self.task_service.start_task(task, user=request.user)
             return Response(self._serialize_detail(started))
         except TaskCapacityError as exc:
             logger.warning(
@@ -351,7 +351,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         drain_minutes = self.get_drain_duration_minutes(request)
         try:
             success = self.task_service.stop_task(
-                task.pk, mode=mode, drain_duration_minutes=drain_minutes
+                task.pk,
+                mode=mode,
+                drain_duration_minutes=drain_minutes,
+                user=request.user,
             )
         except ValueError as exc:
             logger.warning("Stop validation failed: task_id=%s, detail=%s", task.pk, exc)
@@ -399,7 +402,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            success = self.task_service.pause_task(task.pk)
+            success = self.task_service.pause_task(task.pk, user=request.user)
         except ValueError as exc:
             logger.warning("Pause validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
@@ -461,7 +464,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Resume a paused task."""
         task = self.get_object()
         try:
-            resumed = self.task_service.resume_task(task.pk)
+            resumed = self.task_service.resume_task(task.pk, user=request.user)
         except TaskConflictError:
             logger.exception(
                 "Resume conflict",
@@ -498,7 +501,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Restart a task from the beginning."""
         task = self.get_object()
         try:
-            restarted = self.task_service.restart_task(task.pk)
+            restarted = self.task_service.restart_task(task.pk, user=request.user)
         except TaskCapacityError as exc:
             logger.warning("Restart capacity exhausted: task_id=%s, detail=%s", task.pk, exc)
             return Response(

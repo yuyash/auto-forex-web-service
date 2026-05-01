@@ -188,6 +188,7 @@ class TestStart:
         response = vs.start(request, pk=1)
         assert response.status_code == 200
         assert response.data == {"id": 1}
+        vs.task_service.start_task.assert_called_once_with(task, user=request.user)
 
     def test_start_wrong_status_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -293,6 +294,12 @@ class TestStop:
 
         response = vs.stop(request, pk=1)
         assert response.status_code == http_status.HTTP_202_ACCEPTED
+        vs.task_service.stop_task.assert_called_once_with(
+            task.pk,
+            mode="graceful",
+            drain_duration_minutes=None,
+            user=request.user,
+        )
 
     def test_stop_failure_returns_500(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -346,6 +353,7 @@ class TestPause:
 
         response = vs.pause(request, pk=1)
         assert response.status_code == 200
+        vs.task_service.pause_task.assert_called_once_with(task.pk, user=request.user)
 
     def test_pause_not_running_returns_400(self):
         task = _make_task(task_status=TaskStatus.CREATED)
@@ -399,6 +407,7 @@ class TestRestart:
         response = vs.restart(request, pk=1)
         assert response.status_code == 200
         assert response.data == {"id": 1}
+        vs.task_service.restart_task.assert_called_once_with(task.pk, user=request.user)
 
     def test_restart_value_error_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -473,6 +482,7 @@ class TestResume:
 
         response = vs.resume(request, pk=1)
         assert response.status_code == 200
+        vs.task_service.resume_task.assert_called_once_with(task.pk, user=request.user)
 
     def test_resume_not_paused_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
