@@ -89,13 +89,6 @@ class StrategyCyclesService:
                 "execution_id": str(execution_id),
                 "visualization": strategy_capabilities.get("visualization", {}),
                 "strategy_state": _public_strategy_state(strategy_type, strategy_state),
-                "net_grid_ledger": _build_net_grid_ledger_page(
-                    strategy_type=strategy_type,
-                    strategy_state=strategy_state,
-                    page=ledger_page,
-                    page_size=ledger_page_size,
-                    ordering=ledger_ordering,
-                ),
                 "cycles": [],
                 "summary": _empty_summary(),
                 "last_tick_timestamp": _resolve_last_tick_timestamp(execution_state),
@@ -148,73 +141,10 @@ class StrategyCyclesService:
             "execution_id": str(execution_id),
             "visualization": strategy_capabilities.get("visualization", {}),
             "strategy_state": _public_strategy_state(strategy_type, strategy_state),
-            "net_grid_ledger": _build_net_grid_ledger_page(
-                strategy_type=strategy_type,
-                strategy_state=strategy_state,
-                page=ledger_page,
-                page_size=ledger_page_size,
-                ordering=ledger_ordering,
-            ),
             "cycles": cycles,
             "summary": _build_summary(cycles),
             "last_tick_timestamp": last_tick_ts,
         }
-
-
-def _build_net_grid_ledger_page(
-    *,
-    strategy_type: str,
-    strategy_state: dict[str, Any] | None,
-    page: int,
-    page_size: int,
-    ordering: str,
-) -> dict[str, Any] | None:
-    if strategy_type != "net_grid" or not isinstance(strategy_state, dict):
-        return None
-    rows = strategy_state.get("grid_ledger")
-    if not isinstance(rows, list):
-        rows = []
-    safe_page = max(1, int(page or 1))
-    safe_page_size = min(max(1, int(page_size or 25)), 200)
-    reverse = ordering.startswith("-")
-    field = ordering[1:] if reverse else ordering
-    allowed_fields = {
-        "timestamp",
-        "action",
-        "reason",
-        "units_delta",
-        "filled_price",
-        "net_units_after",
-        "realized_pnl",
-    }
-    if field not in allowed_fields:
-        field = "timestamp"
-        reverse = True
-
-    def sort_key(row: Any) -> tuple[bool, Any]:
-        value = row.get(field) if isinstance(row, dict) else None
-        if field in {"units_delta", "filled_price", "net_units_after", "realized_pnl"}:
-            try:
-                value = Decimal(str(value))
-            except Exception:  # noqa: BLE001
-                value = None
-        return (value is None, value)
-
-    sorted_rows = sorted(
-        [row for row in rows if isinstance(row, dict)],
-        key=sort_key,
-        reverse=reverse,
-    )
-    total = len(sorted_rows)
-    start = (safe_page - 1) * safe_page_size
-    end = start + safe_page_size
-    return {
-        "count": total,
-        "page": safe_page,
-        "page_size": safe_page_size,
-        "ordering": f"-{field}" if reverse else field,
-        "results": sorted_rows[start:end],
-    }
 
 
 def _load_execution_state_snapshot(
@@ -245,101 +175,7 @@ def _public_strategy_state(
     """Expose visualization-safe strategy state for non-grid strategy pages."""
     if not isinstance(strategy_state, dict):
         return None
-    if strategy_type == "net_grid":
-        allowed_keys = {
-            "current_net_units",
-            "target_net_units",
-            "open_units",
-            "open_direction",
-            "average_entry_price",
-            "anchor_price",
-            "last_grid_price",
-            "net_take_profit_price",
-            "next_grid_price",
-            "take_profit_remaining_pips",
-            "profit_protection_active",
-            "profit_peak_pips",
-            "profit_trailing_stop_price",
-            "partial_derisk_done",
-            "current_atr_pips",
-            "effective_grid_interval_pips",
-            "effective_next_grid_distance_pips",
-            "effective_take_profit_pips",
-            "effective_order_size_multiplier",
-            "fast_ema_price",
-            "slow_ema_price",
-            "trend_score_pips",
-            "auto_direction_required_trend_pips",
-            "regime_status",
-            "adverse_trend_ticks",
-            "adverse_trend_status",
-            "risk_exit_price",
-            "current_adverse_pips",
-            "current_favorable_pips",
-            "current_unrealized_pnl",
-            "next_order_units",
-            "max_net_units",
-            "max_adverse_pips",
-            "max_loss",
-            "drawdown_budget_quote",
-            "projected_loss_after_next_add",
-            "full_grid_reached_tick",
-            "step",
-            "step_usage",
-            "max_steps",
-            "started_at",
-            "open_position_id",
-            "open_entry_id",
-            "next_entry_id",
-            "grid_ledger",
-            "decision_history",
-            "trend_relation_history",
-            "level_history",
-            "latest_decision",
-            "latest_position_transition",
-            "pending_execution",
-            "last_bid",
-            "last_ask",
-            "last_mid",
-            "last_tick_at",
-            "broker_reconciled_at",
-            "broker_reconciliation_status",
-            "broker_unrealized_pnl",
-            "broker_open_trade_count",
-            "broker_pending_order_count",
-            "broker_backfilled_fill_count",
-            "broker_backfilled_fill_count_latest",
-            "broker_last_backfilled_transaction_id",
-            "broker_backfilled_at",
-            "broker_reconciliation_warnings",
-            "broker_reconciliation_blockers",
-        }
-        return {key: strategy_state.get(key) for key in allowed_keys if key in strategy_state}
-    if strategy_type != "adaptive_net":
-        return None
-    allowed_keys = {
-        "current_net_units",
-        "target_net_units",
-        "open_units",
-        "open_direction",
-        "open_position_id",
-        "latest_decision",
-        "metric_signals",
-        "published_metric_signals",
-        "published_metric_names",
-        "last_metric_publish_tick",
-        "last_metric_publish_at",
-        "metric_publish_count",
-        "last_decision_metric_publish_count",
-        "last_decision_at",
-        "latest_position_transition",
-        "decision_history",
-        "last_price",
-        "last_spread_pips",
-        "last_fill_price",
-        "previous_net_units",
-    }
-    return {key: strategy_state.get(key) for key in allowed_keys if key in strategy_state}
+    return None
 
 
 def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:

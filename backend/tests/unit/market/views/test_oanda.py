@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.market.views.oanda import OandaAccountView
@@ -45,12 +46,12 @@ class TestOandaAccountViewUnit:
         mock_accounts.objects.filter.return_value.select_related.return_value.order_by.return_value = mock_qs
 
         factory = APIRequestFactory()
-        request = factory.get("/api/market/accounts/")
+        request = Request(factory.get("/api/market/accounts/"))
         request.user = mock_user
 
         view = OandaAccountView()
         response = view.get(request)
 
         assert response.status_code == status.HTTP_200_OK
-        if response.data:
-            assert len(response.data) == 0
+        assert response.data["count"] == 0
+        assert response.data["results"] == []

@@ -1,103 +1,11 @@
 """Unit tests for strategy visualization response shaping."""
 
-from apps.trading.services.strategy_cycles import (
-    _build_net_grid_ledger_page,
-    _public_strategy_state,
-)
+from apps.trading.services.strategy_cycles import _public_strategy_state
 
 
-def test_public_net_grid_state_includes_operational_fields():
-    state = {
-        "current_net_units": 2000,
-        "average_entry_price": "150.100",
-        "net_take_profit_price": "150.200",
-        "next_grid_price": "149.800",
-        "take_profit_remaining_pips": "7.5",
-        "current_atr_pips": "4.25",
-        "effective_grid_interval_pips": "12.75",
-        "effective_take_profit_pips": "5.0",
-        "step": 2,
-        "step_usage": "0.4",
-        "max_steps": 5,
-        "broker_reconciliation_status": "ok",
-        "broker_last_backfilled_transaction_id": "12345",
-        "broker_pending_order_count": 0,
-        "internal_secret": "hidden",
-    }
-
-    public = _public_strategy_state("net_grid", state)
-
-    assert public == {
-        "current_net_units": 2000,
-        "average_entry_price": "150.100",
-        "net_take_profit_price": "150.200",
-        "next_grid_price": "149.800",
-        "take_profit_remaining_pips": "7.5",
-        "current_atr_pips": "4.25",
-        "effective_grid_interval_pips": "12.75",
-        "effective_take_profit_pips": "5.0",
-        "step": 2,
-        "step_usage": "0.4",
-        "max_steps": 5,
-        "broker_reconciliation_status": "ok",
-        "broker_last_backfilled_transaction_id": "12345",
-        "broker_pending_order_count": 0,
-    }
+def test_unknown_strategy_does_not_expose_public_state():
+    assert _public_strategy_state("unknown", {"current_net_units": 2000}) is None
 
 
-def test_public_snowball_state_is_not_exposed_as_net_grid_state():
+def test_public_snowball_state_is_not_exposed_as_special_state():
     assert _public_strategy_state("snowball", {"cycles": []}) is None
-
-
-def test_net_grid_ledger_page_sorts_and_paginates():
-    state = {
-        "grid_ledger": [
-            {
-                "timestamp": "2026-01-01T00:00:00Z",
-                "action": "open",
-                "filled_price": "150.000",
-                "realized_pnl": None,
-            },
-            {
-                "timestamp": "2026-01-01T00:02:00Z",
-                "action": "take_profit",
-                "filled_price": "150.300",
-                "realized_pnl": "300",
-            },
-            {
-                "timestamp": "2026-01-01T00:01:00Z",
-                "action": "add",
-                "filled_price": "149.800",
-                "realized_pnl": None,
-            },
-        ]
-    }
-
-    page = _build_net_grid_ledger_page(
-        strategy_type="net_grid",
-        strategy_state=state,
-        page=1,
-        page_size=2,
-        ordering="-timestamp",
-    )
-
-    assert page == {
-        "count": 3,
-        "page": 1,
-        "page_size": 2,
-        "ordering": "-timestamp",
-        "results": [
-            state["grid_ledger"][1],
-            state["grid_ledger"][2],
-        ],
-    }
-
-    second_page = _build_net_grid_ledger_page(
-        strategy_type="net_grid",
-        strategy_state=state,
-        page=2,
-        page_size=2,
-        ordering="-timestamp",
-    )
-
-    assert second_page["results"] == [state["grid_ledger"][0]]

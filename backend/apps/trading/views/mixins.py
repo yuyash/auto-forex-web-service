@@ -6,13 +6,14 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.trading.views.strategy_data_mixin import TaskStrategyDataMixin
 from apps.trading.views.throttles import TaskDataRateThrottle
 
 from apps.trading.serializers.events import (
@@ -52,145 +53,10 @@ from apps.trading.views.pagination import (
 )
 
 
-class TaskSubResourceMixin:
+class TaskSubResourceMixin(TaskStrategyDataMixin):
     """Mixin providing paginated logs / events / trades actions."""
 
     task_type_label: str
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, required=False),
-        ],
-        responses={
-            200: inline_serializer(
-                "TaskStrategySnapshotResponse",
-                fields={
-                    "execution_id": serializers.CharField(allow_null=True),
-                    "strategy_type": serializers.CharField(),
-                    "instrument": serializers.CharField(allow_null=True),
-                    "timestamp": serializers.CharField(allow_null=True),
-                    "snapshot": serializers.JSONField(),
-                },
-            )
-        },
-        description="Retrieve the current strategy snapshot for a task execution.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="strategy/snapshot",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def strategy_snapshot(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.services.strategy_data import StrategyDataService
-
-        task = self.get_object()  # type: ignore[attr-defined]
-        return Response(
-            StrategyDataService().snapshot(
-                request=request,
-                task=task,
-                task_type_label=self.task_type_label,
-            )
-        )
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, required=False),
-            OpenApiParameter("since", str, required=False),
-            OpenApiParameter("until", str, required=False),
-            OpenApiParameter("page", int, required=False),
-            OpenApiParameter("page_size", int, required=False),
-            OpenApiParameter("ordering", str, required=False),
-            OpenApiParameter("granularity", str, required=False),
-            OpenApiParameter("category", str, required=False),
-        ],
-        responses={
-            200: inline_serializer(
-                "TaskStrategyHistoryResponse",
-                fields={
-                    "execution_id": serializers.CharField(allow_null=True),
-                    "strategy_type": serializers.CharField(),
-                    "instrument": serializers.CharField(allow_null=True),
-                    "count": serializers.IntegerField(),
-                    "next": serializers.CharField(allow_null=True),
-                    "previous": serializers.CharField(allow_null=True),
-                    "results": serializers.ListField(child=serializers.JSONField()),
-                },
-            )
-        },
-        description="Retrieve paginated strategy calculations, actions, and operation history.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="strategy/history",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def strategy_history(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.services.strategy_data import StrategyDataService
-
-        task = self.get_object()  # type: ignore[attr-defined]
-        return Response(
-            StrategyDataService().history(
-                request=request,
-                task=task,
-                task_type_label=self.task_type_label,
-            )
-        )
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, required=False),
-            OpenApiParameter("since", str, required=False),
-            OpenApiParameter("until", str, required=False),
-            OpenApiParameter("page", int, required=False),
-            OpenApiParameter("page_size", int, required=False),
-            OpenApiParameter("ordering", str, required=False),
-            OpenApiParameter("granularity", str, required=False),
-            OpenApiParameter("metric_keys", str, required=False),
-        ],
-        responses={
-            200: inline_serializer(
-                "TaskStrategyMetricsResponse",
-                fields={
-                    "execution_id": serializers.CharField(allow_null=True),
-                    "strategy_type": serializers.CharField(),
-                    "instrument": serializers.CharField(allow_null=True),
-                    "data_source": serializers.CharField(),
-                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
-                    "consistency_warnings": serializers.ListField(
-                        child=serializers.JSONField(), required=False
-                    ),
-                    "ohlc_layers": serializers.JSONField(),
-                    "count": serializers.IntegerField(),
-                    "next": serializers.CharField(allow_null=True),
-                    "previous": serializers.CharField(allow_null=True),
-                    "results": serializers.ListField(child=serializers.JSONField()),
-                },
-            )
-        },
-        description="Retrieve paginated strategy metrics aligned to OHLC chart granularity.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="strategy/metrics",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def strategy_metrics(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.services.strategy_data import StrategyDataService
-
-        task = self.get_object()  # type: ignore[attr-defined]
-        return Response(
-            StrategyDataService().metrics(
-                request=request,
-                task=task,
-                task_type_label=self.task_type_label,
-            )
-        )
 
     @extend_schema(
         tags=["Trading"],

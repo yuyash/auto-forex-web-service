@@ -574,16 +574,12 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         direction = Direction(event.direction)
-        merge_with_existing = str(getattr(event, "strategy_type", "") or "") in {
-            "adaptive_net",
-            "net_grid",
-        }
         position, order = self.order_service.open_position(
             instrument=self.instrument,
             units=event.units,
             direction=direction,
             layer_index=event.layer_number,
-            merge_with_existing=merge_with_existing,
+            merge_with_existing=False,
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
             retracement_count=event.retracement_count,

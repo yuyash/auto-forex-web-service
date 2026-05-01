@@ -2,8 +2,8 @@ import type { TabItem } from '../../../hooks/useTabConfig';
 
 export function visibleTabsForStrategy(
   tabs: TabItem[],
-  strategyType?: string | null
+  _strategyType?: string
 ): TabItem[] {
-  if (strategyType !== 'net_grid') return tabs;
-  return tabs.filter((tab) => tab.id !== 'positions');
+  void _strategyType;
+  return tabs;
 }

@@ -392,7 +392,7 @@ class TestEvents:
         assert response.data["summary"]["cycle_count"] == 1
 
     def test_strategy_data_endpoints_split_snapshot_history_and_metrics(self):
-        task = _make_task(strategy_type="net_grid")
+        task = _make_task(strategy_type="snowball")
         client = _auth_client(task.user)
         base = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
         ExecutionState.objects.create(
@@ -402,24 +402,22 @@ class TestEvents:
             current_balance=Decimal("10000"),
             last_tick_timestamp=base + timedelta(minutes=1),
             strategy_state={
-                "current_net_units": 1000,
-                "average_entry_price": "150.100",
-                "grid_ledger": [
-                    {
-                        "timestamp": base.isoformat(),
-                        "action": "open",
-                        "reason": "initial_entry",
-                        "units_delta": 1000,
-                    }
-                ],
-                "level_history": [
-                    {
-                        "timestamp": base.isoformat(),
-                        "current_net_units": 1000,
-                        "average_entry_price": "150.100",
-                    }
-                ],
+                "protection_level": "normal",
+                "cycles": [],
+                "account_balance": "10000",
+                "account_nav": "10000",
             },
+        )
+        TradingEvent.objects.create(
+            event_type="strategy_tick",
+            severity="info",
+            description="strategy tick",
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            strategy_type="snowball",
+            event_timestamp=base,
+            details={"source": "test"},
         )
         Metrics.objects.create(
             task_type=TaskType.BACKTEST,
@@ -432,7 +430,7 @@ class TestEvents:
         snapshot = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/snapshot/")
         history = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy/history/",
-            {"category": "operation", "page_size": 10},
+            {"category": "event", "page_size": 10},
         )
         metrics = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/",
@@ -440,12 +438,12 @@ class TestEvents:
         )
 
         assert snapshot.status_code == status.HTTP_200_OK
-        assert snapshot.data["snapshot"]["state"]["current_net_units"] == 1000
+        assert snapshot.data["snapshot"]["state"]["protection_level"] == "normal"
         assert history.status_code == status.HTTP_200_OK
-        assert history.data["results"][0]["source"] == "net_grid_ledger"
+        assert history.data["results"][0]["source"] == "trading_event"
         assert metrics.status_code == status.HTTP_200_OK
         assert metrics.data["results"][0]["metrics"] == {"margin_ratio": "0.1"}
-        assert metrics.data["ohlc_layers"]["price_series"][0]["id"] == "average_entry_price"
+        assert metrics.data["ohlc_layers"]["price_series"] == []
 
     def test_strategy_events_include_snowball_grid_state(self):
         task = _make_task(strategy_type="snowball")

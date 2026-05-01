@@ -10,15 +10,9 @@ const tabs: TabItem[] = [
 ];
 
 describe('visibleTabsForStrategy', () => {
-  it('hides positions for net_grid', () => {
+  it('keeps positions for all strategy types', () => {
     expect(
-      visibleTabsForStrategy(tabs, 'net_grid').map((tab) => tab.id)
-    ).toEqual(['overview', 'strategy', 'trades']);
-  });
-
-  it('keeps positions for snowball', () => {
-    expect(
-      visibleTabsForStrategy(tabs, 'snowball').map((tab) => tab.id)
+      visibleTabsForStrategy(tabs, 'unknown').map((tab) => tab.id)
     ).toContain('positions');
   });
 });

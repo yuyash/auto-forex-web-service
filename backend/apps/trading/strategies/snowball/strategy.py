@@ -47,9 +47,12 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
     reseed_missing_directions,
 )
 from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.entry_lifecycle import close_entry
 from apps.trading.strategies.snowball.events import (
-    entry_close_event,
     entry_open_event,
+)
+from apps.trading.strategies.snowball.execution_binding import (
+    apply_event_execution_result as apply_snowball_execution_result,
 )
 from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
@@ -68,10 +71,7 @@ from apps.trading.strategies.snowball.parameters import (
     parse_config,
     validate_parameters,
 )
-from apps.trading.strategies.snowball.pricing import (
-    layer_initial_close_price,
-    sync_entry_fill_price,
-)
+from apps.trading.strategies.snowball.pricing import layer_initial_close_price
 from apps.trading.strategies.snowball.protection import (
     handle_emergency,
     handle_lock,
@@ -88,7 +88,6 @@ from apps.trading.strategies.snowball.stop_loss_flow import (
     process_stop_loss_closes,
     process_stop_loss_rebuilds,
 )
-from apps.trading.utils import format_money
 
 logger: Logger = getLogger(__name__)
 
@@ -284,84 +283,18 @@ class SnowballStrategy(Strategy):
         margin_ratio: Decimal | None = None,
         cycle: SnowballCycle | None = None,
     ) -> ClosePositionEvent:
-        """Create a ClosePositionEvent from an Entry and emit sanity warnings.
-
-        Updates ``entry.lifecycle_realized_pnl`` with this close's P/L and,
-        when ``cycle`` is provided, adds the same delta to
-        ``cycle.realized_pnl``.  Emits a ``logger.warning`` in two cases:
-
-        1. A non-stop-loss close ends with negative P/L for this slot's full
-           open → (optional stop-loss → rebuild)+ → close chain.  Open →
-           close without any stop-loss is the degenerate case of the same
-           check and is covered automatically.
-        2. A stop-loss is not expected to be profitable, so it never trips
-           the warning on its own, but it still accumulates into the
-           lifecycle total so the eventual rebuild-close comparison is
-           apples-to-apples.
-        """
-        event = entry_close_event(
-            entry,
+        return close_entry(
+            self,
+            logger,
             tick,
-            instrument=self.instrument,
-            pip_size=self.pip_size,
-            account_currency=self.account_currency,
+            entry,
             description=description,
             close_reason=close_reason,
             actual_tp_pips=actual_tp_pips,
             validation_status=validation_status,
+            margin_ratio=margin_ratio,
+            cycle=cycle,
         )
-        if margin_ratio is not None:
-            event.margin_ratio = margin_ratio
-
-        # Accumulate P/L at the slot-lifecycle and cycle level.
-        delta_pnl = event.pnl
-        entry.lifecycle_realized_pnl += delta_pnl
-        if cycle is not None:
-            cycle.realized_pnl += delta_pnl
-
-        # Warning 1: single close is negative and is not a stop-loss.
-        # Stop-losses are, by definition, losing closes so they do not
-        # warrant a warning on their own.
-        if close_reason != "stop_loss" and delta_pnl < 0:
-            logger.warning(
-                "Close with negative P/L (reason=%s): entry_id=%s position_id=%s "
-                "L%d/R%d %s entry=%s exit=%s units=%s pnl=%s",
-                close_reason or "unknown",
-                entry.entry_id,
-                entry.position_id or "-",
-                entry.layer_number,
-                entry.retracement_count,
-                entry.direction.value.upper(),
-                entry.entry_price,
-                event.exit_price,
-                entry.units,
-                format_money(delta_pnl),
-            )
-
-        # Warning 2: slot lifecycle (open → *SL → rebuild → close)
-        # finishes negative.  Only emitted on non-stop-loss closes —
-        # intermediate stop-losses are expected to push the running
-        # total negative.
-        if (
-            close_reason != "stop_loss"
-            and entry.lifecycle_stop_loss_count > 0
-            and entry.lifecycle_realized_pnl < 0
-        ):
-            logger.warning(
-                "Slot lifecycle closed with negative net P/L: entry_id=%s "
-                "position_id=%s L%d/R%d %s stop_losses=%d net_pnl=%s "
-                "(final_close_reason=%s)",
-                entry.entry_id,
-                entry.position_id or "-",
-                entry.layer_number,
-                entry.retracement_count,
-                entry.direction.value.upper(),
-                entry.lifecycle_stop_loss_count,
-                format_money(entry.lifecycle_realized_pnl),
-                close_reason or "unknown",
-            )
-
-        return event
 
     # ------------------------------------------------------------------
     # Cycle lifecycle
@@ -1117,46 +1050,8 @@ class SnowballStrategy(Strategy):
         state: ExecutionState,
         execution_result: EventExecutionResult,
     ) -> None:
-        """Apply order execution feedback (position IDs, cycle IDs) to state."""
-        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
-        if not execution_result:
-            return
-
-        binding = execution_result.entry_binding
-        if binding is None:
-            return
-        eid = binding.entry_id
-        position_id = binding.position_id
-        if eid is None or position_id is None:
-            return
-
-        for cycle in ss.cycles:
-            for layer in cycle.grid.layers:
-                for slot in layer.slots:
-                    if slot.entry is not None and slot.entry.entry_id == eid:
-                        slot.entry.position_id = str(position_id)
-                        sync_entry_fill_price(
-                            entry=slot.entry,
-                            layer=layer,
-                            fill_price=binding.fill_price,
-                            counter_tp_mode=self.config.counter_tp_mode,
-                        )
-                        # Back-fill trade_cycle_id on the cycle when the
-                        # initial entry (cycle_id == entry_id) is executed.
-                        if (
-                            binding.cycle_id
-                            and cycle.cycle_id == eid
-                            and cycle.trade_cycle_id is None
-                        ):
-                            cycle.trade_cycle_id = binding.cycle_id
-            for entry in cycle.hedge_entries:
-                if entry.entry_id == eid:
-                    entry.position_id = str(position_id)
-                    sync_entry_fill_price(
-                        entry=entry,
-                        layer=None,
-                        fill_price=binding.fill_price,
-                        counter_tp_mode=self.config.counter_tp_mode,
-                    )
-
-        state.strategy_state = ss.to_dict()
+        apply_snowball_execution_result(
+            self,
+            state=state,
+            execution_result=execution_result,
+        )

@@ -9,7 +9,6 @@ from apps.trading.enums import StrategyType
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import StrategyInfo, StrategyRegistry, registry
 from apps.trading.strategies.custom.strategy import CustomStrategy
-from apps.trading.strategies.net_grid.strategy import NetGridStrategy
 
 
 class MinimalStrategy(Strategy):
@@ -127,14 +126,6 @@ class TestStrategyRegistry:
         assert info.strategy_cls is CustomStrategy
         assert info.config_schema["display_name"] == "Custom Strategy"
         assert registry.capabilities(identifier="custom")["visualization"]["kind"] == "none"
-
-    def test_net_grid_strategy_is_registered(self):
-        assert registry.is_registered("net_grid")
-        info = registry.get("net_grid")
-        assert info.strategy_cls is NetGridStrategy
-        assert info.config_schema["display_name"] == "Net Grid Strategy"
-        assert registry.capabilities(identifier="net_grid")["runtime"]["hedging"] is False
-        assert registry.supports_stateful_broker_reconciliation("net_grid") is True
 
 
 class TestStrategyInfo:

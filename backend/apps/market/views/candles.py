@@ -219,9 +219,9 @@ class CandleDataView(APIView):
         )
         try:
             count_int = int(count_raw)
-            if count_int < 1 or count_int > 5000:
+            if count_int < 1 or count_int >= 10000:
                 return {}, Response(
-                    {"error": "count/page_size must be between 1 and 5000"},
+                    {"error": "count/page_size must be between 1 and 9999"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except ValueError:
