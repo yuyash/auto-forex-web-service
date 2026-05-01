@@ -71,6 +71,40 @@ class OandaAccounts(models.Model):
         default=0,
         help_text="Unrealized profit/loss from open positions",
     )
+    nav = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Latest cached net asset value from OANDA",
+    )
+    open_trade_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached open trade count from OANDA",
+    )
+    open_position_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached open position count from OANDA",
+    )
+    pending_order_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached pending order count from OANDA",
+    )
+    hedging_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Latest cached OANDA hedging capability for this account",
+    )
+    snapshot_refreshed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the cached OANDA account snapshot was refreshed",
+    )
+    snapshot_refresh_error = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Last safe error message from refreshing the OANDA account snapshot",
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",

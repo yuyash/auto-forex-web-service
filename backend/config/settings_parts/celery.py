@@ -16,6 +16,9 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     backtest_concurrency = int(os.getenv("CELERY_BACKTEST_WORKER_CONCURRENCY", "4"))
     backtest_publisher_concurrency = int(os.getenv("CELERY_BACKTEST_PUBLISHER_CONCURRENCY", "4"))
     trading_concurrency = int(os.getenv("CELERY_TRADING_WORKER_CONCURRENCY", "2"))
+    account_snapshot_refresh_seconds = int(
+        os.getenv("OANDA_ACCOUNT_SNAPSHOT_REFRESH_SECONDS", "60")
+    )
     return {
         "CELERY_BROKER_URL": broker_url,
         "CELERY_RESULT_BACKEND": broker_url,
@@ -48,6 +51,7 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             "trading.tasks.stop_trading_task": {"queue": "system"},
             # Market queue: data ingestion and streaming
             "market.tasks.publish_oanda_ticks": {"queue": "market"},
+            "market.tasks.refresh_oanda_account_snapshots": {"queue": "market"},
             "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
             # Backtest queue: execution and historical data replay
             "market.tasks.publish_ticks_for_backtest": {"queue": "backtest_publisher"},
@@ -70,6 +74,11 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
                 "task": "accounts.tasks.cleanup_expired_refresh_tokens",
                 "schedule": 3600,
                 "options": {"queue": "default"},
+            },
+            "refresh-oanda-account-snapshots": {
+                "task": "market.tasks.refresh_oanda_account_snapshots",
+                "schedule": account_snapshot_refresh_seconds,
+                "options": {"queue": "market"},
             },
             "load-daily-tick-data": {
                 "task": "market.tasks.load_daily_tick_data",

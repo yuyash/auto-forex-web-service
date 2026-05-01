@@ -5,6 +5,7 @@ This package contains Celery task runners for market data streaming and persiste
 
 from typing import List
 
+from apps.market.tasks.accounts import refresh_oanda_account_snapshots
 from apps.market.tasks.backtest import (
     BacktestTickPublisherRunner,
     publish_ticks_for_backtest,
@@ -34,5 +35,6 @@ __all__: List[str] = [
     "load_daily_tick_data",
     "publish_oanda_ticks",
     "publish_ticks_for_backtest",
+    "refresh_oanda_account_snapshots",
     "subscribe_ticks_to_db",
 ]

@@ -7899,7 +7899,7 @@
             },
             "OandaAccountDetailResponse": {
                 "type": "object",
-                "description": "Schema serializer for OANDA account responses with optional live snapshot fields.",
+                "description": "Schema serializer for OANDA account responses with cached snapshot fields.",
                 "properties": {
                     "id": {
                         "type": "integer"
@@ -7925,6 +7925,9 @@
                     "margin_available": {
                         "type": "string"
                     },
+                    "nav": {
+                        "type": "string"
+                    },
                     "is_active": {
                         "type": "boolean"
                     },
@@ -7940,9 +7943,6 @@
                         "format": "date-time"
                     },
                     "unrealized_pnl": {
-                        "type": "string"
-                    },
-                    "nav": {
                         "type": "string"
                     },
                     "open_trade_count": {
@@ -7968,6 +7968,17 @@
                         "type": "boolean"
                     },
                     "live_data_error": {
+                        "type": "string"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "snapshot_stale": {
+                        "type": "boolean"
+                    },
+                    "snapshot_refresh_error": {
                         "type": "string"
                     }
                 },
@@ -8105,6 +8116,46 @@
                         "readOnly": true,
                         "description": "Unrealized profit/loss from open positions"
                     },
+                    "nav": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "description": "Latest cached net asset value from OANDA"
+                    },
+                    "open_trade_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached open trade count from OANDA"
+                    },
+                    "open_position_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached open position count from OANDA"
+                    },
+                    "pending_order_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached pending order count from OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Latest cached OANDA hedging capability for this account"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the cached OANDA account snapshot was refreshed"
+                    },
+                    "snapshot_refresh_error": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Last safe error message from refreshing the OANDA account snapshot"
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -8130,9 +8181,16 @@
                     "account_id",
                     "balance",
                     "created_at",
+                    "hedging_enabled",
                     "id",
                     "margin_available",
                     "margin_used",
+                    "nav",
+                    "open_position_count",
+                    "open_trade_count",
+                    "pending_order_count",
+                    "snapshot_refresh_error",
+                    "snapshot_refreshed_at",
                     "unrealized_pnl",
                     "updated_at"
                 ]

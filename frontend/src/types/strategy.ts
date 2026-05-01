@@ -174,6 +174,9 @@ export interface Account {
   pending_order_count?: number;
   live_data?: boolean;
   live_data_error?: string;
+  snapshot_refreshed_at?: string | null;
+  snapshot_stale?: boolean;
+  snapshot_refresh_error?: string;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;

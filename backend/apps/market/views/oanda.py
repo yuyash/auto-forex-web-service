@@ -18,11 +18,11 @@ from apps.common.querying import (
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OandaAccountsSerializer
 from apps.market.services.accounts import (
+    apply_cached_oanda_account_snapshot,
     create_oanda_account,
     delete_oanda_account,
     update_oanda_account,
 )
-from apps.market.services.oanda import OandaService
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -34,8 +34,10 @@ OANDA_ACCOUNT_ORDERING = OrderingConfig(
         "api_type": "api_type",
         "currency": "currency",
         "balance": "balance",
+        "nav": "nav",
         "is_active": "is_active",
         "is_default": "is_default",
+        "snapshot_refreshed_at": "snapshot_refreshed_at",
         "created_at": "created_at",
         "updated_at": "updated_at",
     },
@@ -44,7 +46,7 @@ OANDA_ACCOUNT_ORDERING = OrderingConfig(
 
 
 class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
-    """Schema serializer for OANDA account responses with optional live snapshot fields."""
+    """Schema serializer for OANDA account responses with cached snapshot fields."""
 
     id = serializers.IntegerField()
     account_id = serializers.CharField()
@@ -54,12 +56,12 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     balance = serializers.CharField(required=False)
     margin_used = serializers.CharField(required=False)
     margin_available = serializers.CharField(required=False)
+    nav = serializers.CharField(required=False)
     is_active = serializers.BooleanField()
     is_default = serializers.BooleanField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     unrealized_pnl = serializers.CharField(required=False)
-    nav = serializers.CharField(required=False)
     open_trade_count = serializers.IntegerField(required=False)
     open_position_count = serializers.IntegerField(required=False)
     pending_order_count = serializers.IntegerField(required=False)
@@ -68,6 +70,9 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     oanda_account = serializers.DictField(required=False)
     live_data = serializers.BooleanField(required=False)
     live_data_error = serializers.CharField(required=False)
+    snapshot_refreshed_at = serializers.DateTimeField(required=False, allow_null=True)
+    snapshot_stale = serializers.BooleanField(required=False)
+    snapshot_refresh_error = serializers.CharField(required=False, allow_blank=True)
 
 
 OandaAccountUpdateRequestSerializer = inline_serializer(
@@ -82,56 +87,6 @@ OandaAccountUpdateRequestSerializer = inline_serializer(
         "is_default": serializers.BooleanField(required=False),
     },
 )
-
-
-def _apply_live_account_snapshot(
-    *,
-    account: OandaAccounts,
-    response_data: dict,
-    include_account_resource: bool = False,
-) -> None:
-    """Populate response data from the latest OANDA account snapshot."""
-    client = OandaService(account)
-    live_data = client.get_account_details()
-
-    response_data["currency"] = live_data.currency
-    response_data["balance"] = str(live_data.balance)
-    response_data["margin_used"] = str(live_data.margin_used)
-    response_data["margin_available"] = str(live_data.margin_available)
-    response_data["unrealized_pnl"] = str(live_data.unrealized_pl)
-    response_data["nav"] = str(live_data.nav)
-    response_data["open_trade_count"] = live_data.open_trade_count
-    response_data["open_position_count"] = live_data.open_position_count
-    response_data["pending_order_count"] = live_data.pending_order_count
-    response_data["live_data"] = True
-
-    updated_fields: list[str] = []
-    if account.currency != live_data.currency:
-        account.currency = live_data.currency
-        updated_fields.append("currency")
-    if account.balance != live_data.balance:
-        account.balance = live_data.balance
-        updated_fields.append("balance")
-    if account.margin_used != live_data.margin_used:
-        account.margin_used = live_data.margin_used
-        updated_fields.append("margin_used")
-    if account.margin_available != live_data.margin_available:
-        account.margin_available = live_data.margin_available
-        updated_fields.append("margin_available")
-    if account.unrealized_pnl != live_data.unrealized_pl:
-        account.unrealized_pnl = live_data.unrealized_pl
-        updated_fields.append("unrealized_pnl")
-    if updated_fields:
-        account.save(update_fields=[*updated_fields, "updated_at"])
-
-    if not include_account_resource:
-        return
-
-    account_resource = client.get_account_resource()
-    hedging_enabled = bool(account_resource.get("hedgingEnabled", False))
-    response_data["hedging_enabled"] = hedging_enabled
-    response_data["position_mode"] = "hedging" if hedging_enabled else "netting"
-    response_data["oanda_account"] = client.make_jsonable(account_resource)
 
 
 class OandaAccountView(APIView):
@@ -201,16 +156,7 @@ class OandaAccountView(APIView):
         serializer = self.serializer_class(page, many=True)
         response_data = list(serializer.data)
         for account, account_data in zip(page, response_data, strict=False):
-            try:
-                _apply_live_account_snapshot(account=account, response_data=account_data)
-            except Exception as e:
-                logger.warning(
-                    "Failed to fetch live data from OANDA for account %s: %s",
-                    account.account_id,
-                    str(e),
-                )
-                account_data["live_data"] = False
-                account_data["live_data_error"] = "Failed to fetch live data from OANDA"
+            apply_cached_oanda_account_snapshot(account=account, response_data=account_data)
         logger.info(
             "User %s retrieved %s OANDA accounts",
             request.user.email,
@@ -296,20 +242,7 @@ class OandaAccountDetailView(APIView):
             )
         serializer = self.serializer_class(account)
         response_data = serializer.data
-        try:
-            _apply_live_account_snapshot(
-                account=account,
-                response_data=response_data,
-                include_account_resource=True,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to fetch live data from OANDA for account %s: %s",
-                account.account_id,
-                str(e),
-            )
-            response_data["live_data"] = False
-            response_data["live_data_error"] = "Failed to fetch live data from OANDA"
+        apply_cached_oanda_account_snapshot(account=account, response_data=response_data)
         logger.info(
             "User %s retrieved OANDA account %s",
             request.user.email,

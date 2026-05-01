@@ -22,12 +22,18 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "api_type",
         "jurisdiction",
         "balance",
+        "snapshot_refreshed_at",
         "is_active",
         "created_at",
     ]
     list_filter = ["api_type", "jurisdiction", "is_active", "created_at"]
     search_fields = ["user__email", "account_id"]
-    readonly_fields = ["created_at", "updated_at"]
+    readonly_fields = [
+        "snapshot_refreshed_at",
+        "snapshot_refresh_error",
+        "created_at",
+        "updated_at",
+    ]
     ordering = ["-created_at"]
 
     fieldsets = (
@@ -51,6 +57,13 @@ class OandaAccountAdmin(admin.ModelAdmin):
                     "margin_used",
                     "margin_available",
                     "unrealized_pnl",
+                    "nav",
+                    "open_trade_count",
+                    "open_position_count",
+                    "pending_order_count",
+                    "hedging_enabled",
+                    "snapshot_refreshed_at",
+                    "snapshot_refresh_error",
                 )
             },
         ),

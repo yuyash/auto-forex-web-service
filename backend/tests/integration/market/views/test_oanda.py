@@ -1,10 +1,12 @@
 """Unit tests for OANDA account views."""
 
+from decimal import Decimal
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -40,6 +42,32 @@ class TestOandaAccountView:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 2
         assert len(response.data["results"]) == 2
+
+    @patch("apps.market.services.accounts.OandaService")
+    def test_list_accounts_uses_cached_snapshot(self, mock_oanda_service: Any, user: Any) -> None:
+        """List responses should not fetch OANDA live data in the request path."""
+        OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-011",
+            api_type=ApiType.PRACTICE,
+            balance=Decimal("12000"),
+            margin_available=Decimal("11800"),
+            snapshot_refreshed_at=timezone.now(),
+            hedging_enabled=False,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get("/api/market/accounts/")
+
+        assert response.status_code == status.HTTP_200_OK
+        account = response.data["results"][0]
+        assert account["balance"] == "12000.00"
+        assert account["live_data"] is True
+        assert account["snapshot_stale"] is False
+        assert account["position_mode"] == "netting"
+        mock_oanda_service.assert_not_called()
 
     def test_list_accounts_unauthenticated(self) -> None:
         """Test listing accounts without authentication."""
@@ -106,6 +134,32 @@ class TestOandaAccountDetailView:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["account_id"] == "101-001-1234567-005"
+
+    @patch("apps.market.services.accounts.OandaService")
+    def test_get_account_detail_uses_cached_snapshot(
+        self, mock_oanda_service: Any, user: Any
+    ) -> None:
+        """Detail responses should read cached snapshot fields only."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-012",
+            api_type=ApiType.PRACTICE,
+            nav=Decimal("12100"),
+            open_trade_count=2,
+            snapshot_refreshed_at=timezone.now(),
+            hedging_enabled=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(f"/api/market/accounts/{account.id}/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["nav"] == "12100.00"
+        assert response.data["open_trade_count"] == 2
+        assert response.data["position_mode"] == "hedging"
+        mock_oanda_service.assert_not_called()
 
     def test_get_account_not_found(self, user: Any) -> None:
         """Test retrieving non-existent account."""
