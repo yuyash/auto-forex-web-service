@@ -35,6 +35,7 @@ import {
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAccount } from '../hooks/useAccounts';
+import { useRefreshAccountSnapshot } from '../hooks/useAccountMutations';
 import { useToast } from '../components/common/useToast';
 import { Breadcrumbs, PageContainer } from '../components/common';
 import DataTable, { type Column } from '../components/common/DataTable';
@@ -1015,6 +1016,7 @@ export default function OandaAccountDetailPage() {
     isLoading: loading,
     error: queryError,
   } = useAccount(accountId ?? 0, { enabled: accountId !== null });
+  const refreshSnapshot = useRefreshAccountSnapshot();
 
   const { data: marketStatus } = useQuery({
     queryKey: ['market-status'],
@@ -1039,6 +1041,27 @@ export default function OandaAccountDetailPage() {
         queryKey: ['oanda-positions', accountId],
       });
       queryClient.invalidateQueries({ queryKey: ['oanda-orders', accountId] });
+    }
+  };
+
+  const handleRefreshSnapshot = async () => {
+    if (!account) return;
+    try {
+      await refreshSnapshot.mutate(account.id);
+      showSuccess(
+        t('settings:messages.snapshotRefreshQueued', 'Snapshot refresh queued')
+      );
+    } catch (error) {
+      logger.error('Error queueing account snapshot refresh', {
+        account_id: account.account_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(
+        t(
+          'settings:messages.snapshotRefreshFailed',
+          'Failed to queue snapshot refresh'
+        )
+      );
     }
   };
 
@@ -1102,6 +1125,33 @@ export default function OandaAccountDetailPage() {
             size="small"
           />
         )}
+        <Tooltip
+          title={
+            account.is_active
+              ? t('settings:accounts.refreshSnapshot', 'Refresh snapshot')
+              : t(
+                  'settings:accounts.inactiveRefreshDisabled',
+                  'Inactive accounts cannot be refreshed'
+                )
+          }
+        >
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={
+                refreshSnapshot.isLoading ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <RefreshIcon />
+                )
+              }
+              onClick={handleRefreshSnapshot}
+              disabled={!account.is_active || refreshSnapshot.isLoading}
+            >
+              {t('settings:accounts.refreshSnapshot', 'Refresh snapshot')}
+            </Button>
+          </span>
+        </Tooltip>
         <Tooltip title={t('common:actions.reload')}>
           <IconButton onClick={handleReloadAll}>
             <RefreshIcon />
@@ -1137,6 +1187,25 @@ export default function OandaAccountDetailPage() {
               <Chip
                 label="Default"
                 color="primary"
+                variant="outlined"
+                size="small"
+              />
+            )}
+            {account.snapshot_stale && (
+              <Chip
+                label={t('settings:accounts.snapshotStale', 'Snapshot stale')}
+                color="warning"
+                variant="outlined"
+                size="small"
+              />
+            )}
+            {account.snapshot_refresh_error && (
+              <Chip
+                label={t(
+                  'settings:accounts.snapshotRefreshFailed',
+                  'Refresh failed'
+                )}
+                color="error"
                 variant="outlined"
                 size="small"
               />
@@ -1246,6 +1315,17 @@ export default function OandaAccountDetailPage() {
                 {typeof account.hedging_enabled === 'boolean'
                   ? String(account.hedging_enabled)
                   : '\u2014'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {t(
+                  'settings:accounts.snapshotRefreshedAt',
+                  'Snapshot refreshed'
+                )}
+              </Typography>
+              <Typography variant="body1">
+                {fmtTs(account.snapshot_refreshed_at ?? null)}
               </Typography>
             </Box>
           </Box>

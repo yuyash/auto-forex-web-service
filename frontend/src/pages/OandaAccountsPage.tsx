@@ -22,6 +22,7 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
+  Tooltip,
   type SelectChangeEvent,
 } from '@mui/material';
 import {
@@ -42,6 +43,7 @@ import type { Account, AccountUpsertData } from '../types/strategy';
 import {
   useCreateAccount,
   useDeleteAccount,
+  useRefreshAccountSnapshot,
   useUpdateAccount,
 } from '../hooks/useAccountMutations';
 import { useAccounts, useAccountPage, useAccount } from '../hooks/useAccounts';
@@ -91,10 +93,14 @@ function LiveAccountCard({
   account,
   onEdit,
   onDelete,
+  onRefreshSnapshot,
+  isRefreshingSnapshot,
 }: {
   account: Account;
   onEdit: (a: Account) => void;
   onDelete: (a: Account) => void;
+  onRefreshSnapshot: (a: Account) => void;
+  isRefreshingSnapshot: boolean;
 }) {
   const { t } = useTranslation(['settings', 'common']);
   const { data: liveAccount, isLoading } = useAccount(account.id, {
@@ -195,10 +201,58 @@ function LiveAccountCard({
                 variant="outlined"
               />
             )}
+            {a.snapshot_stale && (
+              <Chip
+                label={t('settings:accounts.snapshotStale', 'Snapshot stale')}
+                color="warning"
+                variant="outlined"
+              />
+            )}
+            {a.snapshot_refresh_error && (
+              <Chip
+                label={t(
+                  'settings:accounts.snapshotRefreshFailed',
+                  'Refresh failed'
+                )}
+                color="error"
+                variant="outlined"
+              />
+            )}
           </Box>
         </CardContent>
       </CardActionArea>
       <CardActions>
+        <Tooltip
+          title={
+            a.is_active
+              ? t('settings:accounts.refreshSnapshot', 'Refresh snapshot')
+              : t(
+                  'settings:accounts.inactiveRefreshDisabled',
+                  'Inactive accounts cannot be refreshed'
+                )
+          }
+        >
+          <span>
+            <IconButton
+              color="primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRefreshSnapshot(a);
+              }}
+              disabled={!a.is_active || isRefreshingSnapshot}
+              aria-label={t(
+                'settings:accounts.refreshSnapshot',
+                'Refresh snapshot'
+              )}
+            >
+              {isRefreshingSnapshot ? (
+                <CircularProgress size={20} />
+              ) : (
+                <RefreshIcon />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
         <IconButton
           color="primary"
           onClick={(e) => {
@@ -253,6 +307,10 @@ export default function OandaAccountsPage() {
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();
+  const refreshSnapshot = useRefreshAccountSnapshot();
+  const [refreshingSnapshotIds, setRefreshingSnapshotIds] = useState<
+    ReadonlySet<number>
+  >(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -387,6 +445,33 @@ export default function OandaAccountsPage() {
         error: error instanceof Error ? error.message : String(error),
       });
       showError(t('common:errors.deleteFailed'));
+    }
+  };
+
+  const handleRefreshSnapshot = async (account: Account) => {
+    setRefreshingSnapshotIds((current) => new Set(current).add(account.id));
+    try {
+      await refreshSnapshot.mutate(account.id);
+      showSuccess(
+        t('settings:messages.snapshotRefreshQueued', 'Snapshot refresh queued')
+      );
+    } catch (error) {
+      logger.error('Error queueing account snapshot refresh', {
+        account_id: account.account_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(
+        t(
+          'settings:messages.snapshotRefreshFailed',
+          'Failed to queue snapshot refresh'
+        )
+      );
+    } finally {
+      setRefreshingSnapshotIds((current) => {
+        const next = new Set(current);
+        next.delete(account.id);
+        return next;
+      });
     }
   };
 
@@ -545,6 +630,8 @@ export default function OandaAccountsPage() {
                   account={account}
                   onEdit={handleEditClick}
                   onDelete={handleDeleteClick}
+                  onRefreshSnapshot={handleRefreshSnapshot}
+                  isRefreshingSnapshot={refreshingSnapshotIds.has(account.id)}
                 />
               </Box>
             ))}
