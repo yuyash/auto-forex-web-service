@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -49,7 +50,7 @@ class TestMarketAccountService:
         account.delete.assert_called_once_with()
 
     @pytest.mark.django_db
-    def test_enqueue_oanda_account_snapshot_refresh_queues_market_task(self, user) -> None:
+    def test_enqueue_oanda_account_snapshot_refresh_queues_market_task(self, user, caplog) -> None:
         account = OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-101",
@@ -57,13 +58,14 @@ class TestMarketAccountService:
             is_active=True,
         )
 
-        with (
-            patch(
-                "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
-            ) as apply_async,
-            patch("apps.market.services.accounts.uuid4", return_value="task-123"),
-        ):
-            task_id = enqueue_oanda_account_snapshot_refresh(account)
+        with caplog.at_level(logging.INFO, logger="apps.market.services.accounts"):
+            with (
+                patch(
+                    "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+                ) as apply_async,
+                patch("apps.market.services.accounts.uuid4", return_value="task-123"),
+            ):
+                task_id = enqueue_oanda_account_snapshot_refresh(account)
 
         assert task_id == "task-123"
         assert account.snapshot_refresh_task_id == "task-123"
@@ -79,9 +81,16 @@ class TestMarketAccountService:
         assert account.snapshot_refresh_task_id == "task-123"
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
         assert account.snapshot_refresh_status_updated_at is not None
+        queued_events = [
+            record
+            for record in caplog.records
+            if getattr(record, "event", "") == "oanda_account_snapshot_refresh_queued"
+        ]
+        assert len(queued_events) == 1
+        assert queued_events[0].task_id == "task-123"
 
     @pytest.mark.django_db
-    def test_enqueue_oanda_account_snapshot_refresh_reuses_active_task(self, user) -> None:
+    def test_enqueue_oanda_account_snapshot_refresh_reuses_active_task(self, user, caplog) -> None:
         status_updated_at = timezone.now()
         account = OandaAccounts.objects.create(
             user=user,
@@ -93,10 +102,11 @@ class TestMarketAccountService:
             snapshot_refresh_status_updated_at=status_updated_at,
         )
 
-        with patch(
-            "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
-        ) as apply_async:
-            task_id = enqueue_oanda_account_snapshot_refresh(account)
+        with caplog.at_level(logging.INFO, logger="apps.market.services.accounts"):
+            with patch(
+                "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+            ) as apply_async:
+                task_id = enqueue_oanda_account_snapshot_refresh(account)
 
         assert task_id == "task-active"
         apply_async.assert_not_called()
@@ -104,12 +114,20 @@ class TestMarketAccountService:
         assert account.snapshot_refresh_task_id == "task-active"
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.RUNNING
         assert account.snapshot_refresh_status_updated_at == status_updated_at
+        reused_events = [
+            record
+            for record in caplog.records
+            if getattr(record, "event", "") == "oanda_account_snapshot_refresh_reused"
+        ]
+        assert len(reused_events) == 1
+        assert reused_events[0].task_id == "task-active"
 
     @pytest.mark.django_db
     def test_enqueue_oanda_account_snapshot_refresh_replaces_expired_active_task(
         self,
         user,
         settings,
+        caplog,
     ) -> None:
         settings.OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = 60
         expired_at = timezone.now() - timedelta(seconds=61)
@@ -123,13 +141,14 @@ class TestMarketAccountService:
             snapshot_refresh_status_updated_at=expired_at,
         )
 
-        with (
-            patch(
-                "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
-            ) as apply_async,
-            patch("apps.market.services.accounts.uuid4", return_value="task-new"),
-        ):
-            task_id = enqueue_oanda_account_snapshot_refresh(account)
+        with caplog.at_level(logging.INFO, logger="apps.market.services.accounts"):
+            with (
+                patch(
+                    "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+                ) as apply_async,
+                patch("apps.market.services.accounts.uuid4", return_value="task-new"),
+            ):
+                task_id = enqueue_oanda_account_snapshot_refresh(account)
 
         assert task_id == "task-new"
         apply_async.assert_called_once_with(
@@ -142,6 +161,13 @@ class TestMarketAccountService:
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
         assert account.snapshot_refresh_status_updated_at is not None
         assert account.snapshot_refresh_status_updated_at > expired_at
+        expired_events = [
+            record
+            for record in caplog.records
+            if getattr(record, "event", "") == "oanda_account_snapshot_refresh_expired"
+        ]
+        assert len(expired_events) == 1
+        assert expired_events[0].task_id == "task-expired"
 
     def test_active_snapshot_refresh_without_timestamp_is_expired(self, settings) -> None:
         settings.OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = 60

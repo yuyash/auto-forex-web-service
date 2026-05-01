@@ -74,12 +74,41 @@ def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
     task_id = str(uuid4())
     with transaction.atomic():
         locked_account = OandaAccounts.objects.select_for_update().get(pk=account.pk)
-        if has_active_oanda_account_snapshot_refresh(locked_account):
-            _copy_snapshot_refresh_state(source=locked_account, target=account)
-            return locked_account.snapshot_refresh_task_id
+        if _has_active_oanda_account_snapshot_refresh_record(locked_account):
+            if is_oanda_account_snapshot_refresh_expired(locked_account):
+                logger.warning(
+                    "Expired OANDA account snapshot refresh will be replaced",
+                    extra=_snapshot_refresh_log_extra(
+                        account=locked_account,
+                        event="oanda_account_snapshot_refresh_expired",
+                        task_id=locked_account.snapshot_refresh_task_id,
+                        refresh_status=locked_account.snapshot_refresh_status,
+                    ),
+                )
+            else:
+                _copy_snapshot_refresh_state(source=locked_account, target=account)
+                logger.info(
+                    "Reusing active OANDA account snapshot refresh",
+                    extra=_snapshot_refresh_log_extra(
+                        account=locked_account,
+                        event="oanda_account_snapshot_refresh_reused",
+                        task_id=locked_account.snapshot_refresh_task_id,
+                        refresh_status=locked_account.snapshot_refresh_status,
+                    ),
+                )
+                return locked_account.snapshot_refresh_task_id
 
         mark_oanda_account_snapshot_refresh_queued(locked_account, task_id)
         _copy_snapshot_refresh_state(source=locked_account, target=account)
+        logger.info(
+            "Queued OANDA account snapshot refresh",
+            extra=_snapshot_refresh_log_extra(
+                account=locked_account,
+                event="oanda_account_snapshot_refresh_queued",
+                task_id=task_id,
+                refresh_status=locked_account.snapshot_refresh_status,
+            ),
+        )
 
     try:
         refresh_oanda_account_snapshots.apply_async(
@@ -99,16 +128,30 @@ def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
                 "updated_at",
             ]
         )
+        logger.exception(
+            "Failed to queue OANDA account snapshot refresh",
+            extra=_snapshot_refresh_log_extra(
+                account=account,
+                event="oanda_account_snapshot_refresh_queue_failed",
+                task_id=task_id,
+                refresh_status=account.snapshot_refresh_status,
+            ),
+        )
         raise
     return task_id
 
 
 def has_active_oanda_account_snapshot_refresh(account: OandaAccounts) -> bool:
     """Return whether a manual refresh is already queued or running."""
+    return _has_active_oanda_account_snapshot_refresh_record(
+        account
+    ) and not is_oanda_account_snapshot_refresh_expired(account)
+
+
+def _has_active_oanda_account_snapshot_refresh_record(account: OandaAccounts) -> bool:
     return (
         bool(account.snapshot_refresh_task_id)
         and account.snapshot_refresh_status in ACTIVE_SNAPSHOT_REFRESH_STATUSES
-        and not is_oanda_account_snapshot_refresh_expired(account)
     )
 
 
@@ -194,6 +237,17 @@ def _mark_oanda_account_snapshot_refresh_status(
     refresh_status: OandaAccounts.SnapshotRefreshStatus,
 ) -> None:
     if task_id and account.snapshot_refresh_task_id and account.snapshot_refresh_task_id != task_id:
+        logger.info(
+            "Ignored stale OANDA account snapshot refresh status update",
+            extra=_snapshot_refresh_log_extra(
+                account=account,
+                event="oanda_account_snapshot_refresh_status_ignored",
+                task_id=task_id,
+                refresh_status=refresh_status,
+                current_task_id=account.snapshot_refresh_task_id,
+                current_refresh_status=account.snapshot_refresh_status,
+            ),
+        )
         return
 
     update_fields = [
@@ -207,6 +261,39 @@ def _mark_oanda_account_snapshot_refresh_status(
     account.snapshot_refresh_status = refresh_status
     account.snapshot_refresh_status_updated_at = timezone.now()
     account.save(update_fields=update_fields)
+    logger.info(
+        "Updated OANDA account snapshot refresh status",
+        extra=_snapshot_refresh_log_extra(
+            account=account,
+            event=f"oanda_account_snapshot_refresh_{refresh_status}",
+            task_id=account.snapshot_refresh_task_id or task_id,
+            refresh_status=refresh_status,
+        ),
+    )
+
+
+def _snapshot_refresh_log_extra(
+    *,
+    account: OandaAccounts,
+    event: str,
+    task_id: str,
+    refresh_status: str,
+    current_task_id: str | None = None,
+    current_refresh_status: str | None = None,
+) -> dict[str, object]:
+    extra: dict[str, object] = {
+        "event": event,
+        "oanda_account_pk": account.pk,
+        "oanda_account_id": account.account_id,
+        "user_id": getattr(account, "user_id", None),
+        "task_id": task_id,
+        "refresh_status": str(refresh_status),
+    }
+    if current_task_id is not None:
+        extra["current_task_id"] = current_task_id
+    if current_refresh_status is not None:
+        extra["current_refresh_status"] = str(current_refresh_status)
+    return extra
 
 
 def apply_cached_oanda_account_snapshot(
