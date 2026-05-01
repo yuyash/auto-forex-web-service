@@ -63,6 +63,7 @@ import { useSupportedInstruments } from '../hooks/useMarketConfig';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatAppNumber } from '../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../utils/timezone';
+import { logger } from '../utils/logger';
 import type { AccountSnapshotRefreshStatus } from '../types/strategy';
 
 const DEFAULT_CURRENCY = 'USD';
@@ -1024,6 +1025,7 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
 
 export default function OandaAccountDetailPage() {
   const { t } = useTranslation(['settings', 'common']);
+  const { showSuccess, showError } = useToast();
   const params = useParams();
   const queryClient = useQueryClient();
   const [rawDataOpen, setRawDataOpen] = useState(false);
