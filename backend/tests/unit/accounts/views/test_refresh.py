@@ -19,7 +19,7 @@ class TestTokenRefreshView:
     def test_post_missing_refresh_token(self) -> None:
         """Test token refresh without refresh_token in body."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
         )
@@ -32,7 +32,7 @@ class TestTokenRefreshView:
     def test_post_empty_refresh_token(self) -> None:
         """Test token refresh with empty refresh_token."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             data=json.dumps({"refresh_token": ""}),
             content_type="application/json",
         )
@@ -45,7 +45,7 @@ class TestTokenRefreshView:
     def test_post_invalid_refresh_token(self) -> None:
         """Test token refresh ignores body tokens and requires cookie token."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             data=json.dumps({"refresh_token": "invalid_token"}),
             content_type="application/json",
         )
@@ -58,7 +58,7 @@ class TestTokenRefreshView:
     def test_post_successful_refresh(self) -> None:
         """Test successful token refresh with rotation."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
             HTTP_COOKIE="refresh_token=valid_refresh_token",
@@ -83,7 +83,8 @@ class TestTokenRefreshView:
             response = view(request)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["token"] == "new_access_token"  # type: ignore[index]
+        assert response.data["authenticated"] is True  # type: ignore[index]
+        assert "token" not in response.data  # type: ignore[operator]
         assert "refresh_token" not in response.data  # type: ignore[operator]
         assert response.data["user"]["email"] == "test@example.com"  # type: ignore[index]
         assert response.cookies["refresh_token"].value == "new_refresh_token"
@@ -92,7 +93,7 @@ class TestTokenRefreshView:
     def test_post_invalid_refresh_token_clears_cookie(self) -> None:
         """Test invalid refresh token clears the cookie."""
         request = self.factory.post(
-            "/api/auth/refresh",
+            "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
             HTTP_COOKIE="refresh_token=invalid_token",

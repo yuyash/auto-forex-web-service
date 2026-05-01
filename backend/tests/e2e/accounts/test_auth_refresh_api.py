@@ -14,8 +14,10 @@ class TestAuthRefresh:
             format="json",
         )
         assert resp.status_code == 200
-        assert "token" in resp.data
+        assert resp.data["authenticated"] is True
+        assert "token" not in resp.data
         assert "refresh_token" not in resp.data
+        assert resp.cookies["access_token"].value
         assert resp.cookies["refresh_token"].value
 
     def test_refresh_rotates_tokens(self, api_client, auth_tokens):

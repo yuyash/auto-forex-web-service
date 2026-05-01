@@ -36,12 +36,23 @@ class TestRateLimiterMethods:
     def test_increment_failed_attempts(self) -> None:
         """Test incrementing failed attempts."""
         with patch("apps.accounts.middlewares.limiter.cache") as mock_cache:
-            mock_cache.get.return_value = 2
+            mock_cache.add.return_value = False
+            mock_cache.incr.return_value = 3
 
             attempts = RateLimiter.increment_failed_attempts("192.168.1.1")
 
         assert attempts == 3
-        mock_cache.set.assert_called_once()
+        mock_cache.incr.assert_called_once()
+
+    def test_increment_failed_attempts_initializes_missing_key(self) -> None:
+        """Test first failed attempt initializes a new cache window."""
+        with patch("apps.accounts.middlewares.limiter.cache") as mock_cache:
+            mock_cache.add.return_value = True
+
+            attempts = RateLimiter.increment_failed_attempts("192.168.1.1")
+
+        assert attempts == 1
+        mock_cache.incr.assert_not_called()
 
     def test_reset_failed_attempts(self) -> None:
         """Test resetting failed attempts."""

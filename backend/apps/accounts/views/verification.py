@@ -21,7 +21,7 @@ class EmailVerificationView(APIView):
     """
     API endpoint for email verification.
 
-    POST /api/auth/verify-email
+    POST /api/accounts/auth/verify-email
     - Verify user email with token
     """
 
@@ -108,7 +108,7 @@ class ResendVerificationEmailView(APIView):
     """
     API endpoint for resending verification email.
 
-    POST /api/auth/resend-verification
+    POST /api/accounts/auth/resend-verification
     - Resend verification email to user
     """
 

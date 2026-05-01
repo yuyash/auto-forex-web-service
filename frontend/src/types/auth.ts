@@ -20,7 +20,7 @@ export interface AuthContextType {
   systemSettingsLoading: boolean;
   authLoading: boolean;
   appLoading: boolean;
-  login: (token: string, user: User) => void;
+  login: (user: User) => void;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
   refetchSystemSettings: () => Promise<void>;

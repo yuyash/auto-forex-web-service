@@ -8,7 +8,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  token: string;
+  authenticated: boolean;
   user: User;
 }
 

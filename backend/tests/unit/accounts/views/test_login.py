@@ -41,7 +41,9 @@ class TestUserLoginView:
 
     def test_post_login_disabled(self) -> None:
         """Test login when disabled."""
-        request = self.factory.post("/api/auth/login", {"email": "test@example.com"}, format="json")
+        request = self.factory.post(
+            "/api/accounts/auth/login", {"email": "test@example.com"}, format="json"
+        )
         view = UserLoginView()
 
         with patch("apps.accounts.views.login.PublicAccountSettings") as mock_settings:
@@ -64,9 +66,9 @@ class TestUserLoginView:
         assert view.authentication_classes == []
 
     def test_successful_login_sets_refresh_cookie(self) -> None:
-        """Test successful login returns access token and refresh cookie."""
+        """Test successful login sets auth cookies without exposing tokens in JSON."""
         request = self.factory.post(
-            "/api/auth/login",
+            "/api/accounts/auth/login",
             {"email": "test@example.com", "password": "secret"},
             format="json",
         )
@@ -102,7 +104,8 @@ class TestUserLoginView:
             response = view.post(view.initialize_request(request))
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["token"] == "access-token"  # type: ignore[index]
+        assert response.data["authenticated"] is True  # type: ignore[index]
+        assert "token" not in response.data  # type: ignore[operator]
         assert "refresh_token" not in response.data  # type: ignore[operator]
         assert response.cookies["refresh_token"].value == "refresh-token"
         assert response.cookies["access_token"].value == "access-token"

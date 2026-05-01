@@ -44,7 +44,8 @@ class TestTokenRefreshView:
         response = self.view(request)
 
         assert response.status_code == status.HTTP_200_OK
-        assert "token" in response.data
+        assert response.data["authenticated"] is True
+        assert "token" not in response.data
         assert "refresh_token" not in response.data
         assert "user" in response.data
         assert response.cookies["refresh_token"].value != refresh_token

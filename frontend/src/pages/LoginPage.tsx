@@ -88,14 +88,14 @@ const LoginPage = () => {
     try {
       const loginData = await loginMutation.mutate(formData);
 
-      if (!loginData.token || !loginData.user) {
+      if (!loginData.authenticated || !loginData.user) {
         setErrors({
           general: t('auth.loginFailedInvalidResponse'),
         });
         return;
       }
 
-      login(loginData.token, loginData.user);
+      login(loginData.user);
 
       // Redirect to default authenticated landing page
       navigate('/dashboard');

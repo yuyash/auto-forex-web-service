@@ -15,9 +15,11 @@ class TestAuthLogin:
         )
         assert resp.status_code == 200
         # Validate response structure
-        assert "token" in resp.data
+        assert resp.data["authenticated"] is True
+        assert "token" not in resp.data
         assert "refresh_token" not in resp.data
         assert "user" in resp.data
+        assert resp.cookies["access_token"].value
         assert resp.cookies["refresh_token"].value
         user = resp.data["user"]
         assert "id" in user

@@ -26,7 +26,7 @@ class UserLogoutView(APIView):
     """
     API endpoint for user logout.
 
-    POST /api/auth/logout
+    POST /api/accounts/auth/logout
     - Invalidate JWT token
     - Terminate user session
     """

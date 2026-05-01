@@ -49,6 +49,7 @@ const persistedUserSchema = z.custom<User>(
 const appSettingsSchema = z.object({
   sessionTimeoutMinutes: z.number().optional(),
 });
+const SESSION_MARKER = 'cookie-session';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -113,18 +114,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = useCallback((newToken: string, newUser: User) => {
+  const login = useCallback((newUser: User) => {
     // Only replace the QueryClient when the authenticated user identity
     // changes (login as a different user, or first login after logout).
-    // Token refreshes for the *same* user must NOT reset the cache —
+    // Session refreshes for the *same* user must NOT reset the cache —
     // doing so destroys in-flight queries and causes render errors.
     const previousUserId = userIdRef.current;
     if (previousUserId !== null && previousUserId !== newUser.id) {
       resetQueryClient();
     }
     userIdRef.current = newUser.id;
-    setToken(newToken);
-    tokenRef.current = newToken;
+    setToken(SESSION_MARKER);
+    tokenRef.current = SESSION_MARKER;
     setUser(newUser);
     writeStoredValue('user', newUser);
     clearAuthToken();
@@ -149,8 +150,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshToken = useCallback(async (): Promise<boolean> => {
     try {
       const data = await authApi.refresh();
-      if (data.token && data.user) {
-        login(data.token, data.user);
+      if (data.authenticated && data.user) {
+        login(data.user);
         return true;
       }
       return false;

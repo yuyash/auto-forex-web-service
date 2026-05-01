@@ -24,7 +24,7 @@ class TokenRefreshView(APIView):
     """
     API endpoint for JWT token refresh using opaque refresh tokens.
 
-    POST /api/auth/refresh
+    POST /api/accounts/auth/refresh
     - Exchange a valid refresh_token for a new access + refresh token pair
     - The old refresh token is revoked (rotation)
     """
@@ -35,15 +35,12 @@ class TokenRefreshView(APIView):
     @extend_schema(
         operation_id="auth_token_refresh",
         tags=["Accounts"],
-        request=inline_serializer(
-            "TokenRefreshRequest",
-            fields={"refresh_token": serializers.CharField(required=False, allow_blank=True)},
-        ),
+        request=None,
         responses={
             200: inline_serializer(
                 "TokenRefreshResponse",
                 fields={
-                    "token": serializers.CharField(),
+                    "authenticated": serializers.BooleanField(),
                     "user": inline_serializer(
                         "TokenRefreshUser",
                         fields={
@@ -63,9 +60,7 @@ class TokenRefreshView(APIView):
             ),
         },
         description=(
-            "Exchange a refresh token for a new access + refresh token pair. "
-            "The refresh token is normally read from the HTTP-only cookie; the "
-            "`refresh_token` request field is accepted only as a legacy fallback."
+            "Exchange the HTTP-only refresh-token cookie for a new access + refresh cookie pair."
         ),
     )
     def post(self, request: Request) -> Response:
@@ -110,7 +105,7 @@ class TokenRefreshView(APIView):
 
         response = Response(
             {
-                "token": new_access,
+                "authenticated": True,
                 "user": {
                     "id": user.id,
                     "email": user.email,

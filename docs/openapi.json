@@ -119,19 +119,10 @@
         "/api/accounts/auth/refresh": {
             "post": {
                 "operationId": "auth_token_refresh",
-                "description": "Exchange a refresh token for a new access + refresh token pair. The refresh token is normally read from the HTTP-only cookie; the `refresh_token` request field is accepted only as a legacy fallback.",
+                "description": "Exchange the HTTP-only refresh-token cookie for a new access + refresh cookie pair.",
                 "tags": [
                     "Accounts"
                 ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/TokenRefreshRequestRequest"
-                            }
-                        }
-                    }
-                },
                 "security": [
                     {}
                 ],
@@ -7447,15 +7438,15 @@
             "LoginResponse": {
                 "type": "object",
                 "properties": {
-                    "token": {
-                        "type": "string"
+                    "authenticated": {
+                        "type": "boolean"
                     },
                     "user": {
                         "$ref": "#/components/schemas/LoginUser"
                     }
                 },
                 "required": [
-                    "token",
+                    "authenticated",
                     "user"
                 ]
             },
@@ -10635,26 +10626,18 @@
                     "error"
                 ]
             },
-            "TokenRefreshRequestRequest": {
-                "type": "object",
-                "properties": {
-                    "refresh_token": {
-                        "type": "string"
-                    }
-                }
-            },
             "TokenRefreshResponse": {
                 "type": "object",
                 "properties": {
-                    "token": {
-                        "type": "string"
+                    "authenticated": {
+                        "type": "boolean"
                     },
                     "user": {
                         "$ref": "#/components/schemas/TokenRefreshUser"
                     }
                 },
                 "required": [
-                    "token",
+                    "authenticated",
                     "user"
                 ]
             },

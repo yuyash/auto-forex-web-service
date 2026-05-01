@@ -41,7 +41,7 @@ class TestUserLogoutView:
 
     def test_post_missing_authorization_header(self) -> None:
         """Test logout without authorization header."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         view = UserLogoutView()
 
         response = view.post(request)
@@ -50,7 +50,7 @@ class TestUserLogoutView:
 
     def test_post_invalid_header_format(self) -> None:
         """Test logout with invalid authorization header format."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "InvalidFormat token"
         view = UserLogoutView()
 
@@ -60,7 +60,7 @@ class TestUserLogoutView:
 
     def test_post_empty_token(self) -> None:
         """Test logout with empty token."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer "
         view = UserLogoutView()
 
@@ -70,7 +70,7 @@ class TestUserLogoutView:
 
     def test_post_invalid_token(self) -> None:
         """Test logout without an authenticated user."""
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer invalid_token"
         view = UserLogoutView()
         request.user = MagicMock(is_authenticated=False)
@@ -83,7 +83,7 @@ class TestUserLogoutView:
         """Test successful logout clears the refresh-token cookie."""
         from apps.accounts.models import User
 
-        request = self.factory.post("/api/auth/logout")
+        request = self.factory.post("/api/accounts/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer valid_token"
         request.user = MagicMock(
             spec=User,
