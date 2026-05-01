@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Alert,
   Box,
@@ -26,21 +26,13 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  Code as CodeIcon,
   Settings as SettingsIcon,
   Add as AddIcon,
   Close as CloseIcon,
-  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
-import {
-  isAccountSnapshotRefreshActive,
-  useAccount,
-  useAccountSnapshotRefreshStatus,
-} from '../hooks/useAccounts';
-import { useRefreshAccountSnapshot } from '../hooks/useAccountMutations';
+import { useAccount } from '../hooks/useAccounts';
 import { useToast } from '../components/common/useToast';
 import { Breadcrumbs, PageContainer } from '../components/common';
 import DataTable, { type Column } from '../components/common/DataTable';
@@ -61,110 +53,17 @@ import {
 import { marketApi } from '../services/api/market';
 import { useSupportedInstruments } from '../hooks/useMarketConfig';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatAppNumber } from '../utils/numberFormat';
-import { formatDateTimeInTimezone } from '../utils/timezone';
-import { logger } from '../utils/logger';
-import type { AccountSnapshotRefreshStatus } from '../types/strategy';
-
-const DEFAULT_CURRENCY = 'USD';
-
-const resolveCurrency = (c?: string | null) => {
-  if (!c) return DEFAULT_CURRENCY;
-  const t = c.trim().toUpperCase();
-  return t.length === 3 ? t : DEFAULT_CURRENCY;
-};
-
-const resolveQuoteCurrency = (instrument?: string | null) => {
-  if (!instrument || !instrument.includes('_')) return null;
-  const [, quoteCurrency] = instrument.split('_');
-  const normalized = quoteCurrency?.trim().toUpperCase();
-  return normalized && normalized.length === 3 ? normalized : null;
-};
-
-const fmtBal = (v: string | number | null | undefined, cur?: string) => {
-  if (v == null) return '\u2014';
-  const n = typeof v === 'string' ? Number(v) : v;
-  if (Number.isNaN(n)) return '\u2014';
-  const code = resolveCurrency(cur);
-  try {
-    return `${code} ${formatAppNumber(n, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  } catch {
-    return `${code} ${formatAppNumber(n, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }
-};
-
-const fmtQuoteValue = (
-  value: string | number | null | undefined,
-  instrument?: string | null
-) => {
-  if (value == null) return '\u2014';
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (Number.isNaN(n)) return '\u2014';
-  const currency = resolveQuoteCurrency(instrument);
-  const formatted = formatAppNumber(n, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return currency ? `${formatted} ${currency}` : formatted;
-};
-
-const fmtSignedQuoteValue = (
-  value: string | number | null | undefined,
-  instrument?: string | null
-) => {
-  if (value == null) return '\u2014';
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (Number.isNaN(n)) return '\u2014';
-  const sign = n >= 0 ? '+' : '';
-  return `${sign}${fmtQuoteValue(n, instrument)}`;
-};
-
-const fmtJson = (v: unknown) => {
-  if (v == null) return '\u2014';
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
-  }
-};
-
-const fmtTs = (ts: string | null): string => {
-  if (!ts) return '\u2014';
-  return formatDateTimeInTimezone(ts, 'UTC', undefined, {
-    includeSeconds: true,
-    includeTimezone: true,
-  });
-};
-
-const snapshotRefreshStatusLabel = (
-  t: TFunction,
-  status: AccountSnapshotRefreshStatus
-) => {
-  if (status === 'queued') {
-    return t('settings:accounts.snapshotRefreshQueued', 'Refresh queued');
-  }
-  if (status === 'running') {
-    return t('settings:accounts.snapshotRefreshRunning', 'Refreshing');
-  }
-  if (status === 'completed') {
-    return t('settings:accounts.snapshotRefreshCompleted', 'Refresh complete');
-  }
-  if (status === 'failed') {
-    return t('settings:accounts.snapshotRefreshFailed', 'Refresh failed');
-  }
-  return t('settings:accounts.snapshotRefreshIdle', 'Refresh idle');
-};
-
-type SortOrder = 'asc' | 'desc';
-
-const toOrdering = (field: string, order: SortOrder): string =>
-  order === 'desc' ? `-${field}` : field;
+import {
+  fmtJson,
+  fmtQuoteValue,
+  fmtSignedQuoteValue,
+  fmtTs,
+  toOrdering,
+  type SortOrder,
+} from './oanda-account-detail/formatters';
+import { AccountDetailActions } from './oanda-account-detail/AccountDetailActions';
+import { AccountSummaryCard } from './oanda-account-detail/AccountSummaryCard';
+import { useAccountSnapshotRefreshController } from './oanda-account-detail/useAccountSnapshotRefreshController';
 
 // --- Positions Table ---
 
@@ -1025,13 +924,9 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
 
 export default function OandaAccountDetailPage() {
   const { t } = useTranslation(['settings', 'common']);
-  const { showSuccess, showError } = useToast();
   const params = useParams();
   const queryClient = useQueryClient();
   const [rawDataOpen, setRawDataOpen] = useState(false);
-  const [snapshotRefreshTaskId, setSnapshotRefreshTaskId] = useState<
-    string | null
-  >(null);
 
   const containerSx = useMemo(() => ({ mt: 4, mb: 4 }), []);
 
@@ -1046,29 +941,11 @@ export default function OandaAccountDetailPage() {
     isLoading: loading,
     error: queryError,
   } = useAccount(accountId ?? 0, { enabled: accountId !== null });
-  const refreshSnapshot = useRefreshAccountSnapshot();
-  const activeAccountSnapshotTaskId = isAccountSnapshotRefreshActive(
-    account?.snapshot_refresh_status
-  )
-    ? account?.snapshot_refresh_task_id
-    : undefined;
-  const trackedSnapshotRefreshTaskId =
-    snapshotRefreshTaskId ?? activeAccountSnapshotTaskId ?? null;
-  const snapshotRefreshStatus = useAccountSnapshotRefreshStatus(
-    accountId ?? 0,
-    trackedSnapshotRefreshTaskId,
-    {
-      enabled: accountId !== null && Boolean(trackedSnapshotRefreshTaskId),
-    }
-  );
-  const trackedSnapshotRefreshStatus =
-    snapshotRefreshStatus.data?.status ??
-    (trackedSnapshotRefreshTaskId
-      ? account?.snapshot_refresh_status
-      : undefined);
-  const isSnapshotRefreshInFlight =
-    refreshSnapshot.isLoading ||
-    isAccountSnapshotRefreshActive(trackedSnapshotRefreshStatus);
+  const {
+    handleRefreshSnapshot,
+    isSnapshotRefreshInFlight,
+    trackedSnapshotRefreshStatus,
+  } = useAccountSnapshotRefreshController({ account, accountId });
 
   const { data: marketStatus } = useQuery({
     queryKey: ['market-status'],
@@ -1093,38 +970,6 @@ export default function OandaAccountDetailPage() {
         queryKey: ['oanda-positions', accountId],
       });
       queryClient.invalidateQueries({ queryKey: ['oanda-orders', accountId] });
-    }
-  };
-
-  useEffect(() => {
-    const status = snapshotRefreshStatus.data?.status;
-    if (!status || isAccountSnapshotRefreshActive(status)) return;
-
-    queryClient.invalidateQueries({
-      queryKey: ['accounts'],
-      refetchType: 'active',
-    });
-  }, [queryClient, snapshotRefreshStatus.data?.status]);
-
-  const handleRefreshSnapshot = async () => {
-    if (!account) return;
-    try {
-      const result = await refreshSnapshot.mutate(account.id);
-      setSnapshotRefreshTaskId(result.task_id);
-      showSuccess(
-        t('settings:messages.snapshotRefreshQueued', 'Snapshot refresh queued')
-      );
-    } catch (error) {
-      logger.error('Error queueing account snapshot refresh', {
-        account_id: account.account_id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showError(
-        t(
-          'settings:messages.snapshotRefreshFailed',
-          'Failed to queue snapshot refresh'
-        )
-      );
     }
   };
 
@@ -1168,248 +1013,20 @@ export default function OandaAccountDetailPage() {
           {t('settings:accounts.accountDetails')}: {account.account_id}
         </Typography>
       </Box>
-      <Box
-        display="flex"
-        alignItems="center"
-        justifyContent={{ xs: 'flex-end', sm: 'flex-end' }}
-        gap={1}
-        flexWrap="wrap"
-        mb={2}
-      >
-        {/* Market Status */}
-        {marketStatus && (
-          <Chip
-            label={
-              marketStatus.is_open
-                ? t('settings:accounts.marketOpen')
-                : t('settings:accounts.marketClosed')
-            }
-            color={marketStatus.is_open ? 'success' : 'default'}
-            size="small"
-          />
-        )}
-        <Tooltip
-          title={
-            isSnapshotRefreshInFlight
-              ? snapshotRefreshStatusLabel(
-                  t,
-                  trackedSnapshotRefreshStatus ?? 'queued'
-                )
-              : account.is_active
-                ? t('settings:accounts.refreshSnapshot', 'Refresh snapshot')
-                : t(
-                    'settings:accounts.inactiveRefreshDisabled',
-                    'Inactive accounts cannot be refreshed'
-                  )
-          }
-        >
-          <span>
-            <Button
-              variant="outlined"
-              startIcon={
-                isSnapshotRefreshInFlight ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  <RefreshIcon />
-                )
-              }
-              onClick={handleRefreshSnapshot}
-              disabled={!account.is_active || isSnapshotRefreshInFlight}
-            >
-              {t('settings:accounts.refreshSnapshot', 'Refresh snapshot')}
-            </Button>
-          </span>
-        </Tooltip>
-        <Tooltip title={t('common:actions.reload')}>
-          <IconButton onClick={handleReloadAll}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-        <Button
-          variant="outlined"
-          startIcon={<CodeIcon />}
-          onClick={() => setRawDataOpen(true)}
-        >
-          {t('settings:accounts.rawData')}
-        </Button>
-      </Box>
+      <AccountDetailActions
+        account={account}
+        isSnapshotRefreshInFlight={isSnapshotRefreshInFlight}
+        marketStatus={marketStatus}
+        trackedSnapshotRefreshStatus={trackedSnapshotRefreshStatus}
+        onOpenRawData={() => setRawDataOpen(true)}
+        onRefreshSnapshot={handleRefreshSnapshot}
+        onReloadAll={handleReloadAll}
+      />
 
-      {/* Account Summary */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" gap={1} mb={2}>
-            <Typography variant="h6">{account.account_id}</Typography>
-            <Chip
-              label={
-                account.api_type === 'practice'
-                  ? t('settings:accounts.practice')
-                  : t('settings:accounts.live')
-              }
-              color={account.api_type === 'practice' ? 'default' : 'warning'}
-              size="small"
-            />
-            {account.is_active && (
-              <Chip label="Active" color="success" size="small" />
-            )}
-            {account.is_default && (
-              <Chip
-                label="Default"
-                color="primary"
-                variant="outlined"
-                size="small"
-              />
-            )}
-            {isAccountSnapshotRefreshActive(trackedSnapshotRefreshStatus) && (
-              <Chip
-                label={snapshotRefreshStatusLabel(
-                  t,
-                  trackedSnapshotRefreshStatus
-                )}
-                color="info"
-                variant="outlined"
-                size="small"
-              />
-            )}
-            {account.snapshot_stale && (
-              <Chip
-                label={t('settings:accounts.snapshotStale', 'Snapshot stale')}
-                color="warning"
-                variant="outlined"
-                size="small"
-              />
-            )}
-            {account.snapshot_refresh_error && (
-              <Chip
-                label={t(
-                  'settings:accounts.snapshotRefreshFailed',
-                  'Refresh failed'
-                )}
-                color="error"
-                variant="outlined"
-                size="small"
-              />
-            )}
-          </Box>
-          <Box
-            display="grid"
-            gridTemplateColumns={{
-              xs: '1fr',
-              sm: 'repeat(2, 1fr)',
-              md: 'repeat(4, 1fr)',
-            }}
-            gap={2}
-          >
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.balance')}
-              </Typography>
-              <Typography variant="h6">
-                {fmtBal(account.balance, account.currency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.nav')}
-              </Typography>
-              <Typography variant="h6">
-                {fmtBal(account.nav ?? null, account.currency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.unrealizedPnL')}
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  color:
-                    parseFloat(account.unrealized_pnl) >= 0
-                      ? 'success.main'
-                      : 'error.main',
-                }}
-              >
-                {parseFloat(account.unrealized_pnl) >= 0 ? '+' : ''}
-                {fmtBal(account.unrealized_pnl, account.currency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.currency')}
-              </Typography>
-              <Typography variant="h6">{account.currency}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.marginUsed')}
-              </Typography>
-              <Typography variant="body1">
-                {fmtBal(account.margin_used, account.currency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.marginAvailable')}
-              </Typography>
-              <Typography variant="body1">
-                {fmtBal(account.margin_available, account.currency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.openTrades')}
-              </Typography>
-              <Typography variant="body1">
-                {account.open_trade_count ?? '\u2014'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.openPositions')}
-              </Typography>
-              <Typography variant="body1">
-                {account.open_position_count ?? '\u2014'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.pendingOrders')}
-              </Typography>
-              <Typography variant="body1">
-                {account.pending_order_count ?? '\u2014'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.positionMode')}
-              </Typography>
-              <Typography variant="body1">
-                {account.position_mode ?? '\u2014'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings:accounts.hedgingEnabled')}
-              </Typography>
-              <Typography variant="body1">
-                {typeof account.hedging_enabled === 'boolean'
-                  ? String(account.hedging_enabled)
-                  : '\u2014'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t(
-                  'settings:accounts.snapshotRefreshedAt',
-                  'Snapshot refreshed'
-                )}
-              </Typography>
-              <Typography variant="body1">
-                {fmtTs(account.snapshot_refreshed_at ?? null)}
-              </Typography>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+      <AccountSummaryCard
+        account={account}
+        trackedSnapshotRefreshStatus={trackedSnapshotRefreshStatus}
+      />
 
       {/* Positions */}
       <Card sx={{ mb: 3 }}>
