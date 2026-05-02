@@ -12,6 +12,7 @@
   },
   "types": {
     "snowball": "Snowball Strategy",
+    "snowball_net": "SnowballNet Strategy",
     "trendFollowing": "Trend Following",
     "maCrossover": "MA Crossover",
     "breakout": "Breakout",
@@ -25,7 +26,8 @@
     "newsSpike": "News/Spike"
   },
   "descriptions": {
-    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side."
+    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side.",
+    "snowball_net": "Net-position Snowball variant for FIFO/netting OANDA accounts. Adds and partial closes are based on the average entry price."
   },
   "parameters": {
     "lotSize": "Lot Size",
@@ -67,7 +69,20 @@
     "account_balance": "Account Balance",
     "account_nav": "Account NAV",
     "lock_entered_at": "Lock Entered At",
-    "cooldown_until": "Cooldown Until"
+    "cooldown_until": "Cooldown Until",
+    "status": "Status",
+    "direction": "Direction",
+    "net_units": "Net Units",
+    "average_price": "Average Entry",
+    "current_price": "Current Price",
+    "pips_from_average": "Pips From Average",
+    "target_price": "Take-Profit Price",
+    "next_add_price": "Next Add Price",
+    "next_add_distance_pips": "Next Add Distance",
+    "add_count": "Add Count",
+    "exposure_pct": "Exposure",
+    "margin_ratio_pct": "Margin",
+    "pending_action": "Pending Action"
   },
   "snapshotValues": {
     "protection_level": {

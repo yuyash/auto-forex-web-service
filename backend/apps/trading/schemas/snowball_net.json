@@ -1,0 +1,279 @@
+{
+  "display_name": "SnowballNet Strategy",
+  "type": "object",
+  "description": "Net-position Snowball variant for FIFO/netting OANDA accounts.",
+  "properties": {
+    "trade_direction": {
+      "type": "string",
+      "title": "Trade Direction",
+      "title_ja": "取引方向",
+      "description": "The single net direction managed by this strategy.",
+      "description_ja": "この戦略が管理する単一のネット方向。",
+      "enum": ["long", "short"],
+      "enum_labels": { "long": "Long", "short": "Short" },
+      "enum_labels_ja": { "long": "買い", "short": "売り" },
+      "default": "long",
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "base_units": {
+      "type": "integer",
+      "title": "Base Units",
+      "title_ja": "基本ユニット数",
+      "description": "Base lot size in currency units.",
+      "description_ja": "基本ロットサイズ（通貨単位）。",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "initial_lot_size": {
+      "type": "integer",
+      "title": "Initial Lot Size",
+      "title_ja": "初回ロット数",
+      "description": "Initial net entry size as a multiple of Base Units.",
+      "description_ja": "初回ネット建玉サイズ。基本ユニット数に乗算されます。",
+      "default": 1,
+      "minimum": 1,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "add_lot_size": {
+      "type": "integer",
+      "title": "Add Lot Size",
+      "title_ja": "増し玉ロット数",
+      "description": "Each add size as a multiple of Base Units.",
+      "description_ja": "各増し玉サイズ。基本ユニット数に乗算されます。",
+      "default": 1,
+      "minimum": 1,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "max_add_count": {
+      "type": "integer",
+      "title": "Max Adds",
+      "title_ja": "最大増し玉回数",
+      "description": "Maximum number of average-price based adds before waiting for recovery.",
+      "description_ja": "平均価格ベースで増し玉する最大回数。",
+      "default": 7,
+      "minimum": 0,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "max_net_units": {
+      "type": "integer",
+      "title": "Max Net Units",
+      "title_ja": "最大ネットユニット数",
+      "description": "Absolute cap on the net position. 0 means initial + all configured adds.",
+      "description_ja": "ネット建玉の絶対上限。0の場合は初回と全増し玉の合計。",
+      "default": 0,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
+    "take_profit_pips": {
+      "type": "number",
+      "title": "Net Take-Profit (pips)",
+      "title_ja": "ネット利確幅（pips）",
+      "description": "Favorable distance from average entry price that triggers a partial close.",
+      "description_ja": "平均建値から有利方向にこのpipsだけ進むと部分決済します。",
+      "default": 25,
+      "minimum": 0.1,
+      "group": "Net Take-Profit",
+      "group_ja": "ネット利確"
+    },
+    "partial_close_ratio": {
+      "type": "number",
+      "title": "Partial Close Ratio",
+      "title_ja": "部分決済比率",
+      "description": "Fraction of the current net position to close at take-profit.",
+      "description_ja": "利確時に現在のネット建玉のうち決済する比率。",
+      "default": 0.5,
+      "minimum": 0.01,
+      "maximum": 1,
+      "group": "Net Take-Profit",
+      "group_ja": "ネット利確"
+    },
+    "min_close_units": {
+      "type": "integer",
+      "title": "Minimum Close Units",
+      "title_ja": "最小決済ユニット数",
+      "description": "Smallest partial-close size. If the remainder would be smaller, the full net position is closed.",
+      "description_ja": "部分決済の最小ユニット数。残りがこれ未満になる場合は全決済します。",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Net Take-Profit",
+      "group_ja": "ネット利確"
+    },
+    "interval_mode": {
+      "type": "string",
+      "title": "Add Interval Mode",
+      "title_ja": "増し玉間隔モード",
+      "description": "How adverse pips from the average price are converted into add thresholds.",
+      "description_ja": "平均価格からの逆行pipsを増し玉閾値に変換する方法。",
+      "enum": ["constant", "additive", "subtractive", "multiplicative", "divisive", "manual"],
+      "enum_labels": {
+        "constant": "Constant",
+        "additive": "Additive",
+        "subtractive": "Subtractive",
+        "multiplicative": "Multiplicative",
+        "divisive": "Divisive",
+        "manual": "Manual"
+      },
+      "enum_labels_ja": {
+        "constant": "固定",
+        "additive": "加算",
+        "subtractive": "減算",
+        "multiplicative": "乗算",
+        "divisive": "除算",
+        "manual": "手動"
+      },
+      "default": "constant",
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "n_pips_head": {
+      "type": "number",
+      "title": "Interval Head (pips)",
+      "title_ja": "間隔初期値（pips）",
+      "default": 30,
+      "minimum": 0.1,
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "n_pips_tail": {
+      "type": "number",
+      "title": "Interval Tail (pips)",
+      "title_ja": "間隔終端値（pips）",
+      "default": 14,
+      "minimum": 0.1,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "n_pips_flat_steps": {
+      "type": "integer",
+      "title": "Flat Steps",
+      "title_ja": "固定段数",
+      "default": 2,
+      "minimum": 0,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "n_pips_gamma": {
+      "type": "number",
+      "title": "Interval Gamma",
+      "title_ja": "間隔ガンマ係数",
+      "default": 1.4,
+      "minimum": 0.01,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "manual_intervals": {
+      "type": "array",
+      "title": "Manual Add Intervals (pips)",
+      "title_ja": "手動増し玉間隔（pips）",
+      "default": [],
+      "items": { "type": "number", "minimum": 0.1 },
+      "dependsOn": { "field": "interval_mode", "values": ["manual"] },
+      "linkedCount": { "field": "max_add_count", "offset": 0 },
+      "itemLabel": "Add {index} interval (pips)",
+      "itemLabel_ja": "増し玉{index} 間隔（pips）",
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "round_step_pips": {
+      "type": "number",
+      "title": "Pip Rounding Step",
+      "title_ja": "Pip丸め単位",
+      "default": 0.1,
+      "minimum": 0.01,
+      "group": "Average Add Interval",
+      "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "margin_reduce_enabled": {
+      "type": "boolean",
+      "title": "Margin Reduce Enabled",
+      "title_ja": "証拠金率による縮小",
+      "description": "Close part of the net position when margin ratio becomes too high.",
+      "description_ja": "証拠金率が高すぎるときにネット建玉を一部決済します。",
+      "default": false,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "margin_reduce_threshold_pct": {
+      "type": "number",
+      "title": "Reduce Threshold (%)",
+      "title_ja": "縮小開始率（%）",
+      "default": 70,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "margin_reduce_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "margin_reduce_target_pct": {
+      "type": "number",
+      "title": "Reduce Target (%)",
+      "title_ja": "縮小目標率（%）",
+      "default": 50,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "margin_reduce_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "margin_reduce_ratio": {
+      "type": "number",
+      "title": "Margin Reduce Close Ratio",
+      "title_ja": "縮小決済比率",
+      "default": 0.25,
+      "minimum": 0.01,
+      "maximum": 1,
+      "dependsOn": { "field": "margin_reduce_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "emergency_enabled": {
+      "type": "boolean",
+      "title": "Emergency Stop Enabled",
+      "title_ja": "緊急停止",
+      "default": true,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "emergency_threshold_pct": {
+      "type": "number",
+      "title": "Emergency Threshold (%)",
+      "title_ja": "緊急停止率（%）",
+      "default": 95,
+      "minimum": 1,
+      "maximum": 100,
+      "dependsOn": { "field": "emergency_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "margin_rate": {
+      "type": "number",
+      "title": "Margin Rate",
+      "title_ja": "証拠金率",
+      "description": "Margin rate used by runtime metrics when estimating margin ratio.",
+      "description_ja": "証拠金率の推定に使う証拠金率。",
+      "default": 0.04,
+      "minimum": 0.0001,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    }
+  }
+}

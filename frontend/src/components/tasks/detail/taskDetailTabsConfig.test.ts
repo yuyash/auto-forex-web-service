@@ -15,4 +15,10 @@ describe('visibleTabsForStrategy', () => {
       visibleTabsForStrategy(tabs, 'unknown').map((tab) => tab.id)
     ).toContain('positions');
   });
+
+  it('hides positions for SnowballNet', () => {
+    expect(
+      visibleTabsForStrategy(tabs, 'snowball_net').map((tab) => tab.id)
+    ).not.toContain('positions');
+  });
 });

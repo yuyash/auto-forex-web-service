@@ -150,3 +150,52 @@ class TaskStrategyDataMixin:
                 task_type_label=self.task_type_label,
             )
         )
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("center", str, required=False),
+            OpenApiParameter("since", str, required=False),
+            OpenApiParameter("until", str, required=False),
+            OpenApiParameter("granularity", str, required=False),
+            OpenApiParameter("before_bars", int, required=False),
+            OpenApiParameter("after_bars", int, required=False),
+            OpenApiParameter("follow", bool, required=False),
+            OpenApiParameter("merge_markers", bool, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskSnowballNetChartResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "window": serializers.JSONField(),
+                    "current": serializers.JSONField(),
+                    "candles": serializers.ListField(child=serializers.JSONField()),
+                    "price_lines": serializers.ListField(child=serializers.JSONField()),
+                    "oscillator_lines": serializers.ListField(child=serializers.JSONField()),
+                    "markers": serializers.ListField(child=serializers.JSONField()),
+                },
+            )
+        },
+        description="Retrieve SnowballNet OHLC, average-price lines, metrics, and markers.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/net-chart",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_net_chart(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().net_chart(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )

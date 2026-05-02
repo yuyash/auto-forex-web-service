@@ -24,6 +24,17 @@ if TYPE_CHECKING:
 _EVENT_REGISTRY: dict[str, type["StrategyEvent"]] = {}
 
 
+def parse_bool(value: Any, *, default: bool = False) -> bool:
+    """Parse a JSON-ish boolean value from persisted event details."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def register_event(event_type: EventType):
     """Register an event class for automatic deserialization.
 
@@ -529,6 +540,7 @@ class OpenPositionEvent(StrategyEvent):
     planned_exit_price_formula: str | None = None
     stop_loss_price: Decimal | None = None
     description: str = ""
+    merge_with_existing: bool = False
 
     def __post_init__(self):
         if not self.event_type:
@@ -580,6 +592,8 @@ class OpenPositionEvent(StrategyEvent):
             result["stop_loss_price"] = str(self.stop_loss_price)
         if self.description:
             result["description"] = self.description
+        if self.merge_with_existing:
+            result["merge_with_existing"] = True
         return result
 
     @classmethod
@@ -599,6 +613,7 @@ class OpenPositionEvent(StrategyEvent):
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
             stop_loss_price=parse_optional_decimal(event_dict.get("stop_loss_price")),
             description=str(event_dict.get("description", "")),
+            merge_with_existing=parse_bool(event_dict.get("merge_with_existing")),
         )
         instance.actual_interval_pips = parse_optional_decimal(
             event_dict.get("actual_interval_pips")
@@ -721,6 +736,7 @@ class ClosePositionEvent(StrategyEvent):
     position_id: str | None = None
     strategy_event_type: str = ""
     description: str = ""
+    force_instrument_close: bool = False
 
     def __post_init__(self):
         if not self.event_type:
@@ -768,6 +784,8 @@ class ClosePositionEvent(StrategyEvent):
             result["strategy_event_type"] = self.strategy_event_type
         if self.description:
             result["description"] = self.description
+        if self.force_instrument_close:
+            result["force_instrument_close"] = True
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
         if self.exit_time:
@@ -793,6 +811,7 @@ class ClosePositionEvent(StrategyEvent):
             position_id=event_dict.get("position_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             description=str(event_dict.get("description", "")),
+            force_instrument_close=parse_bool(event_dict.get("force_instrument_close")),
         )
         # Restore base-class fields that are not part of the constructor
         # but are serialised into the event dict.

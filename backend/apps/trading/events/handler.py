@@ -579,7 +579,7 @@ class EventHandler:
             units=event.units,
             direction=direction,
             layer_index=event.layer_number,
-            merge_with_existing=False,
+            merge_with_existing=event.merge_with_existing,
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
             retracement_count=event.retracement_count,
@@ -972,6 +972,7 @@ class EventHandler:
                 units=units_to_close,
                 override_price=override_price,
                 tick_timestamp=event.timestamp,
+                force_instrument_close=event.force_instrument_close,
             )
             realized_delta_total += realized_delta
             total_closed_units += int(closed_units)

@@ -67,6 +67,7 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
+import { SnowballNetStrategyTab } from '../tasks/detail/strategy/SnowballNetStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
 import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabsConfig';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
@@ -513,15 +514,26 @@ export const BacktestTaskDetail: React.FC = () => {
             value={activeTabIndex}
             index={visibleTabIds.indexOf('strategy')}
           >
-            <TaskStrategyTab
-              taskId={taskId}
-              taskType={TaskType.BACKTEST}
-              strategyType={detailTask.strategy_type}
-              instrument={detailTask.instrument}
-              executionRunId={activeExecutionId}
-              enableRealTimeUpdates={enableRealtime}
-              timezone={timezone}
-            />
+            {detailTask.strategy_type === 'snowball_net' ? (
+              <SnowballNetStrategyTab
+                taskId={taskId}
+                taskType={TaskType.BACKTEST}
+                instrument={detailTask.instrument}
+                executionRunId={activeExecutionId}
+                enableRealTimeUpdates={enableRealtime}
+                timezone={timezone}
+              />
+            ) : (
+              <TaskStrategyTab
+                taskId={taskId}
+                taskType={TaskType.BACKTEST}
+                strategyType={detailTask.strategy_type}
+                instrument={detailTask.instrument}
+                executionRunId={activeExecutionId}
+                enableRealTimeUpdates={enableRealtime}
+                timezone={timezone}
+              />
+            )}
           </LazyTabPanel>
         )}
 
@@ -635,6 +647,7 @@ export const BacktestTaskDetail: React.FC = () => {
                     : null
                 }
                 timezone={timezone}
+                strategyType={detailTask.strategy_type}
               />
             </Suspense>
           </LazyTabPanel>

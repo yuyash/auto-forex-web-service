@@ -2,8 +2,10 @@ import type { TabItem } from '../../../hooks/useTabConfig';
 
 export function visibleTabsForStrategy(
   tabs: TabItem[],
-  _strategyType?: string
+  strategyType?: string
 ): TabItem[] {
-  void _strategyType;
+  if (strategyType === 'snowball_net') {
+    return tabs.filter((tab) => tab.id !== 'positions');
+  }
   return tabs;
 }
