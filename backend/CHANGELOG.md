@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.46.0...backend-v1.46.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* **trading:** accept OANDA-style granularity tokens in metrics API ([#630](https://github.com/yuyash/auto-forex-web-service/issues/630)) ([fbc0d2d](https://github.com/yuyash/auto-forex-web-service/commit/fbc0d2d377277975bb8a290e9b5a5e8bcc208bc8))
+
 ## [1.46.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.45.2...backend-v1.46.0) (2026-05-02)
 
 
