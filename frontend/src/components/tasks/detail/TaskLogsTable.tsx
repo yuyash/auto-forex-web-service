@@ -42,6 +42,7 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { useStrategies } from '../../../hooks/useStrategies';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 
 interface TaskLogsTableProps {
   taskId: string;
@@ -66,6 +67,11 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const { t } = useTranslation('common');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeMilliseconds: true,
+    includeTimezone: true,
+  });
   const [levelFilter, setLevelFilter] = useState<string[]>([]);
   const [componentFilter, setComponentFilter] = useState<string[]>([]);
   const [timestampFrom, setTimestampFrom] = useState<string>('');
@@ -155,17 +161,10 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     if (page !== 0) setPage(0);
   }
 
-  const formatTimestamp = (timestamp: string): string => {
-    return new Date(timestamp).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3,
-    });
-  };
+  const formatTimestamp = useCallback(
+    (timestamp: string): string => formatDateTime(timestamp),
+    [formatDateTime]
+  );
 
   const getLevelColor = (
     level: string
@@ -206,8 +205,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'timestamp',
       label: t('tables.logs.timestamp'),
-      width: 260,
-      minWidth: 200,
+      width: 280,
+      minWidth: 240,
       render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
@@ -276,7 +275,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     const logsMap = new Map(logs.map((l) => [String(l.id), l]));
     const extractors: Record<string, (r: TaskLog) => string> = {
       timestamp: (r) =>
-        r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
+        r.timestamp ? formatTimestamp(r.timestamp as string) : '-',
       level: (r) => (r.level as string) ?? '-',
       component: (r) => (r.component as string) ?? '-',
       message: (r) => {
@@ -292,7 +291,14 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       logsMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [getStrategyEventLabel, logs, pageRowIds, selection, visibleColumns]);
+  }, [
+    formatTimestamp,
+    getStrategyEventLabel,
+    logs,
+    pageRowIds,
+    selection,
+    visibleColumns,
+  ]);
 
   const renderMobileCell = useCallback(
     (column: Column<TaskLog>, row: TaskLog) => {

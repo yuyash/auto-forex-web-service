@@ -3,8 +3,7 @@ import { Box, Divider, Grid, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
-import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
-import { StrategySnapshotSummary } from '../../tasks/detail/StrategySnapshotSummary';
+import { ExecutionStatusSummary } from '../../tasks/detail/ExecutionStatusSummary';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildBacktestTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -14,8 +13,9 @@ import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
 import type { StrategySnapshotResponse } from '../../../types/strategyVisualization';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
-import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
-import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 
 const BACKTEST_PERIOD_SETTING_KEYS = new Set([
   'start_time',
@@ -70,6 +70,12 @@ export function BacktestOverviewTab({
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const { user } = useAuth();
+  const { formatDateTime } = useDateTimeFormatter({
+    includeTimezone: true,
+  });
+  const { separators } = useNumberFormatter();
+  const isSuperuser = Boolean(user?.is_superuser);
 
   // When viewing a historical execution, prefer snapshot values for task settings
   const effectiveStartTime =
@@ -91,7 +97,10 @@ export function BacktestOverviewTab({
 
   const taskSettings = useMemo(
     () =>
-      buildBacktestTaskSettingDefinitions(t, timezone, language)
+      buildBacktestTaskSettingDefinitions(t, timezone, language, {
+        includeDebugOptions: isSuperuser,
+        numberSeparators: separators,
+      })
         .filter(
           (definition) => !BACKTEST_PERIOD_SETTING_KEYS.has(definition.key)
         )
@@ -153,9 +162,11 @@ export function BacktestOverviewTab({
       historicalStrategyConfig?.id,
       historicalStrategyConfig?.name,
       historicalStrategyConfig?.strategy_type,
+      isSuperuser,
       isViewingHistorical,
       language,
       onOpenConfiguration,
+      separators,
       strategies,
       t,
       task.config_id,
@@ -164,6 +175,24 @@ export function BacktestOverviewTab({
       timezone,
     ]
   );
+  const normalizedHistoricalTaskConfig = useMemo(() => {
+    if (!historicalTaskConfig) {
+      return historicalTaskConfig;
+    }
+
+    const sellAtCompletion =
+      historicalTaskConfig.sell_on_stop ??
+      historicalTaskConfig.sell_at_completion;
+
+    if (sellAtCompletion === undefined) {
+      return historicalTaskConfig;
+    }
+
+    return {
+      ...historicalTaskConfig,
+      sell_at_completion: sellAtCompletion,
+    };
+  }, [historicalTaskConfig]);
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -172,7 +201,7 @@ export function BacktestOverviewTab({
           <TaskSettingsList
             title={t('common:labels.taskInformation')}
             task={task as unknown as Record<string, unknown>}
-            snapshot={historicalTaskConfig}
+            snapshot={normalizedHistoricalTaskConfig}
             definitions={taskSettings}
           />
         </Grid>
@@ -188,14 +217,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.startTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(
-                  effectiveStartTime,
-                  timezone,
-                  language,
-                  {
-                    includeTimezone: true,
-                  }
-                )}
+                {formatDateTime(effectiveStartTime)}
               </Typography>
             </Box>
             <Box>
@@ -203,14 +225,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.endTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(
-                  effectiveEndTime,
-                  timezone,
-                  language,
-                  {
-                    includeTimezone: true,
-                  }
-                )}
+                {formatDateTime(effectiveEndTime)}
               </Typography>
             </Box>
             <Box>
@@ -252,177 +267,15 @@ export function BacktestOverviewTab({
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" gutterBottom>
-            {t('backtest:detail.results')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.realizedPnl')} ({pnlCurrency})
-              </Typography>
-              <Typography
-                variant="body1"
-                color={
-                  summary.pnl.realized >= 0 ? 'success.main' : 'error.main'
-                }
-              >
-                {summary.pnl.realized >= 0 ? '+' : ''}
-                {formatAppNumber(summary.pnl.realized, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{' '}
-                {pnlCurrency}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.unrealizedPnl')} ({pnlCurrency})
-              </Typography>
-              <Typography
-                variant="body1"
-                color={
-                  summary.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
-                }
-              >
-                {summary.pnl.unrealized >= 0 ? '+' : ''}
-                {formatAppNumber(summary.pnl.unrealized, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{' '}
-                {pnlCurrency}
-              </Typography>
-            </Box>
-            {summary.execution.currentBalance != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('backtest:detail.currentBalance')}
-                </Typography>
-                <Typography variant="body1">
-                  {summary.execution.currentBalanceDisplay != null &&
-                  summary.execution.displayCurrency &&
-                  summary.execution.displayCurrency !==
-                    summary.execution.accountCurrency ? (
-                    <>
-                      {formatAppNumber(
-                        summary.execution.currentBalanceDisplay,
-                        {
-                          maximumFractionDigits: 0,
-                        }
-                      )}{' '}
-                      {summary.execution.displayCurrency}
-                      <Typography
-                        component="span"
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ ml: 1 }}
-                      >
-                        (
-                        {formatAppNumber(summary.execution.currentBalance, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{' '}
-                        {summary.execution.accountCurrency})
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      {formatAppNumber(summary.execution.currentBalance, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      {summary.execution.accountCurrency || pnlCurrency}
-                    </>
-                  )}
-                </Typography>
-              </Box>
-            )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.totalTradesCount')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.totalTrades)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.openPositions')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openPositions)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.closedPositions')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.closedPositions)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.openLongUnits')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openLongUnits ?? 0)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.openShortUnits')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openShortUnits ?? 0)}
-              </Typography>
-            </Box>
-            {summary.execution.ticksProcessed > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('backtest:detail.ticksProcessed')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppNumber(summary.execution.ticksProcessed)}
-                </Typography>
-              </Box>
-            )}
-            {displayedMarginRatio != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:labels.marginRatio')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppPercent(displayedMarginRatio * 100, 1)}
-                </Typography>
-              </Box>
-            )}
-            {summary.execution.currentAtr != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:labels.currentAtr')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppNumber(summary.execution.currentAtr, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </Typography>
-              </Box>
-            )}
-            <LatestMetricsSummary
-              latest={latestMetrics ?? null}
-              pnlCurrency={pnlCurrency}
-              summary={summary}
-            />
-          </Box>
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <StrategySnapshotSummary
+          <ExecutionStatusSummary
+            taskNamespace="backtest"
+            summary={summary}
+            latestMetrics={latestMetrics ?? null}
+            pnlCurrency={pnlCurrency}
+            displayedMarginRatio={displayedMarginRatio}
             snapshot={strategySnapshot ?? null}
-            isLoading={strategySnapshotLoading}
-            error={strategySnapshotError}
+            isSnapshotLoading={strategySnapshotLoading}
+            snapshotError={strategySnapshotError}
           />
         </Grid>
 

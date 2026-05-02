@@ -12,6 +12,7 @@ import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 
 interface LatestMetricsSummaryProps {
   latest: MetricPoint | null;
@@ -64,6 +65,7 @@ export function LatestMetricsSummary({
   summary,
 }: LatestMetricsSummaryProps) {
   const { t } = useTranslation('common');
+  const { formatNumber, formatPercent } = useNumberFormatter();
 
   if (!latest && !summary) return null;
 
@@ -72,11 +74,19 @@ export function LatestMetricsSummary({
     if (num == null) return null;
 
     let display: string;
-    if (format === 'pct') display = `${num.toFixed(2)}%`;
-    else if (format === 'int') display = Math.round(num).toLocaleString();
+    if (format === 'pct') display = formatPercent(num, 2);
+    else if (format === 'int')
+      display = formatNumber(Math.round(num), { maximumFractionDigits: 0 });
     else if (format === 'currency')
-      display = `${num.toFixed(2)} ${pnlCurrency}`;
-    else display = num.toFixed(2);
+      display = `${formatNumber(num, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} ${pnlCurrency}`;
+    else
+      display = formatNumber(num, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
 
     const color =
       key === 'losing_trades'

@@ -47,7 +47,8 @@ export default function BacktestTaskFormPage() {
           task.tick_granularity as BacktestTaskUpdateInitialData['tick_granularity'],
         tick_window_value_mode:
           task.tick_window_value_mode as BacktestTaskUpdateInitialData['tick_window_value_mode'],
-        sell_at_completion: task.sell_at_completion ?? false,
+        sell_at_completion:
+          task.sell_on_stop ?? task.sell_at_completion ?? false,
         hedging_enabled: task.hedging_enabled ?? true,
         drain_duration_hours: task.drain_duration_hours,
         market_idle_pre_close_minutes: task.market_idle_pre_close_minutes,

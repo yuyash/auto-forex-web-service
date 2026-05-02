@@ -29,6 +29,7 @@ export interface Column<T> {
   align?: 'left' | 'center' | 'right';
   minWidth?: number;
   width?: number;
+  defaultVisible?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -122,6 +123,9 @@ function DataTable<T extends object>({
   onSortChange,
   fillEmptyRows = false,
 }: DataTableProps<T>): React.ReactElement {
+  const [tableContainerElement, setTableContainerElement] =
+    useState<HTMLDivElement | null>(null);
+  const [availableTableWidth, setAvailableTableWidth] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
   const [orderBy, setOrderBy] = useState<keyof T | string>(
@@ -157,6 +161,7 @@ function DataTable<T extends object>({
     startX: number;
     startWidth: number;
   } | null>(null);
+  const columnScaleRef = useRef(1);
 
   const handleResizeStart = useCallback(
     (
@@ -180,7 +185,8 @@ function DataTable<T extends object>({
           'touches' in moveEvent
             ? moveEvent.touches[0].clientX
             : (moveEvent as MouseEvent).clientX;
-        const diff = moveX - resizing.startX;
+        const diff =
+          (moveX - resizing.startX) / Math.max(1, columnScaleRef.current);
         const newWidth = Math.max(40, resizing.startWidth + diff);
         const { columnId: resizingColumnId } = resizing;
         setColumnWidths((prev) => ({
@@ -307,13 +313,56 @@ function DataTable<T extends object>({
     return Math.max(1, columnWidth);
   }, [columnWidths, columns, selectable]);
 
-  const getColumnWidth = useCallback(
+  const getBaseColumnWidth = useCallback(
     (column: Column<T>): number => {
       const colId = String(column.id);
       return columnWidths[colId] ?? column.width ?? column.minWidth ?? 120;
     },
     [columnWidths]
   );
+
+  const columnScale = useMemo(() => {
+    const selectionWidth = selectable ? 50 : 0;
+    const baseDataWidth = Math.max(1, tableMinWidth - selectionWidth);
+    const availableDataWidth = availableTableWidth - selectionWidth;
+
+    if (availableDataWidth <= baseDataWidth) return 1;
+    return availableDataWidth / baseDataWidth;
+  }, [availableTableWidth, selectable, tableMinWidth]);
+
+  React.useEffect(() => {
+    columnScaleRef.current = columnScale;
+  }, [columnScale]);
+
+  const getColumnWidth = useCallback(
+    (column: Column<T>): number => getBaseColumnWidth(column) * columnScale,
+    [columnScale, getBaseColumnWidth]
+  );
+
+  const effectiveTableWidth = useMemo(
+    () => Math.max(tableMinWidth, availableTableWidth || 0),
+    [availableTableWidth, tableMinWidth]
+  );
+
+  React.useEffect(() => {
+    const node = tableContainerElement;
+    if (!node) return;
+
+    const updateWidth = () => {
+      setAvailableTableWidth(Math.floor(node.clientWidth));
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [tableContainerElement]);
 
   // Real-time updates effect
   React.useEffect(() => {
@@ -341,7 +390,7 @@ function DataTable<T extends object>({
 
   const resizeHandle = (columnId: string, column: Column<T>) => {
     if (!resizableColumns) return null;
-    const w = columnWidths[columnId] ?? column.width ?? column.minWidth ?? 100;
+    const w = getBaseColumnWidth(column);
     return (
       <Box
         onMouseDown={(e) => handleResizeStart(e, columnId, w)}
@@ -376,6 +425,7 @@ function DataTable<T extends object>({
     return (
       <Paper sx={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
         <TableContainer
+          ref={setTableContainerElement}
           sx={{
             maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
             overflowX: 'auto',
@@ -385,7 +435,7 @@ function DataTable<T extends object>({
         >
           <Table
             stickyHeader={stickyHeader}
-            sx={{ tableLayout: 'fixed', width: `${tableMinWidth}px` }}
+            sx={{ tableLayout: 'fixed', width: `${effectiveTableWidth}px` }}
           >
             {colGroup}
             <TableHead>
@@ -454,6 +504,7 @@ function DataTable<T extends object>({
       aria-label={ariaLabel || 'Data table'}
     >
       <TableContainer
+        ref={setTableContainerElement}
         sx={{
           maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
           overflowX: 'auto',
@@ -463,7 +514,7 @@ function DataTable<T extends object>({
       >
         <Table
           stickyHeader={stickyHeader}
-          sx={{ tableLayout: 'fixed', width: `${tableMinWidth}px` }}
+          sx={{ tableLayout: 'fixed', width: `${effectiveTableWidth}px` }}
         >
           {colGroup}
           <TableHead>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FormControl,
   InputLabel,
@@ -37,14 +38,15 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
   value,
   onChange,
   error,
-  label = 'Strategy Configuration',
+  label,
   required = false,
   disabled = false,
   helperText,
   strategyTypeFilter,
   allowEmptySelection = false,
-  emptySelectionLabel = 'All configurations',
+  emptySelectionLabel,
 }) => {
+  const { t } = useTranslation(['configuration', 'common']);
   const [searchTerm, setSearchTerm] = React.useState('');
   const { strategies } = useStrategies();
   const { data: configurationsData, isLoading } = useConfigurations({
@@ -70,6 +72,9 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
   const selectedConfig =
     filteredConfigurations.find((config) => config.id === value) ??
     selectedConfiguration;
+  const resolvedLabel = label ?? t('common:labels.strategyConfiguration');
+  const resolvedEmptySelectionLabel =
+    emptySelectionLabel ?? t('configuration:filters.allConfigurations');
 
   return (
     <FormControl
@@ -78,12 +83,12 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
       required={required}
       disabled={disabled}
     >
-      <InputLabel id="configuration-selector-label">{label}</InputLabel>
+      <InputLabel id="configuration-selector-label">{resolvedLabel}</InputLabel>
       <Select
         labelId="configuration-selector-label"
         id="configuration-selector"
         value={value || ''}
-        label={label}
+        label={resolvedLabel}
         onChange={(e) => {
           const val = e.target.value;
           if (typeof val === 'string') {
@@ -110,7 +115,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           }}
         >
           <TextField
-            placeholder="Search configurations..."
+            placeholder={t('configuration:filters.searchConfigurations')}
             value={searchTerm}
             onChange={(e) => {
               e.stopPropagation();
@@ -130,7 +135,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
         </Box>
 
         {allowEmptySelection && (
-          <MenuItem value="">{emptySelectionLabel}</MenuItem>
+          <MenuItem value="">{resolvedEmptySelectionLabel}</MenuItem>
         )}
 
         {/* Hidden MenuItem to keep the selected value visible while configurations are loading */}
@@ -138,7 +143,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           !isLoading &&
           !filteredConfigurations.some((c) => c.id === value) && (
             <MenuItem value={value} sx={{ display: 'none' }}>
-              {selectedConfig?.name || 'Loading...'}
+              {selectedConfig?.name || t('common:status.loading')}
             </MenuItem>
           )}
 
@@ -150,21 +155,21 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
                 value={value}
                 sx={{ display: 'none' }}
               >
-                {selectedConfig?.name || 'Loading...'}
+                {selectedConfig?.name || t('common:status.loading')}
               </MenuItem>
             ) : null,
             <MenuItem key="loading-state" disabled>
               <CircularProgress size={20} sx={{ mr: 1 }} />
-              Loading configurations...
+              {t('configuration:feedback.loadingConfigurations')}
             </MenuItem>,
           ]
         ) : filteredConfigurations.length === 0 ? (
           <MenuItem disabled>
             {searchTerm
-              ? 'No configurations found'
+              ? t('configuration:empty.noConfigurationsFound')
               : allowEmptySelection
-                ? 'Type to search configurations'
-                : 'No configurations available'}
+                ? t('configuration:empty.typeToSearchConfigurations')
+                : t('configuration:empty.noConfigurationsAvailable')}
           </MenuItem>
         ) : (
           filteredConfigurations.map((config) => (
@@ -185,9 +190,14 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
       {!error && helperText && <FormHelperText>{helperText}</FormHelperText>}
       {selectedConfig && !error && !helperText && (
         <FormHelperText>
-          Strategy:{' '}
+          {t('common:labels.strategy')}:{' '}
           {getStrategyDisplayName(strategies, selectedConfig.strategy_type)}
-          {selectedConfig.is_in_use && ' • Currently in use'}
+          {selectedConfig.is_in_use && (
+            <>
+              {' • '}
+              {t('configuration:status.currentlyInUse')}
+            </>
+          )}
         </FormHelperText>
       )}
     </FormControl>

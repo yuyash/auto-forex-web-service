@@ -27,6 +27,7 @@ import {
 } from '../../hooks/useStrategies';
 import { useCopyConfiguration } from '../../hooks/useConfigurationMutations';
 import { useTranslation } from 'react-i18next';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
 
 interface ConfigurationCardProps {
   configuration: StrategyConfig;
@@ -34,6 +35,7 @@ interface ConfigurationCardProps {
 
 const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
   const { t } = useTranslation(['configuration', 'common']);
+  const { formatDate } = useDateTimeFormatter();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -84,14 +86,6 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
 
   const getDisplayName = (strategyId: string) => {
     return getStrategyDisplayName(strategies, strategyId);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
   };
 
   return (

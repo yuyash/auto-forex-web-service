@@ -30,6 +30,12 @@ const baseFormData = {
   max_tick_gap_hours: 120,
 };
 
+function omitSellAtCompletion(data: typeof baseFormData) {
+  const copy: Partial<typeof baseFormData> = { ...data };
+  delete copy.sell_at_completion;
+  return copy as Omit<typeof baseFormData, 'sell_at_completion'>;
+}
+
 describe('backtest task payload builders', () => {
   it('maps create form data to the backend payload', () => {
     expect(buildBacktestTaskCreatePayload(baseFormData)).toMatchObject({
@@ -44,6 +50,36 @@ describe('backtest task payload builders', () => {
       hedging_enabled: false,
       market_close_enabled: true,
       max_tick_gap_hours: 120,
+    });
+  });
+
+  it('defaults close-at-completion to disabled when omitted', () => {
+    const formData = omitSellAtCompletion(baseFormData);
+
+    expect(buildBacktestTaskCreatePayload(formData)).toMatchObject({
+      sell_on_stop: false,
+    });
+    expect(buildBacktestTaskUpdatePayload(formData)).toMatchObject({
+      sell_on_stop: false,
+    });
+  });
+
+  it('preserves an explicit disabled close-at-completion value', () => {
+    const formData = { ...baseFormData, sell_at_completion: false };
+
+    expect(buildBacktestTaskCreatePayload(formData)).toMatchObject({
+      sell_on_stop: false,
+    });
+    expect(buildBacktestTaskUpdatePayload(formData)).toMatchObject({
+      sell_on_stop: false,
+    });
+  });
+
+  it('preserves debug options for creates when provided', () => {
+    expect(
+      buildBacktestTaskCreatePayload(baseFormData, { tracemalloc: true })
+    ).toMatchObject({
+      debug_options: { tracemalloc: true },
     });
   });
 

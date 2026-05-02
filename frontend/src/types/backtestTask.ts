@@ -22,6 +22,7 @@ export interface BacktestTask {
   tick_window_value_mode: string;
   status: TaskStatus;
   sell_at_completion: boolean;
+  sell_on_stop?: boolean;
   hedging_enabled: boolean;
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
@@ -68,6 +69,7 @@ export interface BacktestTaskCreateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  debug_options?: Record<string, unknown>;
 }
 
 // Form data type - matches the validation schema (after transformation)

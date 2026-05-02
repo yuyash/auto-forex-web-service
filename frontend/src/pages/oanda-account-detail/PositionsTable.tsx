@@ -48,13 +48,17 @@ import { buildCopyHandler } from '../../utils/tableCopyUtils';
 import {
   fmtQuoteValue,
   fmtSignedQuoteValue,
-  fmtTs,
   toOrdering,
   type SortOrder,
 } from './formatters';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
 
 export function PositionsTable({ accountDbId }: { accountDbId: number }) {
   const { t } = useTranslation(['common', 'settings']);
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
   const { showSuccess, showError } = useToast();
   const queryClient = useQueryClient();
   const { instruments } = useSupportedInstruments();
@@ -136,6 +140,11 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
     setSortOrder(order);
     setPage(0);
   }, []);
+  const fmtTimestamp = useCallback(
+    (timestamp: string | null) =>
+      timestamp ? formatDateTime(timestamp) : '\u2014',
+    [formatDateTime]
+  );
 
   const columns: Column<OandaPosition>[] = [
     {
@@ -198,14 +207,16 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
     {
       id: 'open_time',
       label: t('common:tables.positions.openTimestamp'),
-      width: 180,
-      render: (row) => fmtTs(row.open_time),
+      width: 220,
+      minWidth: 220,
+      render: (row) => fmtTimestamp(row.open_time),
     },
     {
       id: 'close_time' as keyof OandaPosition,
       label: t('common:tables.positions.closeTimestamp'),
-      width: 180,
-      render: (row) => fmtTs(row.close_time ?? null),
+      width: 220,
+      minWidth: 220,
+      render: (row) => fmtTimestamp(row.close_time ?? null),
     },
     { id: 'state', label: t('common:tables.positions.status'), width: 80 },
     {
@@ -250,8 +261,8 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
       fmtQuoteValue(r.entry_price, r.instrument),
     unrealized_pnl: (r: OandaPosition) =>
       fmtSignedQuoteValue(r.unrealized_pnl, r.instrument),
-    open_time: (r: OandaPosition) => r.open_time ?? '',
-    close_time: (r: OandaPosition) => r.close_time ?? '',
+    open_time: (r: OandaPosition) => fmtTimestamp(r.open_time),
+    close_time: (r: OandaPosition) => fmtTimestamp(r.close_time ?? null),
     state: (r: OandaPosition) => r.state,
   };
   const dataMap = new Map(positions.map((r) => [getRowId(r), r]));

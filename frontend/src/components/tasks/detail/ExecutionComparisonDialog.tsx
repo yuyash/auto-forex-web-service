@@ -47,7 +47,12 @@ import {
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
 import { computeAutoInterval } from '../../../utils/autoGranularity';
-import { currencySymbol } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatAppPercent,
+} from '../../../utils/numberFormat';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 
 /** Palette for up to 10 executions */
 const EXEC_COLORS = [
@@ -111,39 +116,43 @@ const SlideUp = React.forwardRef(function Transition(
 });
 
 function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
-  if (format === 'pct') return `${v.toFixed(2)}%`;
-  if (format === 'currency') return v.toFixed(2);
-  if (format === 'int') return Math.round(v).toLocaleString();
-  return v.toFixed(2);
+  if (format === 'pct') return formatAppPercent(v, 2);
+  if (format === 'currency')
+    return formatAppNumber(v, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  if (format === 'int')
+    return formatAppNumber(Math.round(v), { maximumFractionDigits: 0 });
+  return formatAppNumber(v, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
-function formatTickLabel(date: Date, rangeMs: number): string {
+function formatTickLabel(
+  date: Date,
+  rangeMs: number,
+  formatDate: (value: Date | string | null | undefined) => string,
+  formatDateTime: (
+    value: Date | string | null | undefined,
+    options?: { includeSeconds?: boolean; includeTimezone?: boolean }
+  ) => string
+): string {
   const DAY = 86_400_000;
   if (rangeMs <= DAY) {
-    return date.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
+    return formatDateTime(date, {
+      includeSeconds: false,
+      includeTimezone: false,
     });
   }
   if (rangeMs <= 7 * DAY) {
-    return (
-      date.toLocaleDateString(undefined, {
-        month: '2-digit',
-        day: '2-digit',
-      }) +
-      ' ' +
-      date.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
-    );
+    return formatDateTime(date, {
+      includeSeconds: false,
+      includeTimezone: false,
+    });
   }
-  return date.toLocaleDateString(undefined, {
-    month: '2-digit',
-    day: '2-digit',
-  });
+  return formatDate(date);
 }
 
 /** Flatten a nested object into dot-separated key-value pairs. */
@@ -713,15 +722,23 @@ function ResultsComparisonPanel({
                       key === 'win_rate' ||
                       key === 'max_drawdown'
                     ) {
-                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
+                      display = formatAppPercent(num, 2, true);
                     } else if (key.endsWith('_quote')) {
-                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${quoteCcy ? ` ${currencySymbol(quoteCcy)}` : ''}`;
+                      display = `${formatAppNumber(num, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                        signed: true,
+                      })}${quoteCcy ? ` ${currencySymbol(quoteCcy)}` : ''}`;
                     } else if (
                       key.includes('pnl') ||
                       key === 'average_win' ||
                       key === 'average_loss'
                     ) {
-                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${acctCcy ? ` ${currencySymbol(acctCcy)}` : ''}`;
+                      display = `${formatAppNumber(num, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                        signed: true,
+                      })}${acctCcy ? ` ${currencySymbol(acctCcy)}` : ''}`;
                     }
                   }
                   return (
@@ -778,6 +795,7 @@ function MetricsOverlayPanel({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation('common');
+  const { formatDateTime, formatDate } = useDateTimeFormatter();
 
   // Determine which metric keys have data across any execution
   const availableMetrics = useMemo(() => {
@@ -936,9 +954,17 @@ function MetricsOverlayPanel({
                       tickLabelStyle: { fontSize: 10 },
                       valueFormatter: (v: Date, ctx: { location: string }) => {
                         if (ctx.location === 'tooltip') {
-                          return v.toLocaleString();
+                          return formatDateTime(v, {
+                            includeSeconds: true,
+                            includeTimezone: true,
+                          });
                         }
-                        return formatTickLabel(v, rangeMs);
+                        return formatTickLabel(
+                          v,
+                          rangeMs,
+                          formatDate,
+                          formatDateTime
+                        );
                       },
                     },
                   ]}

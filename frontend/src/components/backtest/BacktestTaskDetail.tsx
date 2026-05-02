@@ -601,6 +601,7 @@ export const BacktestTaskDetail: React.FC = () => {
                     ? parseFloat(polledTick.price)
                     : null
                 }
+                timezone={timezone}
               />
             </Suspense>
           </LazyTabPanel>

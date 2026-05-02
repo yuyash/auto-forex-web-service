@@ -100,7 +100,7 @@ class TestSnowballStrategyClassMethods:
         result = SnowballStrategy.normalize_parameters({"base_units": 2000})
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
-        assert result["disable_loss_cut_after_rebuild"] is False
+        assert result["disable_loss_cut_after_rebuild"] is True
         assert result["rebuild_stop_loss_mode"] == "same"
         assert result["rebuild_take_profit_mode"] == "same"
         assert result["grid_order_validation_enabled"] is True
@@ -114,6 +114,7 @@ class TestSnowballStrategyClassMethods:
         assert "base_units" in defaults
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
+        assert defaults["disable_loss_cut_after_rebuild"] is True
         assert "rebuild_stop_loss_mode" in defaults
         assert "rebuild_take_profit_mode" in defaults
         assert "grid_order_validation_enabled" in defaults

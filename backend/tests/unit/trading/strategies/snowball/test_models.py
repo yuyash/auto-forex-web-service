@@ -54,7 +54,7 @@ class TestSnowballStrategyConfig:
         assert cfg.interval_mode == "constant"
         assert cfg.stop_loss_mode == "auto"
         assert cfg.counter_tp_mode == "weighted_avg"
-        assert cfg.disable_loss_cut_after_rebuild is False
+        assert cfg.disable_loss_cut_after_rebuild is True
         assert cfg.rebuild_stop_loss_mode == "same"
         assert cfg.rebuild_stop_loss_manual_pips == []
         assert cfg.rebuild_take_profit_mode == "same"

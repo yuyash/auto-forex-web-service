@@ -237,6 +237,7 @@ describe('API service contracts', () => {
       pip_size: '0.0001',
       instrument: 'EUR_USD',
       hedging_enabled: true,
+      sell_on_stop: true,
       status: 'RUNNING',
       execution_id: 'exec-2',
       started_at: '2026-03-21T10:00:00Z',
@@ -250,6 +251,7 @@ describe('API service contracts', () => {
       id: 'bt-1',
       status: 'RUNNING',
       execution_id: 'exec-2',
+      sell_at_completion: true,
     });
 
     expect(mockApi.post).toHaveBeenCalledWith(

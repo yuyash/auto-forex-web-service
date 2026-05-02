@@ -17,6 +17,7 @@ import type {
   IPrimitivePaneRenderer,
 } from 'lightweight-charts';
 import { formatInTimeZone } from 'date-fns-tz';
+import { formatDateTimeInTimezone } from './timezone';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -529,6 +530,9 @@ export function createTooltipTimeFormatter(opts: {
 }): (time: number) => string {
   return (time: number) => {
     const date = new Date(time * 1000);
-    return formatInTimeZone(date, opts.timezone, 'yyyy-MM-dd HH:mm:ss');
+    return formatDateTimeInTimezone(date, opts.timezone, undefined, {
+      includeSeconds: true,
+      includeTimezone: true,
+    });
   };
 }

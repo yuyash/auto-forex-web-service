@@ -198,6 +198,7 @@
     "instrumentHelperText": "バックテストする通貨ペア",
     "tickGranularity": "リプレイ粒度",
     "tickWindowValueMode": "ウィンドウ代表値",
+    "restartRequiredForExecutionEdits": "実行設定の変更は次回の再起動後に反映されます。タスク名と説明の変更はすぐに反映されます。",
     "replaySettingsRestartNotice": "リプレイ粒度またはウィンドウ代表値を変更すると、現在の実行は再開できません。更新後は未実行タスクは開始、実行履歴があるタスクは再起動のみ可能です。",
     "closePositionsAtCompletion": "バックテスト完了時にすべてのポジションを決済",
     "closePositionsDescription": "有効にすると、バックテスト終了時にすべてのオープンポジションが最終市場価格で自動的に決済されます。",

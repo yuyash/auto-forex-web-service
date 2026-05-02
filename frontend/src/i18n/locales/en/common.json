@@ -132,6 +132,7 @@
     "liveAccount": "LIVE ACCOUNT",
     "total": "Total",
     "parameters": "Parameters",
+    "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
     "pageSize": "Page size"
   },
@@ -263,6 +264,7 @@
       "counter": "Counter",
       "trend": "Trend",
       "active": "Active",
+      "pending": "Pending",
       "completed": "Completed",
       "intervened": "Intervened",
       "long": "Long",
@@ -611,6 +613,11 @@
       "executionId": "Execution ID",
       "status": "Status",
       "progress": "Progress",
+      "configSegment": "Config Segment",
+      "configSegmentTooltip": "1-based config segment for this execution. It increments when an execution resumes after a config change. Hidden by default because Config Rev usually carries the useful signal.",
+      "configRevisions": "Config Rev",
+      "configRevisionsTooltip": "{{count}} config revision(s) recorded. Current config hash: {{hash}}",
+      "configRevisionsTooltipNoHash": "{{count}} config revision(s) recorded. No config hash is available.",
       "started": "Started",
       "completed": "Completed",
       "duration": "Duration",
@@ -628,7 +635,14 @@
       "deleteTitle": "Delete Executions",
       "deleteMessage": "Are you sure you want to delete {{count}} execution(s)? This will permanently remove all associated data.",
       "notesDialogTitle": "Execution Notes",
-      "notesPlaceholder": "Enter notes for this execution..."
+      "notesPlaceholder": "Enter notes for this execution...",
+      "configRevisionsTitle": "Config Revisions",
+      "executionSegment": "Execution {{execution}} / Config Segment {{segment}}",
+      "currentConfigHash": "Current Hash",
+      "strategy": "Strategy",
+      "revisionHistory": "Revision History",
+      "changedFields": "Changed Fields",
+      "noConfigRevisions": "No config revisions recorded for this execution."
     }
   },
   "debug": {

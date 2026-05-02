@@ -29,7 +29,6 @@ import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskTrades, type TaskTrade } from '../../../hooks/useTaskTrades';
 import type { TaskType } from '../../../types/common';
-import { useAuth } from '../../../contexts/AuthContext';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
   useColumnConfig,
@@ -38,7 +37,7 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
-import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { TableFilterBar } from '../../common/TableFilterBar';
 import {
@@ -71,7 +70,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   strategyType,
 }) => {
   const { t } = useTranslation('common');
-  const { user } = useAuth();
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [sortField, setSortField] = useState('timestamp');
@@ -137,17 +139,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   }, []);
 
   const formatTimestamp = useCallback(
-    (timestamp: string): string =>
-      formatDateTimeInTimezone(
-        timestamp,
-        user?.timezone || 'UTC',
-        user?.language,
-        {
-          includeSeconds: true,
-          includeTimezone: true,
-        }
-      ),
-    [user?.language, user?.timezone]
+    (timestamp: string): string => formatDateTime(timestamp),
+    [formatDateTime]
   );
 
   const formatPrice = useCallback(

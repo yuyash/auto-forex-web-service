@@ -26,6 +26,7 @@ interface TradingTaskCreateRequest {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  debug_options?: Record<string, unknown>;
 }
 
 interface TradingTaskUpdateRequest {

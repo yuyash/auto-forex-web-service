@@ -70,7 +70,7 @@ export function columnsToDefaults<T>(columns: Column<T>[]): ColumnItem[] {
   return columns.map((c) => ({
     id: String(c.id),
     label: c.label,
-    visible: true,
+    visible: c.defaultVisible ?? true,
   }));
 }
 

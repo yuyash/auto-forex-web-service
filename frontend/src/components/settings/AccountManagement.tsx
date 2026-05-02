@@ -40,6 +40,8 @@ import {
 } from '../../hooks/useAccountMutations';
 import { useAccounts } from '../../hooks/useAccounts';
 import { logger } from '../../utils/logger';
+import { useNumberFormatter } from '../../hooks/useNumberFormatter';
+import { currencySymbol } from '../../utils/numberFormat';
 
 interface AccountFormData {
   account_id: string;
@@ -49,6 +51,7 @@ interface AccountFormData {
 
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
+  const { formatNumber } = useNumberFormatter();
   const { showSuccess, showError } = useToast();
   const {
     data: rawAccounts,
@@ -263,18 +266,14 @@ const AccountManagement = () => {
     }
 
     const currencyCode = resolveCurrencyCode(currency);
+    const symbol = currencySymbol(currencyCode);
+    const prefix =
+      symbol === currencyCode.trim().toUpperCase() ? `${symbol} ` : symbol;
 
-    try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(numericBalance);
-    } catch {
-      // Intl throws for unsupported/invalid codes; fall back to simple formatting.
-      return `${currencyCode} ${numericBalance.toFixed(2)}`;
-    }
+    return `${prefix}${formatNumber(numericBalance, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   if (loading) {

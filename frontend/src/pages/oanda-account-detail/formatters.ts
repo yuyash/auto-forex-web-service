@@ -79,9 +79,13 @@ export const fmtJson = (value: unknown) => {
   }
 };
 
-export const fmtTs = (timestamp: string | null): string => {
+export const fmtTs = (
+  timestamp: string | null,
+  timezone = 'UTC',
+  language?: string
+): string => {
   if (!timestamp) return '\u2014';
-  return formatDateTimeInTimezone(timestamp, 'UTC', undefined, {
+  return formatDateTimeInTimezone(timestamp, timezone, language, {
     includeSeconds: true,
     includeTimezone: true,
   });

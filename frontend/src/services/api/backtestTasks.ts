@@ -31,6 +31,7 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     ...task,
     data_source: task.data_source as BacktestTask['data_source'],
     status: task.status as BacktestTask['status'],
+    sell_on_stop: task.sell_on_stop ?? false,
     sell_at_completion: task.sell_on_stop ?? false,
     latest_execution: toExecutionSummary(task.latest_execution),
     pip_size: task.pip_size ?? undefined,

@@ -57,6 +57,36 @@ function getLatestTimestamp(logs: TaskLog[]): string | null {
   return latest;
 }
 
+function getSortValue(log: TaskLog, field: string): string | number {
+  if (field === 'timestamp') {
+    const parsed = Date.parse(log.timestamp);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const value = (log as unknown as Record<string, unknown>)[field];
+  if (typeof value === 'number') return value;
+  return String(value ?? '');
+}
+
+function mergeLogsByOrdering(
+  currentItems: TaskLog[],
+  incoming: TaskLog[],
+  ordering: string
+): TaskLog[] {
+  const field = ordering.startsWith('-') ? ordering.slice(1) : ordering;
+  const direction = ordering.startsWith('-') ? 'desc' : 'asc';
+  const merged = new Map(currentItems.map((log) => [log.id, log]));
+  for (const log of incoming) {
+    merged.set(log.id, log);
+  }
+  return Array.from(merged.values()).sort((a, b) => {
+    const aValue = getSortValue(a, field || 'timestamp');
+    const bValue = getSortValue(b, field || 'timestamp');
+    if (aValue < bValue) return direction === 'desc' ? 1 : -1;
+    if (aValue > bValue) return direction === 'desc' ? -1 : 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export const useTaskLogs = ({
   taskId,
   taskType,
@@ -109,6 +139,8 @@ export const useTaskLogs = ({
     },
     getLatestCursor: getLatestTimestamp,
     getItemId: (log) => log.id,
+    mergeIncremental: ({ currentItems, incoming }) =>
+      mergeLogsByOrdering(currentItems, incoming, ordering),
   });
 
   return {

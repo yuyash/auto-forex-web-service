@@ -5,7 +5,8 @@ import type {
   Account,
   AccountSnapshotRefreshStatus,
 } from '../../types/strategy';
-import { fmtBal, fmtTs, snapshotRefreshStatusLabel } from './formatters';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
+import { fmtBal, snapshotRefreshStatusLabel } from './formatters';
 
 interface AccountSummaryCardProps {
   account: Account;
@@ -17,6 +18,10 @@ export function AccountSummaryCard({
   trackedSnapshotRefreshStatus,
 }: AccountSummaryCardProps) {
   const { t } = useTranslation(['settings']);
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
 
   return (
     <Card sx={{ mb: 3 }}>
@@ -185,7 +190,9 @@ export function AccountSummaryCard({
               {t('settings:accounts.snapshotRefreshedAt', 'Snapshot refreshed')}
             </Typography>
             <Typography variant="body1">
-              {fmtTs(account.snapshot_refreshed_at ?? null)}
+              {account.snapshot_refreshed_at
+                ? formatDateTime(account.snapshot_refreshed_at)
+                : '\u2014'}
             </Typography>
           </Box>
         </Box>

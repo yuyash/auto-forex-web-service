@@ -27,6 +27,7 @@ import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { TaskReviewErrors } from '../tasks/forms/TaskReviewErrors';
+import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -47,7 +48,10 @@ import {
   useTickDataRange,
 } from '../../hooks/useMarketConfig';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppSettings } from '../../hooks/useAppSettings';
+import { useNumberFormatter } from '../../hooks/useNumberFormatter';
 import { useToast } from '../common/useToast';
+import { currencySymbol } from '../../utils/numberFormat';
 import {
   formatDateTimeInTimezone,
   formatTimestampWithTimezone,
@@ -127,6 +131,8 @@ function ReviewContent({
   formValues,
 }: ReviewContentProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const { settings } = useAppSettings();
+  const { formatNumber } = useNumberFormatter();
   const {
     name,
     description,
@@ -181,8 +187,15 @@ function ReviewContent({
           {t('backtest:config.dateRange')}
         </Typography>
         <Typography variant="body1">
-          {formatDateTimeInTimezone(start_time, timezone, language)} -{' '}
-          {formatDateTimeInTimezone(end_time, timezone, language)}
+          {formatDateTimeInTimezone(start_time, timezone, language, {
+            includeTimezone: true,
+            dateFormat: settings.dateFormat,
+          })}{' '}
+          -{' '}
+          {formatDateTimeInTimezone(end_time, timezone, language, {
+            includeTimezone: true,
+            dateFormat: settings.dateFormat,
+          })}
         </Typography>
       </Grid>
 
@@ -198,10 +211,11 @@ function ReviewContent({
           {t('backtest:detail.initialBalance')}
         </Typography>
         <Typography variant="body1">
-          {new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-          }).format(Number(initial_balance))}
+          {currencySymbol('USD')}
+          {formatNumber(Number(initial_balance), {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </Typography>
       </Grid>
 
@@ -210,10 +224,11 @@ function ReviewContent({
           {t('backtest:detail.commissionPerTrade')}
         </Typography>
         <Typography variant="body1">
-          {new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-          }).format(Number(commission_per_trade))}
+          {currencySymbol('USD')}
+          {formatNumber(Number(commission_per_trade), {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </Typography>
       </Grid>
 
@@ -285,6 +300,7 @@ export default function BacktestTaskForm({
   const { showError } = useToast();
   const timezone = user?.timezone || 'UTC';
   const language = user?.language;
+  const isSuperuser = Boolean(user?.is_superuser);
   const steps = [
     t('backtest:form.steps.configuration'),
     t('backtest:form.steps.parameters'),
@@ -337,6 +353,7 @@ export default function BacktestTaskForm({
   const [formData, setFormData] = useState<Partial<BacktestTaskSchemaOutput>>(
     initialData || {}
   );
+  const [tracemalloc, setTracemalloc] = useState(false);
   const canSubmitRef = useRef(false); // Flag to prevent auto-submission
   const createTask = useCreateBacktestTask();
   const updateTask = useUpdateBacktestTask();
@@ -559,33 +576,37 @@ export default function BacktestTaskForm({
     const completeData = { ...formData, ...data } as BacktestTaskSchemaOutput;
 
     // Zod has already validated and converted types, so we can use the data directly
-    const apiData = buildBacktestTaskCreatePayload({
-      config_id: completeData.config_id,
-      name: completeData.name,
-      description: completeData.description,
-      start_time: completeData.start_time,
-      end_time: completeData.end_time,
-      initial_balance: completeData.initial_balance,
-      commission_per_trade: completeData.commission_per_trade,
-      pip_size: completeData.pip_size,
-      instrument: completeData.instrument,
-      tick_granularity: completeData.tick_granularity,
-      tick_window_value_mode: completeData.tick_window_value_mode,
-      sell_at_completion: completeData.sell_at_completion,
-      hedging_enabled: strategySupportsHedging
-        ? completeData.hedging_enabled
-        : false,
-      drain_duration_hours: completeData.drain_duration_hours,
-      market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
-      market_idle_resume_delay_minutes:
-        completeData.market_idle_resume_delay_minutes,
-      market_close_enabled: completeData.market_close_enabled,
-      market_close_weekday: completeData.market_close_weekday,
-      market_close_hour_utc: completeData.market_close_hour_utc,
-      market_open_weekday: completeData.market_open_weekday,
-      market_open_hour_utc: completeData.market_open_hour_utc,
-      max_tick_gap_hours: completeData.max_tick_gap_hours,
-    });
+    const apiData = buildBacktestTaskCreatePayload(
+      {
+        config_id: completeData.config_id,
+        name: completeData.name,
+        description: completeData.description,
+        start_time: completeData.start_time,
+        end_time: completeData.end_time,
+        initial_balance: completeData.initial_balance,
+        commission_per_trade: completeData.commission_per_trade,
+        pip_size: completeData.pip_size,
+        instrument: completeData.instrument,
+        tick_granularity: completeData.tick_granularity,
+        tick_window_value_mode: completeData.tick_window_value_mode,
+        sell_at_completion: completeData.sell_at_completion,
+        hedging_enabled: strategySupportsHedging
+          ? completeData.hedging_enabled
+          : false,
+        drain_duration_hours: completeData.drain_duration_hours,
+        market_idle_pre_close_minutes:
+          completeData.market_idle_pre_close_minutes,
+        market_idle_resume_delay_minutes:
+          completeData.market_idle_resume_delay_minutes,
+        market_close_enabled: completeData.market_close_enabled,
+        market_close_weekday: completeData.market_close_weekday,
+        market_close_hour_utc: completeData.market_close_hour_utc,
+        market_open_weekday: completeData.market_open_weekday,
+        market_open_hour_utc: completeData.market_open_hour_utc,
+        max_tick_gap_hours: completeData.max_tick_gap_hours,
+      },
+      isSuperuser ? { tracemalloc } : undefined
+    );
 
     try {
       if (taskId) {
@@ -975,7 +996,7 @@ export default function BacktestTaskForm({
                     <FormControlLabel
                       control={
                         <Checkbox
-                          checked={field.value || false}
+                          checked={field.value ?? false}
                           onChange={(e) => field.onChange(e.target.checked)}
                         />
                       }
@@ -1432,6 +1453,14 @@ export default function BacktestTaskForm({
                 </Alert>
               )}
             </Paper>
+
+            {isSuperuser && (
+              <DebugOptionsSection
+                tracemalloc={tracemalloc}
+                onTracemallocChange={setTracemalloc}
+                sx={{ mt: 3 }}
+              />
+            )}
           </Box>
         );
       }

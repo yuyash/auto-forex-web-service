@@ -35,6 +35,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logger } from '../../utils/logger';
 import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
+import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -188,6 +189,7 @@ export default function BacktestTaskUpdateForm({
   const { user } = useAuth();
   const navigate = useNavigate();
   const timezone = user?.timezone || 'UTC';
+  const isSuperuser = Boolean(user?.is_superuser);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tracemalloc, setTracemalloc] = useState(
     Boolean(debugOptions?.tracemalloc)
@@ -264,7 +266,7 @@ export default function BacktestTaskUpdateForm({
               ? data.hedging_enabled
               : false,
           },
-          { tracemalloc }
+          isSuperuser ? { tracemalloc } : undefined
         ),
       });
 
@@ -315,9 +317,9 @@ export default function BacktestTaskUpdateForm({
 
   return (
     <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          {t('common:labels.taskDetails', 'Task details')}
+          {t('common:labels.taskDetails')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
@@ -365,15 +367,12 @@ export default function BacktestTaskUpdateForm({
           severity={showRestartRequiredGuard ? 'warning' : 'info'}
           sx={{ mb: 3 }}
         >
-          {t(
-            'backtest:form.restartRequiredForExecutionEdits',
-            'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
-          )}
+          {t('backtest:form.restartRequiredForExecutionEdits')}
         </Alert>
       )}
 
       <Typography variant="h6" gutterBottom>
-        {t('common:labels.configuration')}
+        {t('common:labels.strategyConfiguration')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         {t('backtest:form.chooseStrategyConfig')}
@@ -629,7 +628,7 @@ export default function BacktestTaskUpdateForm({
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={field.value || false}
+                    checked={field.value ?? false}
                     onChange={(e) => field.onChange(e.target.checked)}
                   />
                 }
@@ -965,33 +964,15 @@ export default function BacktestTaskUpdateForm({
           </>
         )}
 
-        <Grid size={{ xs: 12 }}>
-          <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-            {t('common:debug.title')}
-          </Typography>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={tracemalloc}
-                onChange={(e) => setTracemalloc(e.target.checked)}
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body1">
-                  {t('common:debug.tracemalloc')}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5 }}
-                >
-                  {t('common:debug.tracemallocDescription')}
-                </Typography>
-              </Box>
-            }
-          />
-        </Grid>
+        {isSuperuser && (
+          <Grid size={{ xs: 12 }}>
+            <DebugOptionsSection
+              tracemalloc={tracemalloc}
+              onTracemallocChange={setTracemalloc}
+              sx={{ mt: 2 }}
+            />
+          </Grid>
+        )}
       </Grid>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>

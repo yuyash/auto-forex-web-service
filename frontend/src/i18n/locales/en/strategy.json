@@ -56,6 +56,28 @@
     "paused": "Paused due to volatility",
     "error": "Error occurred"
   },
+  "snapshot": {
+    "protection_level": "Protection Level",
+    "active_cycles": "Active Cycles",
+    "pending_cycles": "Pending Cycles",
+    "completed_cycles": "Completed Cycles",
+    "open_entries": "Open Entries",
+    "open_long_units": "Open Long Size",
+    "open_short_units": "Open Short Size",
+    "account_balance": "Account Balance",
+    "account_nav": "Account NAV",
+    "lock_entered_at": "Lock Entered At",
+    "cooldown_until": "Cooldown Until"
+  },
+  "snapshotValues": {
+    "protection_level": {
+      "normal": "Normal",
+      "shrink": "Shrink",
+      "locked": "Locked",
+      "emergency": "Emergency",
+      "unknown": "Unknown"
+    }
+  },
   "messages": {
     "startSuccess": "Strategy started successfully",
     "stopSuccess": "Strategy stopped successfully",

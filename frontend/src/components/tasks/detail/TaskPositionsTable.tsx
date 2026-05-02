@@ -30,7 +30,6 @@ import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import type { TaskType } from '../../../types/common';
-import { useAuth } from '../../../contexts/AuthContext';
 import { PositionLifecycleDialog } from './PositionLifecycleDialog';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
@@ -43,7 +42,7 @@ import {
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
-import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { TaskPositionViewHeader } from './TaskPositionViewHeader';
@@ -77,7 +76,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   strategyType,
 }) => {
   const { t } = useTranslation('common');
-  const { user } = useAuth();
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
   const { strategies } = useStrategies();
   const strategyCloseReasonLabels = useMemo(
     () =>
@@ -186,11 +188,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     []
   );
 
-  const formatTimestamp = (ts: string): string =>
-    formatDateTimeInTimezone(ts, user?.timezone || 'UTC', user?.language, {
-      includeSeconds: true,
-      includeTimezone: true,
-    });
+  const formatTimestamp = (ts: string): string => formatDateTime(ts);
 
   const formatPrice = (
     value: string | number | null | undefined,
@@ -307,15 +305,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const entryTimeCol: Column<TaskPosition> = {
     id: 'entry_time',
     label: t('tables.positions.openTimestamp'),
-    width: 180,
-    minWidth: 140,
+    width: 220,
+    minWidth: 220,
     render: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
   };
   const exitTimeCol: Column<TaskPosition> = {
     id: 'exit_time',
     label: t('tables.positions.closeTimestamp'),
-    width: 180,
-    minWidth: 140,
+    width: 220,
+    minWidth: 220,
     render: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
   };
   const instrumentCol: Column<TaskPosition> = {

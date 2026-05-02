@@ -31,6 +31,7 @@ import {
 } from '../../../utils/fetchMetrics';
 import type { TaskType } from '../../../types/common';
 import { getRetryAfterMsFromError } from '../../../utils/retryAfter';
+import { formatAppPercent } from '../../../utils/numberFormat';
 
 export interface UseMetricsOverlayOptions {
   taskId: string;
@@ -94,7 +95,7 @@ function attachSeries(chart: IChartApi) {
     priceFormat: {
       type: 'custom' as const,
       minMove: 0.01,
-      formatter: (price: number) => `${price.toFixed(2)}%`,
+      formatter: (price: number) => formatAppPercent(price, 2),
     },
   });
   const atr = chart.addSeries(LineSeries, {

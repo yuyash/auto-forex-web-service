@@ -46,6 +46,7 @@ interface StrategyGroupChartProps {
   lastTickTimestamp?: string | null;
   selectedTradeIds?: Set<string>;
   onMarkerClick?: (tradeId: string) => void;
+  timezone?: string;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -74,6 +75,7 @@ export function StrategyGroupChart({
   lastTickTimestamp,
   selectedTradeIds,
   onMarkerClick,
+  timezone = 'UTC',
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -134,15 +136,17 @@ export function StrategyGroupChart({
 
   const candleTimes = useMemo(() => candles.map((c) => c.time), [candles]);
   const markers = useMemo(() => {
-    const built = buildCycleMarkers(
+    return buildCycleMarkers(
       trades,
       candleTimes as number[],
       selectedTradeIds,
       markersVisible
     );
-    builtMarkersRef.current = built;
-    return built;
   }, [trades, candleTimes, selectedTradeIds, markersVisible]);
+
+  useEffect(() => {
+    builtMarkersRef.current = markers;
+  }, [markers]);
 
   const paddedRange = useMemo(() => {
     if (!startTime || candles.length === 0) return null;
@@ -152,8 +156,6 @@ export function StrategyGroupChart({
     const pad = Math.max(60, Math.floor(span * 0.1));
     return { from: (startSec - pad) as Time, to: (endSec + pad) as Time };
   }, [startTime, effectiveEndTime, candles]);
-
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const destroyChart = useCallback(() => {
     observerRef.current?.disconnect();

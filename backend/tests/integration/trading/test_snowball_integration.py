@@ -85,7 +85,7 @@ class TestSnowballRegistry:
             parameters={"base_units": 2000},
         )
         assert normalised["base_units"] == 2000
-        assert normalised["disable_loss_cut_after_rebuild"] is False
+        assert normalised["disable_loss_cut_after_rebuild"] is True
 
     def test_normalize_then_validate_defaults(self):
         """Full round-trip: normalize defaults → validate against schema."""

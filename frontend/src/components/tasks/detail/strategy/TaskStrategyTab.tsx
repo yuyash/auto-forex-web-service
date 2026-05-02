@@ -46,7 +46,11 @@ import {
   formatAppPercent,
   currencySymbol,
 } from '../../../../utils/numberFormat';
-import { formatDateTimeInTimezone } from '../../../../utils/timezone';
+import {
+  formatDateTimeInTimezone,
+  type DateTimeFormatOptions,
+} from '../../../../utils/timezone';
+import { useAppSettings } from '../../../../hooks/useAppSettings';
 
 export interface TaskStrategyTabProps {
   taskId: string | number;
@@ -58,10 +62,15 @@ export interface TaskStrategyTabProps {
   timezone?: string;
 }
 
-function formatDateTime(value?: string | null, timezone = 'UTC'): string {
+function formatDateTime(
+  value?: string | null,
+  timezone = 'UTC',
+  dateFormat?: DateTimeFormatOptions['dateFormat']
+): string {
   if (!value) return '-';
   return formatDateTimeInTimezone(value, timezone, undefined, {
     includeTimezone: true,
+    dateFormat,
   });
 }
 
@@ -110,6 +119,11 @@ function getStatusColor(
   return 'default';
 }
 
+function formatStatusFallback(status: string): string {
+  if (!status) return '-';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 function formatCyclePnl(
   cycle: StrategyCycle,
   currencyCode: string | null
@@ -136,6 +150,15 @@ export function TaskStrategyTab({
 }: TaskStrategyTabProps) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
+  const { settings } = useAppSettings();
+  const formatCycleStatus = useCallback(
+    (status: StrategyCycle['status'] | string) =>
+      t(
+        `common:strategyVisualization.labels.${status}`,
+        formatStatusFallback(status)
+      ),
+    [t]
+  );
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'active' | 'completed'
@@ -613,10 +636,7 @@ export function TaskStrategyTab({
                     </Typography>
                     <Chip
                       size="small"
-                      label={
-                        cycle.status.charAt(0).toUpperCase() +
-                        cycle.status.slice(1)
-                      }
+                      label={formatCycleStatus(cycle.status)}
                       color={getStatusColor(cycle.status)}
                       sx={{ fontSize: '0.7rem', height: 20 }}
                     />
@@ -649,7 +669,11 @@ export function TaskStrategyTab({
                     ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    {formatDateTime(cycle.started_at, timezone)}
+                    {formatDateTime(
+                      cycle.started_at,
+                      timezone,
+                      settings.dateFormat
+                    )}
                     <Typography
                       component="span"
                       variant="body2"
@@ -768,10 +792,7 @@ export function TaskStrategyTab({
                   {t('common:strategyVisualization.cycleList.cycle')}
                 </Typography>
                 <Chip
-                  label={
-                    selectedCycle.status.charAt(0).toUpperCase() +
-                    selectedCycle.status.slice(1)
-                  }
+                  label={formatCycleStatus(selectedCycle.status)}
                   size="small"
                   color={getStatusColor(selectedCycle.status)}
                 />
@@ -810,10 +831,16 @@ export function TaskStrategyTab({
                 )}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {formatDateTime(selectedCycle.started_at, timezone)} →{' '}
+                {formatDateTime(
+                  selectedCycle.started_at,
+                  timezone,
+                  settings.dateFormat
+                )}{' '}
+                →{' '}
                 {formatDateTime(
                   selectedCycle.ended_at ?? detailData?.last_tick_timestamp,
-                  timezone
+                  timezone,
+                  settings.dateFormat
                 )}
               </Typography>
               <Typography
@@ -874,6 +901,7 @@ export function TaskStrategyTab({
                     lastTickTimestamp={detailData?.last_tick_timestamp ?? null}
                     selectedTradeIds={selectedTradeIds}
                     onMarkerClick={handleMarkerClick}
+                    timezone={timezone}
                   />
                 </Paper>
               ) : null}
@@ -957,6 +985,7 @@ export function TaskStrategyTab({
                       displayLayer={displayLayer}
                       displayRet={displayRet}
                       timezone={timezone}
+                      dateFormat={settings.dateFormat}
                       currencyCode={pnlCurrencyCode}
                       onToggleSelection={handleToggleTradeSelection}
                       onOpenLifecycle={handleOpenLifecycle}
@@ -1010,6 +1039,7 @@ function TradeRow({
   displayLayer,
   displayRet,
   timezone,
+  dateFormat,
   currencyCode,
   onToggleSelection,
   onOpenLifecycle,
@@ -1020,6 +1050,7 @@ function TradeRow({
   displayLayer: number | null | undefined;
   displayRet: number | null | undefined;
   timezone: string;
+  dateFormat: DateTimeFormatOptions['dateFormat'];
   currencyCode: string | null;
   onToggleSelection: (id: string) => void;
   onOpenLifecycle: (positionId: string) => void;
@@ -1171,7 +1202,7 @@ function TradeRow({
                 >
                   {sign}
                   {symbol}
-                  {Math.abs(pnlValue).toLocaleString('en-US', {
+                  {formatAppNumber(Math.abs(pnlValue), {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}
@@ -1194,7 +1225,7 @@ function TradeRow({
         color="text.secondary"
         sx={{ display: 'block' }}
       >
-        {formatDateTime(trade.timestamp, timezone)}
+        {formatDateTime(trade.timestamp, timezone, dateFormat)}
       </Typography>
     </Box>
   );

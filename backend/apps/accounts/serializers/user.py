@@ -37,8 +37,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "username",
             "first_name",
             "last_name",
+            "is_staff",
+            "is_superuser",
             "timezone",
             "language",
             "email_verified",
         ]
-        read_only_fields = ["id", "email", "email_verified"]
+        read_only_fields = ["id", "email", "is_staff", "is_superuser", "email_verified"]

@@ -52,6 +52,7 @@ interface MetricsOhlcChartProps {
   currentTickPrice?: number | null;
   /** Incrementing token used by the parent toolbar to force a reload. */
   refreshToken?: number;
+  timezone?: string;
 }
 
 const GRANULARITY_OPTIONS = [
@@ -84,6 +85,7 @@ export function MetricsOhlcChart({
   currentTickTimestamp,
   currentTickPrice,
   refreshToken,
+  timezone = 'UTC',
 }: MetricsOhlcChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('common');
@@ -97,12 +99,6 @@ export function MetricsOhlcChart({
   const [liveEndTime, setLiveEndTime] = useState(
     () => endTime ?? new Date().toISOString()
   );
-
-  useEffect(() => {
-    if (endTime) {
-      setLiveEndTime(endTime);
-    }
-  }, [endTime]);
 
   const fallbackEnd = endTime ?? liveEndTime;
 
@@ -160,8 +156,6 @@ export function MetricsOhlcChart({
       effectiveGranularity,
     ]
   );
-
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const destroyChart = useCallback(() => {
     observerRef.current?.disconnect();
@@ -303,7 +297,8 @@ export function MetricsOhlcChart({
       return;
     }
     lastRefreshTokenRef.current = refreshToken;
-    handleReload();
+    const timer = window.setTimeout(handleReload, 0);
+    return () => window.clearTimeout(timer);
   }, [handleReload, refreshToken]);
 
   const displayInstrument = instrument.replace('_', '/');

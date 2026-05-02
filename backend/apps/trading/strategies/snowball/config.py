@@ -318,7 +318,7 @@ class SnowballStrategyConfig:
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=_parse_bool(raw.get("stop_loss_enabled", False), False),
             disable_loss_cut_after_rebuild=_parse_bool(
-                raw.get("disable_loss_cut_after_rebuild", False), False
+                raw.get("disable_loss_cut_after_rebuild", True), True
             ),
             rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same"),
             rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,

@@ -65,6 +65,8 @@
     "openLongUnits": "Open Long Size",
     "openShortUnits": "Open Short Size",
     "ticksProcessed": "Ticks Processed",
+    "resumeCursor": "Resume Cursor",
+    "brokerReconciled": "Broker Reconciled",
     "completed": "completed",
     "viewingHistoricalExecution": "You are viewing a past execution. The data shown below is from this historical run."
   },
@@ -148,6 +150,7 @@
   },
   "updateForm": {
     "taskInfoReadOnly": "Task Information (Read-only)",
-    "updateStrategyConfig": "Update the strategy configuration for this trading task"
+    "updateStrategyConfig": "Update the strategy configuration for this trading task",
+    "restartRequiredForExecutionEdits": "Execution setting changes apply to the next restart. Name and description changes apply immediately."
   }
 }

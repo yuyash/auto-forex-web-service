@@ -7679,6 +7679,9 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_superuser": {
+                        "type": "boolean"
+                    },
                     "timezone": {
                         "type": "string"
                     },
@@ -7690,6 +7693,7 @@
                     "email",
                     "id",
                     "is_staff",
+                    "is_superuser",
                     "language",
                     "timezone",
                     "username"
@@ -11051,6 +11055,9 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_superuser": {
+                        "type": "boolean"
+                    },
                     "timezone": {
                         "type": "string"
                     },
@@ -11062,6 +11069,7 @@
                     "email",
                     "id",
                     "is_staff",
+                    "is_superuser",
                     "language",
                     "timezone",
                     "username"
@@ -11907,6 +11915,18 @@
                         "type": "string",
                         "maxLength": 150
                     },
+                    "is_staff": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "Staff status",
+                        "description": "Designates whether the user can log into this admin site."
+                    },
+                    "is_superuser": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "Superuser status",
+                        "description": "Designates that this user has all permissions without explicitly assigning them."
+                    },
                     "timezone": {
                         "type": "string",
                         "description": "User's preferred timezone (IANA timezone identifier)",
@@ -11930,6 +11950,8 @@
                     "email",
                     "email_verified",
                     "id",
+                    "is_staff",
+                    "is_superuser",
                     "username"
                 ]
             },

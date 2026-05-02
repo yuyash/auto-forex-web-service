@@ -17,9 +17,11 @@ import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskStatus } from '../../types/common';
 import { useTranslation } from 'react-i18next';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
 
 const RecentBacktestsWidget = () => {
   const { t } = useTranslation('dashboard');
+  const { formatDate } = useDateTimeFormatter();
   const navigate = useNavigate();
 
   // Fetch recent completed backtest tasks
@@ -103,7 +105,7 @@ const RecentBacktestsWidget = () => {
                     color="text.secondary"
                     sx={{ fontSize: '0.7rem' }}
                   >
-                    {new Date(task.updated_at).toLocaleDateString()}
+                    {formatDate(task.updated_at)}
                   </Typography>
                 </Box>
               </CardContent>

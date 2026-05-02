@@ -19,6 +19,7 @@ from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.events.handler import CycleResolutionError  # noqa: F401 — used in handle_events
+from apps.trading.logging import flush_task_log_handlers
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService
@@ -438,13 +439,16 @@ class TaskExecutor:
     def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
         """Run batch/tick processing loop."""
         logger.info("Starting tick processing loop")
+        self._flush_task_logs()
 
         for tick_batch in self.data_source:
             if self._should_stop_before_batch(loop):
                 break
 
             if not tick_batch:
-                if self._handle_empty_batch(loop):
+                should_stop = self._handle_empty_batch(loop)
+                self._flush_task_logs()
+                if should_stop:
                     break
                 continue
 
@@ -453,6 +457,7 @@ class TaskExecutor:
             loop.batch_count += 1
             self._persist_batch_progress(loop)
             self._after_batch_processed(loop)
+            self._flush_task_logs()
 
             if loop.stopped_early:
                 break
@@ -463,6 +468,7 @@ class TaskExecutor:
             loop.stopped_early,
             loop.state.ticks_processed,
         )
+        self._flush_task_logs()
 
     def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
         """Check external stop signal before processing a batch."""
@@ -484,6 +490,10 @@ class TaskExecutor:
     def _after_batch_processed(self, loop: ExecutionLoopState) -> None:
         """Hook for executor-specific checks after each processed batch."""
         _ = loop
+
+    def _flush_task_logs(self) -> None:
+        """Make task logs visible to polling clients during long executions."""
+        flush_task_log_handlers(self.task)
 
     def _handle_empty_batch(self, loop: ExecutionLoopState) -> bool:
         """Handle empty tick batch; return True when loop should terminate."""

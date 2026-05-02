@@ -541,6 +541,7 @@ export const TradingTaskDetail: React.FC = () => {
                     ? parseFloat(polledTick.price)
                     : null
                 }
+                timezone={timezone}
               />
             </Suspense>
           </LazyTabPanel>

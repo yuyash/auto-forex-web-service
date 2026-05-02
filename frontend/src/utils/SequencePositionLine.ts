@@ -13,6 +13,7 @@ import type {
   IPrimitivePaneView,
   IPrimitivePaneRenderer,
 } from 'lightweight-charts';
+import { formatAppNumber } from './numberFormat';
 
 // ── Renderer ────────────────────────────────────────────────────────
 
@@ -313,7 +314,11 @@ export class SequencePositionLine implements ISeriesPrimitive<Time> {
     this._price = price;
     this._priceLabel =
       price !== null && Number.isFinite(price)
-        ? `▶ ${price.toFixed(3)}`
+        ? `▶ ${formatAppNumber(price, {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3,
+            useGrouping: false,
+          })}`
         : '▶ Now';
     this._param?.requestUpdate();
 

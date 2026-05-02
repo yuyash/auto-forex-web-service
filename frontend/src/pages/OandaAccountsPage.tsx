@@ -57,8 +57,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { logger } from '../utils/logger';
-import { formatAppNumber } from '../utils/numberFormat';
+import {
+  formatAppNumber,
+  type FormatAppNumberOptions,
+} from '../utils/numberFormat';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useNumberFormatter } from '../hooks/useNumberFormatter';
 import type { AccountSnapshotState } from '../services/api/accounts';
 import type { AccountSnapshotRefreshStatus } from '../types/strategy';
 
@@ -78,24 +82,21 @@ const resolveCurrencyCode = (currency?: string | null) => {
 
 const formatBalance = (
   balance: string | number | null | undefined,
-  currency?: string
+  currency?: string,
+  formatNumber: (
+    value: number,
+    options?: FormatAppNumberOptions
+  ) => string = formatAppNumber
 ) => {
   if (balance == null) return '—';
   const numericBalance =
     typeof balance === 'string' ? Number(balance) : balance;
   if (Number.isNaN(numericBalance)) return '—';
   const currencyCode = resolveCurrencyCode(currency);
-  try {
-    return `${currencyCode} ${formatAppNumber(numericBalance, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  } catch {
-    return `${currencyCode} ${formatAppNumber(numericBalance, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }
+  return `${currencyCode} ${formatNumber(numericBalance, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 interface SnapshotRefreshTaskState {
@@ -162,6 +163,7 @@ function AccountCard({
   refreshTask?: SnapshotRefreshTaskState;
 }) {
   const { t } = useTranslation(['settings', 'common']);
+  const { formatNumber } = useNumberFormatter();
   const a = account;
   const activeAccountTaskId = isAccountSnapshotRefreshActive(
     a.snapshot_refresh_status
@@ -219,7 +221,7 @@ function AccountCard({
               {t('settings:accounts.balance')}
             </Typography>
             <Typography variant="h6">
-              {formatBalance(a.balance, a.currency)}
+              {formatBalance(a.balance, a.currency, formatNumber)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -227,7 +229,7 @@ function AccountCard({
               {t('settings:accounts.marginUsed')}
             </Typography>
             <Typography variant="body1">
-              {formatBalance(a.margin_used, a.currency)}
+              {formatBalance(a.margin_used, a.currency, formatNumber)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -235,7 +237,7 @@ function AccountCard({
               {t('settings:accounts.marginAvailable')}
             </Typography>
             <Typography variant="body1">
-              {formatBalance(a.margin_available, a.currency)}
+              {formatBalance(a.margin_available, a.currency, formatNumber)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -253,7 +255,7 @@ function AccountCard({
               }}
             >
               {parseFloat(a.unrealized_pnl) >= 0 ? '+' : ''}
-              {formatBalance(a.unrealized_pnl, a.currency)}
+              {formatBalance(a.unrealized_pnl, a.currency, formatNumber)}
             </Typography>
           </Box>
           <Box mb={1}>

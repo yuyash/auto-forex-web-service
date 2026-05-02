@@ -29,6 +29,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -119,11 +120,8 @@ const shortId = (value?: string | null): string =>
 function quoteCurrencySymbol(instrument?: string): string {
   if (!instrument) return '';
   const quote = instrument.split('_')[1] ?? '';
-  if (quote === 'JPY') return '¥';
-  if (quote === 'USD') return '$';
-  if (quote === 'EUR') return '€';
-  if (quote === 'GBP') return '£';
-  return quote + ' ';
+  const symbol = currencySymbol(quote);
+  return symbol === quote ? `${quote} ` : symbol;
 }
 
 function quoteCurrencyDecimals(instrument?: string): number {
@@ -132,11 +130,12 @@ function quoteCurrencyDecimals(instrument?: string): number {
   return quote === 'JPY' ? 0 : 2;
 }
 
-const formatPrice = (value?: string | null): string => {
+const formatPrice = (value?: string | null, instrument?: string): string => {
   if (!value) return '-';
   const parsed = Number(value);
+  const symbol = quoteCurrencySymbol(instrument);
   return Number.isFinite(parsed)
-    ? `¥${parsed.toLocaleString('en-US', {
+    ? `${symbol}${formatAppNumber(parsed, {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
       })}`
@@ -152,7 +151,7 @@ const formatSignedPnl = (
   if (!Number.isFinite(parsed)) return value;
   const sym = quoteCurrencySymbol(instrument);
   const decimals = quoteCurrencyDecimals(instrument);
-  const text = `${sym}${Math.abs(parsed).toLocaleString('en-US', {
+  const text = `${sym}${formatAppNumber(Math.abs(parsed), {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;
@@ -316,19 +315,19 @@ const LifecycleEventRow: React.FC<{
         {event.entry_price ? (
           <LifecycleField
             label={t('tables.positions.entryPrice')}
-            value={formatPrice(event.entry_price)}
+            value={formatPrice(event.entry_price, instrument)}
           />
         ) : null}
         {event.exit_price ? (
           <LifecycleField
             label={t('tables.positions.exitPrice')}
-            value={formatPrice(event.exit_price)}
+            value={formatPrice(event.exit_price, instrument)}
           />
         ) : null}
         {event.planned_exit_price ? (
           <LifecycleField
             label={t('tables.positions.plannedExitPrice')}
-            value={formatPrice(event.planned_exit_price)}
+            value={formatPrice(event.planned_exit_price, instrument)}
           />
         ) : null}
         {event.realized_pnl ? (
@@ -519,19 +518,22 @@ const PositionCard: React.FC<{
             />
             <LifecycleField
               label={t('tables.positions.entryPrice')}
-              value={formatPrice(summary.entry_price)}
+              value={formatPrice(summary.entry_price, summary.instrument)}
             />
             <LifecycleField
               label={t('tables.positions.exitPrice')}
-              value={formatPrice(summary.exit_price)}
+              value={formatPrice(summary.exit_price, summary.instrument)}
             />
             <LifecycleField
               label={t('tables.positions.plannedExitPrice')}
-              value={formatPrice(summary.planned_exit_price)}
+              value={formatPrice(
+                summary.planned_exit_price,
+                summary.instrument
+              )}
             />
             <LifecycleField
               label={t('tables.positions.stopLossPrice')}
-              value={formatPrice(summary.stop_loss_price)}
+              value={formatPrice(summary.stop_loss_price, summary.instrument)}
             />
             <LifecycleField
               label={t('tables.positions.lifecycle.fields.closeReason')}
