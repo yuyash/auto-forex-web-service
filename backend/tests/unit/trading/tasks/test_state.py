@@ -5,6 +5,10 @@ from unittest.mock import patch
 
 import fakeredis
 
+from apps.trading.tasks.lifecycle_coordination import (
+    TASK_COORDINATION_STATUS_FIELD,
+    TaskCoordinationStatus,
+)
 from apps.trading.tasks.state import StateManager
 
 
@@ -26,8 +30,8 @@ class TestStateManager:
     def test_start_sets_running(self):
         mgr = self._make_manager()
         mgr.start(celery_task_id="celery-1", worker="w1")
-        status = mgr.redis.hget(mgr.redis_key, "status")
-        assert status == "running"
+        status = mgr.redis.hget(mgr.redis_key, TASK_COORDINATION_STATUS_FIELD)
+        assert status == TaskCoordinationStatus.RUNNING
 
     def test_heartbeat_updates_timestamp(self):
         mgr = self._make_manager(heartbeat_interval_seconds=0)
@@ -49,7 +53,7 @@ class TestStateManager:
         mgr.start()
         with patch("apps.trading.models.BacktestTask") as mock_bt:
             mock_bt.objects.filter.return_value.values_list.return_value.first.return_value = (
-                "running"
+                TaskCoordinationStatus.RUNNING
             )
             ctrl = mgr.check_control(force=True)
         assert ctrl.should_stop is False
@@ -57,7 +61,11 @@ class TestStateManager:
     def test_check_control_stop_signal(self):
         mgr = self._make_manager(stop_check_interval_seconds=0)
         mgr.start()
-        mgr.redis.hset(mgr.redis_key, "status", "stopping")
+        mgr.redis.hset(
+            mgr.redis_key,
+            TASK_COORDINATION_STATUS_FIELD,
+            TaskCoordinationStatus.STOPPING,
+        )
         with patch("apps.trading.models.BacktestTask") as mock_bt:
             mock_bt.objects.filter.return_value.values_list.return_value.first.return_value = None
             with patch("apps.trading.models.TradingTask") as mock_tt:
@@ -71,22 +79,22 @@ class TestStateManager:
         mgr = self._make_manager()
         mgr.start()
         mgr.stop()
-        status = mgr.redis.hget(mgr.redis_key, "status")
-        assert status == "stopped"
+        status = mgr.redis.hget(mgr.redis_key, TASK_COORDINATION_STATUS_FIELD)
+        assert status == TaskCoordinationStatus.STOPPED
 
     def test_stop_marks_completed(self):
         mgr = self._make_manager()
         mgr.start()
         mgr.stop(completed=True)
-        status = mgr.redis.hget(mgr.redis_key, "status")
-        assert status == "completed"
+        status = mgr.redis.hget(mgr.redis_key, TASK_COORDINATION_STATUS_FIELD)
+        assert status == TaskCoordinationStatus.COMPLETED
 
     def test_stop_marks_failed(self):
         mgr = self._make_manager()
         mgr.start()
         mgr.stop(failed=True)
-        status = mgr.redis.hget(mgr.redis_key, "status")
-        assert status == "failed"
+        status = mgr.redis.hget(mgr.redis_key, TASK_COORDINATION_STATUS_FIELD)
+        assert status == TaskCoordinationStatus.FAILED
 
     def test_cleanup(self):
         mgr = self._make_manager()

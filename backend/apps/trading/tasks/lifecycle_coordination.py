@@ -2,6 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Final
+
+TASK_COORDINATION_STATUS_FIELD: Final = "status"
+
+
+class TaskCoordinationStatus:
+    """Redis coordination status values shared by lifecycle producers and consumers."""
+
+    RUNNING: Final = "running"
+    STOPPING: Final = "stopping"
+    PAUSING: Final = "pausing"
+    PAUSED: Final = "paused"
+    STOPPED: Final = "stopped"
+    COMPLETED: Final = "completed"
+    FAILED: Final = "failed"
+
 
 def build_task_execution_instance_key(*, task_id: object, execution_id: object) -> str:
     """Build the execution-scoped Redis instance key for a task."""

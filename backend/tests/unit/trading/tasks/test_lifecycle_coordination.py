@@ -5,6 +5,8 @@ from __future__ import annotations
 from uuid import uuid4
 
 from apps.trading.tasks.lifecycle_coordination import (
+    TASK_COORDINATION_STATUS_FIELD,
+    TaskCoordinationStatus,
     build_task_coordination_key,
     build_task_execution_instance_key,
 )
@@ -31,3 +33,14 @@ def test_build_task_execution_instance_key() -> None:
         )
         == f"{task_id}:{execution_id}"
     )
+
+
+def test_task_coordination_status_values() -> None:
+    assert TASK_COORDINATION_STATUS_FIELD == "status"
+    assert TaskCoordinationStatus.RUNNING == "running"
+    assert TaskCoordinationStatus.STOPPING == "stopping"
+    assert TaskCoordinationStatus.PAUSING == "pausing"
+    assert TaskCoordinationStatus.PAUSED == "paused"
+    assert TaskCoordinationStatus.STOPPED == "stopped"
+    assert TaskCoordinationStatus.COMPLETED == "completed"
+    assert TaskCoordinationStatus.FAILED == "failed"

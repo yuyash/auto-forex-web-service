@@ -12,6 +12,8 @@ from apps.trading.tasks.lifecycle_adapters import (
     _default_signal_stop,
 )
 from apps.trading.tasks.lifecycle_coordination import (
+    TASK_COORDINATION_STATUS_FIELD,
+    TaskCoordinationStatus,
     build_task_coordination_key,
     build_task_execution_instance_key,
 )
@@ -20,8 +22,8 @@ from apps.trading.tasks.lifecycle_coordination import (
 @pytest.mark.parametrize(
     ("signal_func", "expected_status"),
     [
-        (_default_signal_stop, "stopping"),
-        (_default_signal_pause, "pausing"),
+        (_default_signal_stop, TaskCoordinationStatus.STOPPING),
+        (_default_signal_pause, TaskCoordinationStatus.PAUSING),
     ],
 )
 def test_default_signal_writes_coordination_status(
@@ -46,6 +48,10 @@ def test_default_signal_writes_coordination_status(
         ),
     )
     from_url.assert_called_once_with(settings.MARKET_REDIS_URL, decode_responses=True)
-    redis_client.hset.assert_called_once_with(expected_key, "status", expected_status)
+    redis_client.hset.assert_called_once_with(
+        expected_key,
+        TASK_COORDINATION_STATUS_FIELD,
+        expected_status,
+    )
     redis_client.expire.assert_called_once_with(expected_key, 3600)
     redis_client.close.assert_called_once_with()

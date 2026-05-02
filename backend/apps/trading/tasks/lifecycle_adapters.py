@@ -9,6 +9,8 @@ from uuid import UUID
 
 from apps.trading.enums import StopMode
 from apps.trading.tasks.lifecycle_coordination import (
+    TASK_COORDINATION_STATUS_FIELD,
+    TaskCoordinationStatus,
     build_task_coordination_key,
     build_task_execution_instance_key,
 )
@@ -57,7 +59,11 @@ def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) ->
             execution_id=execution_id,
         ),
     )
-    redis_client.hset(redis_key, "status", "stopping")
+    redis_client.hset(
+        redis_key,
+        TASK_COORDINATION_STATUS_FIELD,
+        TaskCoordinationStatus.STOPPING,
+    )
     redis_client.expire(redis_key, 3600)
     redis_client.close()
 
@@ -74,7 +80,11 @@ def _default_signal_pause(task_id: UUID, task_name: str, execution_id: object) -
             execution_id=execution_id,
         ),
     )
-    redis_client.hset(redis_key, "status", "pausing")
+    redis_client.hset(
+        redis_key,
+        TASK_COORDINATION_STATUS_FIELD,
+        TaskCoordinationStatus.PAUSING,
+    )
     redis_client.expire(redis_key, 3600)
     redis_client.close()
 
