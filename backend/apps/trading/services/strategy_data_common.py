@@ -34,10 +34,20 @@ class StrategyDataQuery:
 def page_rows(
     *, request: Request, rows: list[dict[str, Any]], query: StrategyDataQuery
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Paginate an in-memory ``rows`` list and build the response envelope."""
+
     total = len(rows)
     start = (query.page - 1) * query.page_size
     results = rows[start : start + query.page_size]
-    return results, {
+    return results, pagination_envelope(request=request, total=total, query=query)
+
+
+def pagination_envelope(
+    *, request: Request, total: int, query: StrategyDataQuery
+) -> dict[str, Any]:
+    """Build a pagination envelope when the total row count is known up-front."""
+
+    return {
         "count": total,
         "next": _page_url(request, query.page + 1, total, query.page_size),
         "previous": _page_url(request, query.page - 1, total, query.page_size),

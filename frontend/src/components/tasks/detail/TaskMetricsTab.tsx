@@ -578,14 +578,14 @@ export function TaskMetricsTab({
         isLoading={isLoading}
       />
       {consistencyWarnings.length > 0 ? (
-        <Alert severity="warning" sx={{ mb: 1.5 }}>
+        <Alert severity="warning" sx={{ mb: { xs: 0.75, sm: 1.5 } }}>
           {consistencyWarnings.length} continuity warning(s) detected after
           resume. Review the latest metric jump before trusting this run.
         </Alert>
       ) : null}
       <Grid
         container
-        spacing={{ xs: 1, sm: layoutTokens.sectionGap.sm }}
+        spacing={{ xs: 0.75, sm: layoutTokens.sectionGap.sm }}
         justifyContent="flex-start"
         alignItems="stretch"
         sx={{ mt: 0, minWidth: 0, width: '100%' }}

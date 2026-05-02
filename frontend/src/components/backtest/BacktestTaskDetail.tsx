@@ -68,7 +68,7 @@ import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
-import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabs';
+import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabsConfig';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { useStrategySnapshot } from '../../hooks/useStrategyData';

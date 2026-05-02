@@ -58,7 +58,7 @@ describe('useTaskMetrics', () => {
         taskType: TaskType.BACKTEST,
         interval: 5,
         pageSize: 500,
-        maxPages: 20,
+        maxPages: 4,
       })
     );
 

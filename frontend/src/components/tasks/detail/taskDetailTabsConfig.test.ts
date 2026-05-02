@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TabItem } from '../../../hooks/useTabConfig';
-import { visibleTabsForStrategy } from './taskDetailTabs';
+import { visibleTabsForStrategy } from './taskDetailTabsConfig';
 
 const tabs: TabItem[] = [
   { id: 'overview', label: 'Overview', visible: true },

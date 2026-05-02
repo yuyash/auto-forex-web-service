@@ -20,7 +20,7 @@ export function ChartPanel({
     <Paper
       variant="outlined"
       sx={{
-        p: { xs: 0.5, sm: 1 },
+        p: { xs: 0.25, sm: 1 },
         height,
         overflow: 'hidden',
         display: 'flex',

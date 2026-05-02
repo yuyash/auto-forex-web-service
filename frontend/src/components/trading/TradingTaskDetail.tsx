@@ -66,7 +66,7 @@ import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
-import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabs';
+import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabsConfig';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { useStrategySnapshot } from '../../hooks/useStrategyData';

@@ -175,7 +175,7 @@ export function useTaskMetrics({
           since: effectiveSince,
           until,
           pageSize: 500,
-          maxPages: incremental ? 2 : 20,
+          maxPages: incremental ? 2 : 4,
           existingResults: incremental ? dataRef.current : undefined,
         });
         if (mountedRef.current) {

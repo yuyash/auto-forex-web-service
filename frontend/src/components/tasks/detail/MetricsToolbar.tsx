@@ -57,15 +57,15 @@ export function MetricsToolbar({
   const [showRange, setShowRange] = useState(!!since || !!until);
 
   return (
-    <Box sx={{ mb: 1.5 }}>
+    <Box sx={{ mb: { xs: 0.75, sm: 1.5 } }}>
       <Box
         sx={{
           display: 'flex',
           alignItems: { xs: 'stretch', sm: 'center' },
           gap: 1,
           flexWrap: 'wrap',
-          p: { xs: 1.25, sm: 0 },
-          border: { xs: 1, sm: 0 },
+          p: { xs: 0.75, sm: 0 },
+          border: { xs: '1px solid', sm: 'none' },
           borderColor: 'divider',
           borderRadius: { xs: 1, sm: 0 },
           bgcolor: { xs: 'background.paper', sm: 'transparent' },

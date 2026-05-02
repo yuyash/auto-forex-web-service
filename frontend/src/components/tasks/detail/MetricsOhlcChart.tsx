@@ -308,7 +308,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: { xs: 0.75, sm: 1.5 },
+          p: { xs: 0.25, sm: 1 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -327,7 +327,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: { xs: 0.75, sm: 1.5 },
+          p: { xs: 0.25, sm: 1 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -344,7 +344,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: { xs: 0.75, sm: 1.5 },
+          p: { xs: 0.25, sm: 1 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -360,7 +360,7 @@ export function MetricsOhlcChart({
     <Paper
       variant="outlined"
       sx={{
-        p: { xs: 0.75, sm: 1.5 },
+        p: { xs: 0.25, sm: 1 },
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
