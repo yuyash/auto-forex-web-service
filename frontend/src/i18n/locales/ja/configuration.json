@@ -4,8 +4,8 @@
     "subtitle": "バックテストとライブ取引用の再利用可能な戦略設定を管理",
     "createTitle": "新規設定構成を作成",
     "createSubtitle": "バックテストとライブ取引用の再利用可能な戦略設定を作成",
-    "editTitle": "戦略パラメータを編集",
-    "editSubtitle": "戦略設定のパラメータを更新",
+    "editTitle": "戦略設定を編集",
+    "editSubtitle": "設定名、説明、戦略パラメータを更新",
     "detailSubtitle": "戦略設定の詳細"
   },
   "filters": {

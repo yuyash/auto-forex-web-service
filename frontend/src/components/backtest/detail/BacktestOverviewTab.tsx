@@ -36,6 +36,8 @@ interface BacktestOverviewTabProps {
   strategySnapshot?: StrategySnapshotResponse | null;
   strategySnapshotLoading?: boolean;
   strategySnapshotError?: Error | null;
+  onRefreshExecutionStatus?: () => void | Promise<unknown>;
+  executionStatusRefreshing?: boolean;
   timezone: string;
   language?: string;
   isViewingHistorical?: boolean;
@@ -62,6 +64,8 @@ export function BacktestOverviewTab({
   strategySnapshot,
   strategySnapshotLoading,
   strategySnapshotError,
+  onRefreshExecutionStatus,
+  executionStatusRefreshing = false,
   timezone,
   language,
   isViewingHistorical = false,
@@ -276,6 +280,8 @@ export function BacktestOverviewTab({
             snapshot={strategySnapshot ?? null}
             isSnapshotLoading={strategySnapshotLoading}
             snapshotError={strategySnapshotError}
+            onRefresh={onRefreshExecutionStatus}
+            isRefreshing={executionStatusRefreshing}
           />
         </Grid>
 

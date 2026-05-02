@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import {
   DragIndicator as DragIcon,
+  Refresh as RefreshIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,8 @@ interface ExecutionStatusSummaryProps {
   isSnapshotLoading?: boolean;
   snapshotError?: Error | null;
   extraItems?: ExecutionStatusExtraItem[];
+  onRefresh?: () => void | Promise<unknown>;
+  isRefreshing?: boolean;
 }
 
 interface ExecutionStatusItem {
@@ -78,6 +81,8 @@ export function ExecutionStatusSummary({
   isSnapshotLoading = false,
   snapshotError = null,
   extraItems = [],
+  onRefresh,
+  isRefreshing = false,
 }: ExecutionStatusSummaryProps) {
   const { t } = useTranslation(['common', 'strategy', taskNamespace]);
   const { separators } = useNumberFormatter();
@@ -120,7 +125,6 @@ export function ExecutionStatusSummary({
     `execution_status_${taskNamespace}`,
     items
   );
-  const status = formatSnapshotStatus(snapshot?.snapshot.status ?? null, t);
 
   const moveTile = useCallback(
     (from: number, to: number) => {
@@ -177,12 +181,23 @@ export function ExecutionStatusSummary({
         <Typography variant="h6">
           {t('common:labels.executionStatus', 'Execution Status')}
         </Typography>
-        {status ? (
-          <Typography variant="body2" color="text.secondary">
-            {status}
-          </Typography>
+        {isSnapshotLoading || isRefreshing ? (
+          <CircularProgress size={18} />
         ) : null}
-        {isSnapshotLoading ? <CircularProgress size={18} /> : null}
+        {onRefresh ? (
+          <Tooltip title={t('actions.refresh')}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => void onRefresh()}
+                disabled={isRefreshing}
+                aria-label={t('actions.refresh')}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        ) : null}
         <Tooltip title={t('executionStatusOrder.configureTiles')}>
           <span>
             <IconButton
@@ -594,16 +609,6 @@ function formatSnapshotValue(
   const stringValue = String(value);
   return t(`strategy:snapshotValues.${id}.${stringValue}`, {
     defaultValue: stringValue,
-  });
-}
-
-function formatSnapshotStatus(
-  status: string | null,
-  t: ReturnType<typeof useTranslation>['t']
-): string | null {
-  if (!status) return null;
-  return t(`strategy:snapshotValues.protection_level.${status}`, {
-    defaultValue: status,
   });
 }
 

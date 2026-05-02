@@ -28,6 +28,8 @@ interface TradingOverviewTabProps {
   strategySnapshot?: StrategySnapshotResponse | null;
   strategySnapshotLoading?: boolean;
   strategySnapshotError?: Error | null;
+  onRefreshExecutionStatus?: () => void | Promise<unknown>;
+  executionStatusRefreshing?: boolean;
   isViewingHistorical?: boolean;
   historicalStrategyConfig?: {
     id: string;
@@ -52,6 +54,8 @@ export function TradingOverviewTab({
   strategySnapshot,
   strategySnapshotLoading,
   strategySnapshotError,
+  onRefreshExecutionStatus,
+  executionStatusRefreshing = false,
   isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
@@ -206,6 +210,8 @@ export function TradingOverviewTab({
             isSnapshotLoading={strategySnapshotLoading}
             snapshotError={strategySnapshotError}
             extraItems={executionStatusExtraItems}
+            onRefresh={onRefreshExecutionStatus}
+            isRefreshing={executionStatusRefreshing}
           />
         </Grid>
         <Grid size={{ xs: 12 }}>

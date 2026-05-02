@@ -19,6 +19,8 @@ export interface TaskLog {
   details?: Record<string, unknown>;
 }
 
+export type TaskLogMessageMatchMode = 'partial' | 'exact' | 'regex';
+
 interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
@@ -26,6 +28,8 @@ interface UseTaskLogsOptions {
   executionRunId?: string;
   level?: string[];
   component?: string[];
+  message?: string;
+  messageMatchMode?: TaskLogMessageMatchMode;
   /** Filter logs by position ID (supports prefix match for truncated UUIDs). */
   positionId?: string;
   timestampFrom?: string;
@@ -93,6 +97,8 @@ export const useTaskLogs = ({
   executionRunId,
   level,
   component,
+  message,
+  messageMatchMode = 'partial',
   positionId,
   timestampFrom,
   timestampTo,
@@ -102,7 +108,7 @@ export const useTaskLogs = ({
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${ordering}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${message ?? ''}-${message ? messageMatchMode : ''}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${ordering}-${page}-${pageSize}`;
   const {
     items: logs,
     totalCount,
@@ -130,6 +136,10 @@ export const useTaskLogs = ({
       if (level && level.length > 0) params.level = level.join(',');
       if (component && component.length > 0) {
         params.component = component.join(',');
+      }
+      if (message) {
+        params.message = message;
+        params.message_match = messageMatchMode;
       }
       if (positionId) params.position_id = positionId;
       if (timestampFrom) params.timestamp_from = timestampFrom;

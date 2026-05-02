@@ -354,7 +354,6 @@ const ConfigurationForm = ({
   // Different steps for create vs edit mode
   const steps = isEditMode
     ? [
-        t('configuration:form.steps.basicInformation'),
         t('configuration:form.steps.parameters'),
         t('configuration:form.steps.review'),
       ]
@@ -473,6 +472,42 @@ const ConfigurationForm = ({
     return groups;
   })();
 
+  const renderBasicInformationFields = () => (
+    <>
+      <Controller<ConfigurationFormData>
+        name="name"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            fullWidth
+            label={t('configuration:form.configurationName')}
+            placeholder={t('configuration:form.configurationNamePlaceholder')}
+            error={!!errors.name}
+            helperText={errors.name?.message}
+            sx={{ mb: 3 }}
+          />
+        )}
+      />
+      <Controller<ConfigurationFormData>
+        name="description"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            fullWidth
+            label={t('configuration:form.descriptionOptional')}
+            placeholder={t('configuration:form.descriptionPlaceholder')}
+            multiline
+            rows={3}
+            error={!!errors.description}
+            helperText={errors.description?.message}
+          />
+        )}
+      />
+    </>
+  );
+
   return (
     <Box sx={{ width: '100%' }}>
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -485,7 +520,7 @@ const ConfigurationForm = ({
 
       <form onSubmit={handleSubmit(onFormSubmit)}>
         {/* Step 1: Basic Information */}
-        {activeStep === 0 && (
+        {!isEditMode && activeStep === 0 && (
           <Box>
             <Typography variant="h6" gutterBottom>
               {t('configuration:form.basicInformation')}
@@ -493,39 +528,7 @@ const ConfigurationForm = ({
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {t('configuration:form.basicInfoDescription')}
             </Typography>
-            <Controller<ConfigurationFormData>
-              name="name"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  fullWidth
-                  label={t('configuration:form.configurationName')}
-                  placeholder={t(
-                    'configuration:form.configurationNamePlaceholder'
-                  )}
-                  error={!!errors.name}
-                  helperText={errors.name?.message}
-                  sx={{ mb: 3 }}
-                />
-              )}
-            />
-            <Controller<ConfigurationFormData>
-              name="description"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  fullWidth
-                  label={t('configuration:form.descriptionOptional')}
-                  placeholder={t('configuration:form.descriptionPlaceholder')}
-                  multiline
-                  rows={3}
-                  error={!!errors.description}
-                  helperText={errors.description?.message}
-                />
-              )}
-            />
+            {renderBasicInformationFields()}
           </Box>
         )}
 
@@ -635,9 +638,25 @@ const ConfigurationForm = ({
         )}
 
         {/* Step 3: Parameters (Create mode) or Step 1: Parameters (Edit mode) */}
-        {((isEditMode && activeStep === 1) ||
+        {((isEditMode && activeStep === 0) ||
           (!isEditMode && activeStep === 2)) && (
           <Box>
+            {isEditMode && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  {t('configuration:form.basicInformation')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 3 }}
+                >
+                  {t('configuration:form.basicInfoDescription')}
+                </Typography>
+                {renderBasicInformationFields()}
+                <Divider sx={{ mt: 3 }} />
+              </Box>
+            )}
             <Typography variant="h6" gutterBottom>
               {t('configuration:form.configureParameters')}
             </Typography>
@@ -687,7 +706,7 @@ const ConfigurationForm = ({
         )}
 
         {/* Step 4: Review (Create mode) or Step 2: Review (Edit mode) */}
-        {((isEditMode && activeStep === 2) ||
+        {((isEditMode && activeStep === 1) ||
           (!isEditMode && activeStep === 3)) && (
           <Box>
             <Typography variant="h6" gutterBottom>

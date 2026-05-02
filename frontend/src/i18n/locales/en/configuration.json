@@ -4,8 +4,8 @@
     "subtitle": "Manage reusable strategy configurations for backtesting and live trading",
     "createTitle": "Create New Configuration",
     "createSubtitle": "Create a reusable strategy configuration for backtesting and live trading",
-    "editTitle": "Edit Strategy Parameters",
-    "editSubtitle": "Update the parameters for your strategy configuration",
+    "editTitle": "Edit Strategy Configuration",
+    "editSubtitle": "Update the name, description, and strategy parameters",
     "detailSubtitle": "Strategy configuration details"
   },
   "filters": {

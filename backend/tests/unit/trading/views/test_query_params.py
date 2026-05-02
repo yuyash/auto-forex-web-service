@@ -40,6 +40,7 @@ def test_logs_query_params_splits_levels_components_and_range():
     execution_id = uuid4()
     request = _request(
         f"?execution_id={execution_id}&level=info,error&component=strategy,executor"
+        "&message=started&message_match=partial"
         "&position_id=pos-1&timestamp_from=2026-01-01T00:00:00Z"
         "&timestamp_to=2026-01-01T01:00:00Z&ordering=component"
     )
@@ -54,10 +55,26 @@ def test_logs_query_params_splits_levels_components_and_range():
     assert query.execution.execution_id == execution_id
     assert query.levels == ["INFO", "ERROR"]
     assert query.components == ["strategy", "executor"]
+    assert query.message == "started"
+    assert query.message_match == "partial"
     assert query.position_id == "pos-1"
     assert query.timestamp_range.start is not None
     assert query.timestamp_range.end is not None
     assert query.ordering == "component"
+
+
+def test_logs_query_params_reject_invalid_message_regex():
+    request = _request("?message=%5Binvalid&message_match=regex")
+
+    with pytest.raises(ValidationError) as exc_info:
+        LogsQueryParams.from_request(
+            request,
+            default_execution_id=None,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
+        )
+
+    assert "Invalid message regex" in str(exc_info.value.detail)
 
 
 def test_events_query_params_defaults_scope_to_all():

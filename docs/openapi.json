@@ -3110,6 +3110,28 @@
                     },
                     {
                         "in": "query",
+                        "name": "message",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log message text filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message_match",
+                        "schema": {
+                            "enum": [
+                                "partial",
+                                "exact",
+                                "regex"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Message filter match mode: partial, exact, or regex.\n\n* `partial` - partial\n* `exact` - exact\n* `regex` - regex"
+                    },
+                    {
+                        "in": "query",
                         "name": "ordering",
                         "schema": {
                             "type": "string"
@@ -5076,6 +5098,28 @@
                             "type": "string"
                         },
                         "description": "Log level filter (comma-separated for multiple)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log message text filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message_match",
+                        "schema": {
+                            "enum": [
+                                "partial",
+                                "exact",
+                                "regex"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Message filter match mode: partial, exact, or regex.\n\n* `partial` - partial\n* `exact` - exact\n* `regex` - regex"
                     },
                     {
                         "in": "query",

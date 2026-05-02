@@ -149,6 +149,49 @@ def test_log_querysets_filter_components_levels_and_position_prefix():
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (
+            "/tasks/1/logs/?message=task&message_match=partial",
+            ["Backtest task execution started", "Backtest task completed"],
+        ),
+        (
+            "/tasks/1/logs/?message=position%20opened&message_match=exact",
+            ["position opened"],
+        ),
+        (
+            "/tasks/1/logs/?message=^Backtest.*started$&message_match=regex",
+            ["Backtest task execution started"],
+        ),
+    ],
+)
+def test_logs_queryset_filters_message_by_match_mode(query: str, expected: list[str]):
+    task = BacktestTaskFactory()
+    for message in (
+        "Backtest task execution started",
+        "position opened",
+        "Backtest task completed",
+    ):
+        TaskLog.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            level=LogLevel.INFO,
+            component="strategy",
+            message=message,
+        )
+
+    queryset = TaskActivityQueryService().logs_queryset(
+        request=_request(query),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert sorted(queryset.values_list("message", flat=True)) == sorted(expected)
+
+
+@pytest.mark.django_db
 def test_events_queryset_applies_scope_filters():
     task = BacktestTaskFactory()
     TradingEvent.objects.create(
