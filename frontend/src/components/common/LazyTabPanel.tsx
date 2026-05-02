@@ -38,7 +38,7 @@ export function LazyTabPanel({
       {isActive && (
         <Box
           sx={{
-            pt: 1,
+            pt: { xs: 0.5, sm: 1 },
             display: 'flex',
             flexDirection: 'column',
             flex: 1,

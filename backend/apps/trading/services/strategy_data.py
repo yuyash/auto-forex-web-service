@@ -14,15 +14,15 @@ from apps.trading.services.strategy_data_common import (
     StrategyDataQuery,
     normalise_granularity,
     page_rows,
+    pagination_envelope,
     parse_datetime,
     positive_int,
     string_or_none,
 )
 from apps.trading.services.strategy_history import apply_history_filters, load_history_rows
 from apps.trading.services.strategy_metrics import (
-    aggregate_metric_points,
     build_ohlc_layers,
-    load_metric_points,
+    load_paginated_metric_points,
     metric_consistency_warnings,
 )
 from apps.trading.services.strategy_snapshot import build_strategy_snapshot
@@ -68,9 +68,10 @@ class StrategyDataService:
     def metrics(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
         query = _query_from_request(request, default_execution_id=task.execution_id)
         context = _load_context(task=task, task_type_label=task_type_label, query=query)
-        points = load_metric_points(task=task, task_type_label=task_type_label, query=query)
-        points = aggregate_metric_points(points, query.granularity)
-        points, pagination = page_rows(request=request, rows=points, query=query)
+        points, total = load_paginated_metric_points(
+            task=task, task_type_label=task_type_label, query=query
+        )
+        pagination = pagination_envelope(request=request, total=total, query=query)
         return {
             "execution_id": string_or_none(query.execution_id),
             "strategy_type": context["strategy_type"],
