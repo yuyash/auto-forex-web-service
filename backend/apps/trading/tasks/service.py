@@ -90,12 +90,14 @@ class TaskService:
     """
 
     def __init__(self) -> None:
+        from apps.trading.services.live_risk import LiveTradingRiskGuard
         from apps.trading.services.task_capacity import TaskCapacityService
 
         self.writer = TaskLifecycleWriter(logger=logger)
         self.events = TaskLifecycleEventPublisher(logger=logger)
         self.commands = TaskLifecycleCommands(service=self, logger=logger, events=self.events)
         self.capacity = TaskCapacityService()
+        self.risk_guard = LiveTradingRiskGuard()
 
     @staticmethod
     def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
@@ -279,6 +281,7 @@ class TaskService:
             is_valid, error_message = locked_task.validate_configuration()
             if not is_valid:
                 raise TaskValidationError(f"Task configuration is invalid: {error_message}")
+            self._ensure_start_risk_guard_allows(locked_task)
 
             locked_task.execution_id = uuid4()
             locked_task.celery_task_id = uuid4()
@@ -303,6 +306,7 @@ class TaskService:
         is_valid, error_message = task.validate_configuration()
         if not is_valid:
             raise TaskValidationError(f"Task configuration is invalid: {error_message}")
+        self._ensure_start_risk_guard_allows(task)
 
         task.execution_id = uuid4()
         task.celery_task_id = uuid4()
@@ -318,6 +322,14 @@ class TaskService:
         if admission.allowed:
             return
         raise TaskCapacityError(admission.reason, decision=admission)
+
+    def _ensure_start_risk_guard_allows(self, task: BacktestTask | TradingTask) -> None:
+        from apps.trading.services.live_risk import LiveTradingRiskError
+
+        try:
+            self.risk_guard.validate_task_start(task)
+        except LiveTradingRiskError as exc:
+            raise TaskValidationError(str(exc)) from exc
 
     def _finalize_terminal_task(
         self,
