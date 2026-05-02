@@ -11,6 +11,8 @@ from apps.accounts.models import RefreshToken, User, UserSession
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.views.refresh import TokenRefreshView
 
+CSRF_TOKEN = "a" * 32
+
 
 @pytest.mark.django_db
 class TestTokenRefreshView:
@@ -29,6 +31,9 @@ class TestTokenRefreshView:
             password="TestPass123!",
         )
 
+    def _refresh_cookie_header(self, refresh_token: str) -> str:
+        return f"refresh_token={refresh_token}; csrftoken={CSRF_TOKEN}"
+
     def test_successful_token_refresh(self) -> None:
         """Test successful token refresh with rotation."""
         user = self._create_user()
@@ -39,12 +44,14 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_token}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_token),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_200_OK
-        assert "token" in response.data
+        assert response.data["authenticated"] is True
+        assert "token" not in response.data
         assert "refresh_token" not in response.data
         assert "user" in response.data
         assert response.cookies["refresh_token"].value != refresh_token
@@ -54,6 +61,22 @@ class TestTokenRefreshView:
         stored_token.refresh_from_db()
         assert stored_token.revoked_at is not None
         assert RefreshToken.objects.filter(user=user).count() == 2
+
+    def test_refresh_requires_csrf_for_cookie_token(self) -> None:
+        """Test refresh-token cookies require a matching CSRF token."""
+        user = self._create_user()
+        refresh_token = self.jwt.create_refresh_token(user)
+
+        request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_token}",
+        )
+        response = self.view(request)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert RefreshToken.objects.get(user=user).revoked_at is None
 
     def test_refresh_missing_token(self) -> None:
         """Test token refresh without refresh_token in body."""
@@ -103,7 +126,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_token}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_token),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         response = self.view(request)
         assert response.status_code == status.HTTP_200_OK
@@ -113,7 +137,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_token}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_token),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         response2 = self.view(request2)
         assert response2.status_code == status.HTTP_401_UNAUTHORIZED
@@ -132,7 +157,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_token}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_token),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         response = self.view(request)
 
@@ -162,7 +188,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_a}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_a),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         response = self.view(request)
         assert response.status_code == status.HTTP_200_OK
@@ -171,7 +198,8 @@ class TestTokenRefreshView:
             "/api/accounts/auth/refresh",
             data=json.dumps({}),
             content_type="application/json",
-            HTTP_COOKIE=f"refresh_token={refresh_a}",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_a),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
         )
         replay_response = self.view(replay_request)
         assert replay_response.status_code == status.HTTP_401_UNAUTHORIZED

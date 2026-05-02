@@ -161,6 +161,14 @@ class SnowballStrategy(Strategy):
     def strategy_type(self) -> StrategyType:
         return StrategyType.SNOWBALL
 
+    def on_start(self, *, state: ExecutionState) -> StrategyResult:
+        result = super().on_start(state=state)
+        state.strategy_state = SnowballStrategyState.from_strategy_state(
+            state.strategy_state
+        ).to_dict()
+        result.state = state
+        return result
+
     @classmethod
     def supports_stateful_broker_reconciliation(cls) -> bool:
         return True

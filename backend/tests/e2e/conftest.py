@@ -7,6 +7,7 @@ OANDA API access uses a real practice account via GitHub Secrets.
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ from django.core.management import call_command
 from rest_framework.test import APIClient
 
 from apps.market.models import OandaAccounts
+from apps.market.models import TickData
 from apps.trading.models import StrategyConfiguration
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from tests.e2e.helpers import (
@@ -38,6 +40,7 @@ User = get_user_model()
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 TICK_CSV = FIXTURES_DIR / "tick_data_usd_jpy.csv"
+TICK_CSV_LAST_TIMESTAMP = datetime(2026, 1, 2, 21, 59, 58, tzinfo=UTC)
 
 
 @pytest.fixture(scope="session")
@@ -46,7 +49,11 @@ def django_db_setup(django_db_blocker):
     with django_db_blocker.unblock():
         if os.getenv("E2E_DB_PREMIGRATED") != "true":
             call_command("migrate", "--run-syncdb", verbosity=0)
-        if TICK_CSV.exists():
+        fixture_loaded = TickData.objects.filter(
+            instrument="USD_JPY",
+            timestamp=TICK_CSV_LAST_TIMESTAMP,
+        ).exists()
+        if TICK_CSV.exists() and not fixture_loaded:
             call_command("load_data", from_csv=str(TICK_CSV))
 
 
@@ -71,19 +78,19 @@ def test_user(db):
 
 @pytest.fixture
 def auth_tokens(api_client, test_user):
-    """Login and return (access_token, refresh_token_cookie) tuple."""
+    """Login and return (access_cookie, refresh_cookie) tuple."""
     resp = api_client.post(
         "/api/accounts/auth/login",
         {"email": test_user.email, "password": E2E_PASSWORD},
         format="json",
     )
     assert resp.status_code == 200, resp.data
-    return resp.data["token"], resp.cookies["refresh_token"].value
+    return resp.cookies["access_token"].value, resp.cookies["refresh_token"].value
 
 
 @pytest.fixture
 def authenticated_client(api_client, auth_tokens):
-    """API client with JWT Authorization header."""
+    """API client authenticated with the access token set by the login cookie."""
     token, _ = auth_tokens
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     return api_client

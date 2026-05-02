@@ -34,6 +34,17 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   created_at: string;
 }
 
+export interface BackendTaskStopResponse {
+  message: string;
+  command?: 'stop';
+  task_id: string;
+  previous_status?: string;
+  next_status?: string;
+  status: string;
+  accepted?: boolean;
+  mode?: string;
+}
+
 export interface BackendBacktestTask {
   id: string;
   user_id: number;
@@ -173,9 +184,33 @@ export interface BackendAccount {
   pending_order_count?: number;
   live_data?: boolean;
   live_data_error?: string;
+  snapshot_refreshed_at?: string | null;
+  snapshot_stale?: boolean;
+  snapshot_refresh_error?: string;
+  snapshot_refresh_task_id?: string;
+  snapshot_refresh_status?: BackendAccountSnapshotRefreshStatus;
+  snapshot_refresh_status_updated_at?: string | null;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
+}
+
+export type BackendAccountSnapshotRefreshStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed';
+
+export interface BackendAccountSnapshotRefreshResponse {
+  id: number;
+  account_id: string;
+  task_id: string;
+  status: BackendAccountSnapshotRefreshStatus;
+  snapshot_refreshed_at: string | null;
+  snapshot_stale: boolean;
+  snapshot_refresh_error: string;
+  snapshot_refresh_status_updated_at: string | null;
 }
 
 export type BackendPaginatedBacktestTasks =

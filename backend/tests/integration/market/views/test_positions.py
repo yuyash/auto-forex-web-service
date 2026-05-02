@@ -10,6 +10,17 @@ from rest_framework.test import APIClient
 
 from apps.market.enums import ApiType
 from apps.market.models import OandaAccounts
+from apps.market.services.broker_order_guard import BrokerOrderGuardError
+from apps.market.services.compliance import ComplianceViolationError
+from apps.market.services.oanda import OandaAPIError
+from apps.market.views.order_errors import ORDER_COMPLIANCE_ERROR, ORDER_GUARD_ERROR
+
+
+def _guarded_oanda_error(message: str) -> OandaAPIError:
+    try:
+        raise OandaAPIError(message) from BrokerOrderGuardError(message)
+    except OandaAPIError as exc:
+        return exc
 
 
 @pytest.mark.django_db
@@ -150,6 +161,68 @@ class TestPositionView:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    @patch("apps.market.views.positions.OandaService")
+    def test_put_position_guard_failure_returns_400(self, mock_service: Any, user: Any) -> None:
+        """Guardrail denials should be clear client errors, not generic 500s."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-004",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_service.return_value.create_market_order.side_effect = _guarded_oanda_error(
+            "Instrument USD_JPY is not enabled for broker order submission"
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.put(
+            "/api/market/positions/",
+            {
+                "account_id": account.id,
+                "instrument": "USD_JPY",
+                "direction": "long",
+                "units": "1000.00",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Instrument USD_JPY" not in response.data["error"]
+
+    @patch("apps.market.views.positions.OandaService")
+    def test_put_position_compliance_failure_returns_422(
+        self, mock_service: Any, user: Any
+    ) -> None:
+        """Compliance denials should be surfaced as unprocessable orders."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-005",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_service.return_value.create_market_order.side_effect = ComplianceViolationError(
+            "Order exceeds maximum leverage limit"
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.put(
+            "/api/market/positions/",
+            {
+                "account_id": account.id,
+                "instrument": "EUR_USD",
+                "direction": "long",
+                "units": "1000.00",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.data["error_code"] == "ORDER_COMPLIANCE_VIOLATION"
+        assert response.data["error"] == ORDER_COMPLIANCE_ERROR
+        assert "maximum leverage" not in response.data["error"]
+
 
 @pytest.mark.django_db
 class TestPositionDetailView:
@@ -201,3 +274,64 @@ class TestPositionDetailView:
 
         assert response.status_code == status.HTTP_200_OK
         assert "message" in response.data
+
+    @patch("apps.market.views.positions.OandaService")
+    def test_patch_position_guard_failure_returns_400(self, mock_service: Any, user: Any) -> None:
+        """Close-order guardrail denials should be clear client errors."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-006",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_trade = MagicMock()
+        mock_trade.trade_id = "789"
+        mock_service_instance = MagicMock()
+        mock_service_instance.get_open_trades.return_value = [mock_trade]
+        mock_service_instance.close_trade.side_effect = _guarded_oanda_error(
+            "Live OANDA accounts are disabled"
+        )
+        mock_service.return_value = mock_service_instance
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.patch(
+            "/api/market/positions/789/",
+            {"account_id": account.id},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Live OANDA accounts are disabled" not in response.data["error"]
+
+    @patch("apps.market.views.positions.OandaService")
+    def test_patch_position_upstream_failure_returns_502(
+        self, mock_service: Any, user: Any
+    ) -> None:
+        """Raw OANDA close failures should stay generic."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-007",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_trade = MagicMock()
+        mock_trade.trade_id = "789"
+        mock_service_instance = MagicMock()
+        mock_service_instance.get_open_trades.return_value = [mock_trade]
+        mock_service_instance.close_trade.side_effect = OandaAPIError("upstream rejected")
+        mock_service.return_value = mock_service_instance
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.patch(
+            "/api/market/positions/789/",
+            {"account_id": account.id},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert response.data == {
+            "error": "Failed to close position",
+            "error_code": "OANDA_UPSTREAM_ERROR",
+        }

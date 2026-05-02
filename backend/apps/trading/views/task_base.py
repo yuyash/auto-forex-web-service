@@ -8,7 +8,7 @@ from typing import Any
 
 from django.db.models import Q, QuerySet
 from drf_spectacular.utils import OpenApiParameter
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -63,6 +63,24 @@ TASK_LIST_PARAMETERS = [
     OpenApiParameter(name="updated_from", type=str, required=False),
     OpenApiParameter(name="updated_to", type=str, required=False),
 ]
+
+
+def task_stop_response_fields(
+    extra_fields: dict[str, serializers.Field] | None = None,
+) -> dict[str, serializers.Field]:
+    """Return OpenAPI fields for accepted task stop command responses."""
+    fields: dict[str, serializers.Field] = {
+        "message": serializers.CharField(),
+        "command": serializers.CharField(),
+        "task_id": serializers.CharField(),
+        "previous_status": serializers.CharField(),
+        "next_status": serializers.CharField(),
+        "status": serializers.CharField(),
+        "accepted": serializers.BooleanField(),
+    }
+    if extra_fields:
+        fields.update(extra_fields)
+    return fields
 
 
 class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
@@ -215,6 +233,47 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         return {}
 
     @staticmethod
+    def _status_value(value: Any) -> str:
+        return str(getattr(value, "value", value))
+
+    def _resolve_stop_response_status(
+        self,
+        *,
+        task: Any,
+        requested_mode: str,
+        previous_status: Any,
+    ) -> str:
+        """Resolve the post-command status to return after stop acceptance."""
+        refresh_from_db = getattr(task, "refresh_from_db", None)
+        if callable(refresh_from_db):
+            try:
+                refresh_from_db(fields=["status"])
+            except TypeError:
+                try:
+                    refresh_from_db()
+                except Exception:
+                    logger.debug(
+                        "Unable to refresh task after stop",
+                        extra={"task_id": str(getattr(task, "pk", ""))},
+                        exc_info=True,
+                    )
+            except Exception:
+                logger.debug(
+                    "Unable to refresh task after stop",
+                    extra={"task_id": str(getattr(task, "pk", ""))},
+                    exc_info=True,
+                )
+
+        refreshed_status = getattr(task, "status", None)
+        previous_value = self._status_value(previous_status)
+        refreshed_value = self._status_value(refreshed_status)
+        if refreshed_status is not None and refreshed_value != previous_value:
+            return refreshed_value
+        if requested_mode == "drain" and previous_value != self._status_value(TaskStatus.DRAINING):
+            return self._status_value(TaskStatus.DRAINING)
+        return self._status_value(TaskStatus.STOPPING)
+
+    @staticmethod
     def _capacity_error_payload(exc: TaskCapacityError) -> dict[str, Any]:
         payload: dict[str, Any] = {
             **api_error(
@@ -290,7 +349,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
             )
 
         try:
-            started = self.task_service.start_task(task)
+            started = self.task_service.start_task(task, user=request.user)
             return Response(self._serialize_detail(started))
         except TaskCapacityError as exc:
             logger.warning(
@@ -349,9 +408,13 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task = self.get_object()
         mode = self.get_stop_mode(request)
         drain_minutes = self.get_drain_duration_minutes(request)
+        previous_status = task.status
         try:
             success = self.task_service.stop_task(
-                task.pk, mode=mode, drain_duration_minutes=drain_minutes
+                task.pk,
+                mode=mode,
+                drain_duration_minutes=drain_minutes,
+                user=request.user,
             )
         except ValueError as exc:
             logger.warning("Stop validation failed: task_id=%s, detail=%s", task.pk, exc)
@@ -377,10 +440,19 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        next_status = self._resolve_stop_response_status(
+            task=task,
+            requested_mode=mode,
+            previous_status=previous_status,
+        )
         body: dict[str, Any] = {
             "message": "Task stop requested",
+            "command": "stop",
             "task_id": str(task.pk),
-            "status": TaskStatus.STOPPING,
+            "previous_status": self._status_value(previous_status),
+            "next_status": next_status,
+            "status": next_status,
+            "accepted": True,
         }
         body.update(self.get_stop_response_extras(request))
         return Response(body, status=status.HTTP_202_ACCEPTED)
@@ -399,7 +471,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            success = self.task_service.pause_task(task.pk)
+            success = self.task_service.pause_task(task.pk, user=request.user)
         except ValueError as exc:
             logger.warning("Pause validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
@@ -461,7 +533,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Resume a paused task."""
         task = self.get_object()
         try:
-            resumed = self.task_service.resume_task(task.pk)
+            resumed = self.task_service.resume_task(task.pk, user=request.user)
         except TaskConflictError:
             logger.exception(
                 "Resume conflict",
@@ -498,7 +570,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Restart a task from the beginning."""
         task = self.get_object()
         try:
-            restarted = self.task_service.restart_task(task.pk)
+            restarted = self.task_service.restart_task(task.pk, user=request.user)
         except TaskCapacityError as exc:
             logger.warning("Restart capacity exhausted: task_id=%s, detail=%s", task.pk, exc)
             return Response(

@@ -24,7 +24,7 @@ class UserRegistrationView(APIView):
     """
     API endpoint for user registration.
 
-    POST /api/auth/register
+    POST /api/accounts/auth/register
     - Register a new user account
     - Send verification email
     """

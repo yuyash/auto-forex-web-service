@@ -1,4 +1,5 @@
 import { tradingTasksApi } from '../services/api';
+import type { BackendTaskStopResponse } from '../services/api/contracts';
 import type {
   TradingTask,
   TradingTaskCreateData,
@@ -108,7 +109,7 @@ export function useUpdateTradingTask(options?: {
 // --- stop needs a custom status-patch + mode parameter --------------------
 
 export function useStopTradingTask(options?: {
-  onSuccess?: (data: Record<string, unknown>) => void;
+  onSuccess?: (data: BackendTaskStopResponse) => void;
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
@@ -124,7 +125,11 @@ export function useStopTradingTask(options?: {
       ),
     {
       onSuccess: async (data, variables) => {
-        await patchTaskStatusCache('trading', variables.id, 'stopping');
+        const fallbackStatus =
+          variables.mode === 'drain' ? 'draining' : 'stopping';
+        const nextStatus =
+          (data.next_status ?? data.status).toLowerCase() || fallbackStatus;
+        await patchTaskStatusCache('trading', variables.id, nextStatus);
         await invalidateTaskDerivedCaches('trading', variables.id);
         options?.onSuccess?.(data);
       },

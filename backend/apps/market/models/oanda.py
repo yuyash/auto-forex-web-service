@@ -16,6 +16,13 @@ class OandaAccounts(models.Model):
     OANDA trading account with encrypted API token.
     """
 
+    class SnapshotRefreshStatus(models.TextChoices):
+        IDLE = "idle", "Idle"
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
     user = models.ForeignKey(
         "accounts.User",
         on_delete=models.CASCADE,
@@ -71,6 +78,59 @@ class OandaAccounts(models.Model):
         default=0,
         help_text="Unrealized profit/loss from open positions",
     )
+    nav = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        help_text="Latest cached net asset value from OANDA",
+    )
+    open_trade_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached open trade count from OANDA",
+    )
+    open_position_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached open position count from OANDA",
+    )
+    pending_order_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Latest cached pending order count from OANDA",
+    )
+    hedging_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Latest cached OANDA hedging capability for this account",
+    )
+    snapshot_refreshed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the cached OANDA account snapshot was refreshed",
+    )
+    snapshot_refresh_error = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Last safe error message from refreshing the OANDA account snapshot",
+    )
+    snapshot_refresh_task_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Latest manual OANDA account snapshot refresh Celery task ID",
+    )
+    snapshot_refresh_status = models.CharField(
+        max_length=20,
+        choices=SnapshotRefreshStatus.choices,
+        default=SnapshotRefreshStatus.IDLE,
+        db_index=True,
+        help_text="Latest manual OANDA account snapshot refresh task status",
+    )
+    snapshot_refresh_status_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the manual OANDA account snapshot refresh status changed",
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",
@@ -102,6 +162,14 @@ class OandaAccounts(models.Model):
             models.Index(fields=["account_id"]),
             models.Index(fields=["user", "is_default"]),
             models.Index(fields=["created_at"]),
+            models.Index(
+                fields=["user", "snapshot_refresh_status"],
+                name="oanda_user_refresh_stat_idx",
+            ),
+            models.Index(
+                fields=["user", "snapshot_refreshed_at"],
+                name="oanda_user_snap_ref_idx",
+            ),
         ]
         ordering = ["-created_at"]
 

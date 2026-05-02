@@ -24,7 +24,10 @@ class TestHTTPAccessLoggingMiddleware:
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
         request = MagicMock()
-        request.META = {"HTTP_X_FORWARDED_FOR": "203.0.113.1, 198.51.100.1"}
+        request.META = {
+            "REMOTE_ADDR": "127.0.0.1",
+            "HTTP_X_FORWARDED_FOR": "203.0.113.1, 127.0.0.1",
+        }
 
         ip = get_client_ip(request)
 

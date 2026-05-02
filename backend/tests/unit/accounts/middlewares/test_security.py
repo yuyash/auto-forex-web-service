@@ -22,7 +22,10 @@ class TestSecurityMonitoringMiddleware:
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
         request = MagicMock()
-        request.META = {"HTTP_X_FORWARDED_FOR": "203.0.113.1, 198.51.100.1"}
+        request.META = {
+            "REMOTE_ADDR": "127.0.0.1",
+            "HTTP_X_FORWARDED_FOR": "203.0.113.1, 127.0.0.1",
+        }
 
         ip = get_client_ip(request)
 
@@ -36,6 +39,30 @@ class TestSecurityMonitoringMiddleware:
         ip = get_client_ip(request)
 
         assert ip == "192.168.1.1"
+
+    def test_get_client_ip_ignores_forwarded_for_from_untrusted_peer(self) -> None:
+        """Test spoofed forwarding headers are ignored for untrusted peers."""
+        request = MagicMock()
+        request.META = {
+            "REMOTE_ADDR": "203.0.113.10",
+            "HTTP_X_FORWARDED_FOR": "198.51.100.99",
+        }
+
+        ip = get_client_ip(request)
+
+        assert ip == "203.0.113.10"
+
+    def test_get_client_ip_uses_first_untrusted_hop_from_right(self) -> None:
+        """Test trusted proxies are skipped from the right side of the chain."""
+        request = MagicMock()
+        request.META = {
+            "REMOTE_ADDR": "127.0.0.1",
+            "HTTP_X_FORWARDED_FOR": "198.51.100.99, 203.0.113.10",
+        }
+
+        ip = get_client_ip(request)
+
+        assert ip == "203.0.113.10"
 
     def test_is_blocked_ip(self) -> None:
         """Test checking if IP is blocked."""

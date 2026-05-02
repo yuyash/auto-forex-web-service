@@ -8,6 +8,7 @@ import type {
 import type {
   BackendBacktestTask,
   BackendTaskExecutionSummary,
+  BackendTaskStopResponse,
 } from './contracts';
 import { createTaskApi } from './taskApiFactory';
 
@@ -70,12 +71,12 @@ export const backtestTasksApi = {
     id: string,
     mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful',
     drainDurationMinutes?: number
-  ): Promise<Record<string, unknown>> => {
+  ): Promise<BackendTaskStopResponse> => {
     const payload: Record<string, unknown> = { mode };
     if (mode === 'drain' && typeof drainDurationMinutes === 'number') {
       payload.drain_duration_minutes = drainDurationMinutes;
     }
-    return api.post<Record<string, unknown>>(
+    return api.post<BackendTaskStopResponse>(
       `/api/trading/tasks/backtest/${id}/stop/`,
       payload
     );

@@ -21,7 +21,11 @@ from apps.trading.serializers.trading import (
     TradingTaskListSerializer,
     TradingTaskSerializer,
 )
-from apps.trading.views.task_base import TASK_LIST_PARAMETERS, TaskViewSetBase
+from apps.trading.views.task_base import (
+    TASK_LIST_PARAMETERS,
+    TaskViewSetBase,
+    task_stop_response_fields,
+)
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -69,24 +73,24 @@ class ConflictError(APIException):
         operation_id="trading_tasks_stop",
         tags=["Trading"],
         request=inline_serializer(
-            "TradingTaskStopRequest",
+            "TradingTaskStopCommand",
             fields={
                 "mode": serializers.CharField(
                     required=False,
                     default="graceful",
                     help_text="Stop mode. Defaults to graceful.",
                 ),
+                "drain_duration_minutes": serializers.IntegerField(
+                    required=False,
+                    min_value=1,
+                    help_text="Optional drain duration override in minutes.",
+                ),
             },
         ),
         responses={
             202: inline_serializer(
                 "TradingTaskStopResponse",
-                fields={
-                    "message": serializers.CharField(),
-                    "task_id": serializers.CharField(),
-                    "mode": serializers.CharField(),
-                    "status": serializers.CharField(),
-                },
+                fields=task_stop_response_fields({"mode": serializers.CharField()}),
             ),
         },
     ),

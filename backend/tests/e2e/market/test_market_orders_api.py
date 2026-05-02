@@ -27,8 +27,8 @@ class TestMarketOrders:
             },
             format="json",
         )
-        # 200/201 = success, 400 = validation, 422 = compliance
-        assert resp.status_code in (200, 201, 400, 422), resp.data
+        # 200/201 = success, 400 = guard/validation, 422 = compliance, 502 = upstream
+        assert resp.status_code in (200, 201, 400, 422, 502), resp.data
 
     @skip_without_oanda
     def test_get_order_detail(self, authenticated_client, oanda_account):

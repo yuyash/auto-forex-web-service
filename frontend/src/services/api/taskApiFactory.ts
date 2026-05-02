@@ -11,6 +11,7 @@
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type { PaginatedResponse, TaskExecution } from '../../types';
+import type { BackendTaskStopResponse } from './contracts';
 import type { PaginatedApiResponse } from './pagination';
 
 /** Minimal paginated backend shape. */
@@ -30,7 +31,7 @@ export interface TaskApi<TFrontend, TListParams, TCreateData, TUpdateData> {
   partialUpdate: (id: string, data: TUpdateData) => Promise<TFrontend>;
   delete: (id: string) => Promise<void>;
   start: (id: string) => Promise<TFrontend>;
-  stop: (id: string, ...args: unknown[]) => Promise<Record<string, unknown>>;
+  stop: (id: string, ...args: unknown[]) => Promise<BackendTaskStopResponse>;
   pause: (id: string) => Promise<TFrontend>;
   resume: (id: string) => Promise<TFrontend>;
   restart: (id: string) => Promise<TFrontend>;
@@ -123,7 +124,7 @@ export function createTaskApi<
       transform(await api.post<TBackend>(`${BASE}/${id}/start/`, {})),
 
     stop: async (id: string) =>
-      api.post<Record<string, unknown>>(`${BASE}/${id}/stop/`, {}),
+      api.post<BackendTaskStopResponse>(`${BASE}/${id}/stop/`, {}),
 
     pause: async (id) =>
       transform(await api.post<TBackend>(`${BASE}/${id}/pause/`, {})),

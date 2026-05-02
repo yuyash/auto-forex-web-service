@@ -10,6 +10,17 @@ from rest_framework.test import APIClient
 
 from apps.market.enums import ApiType
 from apps.market.models import OandaAccounts
+from apps.market.services.broker_order_guard import BrokerOrderGuardError
+from apps.market.services.compliance import ComplianceViolationError
+from apps.market.services.oanda import OandaAPIError
+from apps.market.views.order_errors import ORDER_COMPLIANCE_ERROR, ORDER_GUARD_ERROR
+
+
+def _guarded_oanda_error(message: str) -> OandaAPIError:
+    try:
+        raise OandaAPIError(message) from BrokerOrderGuardError(message)
+    except OandaAPIError as exc:
+        return exc
 
 
 @pytest.mark.django_db
@@ -145,6 +156,98 @@ class TestOrderView:
         response = client.post("/api/market/orders/", data, format="json")
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("apps.market.views.orders.OandaService")
+    def test_post_order_guard_failure_returns_400(self, mock_service: Any, user: Any) -> None:
+        """Guardrail denials should be clear client errors, not generic 500s."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-005",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_service.return_value.create_market_order.side_effect = _guarded_oanda_error(
+            "Order size exceeds the configured broker order limit"
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post(
+            "/api/market/orders/",
+            {
+                "account_id": account.id,
+                "instrument": "EUR_USD",
+                "order_type": "market",
+                "direction": "long",
+                "units": "1000.00",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Order size exceeds" not in response.data["error"]
+
+    @patch("apps.market.views.orders.OandaService")
+    def test_post_order_compliance_failure_returns_422(self, mock_service: Any, user: Any) -> None:
+        """Compliance denials should be surfaced as unprocessable orders."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-006",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_service.return_value.create_market_order.side_effect = ComplianceViolationError(
+            "Hedging is not allowed for US accounts"
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post(
+            "/api/market/orders/",
+            {
+                "account_id": account.id,
+                "instrument": "EUR_USD",
+                "order_type": "market",
+                "direction": "long",
+                "units": "1000.00",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.data["error_code"] == "ORDER_COMPLIANCE_VIOLATION"
+        assert response.data["error"] == ORDER_COMPLIANCE_ERROR
+        assert "Hedging is not allowed" not in response.data["error"]
+
+    @patch("apps.market.views.orders.OandaService")
+    def test_post_order_upstream_failure_returns_502(self, mock_service: Any, user: Any) -> None:
+        """Raw OANDA failures should stay generic and map to upstream failure."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-007",
+            api_type=ApiType.PRACTICE,
+        )
+        mock_service.return_value.create_market_order.side_effect = OandaAPIError("invalid token")
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post(
+            "/api/market/orders/",
+            {
+                "account_id": account.id,
+                "instrument": "EUR_USD",
+                "order_type": "market",
+                "direction": "long",
+                "units": "1000.00",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert response.data == {
+            "error": "Order execution failed",
+            "error_code": "OANDA_UPSTREAM_ERROR",
+        }
 
 
 @pytest.mark.django_db

@@ -22,6 +22,7 @@ from v20.transaction import StopLossDetails, TakeProfitDetails
 
 from apps.market.enums import MarketEventSeverity, MarketEventType
 from apps.market.models import OandaAccounts, TickData
+from apps.market.services.broker_order_guard import BrokerOrderGuard, BrokerOrderGuardError
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
 from apps.market.services.oanda_dry_run import OandaDryRunSimulator
@@ -101,6 +102,7 @@ class OandaService:
         self.retry_delay = 0.5  # seconds
         self.max_retry_delay = 5.0  # seconds
         self.event_service = MarketEventService()
+        self.order_guard = BrokerOrderGuard()
         self._account_resource_cache: dict[str, Any] | None = None
 
         self._dry_run_simulator = OandaDryRunSimulator(account)
@@ -285,6 +287,10 @@ class OandaService:
         assert self.account is not None, "Account not initialized"
 
         try:
+            self._validate_broker_order_guard(
+                instrument=trade.instrument,
+                units=trade.units if units is None else units,
+            )
             kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
             response = self.api.trade.close(self.account.account_id, trade.trade_id, **kwargs)
 
@@ -370,6 +376,10 @@ class OandaService:
                     raise ValueError("units must be positive")
                 if units > position.units:
                     raise ValueError("units cannot exceed open position units")
+            self._validate_broker_order_guard(
+                instrument=position.instrument,
+                units=position.units if units is None else units,
+            )
 
             if position.direction == OrderDirection.LONG:
                 kwargs: dict[str, Any] = {
@@ -449,6 +459,10 @@ class OandaService:
 
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
+        self._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
+        )
 
         order_request = {
             "instrument": request.instrument,
@@ -530,6 +544,10 @@ class OandaService:
         # Require account for live trading
         if self.account is None:
             raise OandaAPIError("Account required for live trading")
+        self._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
+        )
 
         order_request = {
             "instrument": request.instrument,
@@ -639,6 +657,10 @@ class OandaService:
 
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
         abs_units = abs(request.units)
+        self._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
+        )
 
         order_request = {
             "instrument": request.instrument,
@@ -1334,3 +1356,47 @@ class OandaService:
             )
 
             raise ComplianceViolationError(error_message)
+
+    def _validate_broker_order_guard(self, *, instrument: str, units: Decimal) -> None:
+        try:
+            self.order_guard.validate_order(
+                account=self.account,
+                dry_run=self.dry_run,
+                instrument=instrument,
+                units=units,
+            )
+        except BrokerOrderGuardError as exc:
+            self._log_order_guard_rejection(instrument=instrument, units=units, reason=str(exc))
+            raise OandaAPIError(str(exc), internal_detail=str(exc)) from exc
+
+    def _log_order_guard_rejection(
+        self,
+        *,
+        instrument: str,
+        units: Decimal,
+        reason: str,
+    ) -> None:
+        if self.account is None:
+            return
+
+        try:
+            self.event_service.log_security_event(
+                event_type=MarketEventType.COMPLIANCE_VIOLATION,
+                description=f"Broker order blocked by safety guardrails: {reason}",
+                severity=MarketEventSeverity.WARNING,
+                user=self.account.user,
+                account=self.account,
+                instrument=instrument,
+                details={
+                    "account_id": self.account.account_id,
+                    "instrument": instrument,
+                    "units": str(units),
+                    "violation_reason": reason,
+                },
+            )
+        except Exception:  # pragma: no cover - best-effort audit logging
+            logger.warning(
+                "Failed to log broker order guard rejection for account %s",
+                getattr(self.account, "account_id", "unknown"),
+                exc_info=True,
+            )

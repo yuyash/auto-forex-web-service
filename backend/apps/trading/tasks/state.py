@@ -18,6 +18,11 @@ from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import TaskControl
 from apps.trading.enums import TaskStatus
+from apps.trading.tasks.lifecycle_coordination import (
+    TASK_COORDINATION_STATUS_FIELD,
+    TaskCoordinationStatus,
+    build_task_coordination_key,
+)
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -60,8 +65,10 @@ class StateManager:
         self.heartbeat_interval_seconds = float(heartbeat_interval_seconds)
         self.ttl_seconds = int(ttl_seconds)
 
-        # Redis key for this task instance
-        self.redis_key = f"task:coord:{task_name}:{instance_key}"
+        self.redis_key = build_task_coordination_key(
+            task_name=task_name,
+            instance_key=instance_key,
+        )
 
         # Redis client
         url = redis_url or settings.MARKET_REDIS_URL
@@ -92,7 +99,7 @@ class StateManager:
         """
         now = time.time()
         state = {
-            "status": "running",
+            TASK_COORDINATION_STATUS_FIELD: TaskCoordinationStatus.RUNNING,
             "celery_task_id": celery_task_id or "",
             "worker": worker or "",
             "started_at": now,
@@ -190,9 +197,9 @@ class StateManager:
         should_pause_redis = False
         redis_available = True
         try:
-            redis_status = self.redis.hget(self.redis_key, "status")
-            should_stop_redis = redis_status == "stopping"
-            should_pause_redis = redis_status == "pausing"
+            redis_status = self.redis.hget(self.redis_key, TASK_COORDINATION_STATUS_FIELD)
+            should_stop_redis = redis_status == TaskCoordinationStatus.STOPPING
+            should_pause_redis = redis_status == TaskCoordinationStatus.PAUSING
         except Exception:
             redis_available = False
 
@@ -250,15 +257,15 @@ class StateManager:
             completed: If True, mark as completed (takes precedence over failed)
         """
         if completed:
-            status = "completed"
+            status = TaskCoordinationStatus.COMPLETED
         elif failed:
-            status = "failed"
+            status = TaskCoordinationStatus.FAILED
         else:
-            status = "stopped"
+            status = TaskCoordinationStatus.STOPPED
 
         now = time.time()
         updates: dict[str, str | float] = {
-            "status": status,
+            TASK_COORDINATION_STATUS_FIELD: status,
             "stopped_at": now,
             "last_heartbeat_at": now,
         }
@@ -275,9 +282,9 @@ class StateManager:
 
             now_dt = dj_timezone.now()
             status_map = {
-                "stopped": CeleryTaskStatus.Status.STOPPED,
-                "completed": CeleryTaskStatus.Status.COMPLETED,
-                "failed": CeleryTaskStatus.Status.FAILED,
+                TaskCoordinationStatus.STOPPED: CeleryTaskStatus.Status.STOPPED,
+                TaskCoordinationStatus.COMPLETED: CeleryTaskStatus.Status.COMPLETED,
+                TaskCoordinationStatus.FAILED: CeleryTaskStatus.Status.FAILED,
             }
             db_status = status_map.get(status, CeleryTaskStatus.Status.STOPPED)
             db_updates: dict[str, Any] = {
@@ -303,7 +310,7 @@ class StateManager:
         """Mark task as paused in Redis."""
         now = time.time()
         updates: dict[str, str | float] = {
-            "status": "paused",
+            TASK_COORDINATION_STATUS_FIELD: TaskCoordinationStatus.PAUSED,
             "stopped_at": now,
             "last_heartbeat_at": now,
         }

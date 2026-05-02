@@ -6,7 +6,7 @@
  *
  */
 
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ButtonGroup,
   Button,
@@ -119,6 +119,8 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   //   COMPLETED: Restart, Delete
   //   FAILED: Restart, Delete
   const { t } = useTranslation('common');
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const pendingActionRef = useRef<string | null>(null);
 
   const isTrading = taskType === 'trading';
 
@@ -159,22 +161,41 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       TaskStatusEnum.FAILED,
     ].includes(status);
 
-  const handleAction = async (
-    action?: (taskId: string) => void | Promise<void>
-  ) => {
-    if (action && !isLoading && !disabled) {
-      await action(taskId);
-    }
-  };
+  const handleAction = useCallback(
+    async (
+      actionKey: string,
+      action?: (taskId: string) => void | Promise<void>
+    ) => {
+      if (action && !isLoading && !disabled && !pendingActionRef.current) {
+        pendingActionRef.current = actionKey;
+        setPendingAction(actionKey);
+        try {
+          await action(taskId);
+        } finally {
+          pendingActionRef.current = null;
+          setPendingAction(null);
+        }
+      }
+    },
+    [disabled, isLoading, taskId]
+  );
 
   const renderButton = (
+    actionKey: string,
     icon: React.ReactNode,
     label: string,
     onClick: () => void,
     enabled: boolean,
     color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'
   ) => {
-    const isDisabled = !enabled || isLoading || disabled;
+    const isPending = pendingAction === actionKey;
+    const isDisabled =
+      !enabled || isLoading || disabled || pendingAction !== null;
+    const buttonIcon = isPending ? (
+      <CircularProgress size={16} color="inherit" />
+    ) : (
+      icon
+    );
 
     if (showLabels) {
       return (
@@ -182,7 +203,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
           variant={variant}
           size={size}
           color={color}
-          startIcon={icon}
+          startIcon={buttonIcon}
           onClick={onClick}
           disabled={isDisabled}
           aria-label={label}
@@ -202,7 +223,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
             disabled={isDisabled}
             aria-label={label}
           >
-            {icon}
+            {buttonIcon}
           </IconButton>
         </span>
       </Tooltip>
@@ -228,9 +249,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Start Button */}
       {onStart &&
         renderButton(
+          'start',
           <StartIcon />,
           t('actions.start'),
-          () => handleAction(onStart),
+          () => void handleAction('start', onStart),
           canStart,
           'success'
         )}
@@ -238,9 +260,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Resume Button */}
       {onResume &&
         renderButton(
+          'resume',
           <ResumeIcon />,
           t('actions.resume'),
-          () => handleAction(onResume),
+          () => void handleAction('resume', onResume),
           resumeEnabled,
           'primary'
         )}
@@ -249,9 +272,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onPause &&
         !isTrading &&
         renderButton(
+          'pause',
           <PauseIcon />,
           t('actions.pause'),
-          () => handleAction(onPause),
+          () => void handleAction('pause', onPause),
           pauseEnabled,
           'warning'
         )}
@@ -259,9 +283,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Stop Button */}
       {onStop &&
         renderButton(
+          'stop',
           <StopIcon />,
           t('actions.stop'),
-          () => handleAction(onStop),
+          () => void handleAction('stop', onStop),
           canStop,
           'error'
         )}
@@ -269,9 +294,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Restart Button */}
       {onRestart &&
         renderButton(
+          'restart',
           <RestartIcon />,
           t('actions.restart'),
-          () => handleAction(onRestart),
+          () => void handleAction('restart', onRestart),
           canRestart,
           'info'
         )}
@@ -279,9 +305,10 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {/* Delete Button */}
       {onDelete &&
         renderButton(
+          'delete',
           <DeleteIcon />,
           t('actions.delete'),
-          () => handleAction(onDelete),
+          () => void handleAction('delete', onDelete),
           canDelete,
           'error'
         )}

@@ -6,6 +6,7 @@ import type {
 } from '../../types';
 import type {
   BackendTaskExecutionSummary,
+  BackendTaskStopResponse,
   BackendTradingTask,
 } from './contracts';
 import { createTaskApi } from './taskApiFactory';
@@ -101,12 +102,12 @@ export const tradingTasksApi = {
     id: string,
     mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful',
     drainDurationMinutes?: number
-  ): Promise<Record<string, unknown>> => {
+  ): Promise<BackendTaskStopResponse> => {
     const payload: Record<string, unknown> = { mode };
     if (mode === 'drain' && typeof drainDurationMinutes === 'number') {
       payload.drain_duration_minutes = drainDurationMinutes;
     }
-    return api.post<Record<string, unknown>>(
+    return api.post<BackendTaskStopResponse>(
       `/api/trading/tasks/trading/${id}/stop/`,
       payload
     );

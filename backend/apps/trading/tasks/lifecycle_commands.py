@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
 from logging import Logger
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
@@ -14,74 +12,28 @@ from django.db import transaction
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
-from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
+from apps.trading.tasks.lifecycle_adapters import (
+    LifecycleCommandAdapters,
+    create_default_lifecycle_adapters,
+)
+from apps.trading.tasks.lifecycle_events import (
+    TaskLifecycleEventPublisher,
+    build_cancelled_event_spec,
+    build_pause_requested_event_spec,
+    build_restart_requested_event_spec,
+    build_start_requested_event_spec,
+    build_stop_requested_event_spec,
+)
+from apps.trading.tasks.lifecycle_plans import (
+    LifecycleCommandResult,
+    build_resume_command_plan,
+    build_stop_command_plan,
+)
 from apps.trading.tasks.lifecycle_state_machine import allowed_statuses_for_command
+from apps.trading.tasks.lifecycle_validators import ResumeCommandValidator
 
 if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
-
-
-@dataclass(frozen=True)
-class LifecycleCommandAdapters:
-    """External side effects used by lifecycle commands."""
-
-    inspect_workers: Callable[[], dict[str, object] | None]
-    signal_stop: Callable[[UUID, str, object], None]
-    signal_pause: Callable[[UUID, str, object], None]
-    revoke_execution: Callable[[object], None]
-    dispatch_stop: Callable[[UUID, bool, StopMode], None]
-    sleep: Callable[[float], None]
-
-
-def _default_inspect_workers() -> dict[str, object] | None:
-    from celery import current_app
-
-    return current_app.control.inspect(timeout=3.0).active()
-
-
-def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) -> None:
-    import redis
-    from django.conf import settings
-
-    redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-    redis_instance_key = f"{task_id}:{execution_id}"
-    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
-    redis_client.hset(redis_key, "status", "stopping")
-    redis_client.expire(redis_key, 3600)
-    redis_client.close()
-
-
-def _default_signal_pause(task_id: UUID, task_name: str, execution_id: object) -> None:
-    import redis
-    from django.conf import settings
-
-    redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-    redis_instance_key = f"{task_id}:{execution_id}"
-    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
-    redis_client.hset(redis_key, "status", "pausing")
-    redis_client.expire(redis_key, 3600)
-    redis_client.close()
-
-
-def _default_revoke_execution(celery_task_id: object) -> None:
-    from celery import current_app
-
-    current_app.control.revoke(str(celery_task_id), terminate=True, signal="SIGKILL")
-
-
-def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode) -> None:
-    from apps.trading.tasks import service as service_module
-
-    if is_backtest:
-        service_module.stop_backtest_task.apply_async(
-            args=[task_id, stop_mode.value],
-            queue="system",
-        )
-    else:
-        service_module.stop_trading_task.apply_async(
-            args=[task_id, stop_mode.value],
-            queue="system",
-        )
 
 
 class TaskLifecycleCommands:
@@ -98,13 +50,10 @@ class TaskLifecycleCommands:
         self.service = service
         self.logger = logger
         self.events = events or TaskLifecycleEventPublisher(logger=logger)
-        self.adapters = adapters or LifecycleCommandAdapters(
-            inspect_workers=_default_inspect_workers,
-            signal_stop=_default_signal_stop,
-            signal_pause=_default_signal_pause,
-            revoke_execution=_default_revoke_execution,
-            dispatch_stop=_default_dispatch_stop,
-            sleep=time.sleep,
+        self.adapters = adapters or create_default_lifecycle_adapters()
+        self.resume_validator = ResumeCommandValidator(
+            logger=logger,
+            ensure_dispatch_risk_guard_allows=service._ensure_dispatch_risk_guard_allows,
         )
 
     def start(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
@@ -139,7 +88,15 @@ class TaskLifecycleCommands:
                 task.pk,
                 task.execution_id,
             )
-            self.service._dispatch_task(task, task_type)
+            transition = LifecycleCommandResult(
+                command="start",
+                previous_status=TaskStatus.CREATED,
+                current_status=task.status,
+                event=build_start_requested_event_spec(),
+                dispatch_task=True,
+            )
+            if transition.dispatch_task:
+                self.service._dispatch_task(task, task_type)
             if task_type == "trading":
                 self._kick_market_supervisor()
             self.logger.info(
@@ -148,21 +105,8 @@ class TaskLifecycleCommands:
                 task.execution_id,
                 task.status,
             )
-            self._audit_lifecycle_transition(
-                command="start",
-                task_id=task.pk,
-                task_type=task_type,
-                from_status=TaskStatus.CREATED,
-                to_status=task.status,
-                execution_id=task.execution_id,
-                celery_task_id=getattr(task, "celery_task_id", None),
-            )
-            self.events.publish(
-                task=task,
-                task_type=task_type,
-                kind="task_start_requested",
-                description="Task start requested",
-            )
+            self._audit_command_transition(task=task, task_type=task_type, transition=transition)
+            self._publish_command_event(task=task, task_type=task_type, transition=transition)
             self._log_worker_state(task)
             return task
         except Exception:
@@ -185,6 +129,7 @@ class TaskLifecycleCommands:
         mode: str = "graceful",
         *,
         drain_duration_minutes: int | None = None,
+        user: Any | None = None,
     ) -> bool:
         self.logger.info(
             "[SERVICE:STOP] Stopping task - task_id=%s, mode=%s, drain_duration_minutes=%s",
@@ -196,7 +141,7 @@ class TaskLifecycleCommands:
             stop_mode = StopMode(mode)
         except ValueError as exc:
             raise ValueError(f"Invalid stop mode: {mode}") from exc
-        task, task_type = self.service._get_task_and_type(task_id)
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         is_backtest = task_type == "backtest"
         task_name = (
             "trading.tasks.run_backtest_task" if is_backtest else "trading.tasks.run_trading_task"
@@ -223,63 +168,43 @@ class TaskLifecycleCommands:
             message=f"Task cannot be stopped from {task.status} state",
         )
 
-        # A stop issued while the task is DRAINING means the user wants to
-        # terminate now rather than waiting for positions to reach breakeven.
-        # Promote the stop mode to IMMEDIATE so the Celery worker is
-        # revoked and the task transitions straight to STOPPED.
-        if task.status == TaskStatus.DRAINING and stop_mode == StopMode.DRAIN:
-            stop_mode = StopMode.IMMEDIATE
-            self.logger.info(
-                "[SERVICE:STOP] DRAINING task received another drain stop, "
-                "escalating to IMMEDIATE - task_id=%s",
-                task_id,
-            )
-        elif task.status == TaskStatus.DRAINING and stop_mode == StopMode.GRACEFUL:
-            # Same idea: draining is already a "graceful wait" — a plain
-            # stop while draining means "stop now, don't keep waiting".
-            stop_mode = StopMode.IMMEDIATE
-            self.logger.info(
-                "[SERVICE:STOP] DRAINING task received graceful stop, "
-                "escalating to IMMEDIATE - task_id=%s",
-                task_id,
-            )
-
-        # DRAIN mode parks the task in DRAINING while it gradually closes
-        # positions at break-even.  Only live trading tasks support it; for
-        # backtests we treat it the same as GRACEFUL_CLOSE (the executor
-        # finishes on end-of-data anyway).
-        if stop_mode == StopMode.DRAIN and not is_backtest:
-            next_status: TaskStatus = TaskStatus.DRAINING
-        elif stop_mode == StopMode.DRAIN and is_backtest:
-            next_status = TaskStatus.DRAINING
-        else:
-            next_status = TaskStatus.STOPPING
-
-        task.status = next_status
-        update_fields = ["status", "updated_at"]
-        # Both trading and backtest tasks persist the ``sell_on_stop`` flag
-        # so the worker that runs the shutdown logic can close open
-        # positions at current market / tick prices.
-        if stop_mode == StopMode.GRACEFUL_CLOSE:
-            task.sell_on_stop = True
-            update_fields.append("sell_on_stop")
-        task.save(update_fields=update_fields)
-        self._audit_lifecycle_transition(
-            command="stop",
-            task_id=task.pk,
-            task_type=task_type,
-            from_status=previous_status,
-            to_status=task.status,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
-            mode=stop_mode.value,
-            drain_duration_minutes=drain_duration_minutes,
+        stop_plan = build_stop_command_plan(
+            current_status=task.status,
+            requested_mode=stop_mode,
         )
+        if stop_plan.escalation_log_message:
+            self.logger.info(
+                stop_plan.escalation_log_message,
+                task_id,
+            )
+
+        self.service.writer.persist_state_if_current(
+            command="stop",
+            task=task,
+            from_status=previous_status,
+            to_status=stop_plan.next_status,
+            extra_updates=stop_plan.extra_updates,
+        )
+        transition = LifecycleCommandResult(
+            command="stop",
+            previous_status=previous_status,
+            current_status=task.status,
+            event=build_stop_requested_event_spec(mode=stop_plan.effective_mode),
+            audit_details={
+                "mode": stop_plan.effective_mode.value,
+                "drain_duration_minutes": drain_duration_minutes,
+            },
+        )
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
 
         # Persist per-stop drain duration override so the executor picks
         # it up on the next drain evaluation. Written only when drain is
         # the effective mode and a positive value was supplied.
-        if stop_mode == StopMode.DRAIN and drain_duration_minutes and drain_duration_minutes > 0:
+        if (
+            stop_plan.effective_mode == StopMode.DRAIN
+            and drain_duration_minutes
+            and drain_duration_minutes > 0
+        ):
             self._record_drain_duration_minutes_override(
                 task_id=task_id,
                 task_type=task_type,
@@ -293,27 +218,23 @@ class TaskLifecycleCommands:
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field and may still have it set to NULL.
         celery_id = getattr(task, "celery_task_id", None) or task.execution_id
-        if stop_mode == StopMode.IMMEDIATE and celery_id:
+        if stop_plan.should_revoke_execution and celery_id:
             self._revoke_execution(celery_id)
         # DRAIN mode keeps the worker running — don't dispatch the stop
         # finalisation task; the executor will transition to STOPPED when
         # it finishes draining.
-        if stop_mode != StopMode.DRAIN:
-            self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
+        if stop_plan.should_dispatch_stop_task:
+            self._trigger_stop_task(
+                task_id=task_id,
+                is_backtest=is_backtest,
+                stop_mode=stop_plan.effective_mode,
+            )
 
-        self.events.publish(
-            task=task,
-            task_type=task_type,
-            kind="task_drain_requested" if stop_mode == StopMode.DRAIN else "task_stop_requested",
-            description=(
-                "Task drain requested" if stop_mode == StopMode.DRAIN else "Task stop requested"
-            ),
-            extra_details={"mode": stop_mode.value},
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
-    def pause(self, task_id: UUID) -> bool:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def pause(self, task_id: UUID, *, user: Any | None = None) -> bool:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         previous_status = task.status
 
         # Pause is only supported for backtest tasks.  Trading tasks should
@@ -337,37 +258,49 @@ class TaskLifecycleCommands:
             if task_type == "backtest"
             else "trading.tasks.run_trading_task"
         )
-        self.service.writer.persist_state(task, status=TaskStatus.PAUSED)
-        self._audit_lifecycle_transition(
+        self.service.writer.persist_state_if_current(
             command="pause",
-            task_id=task.pk,
-            task_type=task_type,
+            task=task,
             from_status=previous_status,
             to_status=TaskStatus.PAUSED,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
         )
+        transition = LifecycleCommandResult(
+            command="pause",
+            previous_status=previous_status,
+            current_status=TaskStatus.PAUSED,
+            event=build_pause_requested_event_spec(),
+        )
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
         self._signal_redis_pause(
             task_id=task_id,
             task_name=task_name,
             execution_id=task.execution_id,
         )
-        self.events.publish(
-            task=task,
-            task_type=task_type,
-            kind="task_pause_requested",
-            description="Task pause requested",
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
-    def cancel(self, task_id: UUID) -> bool:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def cancel(self, task_id: UUID, *, user: Any | None = None) -> bool:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         if task.status not in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.PAUSED]:
             self.logger.warning(
                 "Task not in cancellable state",
                 extra={"task_id": str(task_id), "status": task.status},
             )
             return False
+
+        previous_status = task.status
+        self.service.writer.persist_terminal_state_if_current(
+            command="cancel",
+            task=task,
+            from_status=previous_status,
+            to_status=TaskStatus.STOPPED,
+        )
+        transition = LifecycleCommandResult(
+            command="cancel",
+            previous_status=previous_status,
+            current_status=TaskStatus.STOPPED,
+            event=build_cancelled_event_spec(),
+        )
 
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field.
@@ -376,17 +309,16 @@ class TaskLifecycleCommands:
         if result:
             result.revoke(terminate=True)
 
-        self.service._finalize_terminal_task(
-            task=task,
-            task_type=task_type,
-            status=TaskStatus.STOPPED,
-            description="Task cancelled",
-            kind="task_cancelled",
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
-    def restart(self, task_id: UUID) -> BacktestTask | TradingTask:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def restart(
+        self,
+        task_id: UUID,
+        *,
+        user: Any | None = None,
+    ) -> BacktestTask | TradingTask:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         self._assert_transition_allowed(
             command="restart",
             task_status=task.status,
@@ -395,7 +327,10 @@ class TaskLifecycleCommands:
         previous_status = task.status
         if task.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
             try:
-                self.service.stop_task(task_id)
+                if user is None:
+                    self.service.stop_task(task_id)
+                else:
+                    self.service.stop_task(task_id, user=user)
                 self.adapters.sleep(1)
                 task.refresh_from_db()
             except Exception as exc:  # pragma: no cover - defensive logging path
@@ -412,89 +347,50 @@ class TaskLifecycleCommands:
             self._revoke_execution(celery_id)
 
         self.service.writer.clear_execution_history(task=task, task_type=task_type)
-        type(task).objects.filter(pk=task.pk).update(
-            execution_id=None,
-            celery_task_id=None,
-            status=TaskStatus.CREATED,
-            started_at=None,
-            completed_at=None,
-            error_message=None,
-            error_traceback=None,
+        self.service.writer.update_if_current(
+            command="restart",
+            task=task,
+            expected_status=task.status,
+            updates={
+                "execution_id": None,
+                "celery_task_id": None,
+                "status": TaskStatus.CREATED,
+                "started_at": None,
+                "completed_at": None,
+                "error_message": None,
+                "error_traceback": None,
+            },
         )
         task.refresh_from_db()
         if task.status != TaskStatus.CREATED:
             raise RuntimeError(f"Failed to reset task status: expected CREATED, got {task.status}")
-        self._audit_lifecycle_transition(
+        transition = LifecycleCommandResult(
             command="restart",
-            task_id=task.pk,
-            task_type=task_type,
-            from_status=previous_status,
-            to_status=TaskStatus.CREATED,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
+            previous_status=previous_status,
+            current_status=TaskStatus.CREATED,
+            event=build_restart_requested_event_spec(),
         )
-        self.events.publish(
-            task=task,
-            task_type=task_type,
-            kind="task_restart_requested",
-            description="Task restart requested",
-        )
-        return self.service.start_task(task)
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
+        if user is None:
+            return self.service.start_task(task)
+        return self.service.start_task(task, user=user)
 
-    def resume(self, task_id: UUID) -> BacktestTask | TradingTask:
-        task, task_type = self.service._get_task_and_type(task_id)
+    def resume(
+        self,
+        task_id: UUID,
+        *,
+        user: Any | None = None,
+    ) -> BacktestTask | TradingTask:
+        task, task_type = self.service._get_task_and_type(task_id, user=user)
         model_class = self.service._get_task_model(task_type)
         is_trading = task_type == "trading"
 
-        # Trading tasks can resume from PAUSED, STOPPED, or FAILED.
-        # Backtests can resume from PAUSED or STOPPED while preserving their
-        # execution_id and ExecutionState; the publisher continues from the
-        # last processed tick instead of replaying from task.start_time.
-        if is_trading:
-            allowed_statuses = allowed_statuses_for_command("resume_trading")
-        else:
-            allowed_statuses = allowed_statuses_for_command("resume_backtest")
-
+        transition: LifecycleCommandResult
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
             previous_status = locked_task.status
-            self._assert_transition_allowed(
-                command="resume_trading" if is_trading else "resume_backtest",
-                task_status=locked_task.status,
-                message=(
-                    f"Task cannot be resumed from {locked_task.status} state. "
-                    f"Only {', '.join(str(s.value).upper() for s in allowed_statuses)} tasks can be resumed."
-                ),
-            )
-            if not locked_task.execution_id:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError("Cannot resume task without an execution_id")
-
-            try:
-                from apps.trading.services.resume_config import (
-                    ResumeConfigurationError,
-                    log_effective_resume_configuration,
-                    validate_resume_configuration,
-                )
-
-                audit = validate_resume_configuration(task=locked_task, task_type=task_type)
-                log_effective_resume_configuration(
-                    logger=self.logger,
-                    audit=audit,
-                    task=locked_task,
-                )
-            except ResumeConfigurationError as exc:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError(
-                    str(exc),
-                    resume_config_error=exc.as_payload(),
-                ) from exc
-            except ValueError as exc:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError(str(exc)) from exc
+            self.resume_validator.validate(task=locked_task, task_type=task_type)
 
             previous_celery_task_id = locked_task.celery_task_id
             result = self.service.get_celery_result(
@@ -505,6 +401,11 @@ class TaskLifecycleCommands:
                 task_id=task_id,
                 db_status=locked_task.status,
                 celery_task_id=previous_celery_task_id,
+            )
+            resume_plan = build_resume_command_plan(
+                previous_status=previous_status,
+                previous_celery_task_id=previous_celery_task_id,
+                new_celery_task_id=uuid4(),
             )
 
             # Revoke any lingering Celery task for this execution before
@@ -521,56 +422,41 @@ class TaskLifecycleCommands:
             # revoke list while keeping the execution-scoped state
             # (ExecutionState, positions, events, trades, ...) continuous
             # across the resume.
-            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
-                if previous_celery_task_id:
-                    try:
-                        self._revoke_execution(previous_celery_task_id)
-                    except Exception as exc:  # pragma: no cover - best effort
-                        self.logger.debug(
-                            "Pre-resume revoke skipped - task_id=%s, error=%s",
-                            task_id,
-                            exc,
-                        )
+            if resume_plan.should_revoke_previous_execution:
+                try:
+                    self._revoke_execution(previous_celery_task_id)
+                except Exception as exc:  # pragma: no cover - best effort
+                    self.logger.debug(
+                        "Pre-resume revoke skipped - task_id=%s, error=%s",
+                        task_id,
+                        exc,
+                    )
 
             # Clear error fields when resuming from a terminal state so the
             # execution starts cleanly while preserving execution_id and
             # all persisted state (strategy_state, events, positions, etc.).
-            update_fields = ["status", "updated_at"]
-            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+            if resume_plan.should_clear_terminal_fields:
                 locked_task.error_message = None
                 locked_task.error_traceback = None
                 locked_task.completed_at = None
-                update_fields += [
-                    "error_message",
-                    "error_traceback",
-                    "completed_at",
-                ]
 
             # Always rotate the Celery task id on resume so the next
             # worker invocation is guaranteed to be accepted.
-            locked_task.celery_task_id = uuid4()
-            update_fields.append("celery_task_id")
+            locked_task.celery_task_id = resume_plan.new_celery_task_id
 
-            locked_task.status = TaskStatus.STARTING
-            locked_task.save(update_fields=update_fields)
-            self._audit_lifecycle_transition(
-                command="resume",
-                task_id=locked_task.pk,
+            locked_task.status = resume_plan.next_status
+            locked_task.save(update_fields=list(resume_plan.update_fields))
+            transition = resume_plan.transition
+            self._audit_command_transition(
+                task=locked_task,
                 task_type=task_type,
-                from_status=previous_status,
-                to_status=locked_task.status,
-                execution_id=locked_task.execution_id,
-                celery_task_id=locked_task.celery_task_id,
+                transition=transition,
             )
             task = locked_task
 
-        self.events.publish(
-            task=task,
-            task_type=task_type,
-            kind="task_resume_requested",
-            description=f"Task resume requested (from {locked_task.status})",
-        )
-        self.service._dispatch_task(task, task_type)
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
+        if transition.dispatch_task:
+            self.service._dispatch_task(task, task_type)
         if is_trading:
             self._kick_market_supervisor()
         return task
@@ -782,6 +668,37 @@ class TaskLifecycleCommands:
         from apps.trading.tasks.service import TaskValidationError
 
         raise TaskValidationError(message)
+
+    def _audit_command_transition(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        transition: LifecycleCommandResult,
+    ) -> None:
+        self._audit_lifecycle_transition(
+            command=transition.command,
+            task_id=task.pk,
+            task_type=task_type,
+            from_status=transition.previous_status,
+            to_status=transition.current_status,
+            execution_id=task.execution_id,
+            celery_task_id=getattr(task, "celery_task_id", None),
+            **transition.audit_details,
+        )
+
+    def _publish_command_event(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        transition: LifecycleCommandResult,
+    ) -> None:
+        self.events.publish_spec(
+            task=task,
+            task_type=task_type,
+            event=transition.event,
+        )
 
     def _audit_lifecycle_transition(
         self,

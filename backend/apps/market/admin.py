@@ -10,6 +10,26 @@ from apps.market.models import (
     OandaAccounts,
     OandaApiHealthStatus,
 )
+from apps.market.services.accounts import (
+    OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES,
+    build_oanda_account_snapshot_state_filter,
+)
+
+
+class OandaAccountSnapshotStateFilter(admin.SimpleListFilter):
+    """Filter OANDA accounts by cached snapshot health."""
+
+    title = "snapshot state"
+    parameter_name = "snapshot_state"
+
+    def lookups(self, request, model_admin):
+        return tuple((state, state.title()) for state in OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES)
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value in OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES:
+            return queryset.filter(build_oanda_account_snapshot_state_filter(value))
+        return queryset
 
 
 @admin.register(OandaAccounts)
@@ -22,12 +42,31 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "api_type",
         "jurisdiction",
         "balance",
+        "snapshot_refreshed_at",
+        "snapshot_refresh_status",
+        "snapshot_refresh_status_updated_at",
         "is_active",
         "created_at",
     ]
-    list_filter = ["api_type", "jurisdiction", "is_active", "created_at"]
+    list_filter = [
+        "api_type",
+        "jurisdiction",
+        "is_active",
+        "snapshot_refresh_status",
+        OandaAccountSnapshotStateFilter,
+        "snapshot_refreshed_at",
+        "created_at",
+    ]
     search_fields = ["user__email", "account_id"]
-    readonly_fields = ["created_at", "updated_at"]
+    readonly_fields = [
+        "snapshot_refreshed_at",
+        "snapshot_refresh_error",
+        "snapshot_refresh_task_id",
+        "snapshot_refresh_status",
+        "snapshot_refresh_status_updated_at",
+        "created_at",
+        "updated_at",
+    ]
     ordering = ["-created_at"]
 
     fieldsets = (
@@ -51,6 +90,16 @@ class OandaAccountAdmin(admin.ModelAdmin):
                     "margin_used",
                     "margin_available",
                     "unrealized_pnl",
+                    "nav",
+                    "open_trade_count",
+                    "open_position_count",
+                    "pending_order_count",
+                    "hedging_enabled",
+                    "snapshot_refreshed_at",
+                    "snapshot_refresh_error",
+                    "snapshot_refresh_task_id",
+                    "snapshot_refresh_status",
+                    "snapshot_refresh_status_updated_at",
                 )
             },
         ),

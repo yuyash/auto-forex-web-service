@@ -15,7 +15,7 @@ class TestGetClientIP:
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
         factory = APIRequestFactory()
-        request = factory.get("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 198.51.100.1")
+        request = factory.get("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 127.0.0.1")
 
         client_ip = get_client_ip(request)
 
@@ -53,7 +53,7 @@ class TestGetClientIP:
     def test_get_client_ip_with_whitespace_in_x_forwarded_for(self) -> None:
         """Test extracting client IP strips whitespace from X-Forwarded-For."""
         factory = APIRequestFactory()
-        request = factory.get("/", HTTP_X_FORWARDED_FOR="  203.0.113.1  , 198.51.100.1")
+        request = factory.get("/", HTTP_X_FORWARDED_FOR="  203.0.113.1  , 127.0.0.1")
 
         client_ip = get_client_ip(request)
 

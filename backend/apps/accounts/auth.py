@@ -22,6 +22,24 @@ class CSRFCheck(CsrfViewMiddleware):
         return reason
 
 
+def enforce_csrf(request: Request) -> None:
+    """Require Django's CSRF token for a DRF request."""
+    django_request = cast(HttpRequest, getattr(request, "_request", request))
+    check = CSRFCheck(lambda req: None)
+    csrf_checks_disabled = getattr(django_request, "_dont_enforce_csrf_checks", None)
+    setattr(django_request, "_dont_enforce_csrf_checks", False)
+    try:
+        check.process_request(django_request)
+        reason = check.process_view(django_request, lambda req: None, (), {})
+    finally:
+        if csrf_checks_disabled is None:
+            delattr(django_request, "_dont_enforce_csrf_checks")
+        else:
+            setattr(django_request, "_dont_enforce_csrf_checks", csrf_checks_disabled)
+    if reason:
+        raise exceptions.PermissionDenied("CSRF verification failed.")
+
+
 class JWTAuthentication(authentication.BaseAuthentication):
     """
     JWT token authentication backend.
@@ -103,10 +121,4 @@ class JWTAuthentication(authentication.BaseAuthentication):
         """Require Django's CSRF token when authenticating unsafe cookie requests."""
         if request.method in self.safe_methods:
             return
-
-        django_request = cast(HttpRequest, getattr(request, "_request", request))
-        check = CSRFCheck(lambda req: None)
-        check.process_request(django_request)
-        reason = check.process_view(django_request, lambda req: None, (), {})
-        if reason:
-            raise exceptions.PermissionDenied("CSRF verification failed.")
+        enforce_csrf(request)

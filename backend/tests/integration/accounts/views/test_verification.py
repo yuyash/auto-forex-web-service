@@ -29,7 +29,9 @@ class TestEmailVerificationView:
         token = user.generate_verification_token()
 
         data = {"token": token}
-        request = self.factory.post("/api/auth/verify-email", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/verify-email", data, content_type="application/json"
+        )
 
         with patch("apps.accounts.views.verification.AccountEmailService") as mock_email:
             mock_email.return_value.send_welcome_message.return_value = True
@@ -42,7 +44,9 @@ class TestEmailVerificationView:
     def test_verification_missing_token(self) -> None:
         """Test verification without token."""
         data = {}
-        request = self.factory.post("/api/auth/verify-email", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/verify-email", data, content_type="application/json"
+        )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -50,7 +54,9 @@ class TestEmailVerificationView:
     def test_verification_invalid_token(self) -> None:
         """Test verification with invalid token."""
         data = {"token": "invalid_token"}
-        request = self.factory.post("/api/auth/verify-email", data, content_type="application/json")
+        request = self.factory.post(
+            "/api/accounts/auth/verify-email", data, content_type="application/json"
+        )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -77,7 +83,7 @@ class TestResendVerificationEmailView:
 
         data = {"email": "test@example.com"}
         request = self.factory.post(
-            "/api/auth/resend-verification", data, content_type="application/json"
+            "/api/accounts/auth/resend-verification", data, content_type="application/json"
         )
 
         with patch("apps.accounts.views.verification.AccountEmailService") as mock_email:
@@ -98,7 +104,7 @@ class TestResendVerificationEmailView:
 
         data = {"email": "test@example.com"}
         request = self.factory.post(
-            "/api/auth/resend-verification", data, content_type="application/json"
+            "/api/accounts/auth/resend-verification", data, content_type="application/json"
         )
         response = self.view(request)
 
@@ -108,7 +114,7 @@ class TestResendVerificationEmailView:
         """Test resending verification email for nonexistent email."""
         data = {"email": "nonexistent@example.com"}
         request = self.factory.post(
-            "/api/auth/resend-verification", data, content_type="application/json"
+            "/api/accounts/auth/resend-verification", data, content_type="application/json"
         )
         response = self.view(request)
 

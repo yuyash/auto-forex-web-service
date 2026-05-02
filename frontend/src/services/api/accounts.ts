@@ -1,8 +1,17 @@
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
-import type { BackendAccount } from './contracts';
+import type {
+  BackendAccount,
+  BackendAccountSnapshotRefreshResponse,
+} from './contracts';
 import type { PaginatedResponse } from '../../types/common';
-import type { Account, AccountUpsertData } from '../../types/strategy';
+import type {
+  Account,
+  AccountSnapshotRefreshStatus,
+  AccountUpsertData,
+} from '../../types/strategy';
+
+export type AccountSnapshotState = 'failed' | 'stale' | 'healthy';
 
 export interface AccountListParams {
   page?: number;
@@ -11,6 +20,8 @@ export interface AccountListParams {
   ordering?: string;
   created_from?: string;
   created_to?: string;
+  snapshot_refresh_status?: AccountSnapshotRefreshStatus;
+  snapshot_state?: AccountSnapshotState;
 }
 
 interface PaginatedAccounts {
@@ -69,6 +80,28 @@ export const accountsApi = {
     return toAccount(
       await withRetry(() =>
         api.get<BackendAccount>(`/api/market/accounts/${id}/`)
+      )
+    );
+  },
+
+  refreshSnapshot: async (
+    id: number
+  ): Promise<BackendAccountSnapshotRefreshResponse> => {
+    return withRetry(() =>
+      api.post<BackendAccountSnapshotRefreshResponse>(
+        `/api/market/accounts/${id}/refresh/`,
+        {}
+      )
+    );
+  },
+
+  getSnapshotRefreshStatus: async (
+    id: number,
+    taskId: string
+  ): Promise<BackendAccountSnapshotRefreshResponse> => {
+    return withRetry(() =>
+      api.get<BackendAccountSnapshotRefreshResponse>(
+        `/api/market/accounts/${id}/refresh/${taskId}/`
       )
     );
   },

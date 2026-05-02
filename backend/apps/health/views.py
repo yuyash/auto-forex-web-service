@@ -10,18 +10,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.health.services.health import HealthCheckResult, HealthCheckService
 
 logger: Logger = getLogger(name=__name__)
-
-
-def get_client_ip(request: Request) -> str:
-    """Get client IP address from request, considering proxy headers."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        # X-Forwarded-For can contain multiple IPs; the first is the client
-        return x_forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "unknown")
 
 
 class HealthView(APIView):

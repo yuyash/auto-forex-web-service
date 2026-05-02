@@ -24,7 +24,7 @@ class TestUserRegistrationView:
 
     def test_build_verification_url_with_frontend_url(self) -> None:
         """Test building verification URL with FRONTEND_URL setting."""
-        request = self.factory.post("/api/auth/register")
+        request = self.factory.post("/api/accounts/auth/register")
         view = UserRegistrationView()
 
         with patch("apps.accounts.views.registration.settings") as mock_settings:
@@ -35,7 +35,7 @@ class TestUserRegistrationView:
 
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
-        request = self.factory.post("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 198.51.100.1")
+        request = self.factory.post("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 127.0.0.1")
 
         ip = get_client_ip(request)
 
@@ -53,7 +53,7 @@ class TestUserRegistrationView:
     def test_post_registration_disabled(self) -> None:
         """Test registration when disabled."""
         request = self.factory.post(
-            "/api/auth/register", {"email": "test@example.com"}, format="json"
+            "/api/accounts/auth/register", {"email": "test@example.com"}, format="json"
         )
         view = UserRegistrationView()
 

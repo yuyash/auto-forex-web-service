@@ -29,9 +29,9 @@ class UserLoginView(APIView):
     """
     API endpoint for user login.
 
-    POST /api/auth/login
+    POST /api/accounts/auth/login
     - Authenticate user with email and password
-    - Generate JWT token
+    - Issue access and refresh cookies
     - Implement rate limiting
     """
 
@@ -55,7 +55,7 @@ class UserLoginView(APIView):
             200: inline_serializer(
                 "LoginResponse",
                 fields={
-                    "token": serializers.CharField(),
+                    "authenticated": serializers.BooleanField(),
                     "user": inline_serializer(
                         "LoginUser",
                         fields={
@@ -100,41 +100,32 @@ class UserLoginView(APIView):
 
         ip_address = get_client_ip(request)
         email = request.data.get("email", "").lower()
-        is_admin_user = False
+
+        is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
+        if is_blocked:
+            self.security_events.log_security_event(
+                event_type="login_rate_limited",
+                description=f"Login rate limited for IP {ip_address}",
+                severity="warning",
+                ip_address=ip_address,
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                details={
+                    "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
+                    "reason": block_reason,
+                    "attempts": RateLimiter.get_failed_attempts(ip_address),
+                },
+            )
+            logger.warning(
+                "Login attempt from blocked IP: %s",
+                ip_address,
+                extra={"ip_address": ip_address, "reason": block_reason},
+            )
+            return Response(
+                {"error": block_reason},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
         if email:
-            try:
-                user_check = User.objects.get(email__iexact=email)
-                is_admin_user = user_check.is_staff or user_check.is_superuser
-            except User.DoesNotExist:
-                pass
-
-        if not is_admin_user:
-            is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
-            if is_blocked:
-                self.security_events.log_security_event(
-                    event_type="login_rate_limited",
-                    description=f"Login rate limited for IP {ip_address}",
-                    severity="warning",
-                    ip_address=ip_address,
-                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
-                    details={
-                        "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
-                        "reason": block_reason,
-                        "attempts": RateLimiter.get_failed_attempts(ip_address),
-                    },
-                )
-                logger.warning(
-                    "Login attempt from blocked IP: %s",
-                    ip_address,
-                    extra={"ip_address": ip_address, "reason": block_reason},
-                )
-                return Response(
-                    {"error": block_reason},
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
-
-        if email and not is_admin_user:
             try:
                 user_check = User.objects.get(email__iexact=email)
                 if user_check.is_locked:
@@ -188,24 +179,14 @@ class UserLoginView(APIView):
                             "email": email,
                             "ip_address": ip_address,
                             "credentials_valid": credentials_valid,
-                            "is_admin": is_admin_user,
                         },
                     )
 
-            if not is_admin_user:
-                ip_attempts = (
-                    RateLimiter.get_failed_attempts(ip_address)
-                    if blocked_by_whitelist
-                    else RateLimiter.increment_failed_attempts(ip_address)
-                )
-            else:
-                ip_attempts = 0
-                logger.info(
-                    "Failed login attempt for admin user %s from %s (rate limiting bypassed)",
-                    email,
-                    ip_address,
-                    extra={"email": email, "ip_address": ip_address, "is_admin": True},
-                )
+            ip_attempts = (
+                RateLimiter.get_failed_attempts(ip_address)
+                if blocked_by_whitelist
+                else RateLimiter.increment_failed_attempts(ip_address)
+            )
 
             self.security_events.log_login_failed(
                 username=email,
@@ -220,12 +201,12 @@ class UserLoginView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT"),
             )
 
-            if not is_admin_user and not blocked_by_whitelist:
+            if not blocked_by_whitelist:
                 try:
                     user = User.objects.get(email__iexact=email)
                     user.increment_failed_login()
 
-                    if user.failed_login_attempts >= RateLimiter.ACCOUNT_LOCK_THRESHOLD:
+                    if user.failed_login_attempts >= RateLimiter.account_lock_threshold():
                         user.lock_account()
                         logger.error(
                             "Account locked for user %s after %s failed attempts",
@@ -246,19 +227,18 @@ class UserLoginView(APIView):
                 except User.DoesNotExist:
                     pass
 
-                if ip_attempts >= RateLimiter.MAX_ATTEMPTS:
+                if ip_attempts >= RateLimiter.max_attempts():
                     RateLimiter.block_ip_address(ip_address)
                     logger.error(
                         "IP address %s blocked due to excessive failed login attempts",
                         ip_address,
                         extra={"ip_address": ip_address, "attempts": ip_attempts},
                     )
-
-                self.security_events.log_ip_blocked(
-                    ip_address=ip_address,
-                    failed_attempts=ip_attempts,
-                    duration_seconds=RateLimiter.LOCKOUT_DURATION_MINUTES * 60,
-                )
+                    self.security_events.log_ip_blocked(
+                        ip_address=ip_address,
+                        failed_attempts=ip_attempts,
+                        duration_seconds=RateLimiter.lockout_seconds(),
+                    )
 
             if blocked_by_whitelist and credentials_valid:
                 return Response(
@@ -305,7 +285,7 @@ class UserLoginView(APIView):
 
         response = Response(
             {
-                "token": token,
+                "authenticated": True,
                 "user": {
                     "id": user.id,
                     "email": user.email,

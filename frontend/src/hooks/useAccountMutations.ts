@@ -1,5 +1,7 @@
 import { accountsApi } from '../services/api';
+import type { BackendAccountSnapshotRefreshResponse } from '../services/api/contracts';
 import type { Account, AccountUpsertData } from '../types/strategy';
+import { queryClient, queryKeys } from '../config/reactQuery';
 import { removeAccountCaches, upsertAccountCaches } from './accountCache';
 import { useWrappedMutation } from './useWrappedMutation';
 
@@ -44,6 +46,26 @@ export function useDeleteAccount(options?: {
     onSuccess: async (_, id) => {
       await removeAccountCaches(id);
       options?.onSuccess?.();
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+export function useRefreshAccountSnapshot(options?: {
+  onSuccess?: (data: BackendAccountSnapshotRefreshResponse) => void;
+  onError?: (error: Error) => void;
+}) {
+  return useWrappedMutation((id: number) => accountsApi.refreshSnapshot(id), {
+    onSuccess: async (data, id) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.accounts.detail(id),
+        refetchType: 'active',
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.accounts.lists(),
+        refetchType: 'active',
+      });
+      options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),
   });

@@ -36,7 +36,7 @@ class TestResendVerificationEmailView:
 
     def test_build_verification_url_with_frontend_url(self) -> None:
         """Test building verification URL with FRONTEND_URL setting."""
-        request = self.factory.post("/api/auth/resend-verification")
+        request = self.factory.post("/api/accounts/auth/resend-verification")
         view = ResendVerificationEmailView()
 
         with patch("apps.accounts.views.verification.settings") as mock_settings:

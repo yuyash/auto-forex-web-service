@@ -415,24 +415,7 @@ def _recover_task(
 
 def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
     """Resume an orphaned trading task in the same execution run."""
-    # Optimistic lock: verify the task is still in a recoverable state before
-    # proceeding.  Without this, concurrent recovery runs could both attempt
-    # to resume the same task.
-    rows = TradingTask.objects.filter(
-        pk=task.pk,
-        status__in=_ACTIVE_STATUSES,
-    ).update(status=TaskStatus.STARTING)
-    if rows == 0:
-        logger.info("[RECOVERY:%s] Trading task already transitioned - task_id=%s", source, task.pk)
-        _record_recovery_attempt(
-            task=task,
-            task_type=TaskType.TRADING,
-            source=source,
-            action="resume_same_execution",
-            result="skipped",
-            reason="already_transitioned",
-        )
-        return False
+    from apps.trading.tasks.service import TaskConflictError
 
     CeleryTaskStatus.objects.filter(
         task_name="trading.tasks.run_trading_task",
@@ -453,7 +436,10 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
     )
 
     try:
-        service.recover_trading_task(task)
+        service.recover_trading_task(
+            task,
+            expected_celery_task_id=getattr(task, "celery_task_id", None),
+        )
         logger.info(
             "[RECOVERY:%s] Trading task resumed in same run - task_id=%s, execution_id=%s",
             source,
@@ -469,6 +455,21 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             reason="orphaned_trading",
         )
         return True
+    except TaskConflictError:
+        logger.info(
+            "[RECOVERY:%s] Trading task recovery already claimed - task_id=%s",
+            source,
+            task.pk,
+        )
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="skipped",
+            reason="already_claimed",
+        )
+        return False
     except Exception:
         logger.exception(
             "[RECOVERY:%s] Failed to resume trading task - task_id=%s",

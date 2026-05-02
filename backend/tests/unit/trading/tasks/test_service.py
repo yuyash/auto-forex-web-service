@@ -203,6 +203,31 @@ class TestStartTask:
             with pytest.raises(ValueError, match="already has an active task"):
                 TaskService().start_task(task)
 
+    @patch("apps.trading.tasks.service.run_trading_task")
+    def test_dispatch_rejects_superseded_lifecycle_transition(self, mock_celery_task):
+        from apps.trading.tasks.service import TaskConflictError, TaskService
+
+        class DispatchTask:
+            objects = MagicMock()
+
+        task = DispatchTask()
+        task.pk = uuid4()
+        task.status = TaskStatus.STARTING
+        task.execution_id = uuid4()
+        task.celery_task_id = uuid4()
+
+        DispatchTask.objects.filter.return_value.update.return_value = 0
+
+        with pytest.raises(TaskConflictError, match="superseded"):
+            TaskService._dispatch_task(task, "trading")
+
+        DispatchTask.objects.filter.assert_called_once_with(
+            pk=task.pk,
+            status=TaskStatus.STARTING,
+            celery_task_id=task.celery_task_id,
+        )
+        mock_celery_task.apply_async.assert_not_called()
+
 
 class TestRecoverTradingTask:
     @patch("apps.trading.tasks.service.uuid4")
@@ -296,6 +321,87 @@ class TestRecoverTradingTask:
 
         with pytest.raises(ValueError, match="execution_id"):
             TaskService().recover_trading_task(task)
+
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.run_trading_task")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_recover_rejects_already_claimed_dispatch(
+        self,
+        mock_tt,
+        mock_run_trading_task,
+        mock_atomic,
+    ):
+        from apps.trading.tasks.service import TaskConflictError, TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        old_celery_task_id = uuid4()
+        new_celery_task_id = uuid4()
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.execution_id = uuid4()
+        task.celery_task_id = old_celery_task_id
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.RUNNING
+        locked.execution_id = task.execution_id
+        locked.celery_task_id = new_celery_task_id
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+
+        with pytest.raises(TaskConflictError, match="already claimed"):
+            TaskService().recover_trading_task(
+                task,
+                expected_celery_task_id=old_celery_task_id,
+            )
+
+        mock_run_trading_task.apply_async.assert_not_called()
+
+    @patch("apps.trading.tasks.service.uuid4")
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_recover_dispatch_conflict_does_not_mark_failed(
+        self,
+        mock_tt,
+        mock_atomic,
+        mock_uuid,
+    ):
+        from apps.trading.tasks.service import TaskConflictError, TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.execution_id = uuid4()
+        task.celery_task_id = uuid4()
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.RUNNING
+        locked.execution_id = task.execution_id
+        locked.celery_task_id = task.celery_task_id
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+        mock_uuid.return_value = uuid4()
+
+        service = TaskService()
+        with patch.object(
+            TaskService,
+            "_dispatch_task",
+            side_effect=TaskConflictError("superseded"),
+        ):
+            with pytest.raises(TaskConflictError, match="superseded"):
+                service.recover_trading_task(
+                    task,
+                    expected_celery_task_id=task.celery_task_id,
+                )
+
+        mock_tt.objects.filter.assert_not_called()
+        locked.refresh_from_db.assert_called_once()
 
 
 class TestResumeTask:
@@ -429,7 +535,7 @@ class TestResumeTask:
 
         with (
             patch.object(TaskService, "get_celery_result", return_value=None),
-            patch("apps.trading.tasks.lifecycle_commands._default_revoke_execution"),
+            patch("apps.trading.tasks.lifecycle_adapters._default_revoke_execution"),
             patch(
                 "apps.trading.tasks.lifecycle_commands."
                 "TaskLifecycleCommands._kick_market_supervisor"

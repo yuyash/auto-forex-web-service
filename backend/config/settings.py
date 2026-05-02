@@ -44,6 +44,12 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+TRUSTED_PROXY_CIDRS = [
+    cidr.strip()
+    for cidr in os.getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").split(",")
+    if cidr.strip()
+]
+
 
 # Application definition
 
@@ -429,3 +435,29 @@ OANDA_LIVE_API = os.getenv("OANDA_LIVE_API", "https://api-fxtrade.oanda.com")
 OANDA_STREAM_TIMEOUT = int(os.getenv("OANDA_STREAM_TIMEOUT", "30"))
 OANDA_REST_TIMEOUT = int(os.getenv("OANDA_REST_TIMEOUT", "30"))
 OANDA_REST_MAX_RETRIES = int(os.getenv("OANDA_REST_MAX_RETRIES", "2"))
+OANDA_ACCOUNT_SNAPSHOT_STALE_SECONDS = int(os.getenv("OANDA_ACCOUNT_SNAPSHOT_STALE_SECONDS", "300"))
+OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = int(
+    os.getenv("OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS", "900")
+)
+
+# Live-trading safety guardrails. These are enforced when a TradingTask is
+# submitted, before the worker can place any broker orders.
+TRADING_ALLOW_LIVE_OANDA = os.getenv("TRADING_ALLOW_LIVE_OANDA", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+TRADING_LIVE_ALLOWED_INSTRUMENTS = [
+    instrument.strip().upper()
+    for instrument in os.getenv(
+        "TRADING_LIVE_ALLOWED_INSTRUMENTS",
+        "USD_JPY,EUR_USD,GBP_USD,AUD_USD,USD_CAD,USD_CHF,NZD_USD",
+    ).split(",")
+    if instrument.strip()
+]
+TRADING_LIVE_MAX_INITIAL_UNITS = int(os.getenv("TRADING_LIVE_MAX_INITIAL_UNITS", "10000"))
+TRADING_LIVE_MAX_ORDER_UNITS = int(os.getenv("TRADING_LIVE_MAX_ORDER_UNITS", "10000"))
+TRADING_LIVE_MAX_ESTIMATED_EXPOSURE_UNITS = int(
+    os.getenv("TRADING_LIVE_MAX_ESTIMATED_EXPOSURE_UNITS", "200000")
+)

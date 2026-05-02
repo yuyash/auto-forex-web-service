@@ -119,19 +119,10 @@
         "/api/accounts/auth/refresh": {
             "post": {
                 "operationId": "auth_token_refresh",
-                "description": "Exchange a refresh token for a new access + refresh token pair. The refresh token is normally read from the HTTP-only cookie; the `refresh_token` request field is accepted only as a legacy fallback.",
+                "description": "Exchange the HTTP-only refresh-token cookie for a new access + refresh cookie pair.",
                 "tags": [
                     "Accounts"
                 ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/TokenRefreshRequestRequest"
-                            }
-                        }
-                    }
-                },
                 "security": [
                     {}
                 ],
@@ -151,6 +142,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TokenRefreshError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenRefreshForbidden"
                                 }
                             }
                         },
@@ -633,6 +634,32 @@
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "snapshot_refresh_status",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "completed",
+                                "failed",
+                                "idle",
+                                "queued",
+                                "running"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "snapshot_state",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "failed",
+                                "healthy",
+                                "stale"
+                            ]
+                        }
                     }
                 ],
                 "tags": [
@@ -796,6 +823,126 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/OandaAccountDeleteResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/market/accounts/{account_id}/refresh/": {
+            "post": {
+                "operationId": "market_account_snapshot_refresh",
+                "description": "Queue a refresh for a cached OANDA account snapshot.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Market"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshNotFound"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshUnavailable"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/market/accounts/{account_id}/refresh/{task_id}/": {
+            "get": {
+                "operationId": "market_account_snapshot_refresh_status",
+                "description": "Return the status for the latest cached OANDA account snapshot refresh.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Market"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshStatusNotFound"
                                 }
                             }
                         },
@@ -3609,11 +3756,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/BacktestTaskRequest"
+                                "$ref": "#/components/schemas/BacktestTaskStopCommandRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -5579,7 +5725,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TradingTaskStopRequestRequest"
+                                "$ref": "#/components/schemas/TradingTaskStopCommandRequest"
                             }
                         }
                     }
@@ -6947,21 +7093,57 @@
                     "start_time"
                 ]
             },
+            "BacktestTaskStopCommandRequest": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": "graceful",
+                        "description": "Stop mode. Defaults to graceful."
+                    },
+                    "drain_duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional drain duration override in minutes."
+                    }
+                }
+            },
             "BacktestTaskStopResponse": {
                 "type": "object",
                 "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
                     "message": {
+                        "type": "string"
+                    },
+                    "command": {
                         "type": "string"
                     },
                     "task_id": {
                         "type": "string"
                     },
+                    "previous_status": {
+                        "type": "string"
+                    },
+                    "next_status": {
+                        "type": "string"
+                    },
                     "status": {
                         "type": "string"
+                    },
+                    "accepted": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
+                    "accepted",
+                    "command",
                     "message",
+                    "mode",
+                    "next_status",
+                    "previous_status",
                     "status",
                     "task_id"
                 ]
@@ -7447,15 +7629,15 @@
             "LoginResponse": {
                 "type": "object",
                 "properties": {
-                    "token": {
-                        "type": "string"
+                    "authenticated": {
+                        "type": "boolean"
                     },
                     "user": {
                         "$ref": "#/components/schemas/LoginUser"
                     }
                 },
                 "required": [
-                    "token",
+                    "authenticated",
                     "user"
                 ]
             },
@@ -7898,7 +8080,7 @@
             },
             "OandaAccountDetailResponse": {
                 "type": "object",
-                "description": "Schema serializer for OANDA account responses with optional live snapshot fields.",
+                "description": "Schema serializer for OANDA account responses with cached snapshot fields.",
                 "properties": {
                     "id": {
                         "type": "integer"
@@ -7924,6 +8106,9 @@
                     "margin_available": {
                         "type": "string"
                     },
+                    "nav": {
+                        "type": "string"
+                    },
                     "is_active": {
                         "type": "boolean"
                     },
@@ -7939,9 +8124,6 @@
                         "format": "date-time"
                     },
                     "unrealized_pnl": {
-                        "type": "string"
-                    },
-                    "nav": {
                         "type": "string"
                     },
                     "open_trade_count": {
@@ -7968,6 +8150,28 @@
                     },
                     "live_data_error": {
                         "type": "string"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "snapshot_stale": {
+                        "type": "boolean"
+                    },
+                    "snapshot_refresh_error": {
+                        "type": "string"
+                    },
+                    "snapshot_refresh_task_id": {
+                        "type": "string"
+                    },
+                    "snapshot_refresh_status": {
+                        "type": "string"
+                    },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -8008,6 +8212,94 @@
                     "next",
                     "previous",
                     "results"
+                ]
+            },
+            "OandaAccountSnapshotRefreshBadRequest": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "OandaAccountSnapshotRefreshNotFound": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "OandaAccountSnapshotRefreshResponse": {
+                "type": "object",
+                "description": "Schema serializer for OANDA account snapshot refresh task status.",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "account_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "snapshot_stale": {
+                        "type": "boolean"
+                    },
+                    "snapshot_refresh_error": {
+                        "type": "string"
+                    },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "account_id",
+                    "id",
+                    "snapshot_refresh_error",
+                    "snapshot_refresh_status_updated_at",
+                    "snapshot_refreshed_at",
+                    "snapshot_stale",
+                    "status",
+                    "task_id"
+                ]
+            },
+            "OandaAccountSnapshotRefreshStatusNotFound": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "OandaAccountSnapshotRefreshUnavailable": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
                 ]
             },
             "OandaAccountUpdateRequestRequest": {
@@ -8104,6 +8396,67 @@
                         "readOnly": true,
                         "description": "Unrealized profit/loss from open positions"
                     },
+                    "nav": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "description": "Latest cached net asset value from OANDA"
+                    },
+                    "open_trade_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached open trade count from OANDA"
+                    },
+                    "open_position_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached open position count from OANDA"
+                    },
+                    "pending_order_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Latest cached pending order count from OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Latest cached OANDA hedging capability for this account"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the cached OANDA account snapshot was refreshed"
+                    },
+                    "snapshot_refresh_error": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Last safe error message from refreshing the OANDA account snapshot"
+                    },
+                    "snapshot_refresh_task_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Latest manual OANDA account snapshot refresh Celery task ID"
+                    },
+                    "snapshot_refresh_status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SnapshotRefreshStatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Latest manual OANDA account snapshot refresh task status\n\n* `idle` - Idle\n* `queued` - Queued\n* `running` - Running\n* `completed` - Completed\n* `failed` - Failed"
+                    },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the manual OANDA account snapshot refresh status changed"
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -8129,9 +8482,19 @@
                     "account_id",
                     "balance",
                     "created_at",
+                    "hedging_enabled",
                     "id",
                     "margin_available",
                     "margin_used",
+                    "nav",
+                    "open_position_count",
+                    "open_trade_count",
+                    "pending_order_count",
+                    "snapshot_refresh_error",
+                    "snapshot_refresh_status",
+                    "snapshot_refresh_status_updated_at",
+                    "snapshot_refresh_task_id",
+                    "snapshot_refreshed_at",
                     "unrealized_pnl",
                     "updated_at"
                 ]
@@ -9556,6 +9919,17 @@
                     "message"
                 ]
             },
+            "SnapshotRefreshStatusEnum": {
+                "enum": [
+                    "idle",
+                    "queued",
+                    "running",
+                    "completed",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `idle` - Idle\n* `queued` - Queued\n* `running` - Running\n* `completed` - Completed\n* `failed` - Failed"
+            },
             "StatusEnum": {
                 "enum": [
                     "created",
@@ -10635,26 +11009,29 @@
                     "error"
                 ]
             },
-            "TokenRefreshRequestRequest": {
+            "TokenRefreshForbidden": {
                 "type": "object",
                 "properties": {
-                    "refresh_token": {
+                    "error": {
                         "type": "string"
                     }
-                }
+                },
+                "required": [
+                    "error"
+                ]
             },
             "TokenRefreshResponse": {
                 "type": "object",
                 "properties": {
-                    "token": {
-                        "type": "string"
+                    "authenticated": {
+                        "type": "boolean"
                     },
                     "user": {
                         "$ref": "#/components/schemas/TokenRefreshUser"
                     }
                 },
                 "required": [
-                    "token",
+                    "authenticated",
                     "user"
                 ]
             },
@@ -11425,7 +11802,7 @@
                     "name"
                 ]
             },
-            "TradingTaskStopRequestRequest": {
+            "TradingTaskStopCommandRequest": {
                 "type": "object",
                 "properties": {
                     "mode": {
@@ -11433,28 +11810,49 @@
                         "minLength": 1,
                         "default": "graceful",
                         "description": "Stop mode. Defaults to graceful."
+                    },
+                    "drain_duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional drain duration override in minutes."
                     }
                 }
             },
             "TradingTaskStopResponse": {
                 "type": "object",
                 "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
                     "message": {
+                        "type": "string"
+                    },
+                    "command": {
                         "type": "string"
                     },
                     "task_id": {
                         "type": "string"
                     },
-                    "mode": {
+                    "previous_status": {
+                        "type": "string"
+                    },
+                    "next_status": {
                         "type": "string"
                     },
                     "status": {
                         "type": "string"
+                    },
+                    "accepted": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
+                    "accepted",
+                    "command",
                     "message",
                     "mode",
+                    "next_status",
+                    "previous_status",
                     "status",
                     "task_id"
                 ]

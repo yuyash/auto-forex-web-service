@@ -35,6 +35,7 @@ from apps.market.services.oanda import (
     StopOrderRequest,
 )
 from apps.market.views.account_helpers import get_user_accounts
+from apps.market.views.order_errors import order_error_response
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -430,10 +431,7 @@ class OrderView(APIView):
 
         except (OandaAPIError, ComplianceViolationError) as e:
             logger.error("Order execution failed: %s", e)
-            return Response(
-                {"error": "Order execution failed"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return order_error_response(e, fallback_error="Order execution failed")
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Unexpected error during order submission: %s", e)
             return Response(

@@ -174,6 +174,12 @@ export interface Account {
   pending_order_count?: number;
   live_data?: boolean;
   live_data_error?: string;
+  snapshot_refreshed_at?: string | null;
+  snapshot_stale?: boolean;
+  snapshot_refresh_error?: string;
+  snapshot_refresh_task_id?: string;
+  snapshot_refresh_status?: AccountSnapshotRefreshStatus;
+  snapshot_refresh_status_updated_at?: string | null;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
@@ -181,6 +187,13 @@ export interface Account {
   is_default?: boolean;
   jurisdiction?: string;
 }
+
+export type AccountSnapshotRefreshStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed';
 
 export interface AccountUpsertData {
   account_id: string;

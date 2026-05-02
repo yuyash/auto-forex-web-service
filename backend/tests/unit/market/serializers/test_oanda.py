@@ -22,6 +22,13 @@ class TestOandaAccountsSerializerUnit:
         mock_account.margin_used = 1000.00
         mock_account.margin_available = 9000.00
         mock_account.unrealized_pnl = 100.00
+        mock_account.nav = 10100.00
+        mock_account.open_trade_count = 2
+        mock_account.open_position_count = 1
+        mock_account.pending_order_count = 0
+        mock_account.hedging_enabled = True
+        mock_account.snapshot_refreshed_at = None
+        mock_account.snapshot_refresh_error = ""
         mock_account.is_active = True
         mock_account.is_default = False
         mock_account.created_at = "2024-01-01T00:00:00Z"
@@ -82,6 +89,13 @@ class TestOandaAccountsSerializerUnit:
         assert "margin_used" in read_only_fields
         assert "margin_available" in read_only_fields
         assert "unrealized_pnl" in read_only_fields
+        assert "nav" in read_only_fields
+        assert "open_trade_count" in read_only_fields
+        assert "open_position_count" in read_only_fields
+        assert "pending_order_count" in read_only_fields
+        assert "hedging_enabled" in read_only_fields
+        assert "snapshot_refreshed_at" in read_only_fields
+        assert "snapshot_refresh_error" in read_only_fields
         assert "created_at" in read_only_fields
         assert "updated_at" in read_only_fields
 

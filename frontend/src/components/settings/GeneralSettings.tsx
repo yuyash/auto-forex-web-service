@@ -140,7 +140,7 @@ const GeneralSettings = () => {
         settings as unknown as Record<string, unknown>
       );
       if (data.user && user && token) {
-        login(token, data.user);
+        login(data.user);
       }
       if (settings.language !== i18n.language) {
         await i18n.changeLanguage(settings.language);

@@ -136,6 +136,8 @@ export const queryKeys = {
       [...queryKeys.accounts.lists(), params] as const,
     details: () => [...queryKeys.accounts.all, 'detail'] as const,
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
+    snapshotRefresh: (id: number, taskId: string) =>
+      [...queryKeys.accounts.detail(id), 'snapshot-refresh', taskId] as const,
   },
 
   health: {

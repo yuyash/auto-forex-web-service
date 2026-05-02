@@ -8,7 +8,7 @@ from typing import Callable, Protocol
 
 from django.utils import timezone
 
-from apps.trading.enums import LogLevel, TaskStatus
+from apps.trading.enums import LogLevel, StopMode, TaskStatus
 from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.models import BacktestTask, TaskLog, TradingEvent, TradingTask
 from apps.trading.services.execution_lifecycle import (
@@ -21,6 +21,12 @@ from apps.trading.services.execution_lifecycle import (
 class TaskLifecycleKind:
     """Canonical lifecycle event kinds."""
 
+    START_REQUESTED = "task_start_requested"
+    STOP_REQUESTED = "task_stop_requested"
+    DRAIN_REQUESTED = "task_drain_requested"
+    PAUSE_REQUESTED = "task_pause_requested"
+    RESTART_REQUESTED = "task_restart_requested"
+    RESUME_REQUESTED = "task_resume_requested"
     STARTED = "task_started"
     COMPLETED = "task_completed"
     FAILED = "task_failed"
@@ -38,6 +44,36 @@ class TaskLifecycleTemplate:
 
 
 LIFECYCLE_EVENT_TEMPLATES = {
+    TaskLifecycleKind.START_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task start requested",
+        default_log_message="Task start requested",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.STOP_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task stop requested",
+        default_log_message="Task stop requested",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.DRAIN_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task drain requested",
+        default_log_message="Task drain requested",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.PAUSE_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task pause requested",
+        default_log_message="Task pause requested",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.RESTART_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task restart requested",
+        default_log_message="Task restart requested",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.RESUME_REQUESTED: TaskLifecycleTemplate(
+        default_description="Task resume requested",
+        default_log_message="Task resume requested",
+        default_log_level=LogLevel.INFO,
+    ),
     TaskLifecycleKind.STARTED: TaskLifecycleTemplate(
         default_description="Task execution started",
         default_log_message="Task execution started",
@@ -133,6 +169,56 @@ def build_started_event_spec(*, task_label: str, component: str) -> TaskLifecycl
         description=f"{task_label} task execution started",
         log_component=component,
         log_message=f"{task_label} task execution started",
+    )
+
+
+def build_start_requested_event_spec() -> TaskLifecycleEventSpec:
+    """Build a canonical start-request lifecycle event."""
+
+    return build_lifecycle_event_spec(kind=TaskLifecycleKind.START_REQUESTED)
+
+
+def build_stop_requested_event_spec(*, mode: StopMode | str) -> TaskLifecycleEventSpec:
+    """Build a canonical stop/drain request lifecycle event."""
+
+    mode_value = str(getattr(mode, "value", mode))
+    is_drain = mode_value == StopMode.DRAIN.value
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.DRAIN_REQUESTED if is_drain else TaskLifecycleKind.STOP_REQUESTED,
+        extra_details={"mode": mode_value},
+    )
+
+
+def build_pause_requested_event_spec() -> TaskLifecycleEventSpec:
+    """Build a canonical pause-request lifecycle event."""
+
+    return build_lifecycle_event_spec(kind=TaskLifecycleKind.PAUSE_REQUESTED)
+
+
+def build_cancelled_event_spec() -> TaskLifecycleEventSpec:
+    """Build a canonical cancel lifecycle event."""
+
+    return build_lifecycle_event_spec(kind=TaskLifecycleKind.CANCELLED)
+
+
+def build_restart_requested_event_spec() -> TaskLifecycleEventSpec:
+    """Build a canonical restart-request lifecycle event."""
+
+    return build_lifecycle_event_spec(kind=TaskLifecycleKind.RESTART_REQUESTED)
+
+
+def build_resume_requested_event_spec(
+    *, from_status: object | None = None
+) -> TaskLifecycleEventSpec:
+    """Build a canonical resume-request lifecycle event."""
+
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.RESUME_REQUESTED,
+        description=(
+            f"Task resume requested (from {from_status})"
+            if from_status is not None
+            else "Task resume requested"
+        ),
     )
 
 
@@ -391,6 +477,26 @@ class TaskLifecycleEventPublisher:
         for sink in self.sinks:
             sink.publish(event)
 
+    def publish_spec(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        event: TaskLifecycleEventSpec,
+    ) -> None:
+        """Publish a typed lifecycle event definition."""
+
+        self.publish(
+            task=task,
+            task_type=task_type,
+            kind=event.kind,
+            description=event.description,
+            extra_details=event.extra_details,
+            log_level=event.log_level,
+            log_message=event.log_message,
+            log_component=event.log_component,
+        )
+
 
 def publish_task_lifecycle_event(
     *,
@@ -401,15 +507,10 @@ def publish_task_lifecycle_event(
 ) -> None:
     """Publish a lifecycle event through the default sink pipeline."""
 
-    TaskLifecycleEventPublisher(logger=logger).publish(
+    TaskLifecycleEventPublisher(logger=logger).publish_spec(
         task=task,
         task_type=task_type,
-        kind=event.kind,
-        description=event.description,
-        extra_details=event.extra_details,
-        log_level=event.log_level,
-        log_message=event.log_message,
-        log_component=event.log_component,
+        event=event,
     )
 
 

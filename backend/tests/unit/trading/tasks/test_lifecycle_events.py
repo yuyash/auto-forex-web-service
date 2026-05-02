@@ -10,7 +10,13 @@ from apps.trading.tasks.lifecycle_events import (
     ExecutionArtifactsLifecycleSink,
     TaskLifecycleEventPublisher,
     TaskLifecycleKind,
+    build_cancelled_event_spec,
     build_lifecycle_event_spec,
+    build_pause_requested_event_spec,
+    build_restart_requested_event_spec,
+    build_resume_requested_event_spec,
+    build_start_requested_event_spec,
+    build_stop_requested_event_spec,
 )
 
 
@@ -58,6 +64,40 @@ def test_callback_sink_forwards_event() -> None:
 
     callback.assert_called_once()
     assert callback.call_args.args[0].kind == "task_paused"
+
+
+def test_publisher_accepts_event_specs() -> None:
+    logger = MagicMock()
+    sink = MagicMock()
+    task = MagicMock(pk="task-1", status="running", name="Task")
+
+    publisher = TaskLifecycleEventPublisher(logger=logger, sinks=(sink,))
+
+    publisher.publish_spec(
+        task=task,
+        task_type="trading",
+        event=build_stop_requested_event_spec(mode="graceful"),
+    )
+
+    published_event = sink.publish.call_args.args[0]
+    assert published_event.kind == TaskLifecycleKind.STOP_REQUESTED
+    assert published_event.description == "Task stop requested"
+    assert published_event.details["mode"] == "graceful"
+
+
+def test_build_command_lifecycle_event_specs() -> None:
+    assert build_start_requested_event_spec().kind == TaskLifecycleKind.START_REQUESTED
+    assert build_pause_requested_event_spec().description == "Task pause requested"
+    assert build_cancelled_event_spec().kind == TaskLifecycleKind.CANCELLED
+    assert build_restart_requested_event_spec().description == "Task restart requested"
+
+    drain = build_stop_requested_event_spec(mode="drain")
+    assert drain.kind == TaskLifecycleKind.DRAIN_REQUESTED
+    assert drain.extra_details == {"mode": "drain"}
+
+    resume = build_resume_requested_event_spec(from_status="starting")
+    assert resume.kind == TaskLifecycleKind.RESUME_REQUESTED
+    assert resume.description == "Task resume requested (from starting)"
 
 
 def test_execution_artifacts_sink_only_handles_terminal_kinds() -> None:

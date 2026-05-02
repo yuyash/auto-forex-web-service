@@ -7,12 +7,14 @@ from django.conf import settings
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
 from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.auth import enforce_csrf
 from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.utils.cookies import clear_auth_cookies, set_auth_cookies
@@ -24,7 +26,7 @@ class TokenRefreshView(APIView):
     """
     API endpoint for JWT token refresh using opaque refresh tokens.
 
-    POST /api/auth/refresh
+    POST /api/accounts/auth/refresh
     - Exchange a valid refresh_token for a new access + refresh token pair
     - The old refresh token is revoked (rotation)
     """
@@ -35,15 +37,12 @@ class TokenRefreshView(APIView):
     @extend_schema(
         operation_id="auth_token_refresh",
         tags=["Accounts"],
-        request=inline_serializer(
-            "TokenRefreshRequest",
-            fields={"refresh_token": serializers.CharField(required=False, allow_blank=True)},
-        ),
+        request=None,
         responses={
             200: inline_serializer(
                 "TokenRefreshResponse",
                 fields={
-                    "token": serializers.CharField(),
+                    "authenticated": serializers.BooleanField(),
                     "user": inline_serializer(
                         "TokenRefreshUser",
                         fields={
@@ -61,11 +60,13 @@ class TokenRefreshView(APIView):
                 "TokenRefreshError",
                 fields={"error": serializers.CharField()},
             ),
+            403: inline_serializer(
+                "TokenRefreshForbidden",
+                fields={"error": serializers.CharField()},
+            ),
         },
         description=(
-            "Exchange a refresh token for a new access + refresh token pair. "
-            "The refresh token is normally read from the HTTP-only cookie; the "
-            "`refresh_token` request field is accepted only as a legacy fallback."
+            "Exchange the HTTP-only refresh-token cookie for a new access + refresh cookie pair."
         ),
     )
     def post(self, request: Request) -> Response:
@@ -79,6 +80,19 @@ class TokenRefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             return clear_auth_cookies(response)
+
+        try:
+            enforce_csrf(request)
+        except PermissionDenied:
+            logger.warning(
+                "Refresh token rejected due to CSRF failure from %s",
+                get_client_ip(request),
+            )
+            get_token(cast(HttpRequest, request._request))
+            return Response(
+                {"error": "CSRF verification failed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         ip_address = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -110,7 +124,7 @@ class TokenRefreshView(APIView):
 
         response = Response(
             {
-                "token": new_access,
+                "authenticated": True,
                 "user": {
                     "id": user.id,
                     "email": user.email,
