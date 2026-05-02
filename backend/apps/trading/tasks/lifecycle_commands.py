@@ -112,6 +112,57 @@ def build_stop_command_plan(
     )
 
 
+@dataclass(frozen=True)
+class ResumeCommandPlan:
+    """Decision plan for a resume command after validation passes."""
+
+    previous_status: TaskStatus
+    next_status: TaskStatus
+    previous_celery_task_id: object
+    new_celery_task_id: UUID
+    update_fields: tuple[str, ...]
+    transition: LifecycleCommandResult
+
+    @property
+    def should_revoke_previous_execution(self) -> bool:
+        return self.should_clear_terminal_fields and bool(self.previous_celery_task_id)
+
+    @property
+    def should_clear_terminal_fields(self) -> bool:
+        return self.previous_status in (TaskStatus.STOPPED, TaskStatus.FAILED)
+
+
+def build_resume_command_plan(
+    *,
+    previous_status: TaskStatus,
+    previous_celery_task_id: object,
+    new_celery_task_id: UUID,
+) -> ResumeCommandPlan:
+    """Resolve resume mutation fields, Celery id rotation, and transition metadata."""
+
+    next_status = TaskStatus.STARTING
+    update_fields = ["status", "updated_at"]
+    if previous_status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+        update_fields += ["error_message", "error_traceback", "completed_at"]
+    update_fields.append("celery_task_id")
+
+    transition = LifecycleCommandResult(
+        command="resume",
+        previous_status=previous_status,
+        current_status=next_status,
+        event=build_resume_requested_event_spec(from_status=previous_status),
+        dispatch_task=True,
+    )
+    return ResumeCommandPlan(
+        previous_status=previous_status,
+        next_status=next_status,
+        previous_celery_task_id=previous_celery_task_id,
+        new_celery_task_id=new_celery_task_id,
+        update_fields=tuple(update_fields),
+        transition=transition,
+    )
+
+
 def _default_inspect_workers() -> dict[str, object] | None:
     from celery import current_app
 
@@ -579,6 +630,11 @@ class TaskLifecycleCommands:
                 db_status=locked_task.status,
                 celery_task_id=previous_celery_task_id,
             )
+            resume_plan = build_resume_command_plan(
+                previous_status=previous_status,
+                previous_celery_task_id=previous_celery_task_id,
+                new_celery_task_id=uuid4(),
+            )
 
             # Revoke any lingering Celery task for this execution before
             # dispatching a new one. This is a no-op for a clean exit but
@@ -594,45 +650,31 @@ class TaskLifecycleCommands:
             # revoke list while keeping the execution-scoped state
             # (ExecutionState, positions, events, trades, ...) continuous
             # across the resume.
-            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
-                if previous_celery_task_id:
-                    try:
-                        self._revoke_execution(previous_celery_task_id)
-                    except Exception as exc:  # pragma: no cover - best effort
-                        self.logger.debug(
-                            "Pre-resume revoke skipped - task_id=%s, error=%s",
-                            task_id,
-                            exc,
-                        )
+            if resume_plan.should_revoke_previous_execution:
+                try:
+                    self._revoke_execution(previous_celery_task_id)
+                except Exception as exc:  # pragma: no cover - best effort
+                    self.logger.debug(
+                        "Pre-resume revoke skipped - task_id=%s, error=%s",
+                        task_id,
+                        exc,
+                    )
 
             # Clear error fields when resuming from a terminal state so the
             # execution starts cleanly while preserving execution_id and
             # all persisted state (strategy_state, events, positions, etc.).
-            update_fields = ["status", "updated_at"]
-            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+            if resume_plan.should_clear_terminal_fields:
                 locked_task.error_message = None
                 locked_task.error_traceback = None
                 locked_task.completed_at = None
-                update_fields += [
-                    "error_message",
-                    "error_traceback",
-                    "completed_at",
-                ]
 
             # Always rotate the Celery task id on resume so the next
             # worker invocation is guaranteed to be accepted.
-            locked_task.celery_task_id = uuid4()
-            update_fields.append("celery_task_id")
+            locked_task.celery_task_id = resume_plan.new_celery_task_id
 
-            locked_task.status = TaskStatus.STARTING
-            locked_task.save(update_fields=update_fields)
-            transition = LifecycleCommandResult(
-                command="resume",
-                previous_status=previous_status,
-                current_status=locked_task.status,
-                event=build_resume_requested_event_spec(from_status=previous_status),
-                dispatch_task=True,
-            )
+            locked_task.status = resume_plan.next_status
+            locked_task.save(update_fields=list(resume_plan.update_fields))
+            transition = resume_plan.transition
             self._audit_command_transition(
                 task=locked_task,
                 task_type=task_type,

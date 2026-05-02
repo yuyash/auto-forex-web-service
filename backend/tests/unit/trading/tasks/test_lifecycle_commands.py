@@ -11,6 +11,7 @@ from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.tasks.lifecycle_commands import (
     LifecycleCommandAdapters,
     TaskLifecycleCommands,
+    build_resume_command_plan,
     build_stop_command_plan,
 )
 from apps.trading.tasks.lifecycle_events import TaskLifecycleKind
@@ -72,6 +73,45 @@ def test_stop_plan_sets_sell_on_stop_for_graceful_close() -> None:
     assert plan.effective_mode == StopMode.GRACEFUL_CLOSE
     assert plan.next_status == TaskStatus.STOPPING
     assert plan.extra_updates == {"sell_on_stop": True}
+
+
+def test_resume_plan_rotates_and_clears_failed_task() -> None:
+    old_celery_task_id = uuid4()
+    new_celery_task_id = uuid4()
+
+    plan = build_resume_command_plan(
+        previous_status=TaskStatus.FAILED,
+        previous_celery_task_id=old_celery_task_id,
+        new_celery_task_id=new_celery_task_id,
+    )
+
+    assert plan.next_status == TaskStatus.STARTING
+    assert plan.new_celery_task_id == new_celery_task_id
+    assert plan.should_revoke_previous_execution is True
+    assert plan.should_clear_terminal_fields is True
+    assert plan.update_fields == (
+        "status",
+        "updated_at",
+        "error_message",
+        "error_traceback",
+        "completed_at",
+        "celery_task_id",
+    )
+    assert plan.transition.dispatch_task is True
+    assert plan.transition.event.description == f"Task resume requested (from {TaskStatus.FAILED})"
+
+
+def test_resume_plan_keeps_paused_task_state_fields() -> None:
+    plan = build_resume_command_plan(
+        previous_status=TaskStatus.PAUSED,
+        previous_celery_task_id=uuid4(),
+        new_celery_task_id=uuid4(),
+    )
+
+    assert plan.next_status == TaskStatus.STARTING
+    assert plan.should_revoke_previous_execution is False
+    assert plan.should_clear_terminal_fields is False
+    assert plan.update_fields == ("status", "updated_at", "celery_task_id")
 
 
 def test_stop_uses_injected_adapters() -> None:
@@ -332,6 +372,10 @@ def test_resume_allows_stopped_backtest_and_rotates_only_celery_task_id() -> Non
     assert task.status == TaskStatus.STARTING
     assert task.execution_id == execution_id
     assert task.celery_task_id != old_celery_task_id
+    save_fields = task.save.call_args.kwargs["update_fields"]
+    assert "error_message" in save_fields
+    assert "error_traceback" in save_fields
+    assert "completed_at" in save_fields
     adapters.revoke_execution.assert_called_once_with(old_celery_task_id)
     service._dispatch_task.assert_called_once_with(task, "backtest")
     event = commands.events.publish_spec.call_args.kwargs["event"]
