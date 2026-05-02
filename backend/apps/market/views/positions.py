@@ -27,6 +27,7 @@ from apps.market.services.oanda import (
     OpenTrade,
 )
 from apps.market.views.account_helpers import get_user_accounts
+from apps.market.views.order_errors import order_error_response
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -242,10 +243,7 @@ class PositionView(APIView):
             )
         except (OandaAPIError, ComplianceViolationError) as e:
             logger.error("Position open (market order) failed: %s", e)
-            return Response(
-                {"error": "Order execution failed"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return order_error_response(e, fallback_error="Order execution failed")
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Unexpected error opening position: %s", e)
             return Response(
@@ -582,7 +580,4 @@ class PositionDetailView(APIView):
 
         except OandaAPIError as e:
             logger.error("Failed to close position %s: %s", position_id, str(e))
-            return Response(
-                {"error": "Failed to close position"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return order_error_response(e, fallback_error="Failed to close position")
