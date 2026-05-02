@@ -54,6 +54,64 @@ class LifecycleCommandResult:
     audit_details: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class StopCommandPlan:
+    """Decision plan for a stop command before side effects run."""
+
+    effective_mode: StopMode
+    next_status: TaskStatus
+    extra_updates: dict[str, object] = field(default_factory=dict)
+    escalation_log_message: str | None = None
+
+    @property
+    def should_revoke_execution(self) -> bool:
+        return self.effective_mode == StopMode.IMMEDIATE
+
+    @property
+    def should_dispatch_stop_task(self) -> bool:
+        return self.effective_mode != StopMode.DRAIN
+
+
+def build_stop_command_plan(
+    *,
+    current_status: TaskStatus,
+    requested_mode: StopMode,
+) -> StopCommandPlan:
+    """Resolve stop command mode, target state, and follow-up side effects."""
+
+    effective_mode = requested_mode
+    escalation_log_message = None
+
+    if current_status == TaskStatus.DRAINING and requested_mode == StopMode.DRAIN:
+        effective_mode = StopMode.IMMEDIATE
+        escalation_log_message = (
+            "[SERVICE:STOP] DRAINING task received another drain stop, "
+            "escalating to IMMEDIATE - task_id=%s"
+        )
+    elif current_status == TaskStatus.DRAINING and requested_mode == StopMode.GRACEFUL:
+        effective_mode = StopMode.IMMEDIATE
+        escalation_log_message = (
+            "[SERVICE:STOP] DRAINING task received graceful stop, "
+            "escalating to IMMEDIATE - task_id=%s"
+        )
+
+    if effective_mode == StopMode.DRAIN:
+        next_status = TaskStatus.DRAINING
+    else:
+        next_status = TaskStatus.STOPPING
+
+    extra_updates: dict[str, object] = {}
+    if effective_mode == StopMode.GRACEFUL_CLOSE:
+        extra_updates["sell_on_stop"] = True
+
+    return StopCommandPlan(
+        effective_mode=effective_mode,
+        next_status=next_status,
+        extra_updates=extra_updates,
+        escalation_log_message=escalation_log_message,
+    )
+
+
 def _default_inspect_workers() -> dict[str, object] | None:
     from celery import current_app
 
@@ -240,58 +298,30 @@ class TaskLifecycleCommands:
             message=f"Task cannot be stopped from {task.status} state",
         )
 
-        # A stop issued while the task is DRAINING means the user wants to
-        # terminate now rather than waiting for positions to reach breakeven.
-        # Promote the stop mode to IMMEDIATE so the Celery worker is
-        # revoked and the task transitions straight to STOPPED.
-        if task.status == TaskStatus.DRAINING and stop_mode == StopMode.DRAIN:
-            stop_mode = StopMode.IMMEDIATE
+        stop_plan = build_stop_command_plan(
+            current_status=task.status,
+            requested_mode=stop_mode,
+        )
+        if stop_plan.escalation_log_message:
             self.logger.info(
-                "[SERVICE:STOP] DRAINING task received another drain stop, "
-                "escalating to IMMEDIATE - task_id=%s",
-                task_id,
-            )
-        elif task.status == TaskStatus.DRAINING and stop_mode == StopMode.GRACEFUL:
-            # Same idea: draining is already a "graceful wait" — a plain
-            # stop while draining means "stop now, don't keep waiting".
-            stop_mode = StopMode.IMMEDIATE
-            self.logger.info(
-                "[SERVICE:STOP] DRAINING task received graceful stop, "
-                "escalating to IMMEDIATE - task_id=%s",
+                stop_plan.escalation_log_message,
                 task_id,
             )
 
-        # DRAIN mode parks the task in DRAINING while it gradually closes
-        # positions at break-even.  Only live trading tasks support it; for
-        # backtests we treat it the same as GRACEFUL_CLOSE (the executor
-        # finishes on end-of-data anyway).
-        if stop_mode == StopMode.DRAIN and not is_backtest:
-            next_status: TaskStatus = TaskStatus.DRAINING
-        elif stop_mode == StopMode.DRAIN and is_backtest:
-            next_status = TaskStatus.DRAINING
-        else:
-            next_status = TaskStatus.STOPPING
-
-        extra_updates: dict[str, object] = {}
-        # Both trading and backtest tasks persist the ``sell_on_stop`` flag
-        # so the worker that runs the shutdown logic can close open
-        # positions at current market / tick prices.
-        if stop_mode == StopMode.GRACEFUL_CLOSE:
-            extra_updates["sell_on_stop"] = True
         self.service.writer.persist_state_if_current(
             command="stop",
             task=task,
             from_status=previous_status,
-            to_status=next_status,
-            extra_updates=extra_updates,
+            to_status=stop_plan.next_status,
+            extra_updates=stop_plan.extra_updates,
         )
         transition = LifecycleCommandResult(
             command="stop",
             previous_status=previous_status,
             current_status=task.status,
-            event=build_stop_requested_event_spec(mode=stop_mode),
+            event=build_stop_requested_event_spec(mode=stop_plan.effective_mode),
             audit_details={
-                "mode": stop_mode.value,
+                "mode": stop_plan.effective_mode.value,
                 "drain_duration_minutes": drain_duration_minutes,
             },
         )
@@ -300,7 +330,11 @@ class TaskLifecycleCommands:
         # Persist per-stop drain duration override so the executor picks
         # it up on the next drain evaluation. Written only when drain is
         # the effective mode and a positive value was supplied.
-        if stop_mode == StopMode.DRAIN and drain_duration_minutes and drain_duration_minutes > 0:
+        if (
+            stop_plan.effective_mode == StopMode.DRAIN
+            and drain_duration_minutes
+            and drain_duration_minutes > 0
+        ):
             self._record_drain_duration_minutes_override(
                 task_id=task_id,
                 task_type=task_type,
@@ -314,13 +348,17 @@ class TaskLifecycleCommands:
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field and may still have it set to NULL.
         celery_id = getattr(task, "celery_task_id", None) or task.execution_id
-        if stop_mode == StopMode.IMMEDIATE and celery_id:
+        if stop_plan.should_revoke_execution and celery_id:
             self._revoke_execution(celery_id)
         # DRAIN mode keeps the worker running — don't dispatch the stop
         # finalisation task; the executor will transition to STOPPED when
         # it finishes draining.
-        if stop_mode != StopMode.DRAIN:
-            self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
+        if stop_plan.should_dispatch_stop_task:
+            self._trigger_stop_task(
+                task_id=task_id,
+                is_backtest=is_backtest,
+                stop_mode=stop_plan.effective_mode,
+            )
 
         self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True

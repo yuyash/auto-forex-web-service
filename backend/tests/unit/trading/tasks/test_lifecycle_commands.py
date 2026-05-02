@@ -11,6 +11,7 @@ from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.tasks.lifecycle_commands import (
     LifecycleCommandAdapters,
     TaskLifecycleCommands,
+    build_stop_command_plan,
 )
 from apps.trading.tasks.lifecycle_events import TaskLifecycleKind
 
@@ -35,6 +36,42 @@ def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock
         ),
         adapters,
     )
+
+
+def test_stop_plan_escalates_draining_drain_to_immediate() -> None:
+    plan = build_stop_command_plan(
+        current_status=TaskStatus.DRAINING,
+        requested_mode=StopMode.DRAIN,
+    )
+
+    assert plan.effective_mode == StopMode.IMMEDIATE
+    assert plan.next_status == TaskStatus.STOPPING
+    assert plan.should_revoke_execution is True
+    assert plan.should_dispatch_stop_task is True
+    assert plan.escalation_log_message is not None
+
+
+def test_stop_plan_keeps_drain_worker_running() -> None:
+    plan = build_stop_command_plan(
+        current_status=TaskStatus.RUNNING,
+        requested_mode=StopMode.DRAIN,
+    )
+
+    assert plan.effective_mode == StopMode.DRAIN
+    assert plan.next_status == TaskStatus.DRAINING
+    assert plan.should_revoke_execution is False
+    assert plan.should_dispatch_stop_task is False
+
+
+def test_stop_plan_sets_sell_on_stop_for_graceful_close() -> None:
+    plan = build_stop_command_plan(
+        current_status=TaskStatus.RUNNING,
+        requested_mode=StopMode.GRACEFUL_CLOSE,
+    )
+
+    assert plan.effective_mode == StopMode.GRACEFUL_CLOSE
+    assert plan.next_status == TaskStatus.STOPPING
+    assert plan.extra_updates == {"sell_on_stop": True}
 
 
 def test_stop_uses_injected_adapters() -> None:
