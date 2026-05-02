@@ -134,8 +134,12 @@ def test_pause_uses_injected_adapter_for_backtest() -> None:
     result = commands.pause(task_id)
 
     assert result is True
-    assert task.status == TaskStatus.PAUSED
-    task.save.assert_called_once()
+    service.writer.persist_state_if_current.assert_called_once_with(
+        command="pause",
+        task=task,
+        from_status=TaskStatus.RUNNING,
+        to_status=TaskStatus.PAUSED,
+    )
     adapters.signal_pause.assert_called_once()
 
 
@@ -162,27 +166,20 @@ def test_stop_rejects_stale_transition_before_side_effects() -> None:
     from apps.trading.tasks.service import TaskConflictError
 
     task_id = uuid4()
-
-    class TaskModel:
-        objects = MagicMock()
-
-    task = TaskModel()
-    task.pk = task_id
-    task.status = TaskStatus.RUNNING
-    task.execution_id = uuid4()
-    task.celery_task_id = uuid4()
-    task.refresh_from_db = MagicMock()
-    TaskModel.objects.filter.return_value.update.return_value = 0
-
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.RUNNING,
+        execution_id=uuid4(),
+        celery_task_id=uuid4(),
+    )
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "trading")
+    service.writer.persist_state_if_current.side_effect = TaskConflictError("superseded")
     commands, adapters = _make_commands(service)
 
     with pytest.raises(TaskConflictError, match="superseded"):
         commands.stop(task_id, "graceful")
 
-    TaskModel.objects.filter.assert_called_once_with(pk=task_id, status=TaskStatus.RUNNING)
-    task.refresh_from_db.assert_called_once()
     adapters.signal_stop.assert_not_called()
     adapters.dispatch_stop.assert_not_called()
     adapters.revoke_execution.assert_not_called()
@@ -192,27 +189,20 @@ def test_pause_rejects_stale_transition_before_signal() -> None:
     from apps.trading.tasks.service import TaskConflictError
 
     task_id = uuid4()
-
-    class TaskModel:
-        objects = MagicMock()
-
-    task = TaskModel()
-    task.pk = task_id
-    task.status = TaskStatus.RUNNING
-    task.execution_id = uuid4()
-    task.celery_task_id = uuid4()
-    task.refresh_from_db = MagicMock()
-    TaskModel.objects.filter.return_value.update.return_value = 0
-
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.RUNNING,
+        execution_id=uuid4(),
+        celery_task_id=uuid4(),
+    )
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "backtest")
+    service.writer.persist_state_if_current.side_effect = TaskConflictError("superseded")
     commands, adapters = _make_commands(service)
 
     with pytest.raises(TaskConflictError, match="superseded"):
         commands.pause(task_id)
 
-    TaskModel.objects.filter.assert_called_once_with(pk=task_id, status=TaskStatus.RUNNING)
-    task.refresh_from_db.assert_called_once()
     adapters.signal_pause.assert_not_called()
 
 
@@ -220,28 +210,21 @@ def test_cancel_rejects_stale_transition_before_revoke() -> None:
     from apps.trading.tasks.service import TaskConflictError
 
     task_id = uuid4()
-
-    class TaskModel:
-        objects = MagicMock()
-
-    task = TaskModel()
-    task.pk = task_id
-    task.status = TaskStatus.RUNNING
-    task.execution_id = uuid4()
-    task.celery_task_id = uuid4()
-    task.refresh_from_db = MagicMock()
-    TaskModel.objects.filter.return_value.update.return_value = 0
-
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.RUNNING,
+        execution_id=uuid4(),
+        celery_task_id=uuid4(),
+    )
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "backtest")
     service.get_celery_result = MagicMock()
+    service.writer.persist_terminal_state_if_current.side_effect = TaskConflictError("superseded")
     commands, _ = _make_commands(service)
 
     with pytest.raises(TaskConflictError, match="superseded"):
         commands.cancel(task_id)
 
-    TaskModel.objects.filter.assert_called_once_with(pk=task_id, status=TaskStatus.RUNNING)
-    task.refresh_from_db.assert_called_once()
     service.get_celery_result.assert_not_called()
 
 

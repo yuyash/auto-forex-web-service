@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 from celery.result import AsyncResult
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
@@ -263,7 +262,7 @@ class TaskLifecycleCommands:
         # positions at current market / tick prices.
         if stop_mode == StopMode.GRACEFUL_CLOSE:
             extra_updates["sell_on_stop"] = True
-        self._transition_task_status(
+        self.service.writer.persist_state_if_current(
             command="stop",
             task=task,
             from_status=previous_status,
@@ -343,7 +342,7 @@ class TaskLifecycleCommands:
             if task_type == "backtest"
             else "trading.tasks.run_trading_task"
         )
-        self._transition_task_status(
+        self.service.writer.persist_state_if_current(
             command="pause",
             task=task,
             from_status=previous_status,
@@ -381,12 +380,11 @@ class TaskLifecycleCommands:
             return False
 
         previous_status = task.status
-        self._transition_task_status(
+        self.service.writer.persist_terminal_state_if_current(
             command="cancel",
             task=task,
             from_status=previous_status,
             to_status=TaskStatus.STOPPED,
-            extra_updates={"completed_at": timezone.now()},
         )
 
         # Fall back to execution_id for older rows that pre-date the
@@ -439,7 +437,7 @@ class TaskLifecycleCommands:
             self._revoke_execution(celery_id)
 
         self.service.writer.clear_execution_history(task=task, task_type=task_type)
-        self._conditional_task_update(
+        self.service.writer.update_if_current(
             command="restart",
             task=task,
             expected_status=task.status,
@@ -615,68 +613,6 @@ class TaskLifecycleCommands:
         if is_trading:
             self._kick_market_supervisor()
         return task
-
-    def _transition_task_status(
-        self,
-        *,
-        command: str,
-        task: BacktestTask | TradingTask,
-        from_status: TaskStatus | str,
-        to_status: TaskStatus,
-        extra_updates: dict[str, object] | None = None,
-    ) -> None:
-        updates: dict[str, object] = {"status": to_status, **(extra_updates or {})}
-        self._conditional_task_update(
-            command=command,
-            task=task,
-            expected_status=from_status,
-            updates=updates,
-        )
-
-    def _conditional_task_update(
-        self,
-        *,
-        command: str,
-        task: BacktestTask | TradingTask,
-        expected_status: TaskStatus | str,
-        updates: dict[str, object],
-    ) -> None:
-        model_objects = getattr(type(task), "objects", None)
-        update_values = {"updated_at": timezone.now(), **updates}
-
-        if model_objects is None:
-            self._save_detached_task_update(task=task, updates=update_values)
-            return
-
-        rows_updated = model_objects.filter(pk=task.pk, status=expected_status).update(
-            **update_values
-        )
-        if rows_updated == 0:
-            refresh_from_db = getattr(task, "refresh_from_db", None)
-            if callable(refresh_from_db):
-                refresh_from_db()
-            from apps.trading.tasks.service import TaskConflictError
-
-            raise TaskConflictError(
-                f"Task {command} was superseded by another lifecycle transition. "
-                "Reload the task before retrying."
-            )
-
-        for field, value in update_values.items():
-            setattr(task, field, value)
-
-    @staticmethod
-    def _save_detached_task_update(
-        *,
-        task: BacktestTask | TradingTask,
-        updates: dict[str, object],
-    ) -> None:
-        for field, value in updates.items():
-            setattr(task, field, value)
-        try:
-            task.save(update_fields=list(updates.keys()))
-        except TypeError:
-            task.save()
 
     def _prepare_start(
         self,
