@@ -14,7 +14,15 @@ from django.db import transaction
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
-from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
+from apps.trading.tasks.lifecycle_events import (
+    TaskLifecycleEventPublisher,
+    build_cancelled_event_spec,
+    build_pause_requested_event_spec,
+    build_restart_requested_event_spec,
+    build_resume_requested_event_spec,
+    build_start_requested_event_spec,
+    build_stop_requested_event_spec,
+)
 from apps.trading.tasks.lifecycle_state_machine import allowed_statuses_for_command
 
 if TYPE_CHECKING:
@@ -157,11 +165,10 @@ class TaskLifecycleCommands:
                 execution_id=task.execution_id,
                 celery_task_id=getattr(task, "celery_task_id", None),
             )
-            self.events.publish(
+            self.events.publish_spec(
                 task=task,
                 task_type=task_type,
-                kind="task_start_requested",
-                description="Task start requested",
+                event=build_start_requested_event_spec(),
             )
             self._log_worker_state(task)
             return task
@@ -306,14 +313,10 @@ class TaskLifecycleCommands:
         if stop_mode != StopMode.DRAIN:
             self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
 
-        self.events.publish(
+        self.events.publish_spec(
             task=task,
             task_type=task_type,
-            kind="task_drain_requested" if stop_mode == StopMode.DRAIN else "task_stop_requested",
-            description=(
-                "Task drain requested" if stop_mode == StopMode.DRAIN else "Task stop requested"
-            ),
-            extra_details={"mode": stop_mode.value},
+            event=build_stop_requested_event_spec(mode=stop_mode),
         )
         return True
 
@@ -362,11 +365,10 @@ class TaskLifecycleCommands:
             task_name=task_name,
             execution_id=task.execution_id,
         )
-        self.events.publish(
+        self.events.publish_spec(
             task=task,
             task_type=task_type,
-            kind="task_pause_requested",
-            description="Task pause requested",
+            event=build_pause_requested_event_spec(),
         )
         return True
 
@@ -394,11 +396,10 @@ class TaskLifecycleCommands:
         if result:
             result.revoke(terminate=True)
 
-        self.events.publish(
+        self.events.publish_spec(
             task=task,
             task_type=task_type,
-            kind="task_cancelled",
-            description="Task cancelled",
+            event=build_cancelled_event_spec(),
         )
         return True
 
@@ -463,11 +464,10 @@ class TaskLifecycleCommands:
             execution_id=task.execution_id,
             celery_task_id=getattr(task, "celery_task_id", None),
         )
-        self.events.publish(
+        self.events.publish_spec(
             task=task,
             task_type=task_type,
-            kind="task_restart_requested",
-            description="Task restart requested",
+            event=build_restart_requested_event_spec(),
         )
         if user is None:
             return self.service.start_task(task)
@@ -603,11 +603,10 @@ class TaskLifecycleCommands:
             )
             task = locked_task
 
-        self.events.publish(
+        self.events.publish_spec(
             task=task,
             task_type=task_type,
-            kind="task_resume_requested",
-            description=f"Task resume requested (from {locked_task.status})",
+            event=build_resume_requested_event_spec(from_status=locked_task.status),
         )
         self.service._dispatch_task(task, task_type)
         if is_trading:
