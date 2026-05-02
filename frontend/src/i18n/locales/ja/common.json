@@ -670,6 +670,16 @@
     "moveDown": "下に移動",
     "configureTabs": "タブ設定"
   },
+  "itemOrder": {
+    "reset": "順序をリセット",
+    "moveUp": "上に移動",
+    "moveDown": "下に移動"
+  },
+  "executionStatusOrder": {
+    "configureTiles": "実行状態タイル設定",
+    "title": "実行状態タイルの順序",
+    "description": "ドラッグまたは矢印ボタンでタイルの表示順序を変更できます。"
+  },
   "footer": {
     "oandaApiReachable": "OANDA APIに接続可能",
     "oandaApiUnavailable": "OANDA APIが利用不可",

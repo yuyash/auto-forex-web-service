@@ -1,11 +1,18 @@
+import { useCallback, useMemo, useState, type DragEvent } from 'react';
 import {
   Alert,
   Box,
   CircularProgress,
   Divider,
+  IconButton,
+  Tooltip,
   Typography,
   type TypographyProps,
 } from '@mui/material';
+import {
+  DragIndicator as DragIcon,
+  Settings as SettingsIcon,
+} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import type {
@@ -20,6 +27,8 @@ import {
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
+import { useItemOrder } from '../../../hooks/useItemOrder';
+import { ItemOrderDialog } from '../../common/ItemOrderDialog';
 
 type DetailNamespace = 'backtest' | 'trading';
 
@@ -72,26 +81,82 @@ export function ExecutionStatusSummary({
 }: ExecutionStatusSummaryProps) {
   const { t } = useTranslation(['common', 'strategy', taskNamespace]);
   const { separators } = useNumberFormatter();
-  const cards = snapshot?.snapshot.cards ?? [];
-  const snapshotCardIds = new Set(cards.map((card) => card.id));
+  const snapshotCards = snapshot?.snapshot.cards;
   const accountCurrency = summary.execution.accountCurrency || pnlCurrency;
-  const items = [
-    ...buildResultItems({
-      taskNamespace,
-      summary,
-      latestMetrics,
-      pnlCurrency,
-      displayedMarginRatio,
-      hiddenIds: snapshotCardIds,
-      separators,
-      t,
-    }),
-    ...extraItems,
-    ...cards.map((card) =>
-      snapshotCardToItem(card, accountCurrency, pnlCurrency, t, separators)
-    ),
-  ];
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const items = useMemo(() => {
+    const cards = snapshotCards ?? [];
+    const snapshotCardIds = new Set(cards.map((card) => card.id));
+    return [
+      ...buildResultItems({
+        taskNamespace,
+        summary,
+        latestMetrics,
+        pnlCurrency,
+        displayedMarginRatio,
+        hiddenIds: snapshotCardIds,
+        separators,
+        t,
+      }),
+      ...extraItems,
+      ...cards.map((card) =>
+        snapshotCardToItem(card, accountCurrency, pnlCurrency, t, separators)
+      ),
+    ];
+  }, [
+    accountCurrency,
+    displayedMarginRatio,
+    extraItems,
+    latestMetrics,
+    pnlCurrency,
+    separators,
+    summary,
+    snapshotCards,
+    t,
+    taskNamespace,
+  ]);
+  const { orderedItems, updateOrder, resetOrder } = useItemOrder(
+    `execution_status_${taskNamespace}`,
+    items
+  );
   const status = formatSnapshotStatus(snapshot?.snapshot.status ?? null, t);
+
+  const moveTile = useCallback(
+    (from: number, to: number) => {
+      if (from < 0 || to < 0 || from === to || to >= orderedItems.length) {
+        return;
+      }
+      const ids = orderedItems.map((item) => item.id);
+      const [moved] = ids.splice(from, 1);
+      ids.splice(to, 0, moved);
+      updateOrder(ids);
+    },
+    [orderedItems, updateOrder]
+  );
+
+  const handleTileDragStart = useCallback(
+    (event: DragEvent, index: number) => {
+      setDragIndex(index);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', orderedItems[index]?.id ?? '');
+    },
+    [orderedItems]
+  );
+
+  const handleTileDragOver = useCallback(
+    (event: DragEvent, index: number) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (dragIndex !== null && dragIndex !== index) {
+        moveTile(dragIndex, index);
+        setDragIndex(index);
+      }
+    },
+    [dragIndex, moveTile]
+  );
+
+  const handleTileDragEnd = useCallback(() => setDragIndex(null), []);
 
   if (items.length === 0 && !snapshotError && !isSnapshotLoading) {
     return null;
@@ -118,6 +183,18 @@ export function ExecutionStatusSummary({
           </Typography>
         ) : null}
         {isSnapshotLoading ? <CircularProgress size={18} /> : null}
+        <Tooltip title={t('executionStatusOrder.configureTiles')}>
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => setOrderDialogOpen(true)}
+              disabled={orderedItems.length < 2}
+              aria-label={t('executionStatusOrder.configureTiles')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Box>
 
       {snapshotError ? (
@@ -138,37 +215,97 @@ export function ExecutionStatusSummary({
           },
         }}
       >
-        {items.map((item) => (
-          <ExecutionStatusTile key={item.id} item={item} />
+        {orderedItems.map((item, index) => (
+          <ExecutionStatusTile
+            key={item.id}
+            item={item}
+            index={index}
+            isDragging={dragIndex === index}
+            onDragStart={handleTileDragStart}
+            onDragOver={handleTileDragOver}
+            onDragEnd={handleTileDragEnd}
+          />
         ))}
       </Box>
+      {orderDialogOpen ? (
+        <ItemOrderDialog
+          open={orderDialogOpen}
+          title={t('executionStatusOrder.title')}
+          description={t('executionStatusOrder.description')}
+          items={orderedItems.map((item) => ({
+            id: item.id,
+            label: item.label,
+            secondary: item.value,
+          }))}
+          onClose={() => setOrderDialogOpen(false)}
+          onSave={updateOrder}
+          onReset={resetOrder}
+        />
+      ) : null}
     </Box>
   );
 }
 
-function ExecutionStatusTile({ item }: { item: ExecutionStatusItem }) {
+function ExecutionStatusTile({
+  item,
+  index,
+  isDragging,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+}: {
+  item: ExecutionStatusItem;
+  index: number;
+  isDragging: boolean;
+  onDragStart: (event: DragEvent, index: number) => void;
+  onDragOver: (event: DragEvent, index: number) => void;
+  onDragEnd: () => void;
+}) {
   return (
     <Box
+      draggable
+      onDragStart={(event) => onDragStart(event, index)}
+      onDragOver={(event) => onDragOver(event, index)}
+      onDragEnd={onDragEnd}
       sx={{
         border: 1,
-        borderColor: 'divider',
+        borderColor: isDragging ? 'primary.main' : 'divider',
         borderRadius: 1,
         p: 1.25,
         minWidth: 0,
         minHeight: 68,
+        cursor: 'grab',
+        bgcolor: isDragging ? 'action.hover' : 'background.paper',
+        '&:active': { cursor: 'grabbing' },
+        '&:hover': {
+          borderColor: 'text.secondary',
+        },
       }}
     >
-      <Typography
-        variant="caption"
-        color="text.secondary"
+      <Box
         sx={{
-          display: 'block',
-          lineHeight: 1.25,
-          overflowWrap: 'anywhere',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 0.5,
         }}
       >
-        {item.label}
-      </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: 'block',
+            lineHeight: 1.25,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {item.label}
+        </Typography>
+        <DragIcon
+          fontSize="small"
+          sx={{ color: 'text.disabled', mt: -0.25, flexShrink: 0 }}
+        />
+      </Box>
       <Typography
         variant="body2"
         color={item.color}

@@ -670,6 +670,16 @@
     "moveDown": "Move down",
     "configureTabs": "Configure tabs"
   },
+  "itemOrder": {
+    "reset": "Reset order",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
+  "executionStatusOrder": {
+    "configureTiles": "Configure execution status tiles",
+    "title": "Execution status tile order",
+    "description": "Drag tiles or use the arrow buttons to change their display order."
+  },
   "footer": {
     "oandaApiReachable": "OANDA API is reachable",
     "oandaApiUnavailable": "OANDA API is unavailable",
