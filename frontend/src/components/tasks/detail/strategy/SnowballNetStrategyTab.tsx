@@ -93,8 +93,8 @@ interface NoDataRegionStyle {
 
 interface CandleBucketRange {
   step: number;
-  firstBucket: number;
-  lastBucket: number;
+  since: number;
+  until: number;
 }
 
 function toNumber(value: unknown): number | null {
@@ -138,10 +138,6 @@ function toUnixSeconds(value: string | null | undefined): number | null {
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
 }
 
-function positiveModulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
-}
-
 function candleBucketRange(
   data: SnowballNetChartResponse
 ): CandleBucketRange | null {
@@ -150,13 +146,19 @@ function candleBucketRange(
   const until = toUnixSeconds(data.window.until);
   if (!step || since == null || until == null || since > until) return null;
 
-  const anchor =
-    data.candles.length > 0 ? positiveModulo(data.candles[0].time, step) : 0;
   return {
     step,
-    firstBucket: Math.floor((since - anchor) / step) * step + anchor,
-    lastBucket: Math.floor((until - anchor) / step) * step + anchor,
+    since,
+    until,
   };
+}
+
+function sortedCandles(data: SnowballNetChartResponse) {
+  return [...data.candles].sort((a, b) => a.time - b.time);
+}
+
+function noDataThresholdSeconds(step: number): number {
+  return step >= 86400 ? step : step * MIN_NO_DATA_BUCKETS;
 }
 
 function buildContinuousCandleData(
@@ -176,68 +178,75 @@ function buildContinuousCandleData(
     );
   }
 
-  const byTime = new Map(data.candles.map((candle) => [candle.time, candle]));
-  const result: Array<CandlestickData<Time> | WhitespaceData<Time>> = [];
-  for (
-    let time = bucketRange.firstBucket;
-    time <= bucketRange.lastBucket;
-    time += bucketRange.step
-  ) {
-    const candle = byTime.get(time);
-    if (candle) {
-      result.push({
-        time: time as Time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      });
-    } else {
-      result.push({ time: time as Time });
+  const points = new Map<
+    number,
+    CandlestickData<Time> | WhitespaceData<Time>
+  >();
+  const addWhitespace = (time: number) => {
+    if (!points.has(time)) {
+      points.set(time, { time: time as Time });
     }
+  };
+  const addWhitespaceRange = (from: number, to: number) => {
+    if (to <= from) return;
+    for (let time = from; time < to; time += bucketRange.step) {
+      addWhitespace(time);
+    }
+    addWhitespace(to);
+  };
+
+  addWhitespace(bucketRange.since);
+  addWhitespace(bucketRange.until);
+  for (const region of buildNoDataRegions(data)) {
+    addWhitespaceRange(region.from, region.to);
   }
-  return result;
+  for (const candle of sortedCandles(data)) {
+    points.set(candle.time, {
+      time: candle.time as Time,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    });
+  }
+
+  return [...points.values()].sort((a, b) => Number(a.time) - Number(b.time));
 }
 
 function buildNoDataRegions(data: SnowballNetChartResponse): NoDataRegion[] {
   const bucketRange = candleBucketRange(data);
   if (!bucketRange) return [];
 
-  const candleTimes = new Set(data.candles.map((candle) => candle.time));
+  const candles = sortedCandles(data);
+  const threshold = noDataThresholdSeconds(bucketRange.step);
   const regions: NoDataRegion[] = [];
-  let missingStart: number | null = null;
-  let missingCount = 0;
-  let lastMissing = bucketRange.firstBucket;
 
-  const flush = (nextTime: number) => {
-    if (missingStart == null) return;
-    if (missingCount >= MIN_NO_DATA_BUCKETS) {
+  const addRegion = (from: number, to: number) => {
+    if (to - from >= threshold) {
       regions.push({
-        from: missingStart,
-        to: nextTime <= bucketRange.lastBucket ? nextTime : lastMissing,
+        from,
+        to,
       });
     }
-    missingStart = null;
-    missingCount = 0;
   };
 
-  for (
-    let time = bucketRange.firstBucket;
-    time <= bucketRange.lastBucket;
-    time += bucketRange.step
-  ) {
-    if (!candleTimes.has(time)) {
-      if (missingStart == null) {
-        missingStart = time;
-      }
-      missingCount += 1;
-      lastMissing = time;
-      continue;
-    }
-    flush(time);
+  if (candles.length === 0) {
+    addRegion(bucketRange.since, bucketRange.until);
+    return regions;
   }
-  flush(bucketRange.lastBucket + bucketRange.step);
-  return regions.filter((region) => region.to > region.from);
+
+  addRegion(bucketRange.since, candles[0].time);
+  for (let index = 1; index < candles.length; index += 1) {
+    const previous = candles[index - 1];
+    const current = candles[index];
+    const expectedNext = previous.time + bucketRange.step;
+    addRegion(expectedNext, current.time);
+  }
+  addRegion(
+    candles[candles.length - 1].time + bucketRange.step,
+    bucketRange.until
+  );
+  return regions;
 }
 
 function releaseProgrammaticRangeFlag(ref: MutableRefObject<boolean>) {
