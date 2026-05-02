@@ -284,6 +284,8 @@ def _make_mock_account(**overrides):
     account.balance = overrides.get("balance", Decimal("100000"))
     account.unrealized_pnl = overrides.get("unrealized_pnl", Decimal("0"))
     account.margin_used = overrides.get("margin_used", Decimal("0"))
+    account.api_type = overrides.get("api_type", "practice")
+    account.is_active = overrides.get("is_active", True)
     return account
 
 
@@ -808,6 +810,75 @@ class TestCreateMarketOrderDryRun:
 
         assert "EUR_USD_long" in svc._dry_run_positions
         assert svc._dry_run_positions["EUR_USD_long"].units == Decimal("1000")
+
+
+# ---------------------------------------------------------------------------
+# Broker order guard
+# ---------------------------------------------------------------------------
+
+
+class TestBrokerOrderGuardBoundary:
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_market_order_guard_blocks_live_account_before_api_call(
+        self, mock_event_svc, mock_compliance, mock_v20_ctx, settings
+    ):
+        settings.TRADING_ALLOW_LIVE_OANDA = False
+        account = _make_mock_account(api_type="live", is_active=True)
+        svc = OandaService(account=account)
+        svc.api.order.create = MagicMock()
+
+        with pytest.raises(OandaAPIError, match="Live OANDA accounts are disabled"):
+            svc.create_market_order(MarketOrderRequest(instrument="EUR_USD", units=Decimal("1000")))
+
+        svc.api.order.create.assert_not_called()
+        svc.event_service.log_security_event.assert_called_once()
+
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_market_order_guard_blocks_oversized_order_before_api_call(
+        self, mock_event_svc, mock_compliance, mock_v20_ctx, settings
+    ):
+        settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
+        account = _make_mock_account(api_type="practice", is_active=True)
+        svc = OandaService(account=account)
+        svc.api.order.create = MagicMock()
+
+        with pytest.raises(OandaAPIError, match="Order size exceeds"):
+            svc.create_market_order(MarketOrderRequest(instrument="EUR_USD", units=Decimal("1001")))
+
+        svc.api.order.create.assert_not_called()
+        svc.event_service.log_security_event.assert_called_once()
+
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_close_trade_guard_blocks_before_api_call(
+        self, mock_event_svc, mock_compliance, mock_v20_ctx, settings
+    ):
+        settings.TRADING_LIVE_ALLOWED_INSTRUMENTS = ["USD_JPY"]
+        account = _make_mock_account(api_type="practice", is_active=True)
+        svc = OandaService(account=account)
+        svc.api.trade.close = MagicMock()
+        trade = OpenTrade(
+            trade_id="T1",
+            instrument="EUR_USD",
+            direction=OrderDirection.LONG,
+            units=Decimal("1000"),
+            entry_price=Decimal("1.1000"),
+            unrealized_pnl=Decimal("0"),
+            open_time=None,
+            state="OPEN",
+            account_id="001",
+        )
+
+        with pytest.raises(OandaAPIError, match="Instrument EUR_USD"):
+            svc.close_trade(trade)
+
+        svc.api.trade.close.assert_not_called()
+        svc.event_service.log_security_event.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
