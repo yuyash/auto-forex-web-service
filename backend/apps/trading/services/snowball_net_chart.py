@@ -8,23 +8,42 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+import v20
+from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from v20.errors import V20Timeout
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.request import Request
 
-from apps.market.models import TickData
+from apps.market.models import OandaAccounts
+from apps.market.views.candles import (
+    OandaCandleFetchError,
+    _fetch_oanda_candles,
+    _parse_candle_time,
+    _parse_candles,
+)
 from apps.trading.models.metrics import Metrics
 from apps.trading.models.trades import Trade
 from apps.trading.services.strategy_data_common import (
     granularity_seconds,
-    normalise_granularity,
     parse_datetime,
     string_or_none,
 )
 
 
-DEFAULT_SIDE_BARS = 180
+DEFAULT_GRANULARITY = "H1"
+DEFAULT_SIDE_BARS = 250
 MAX_SIDE_BARS = 2000
+OANDA_CANDLE_MAX_BATCH = 5000
+
+
+class OandaCandleUnavailable(APIException):
+    """Raised when OANDA candles cannot be fetched for the strategy chart."""
+
+    status_code = 502
+    default_detail = "Failed to fetch candles from OANDA."
+    default_code = "oanda_candles_unavailable"
 
 
 PRICE_LINE_SPECS = (
@@ -66,8 +85,10 @@ def build_snowball_net_chart(
     last_tick_timestamp: str | None,
 ) -> dict[str, Any]:
     """Build the chart payload consumed by the SnowballNet strategy tab."""
-    window = _window_from_request(request, last_tick_timestamp=last_tick_timestamp)
+    current_timestamp = _resolve_current_timestamp(strategy_state, last_tick_timestamp)
+    window = _window_from_request(request, last_tick_timestamp=current_timestamp)
     instrument = str(getattr(task, "instrument", "") or "")
+    account = _resolve_oanda_account(request=request, task=task)
 
     return {
         "execution_id": string_or_none(execution_id),
@@ -82,12 +103,13 @@ def build_snowball_net_chart(
             "follow": window.follow,
             "merge_markers": window.merge_markers,
         },
-        "current": _current_state(strategy_state, last_tick_timestamp),
+        "current": _current_state(strategy_state, current_timestamp),
         "candles": _load_candles(
+            account=account,
             instrument=instrument,
             since=window.since,
             until=window.until,
-            granularity_seconds=window.granularity_seconds,
+            granularity=window.granularity,
         ),
         "price_lines": _load_price_lines(
             task=task,
@@ -123,9 +145,7 @@ def _window_from_request(
     last_tick_timestamp: str | None,
 ) -> NetChartWindow:
     params = request.query_params
-    granularity = normalise_granularity(params.get("granularity") or "M1")
-    if granularity == "raw":
-        granularity = "M1"
+    granularity = _normalise_chart_granularity(params.get("granularity") or DEFAULT_GRANULARITY)
     seconds = granularity_seconds(granularity)
     if seconds is None:
         raise ValidationError("granularity must be M1, M5, M15, M30, H1, H4, or D.")
@@ -160,44 +180,137 @@ def _window_from_request(
     )
 
 
+def _normalise_chart_granularity(value: Any) -> str:
+    raw = str(value or DEFAULT_GRANULARITY).strip().upper()
+    if raw in {"", "RAW", "TICK", "1"}:
+        return "M1"
+    if raw.isdigit():
+        raw = f"M{raw}"
+    if raw in {"M60", "H1"}:
+        return "H1"
+    if raw in {"M240", "H4"}:
+        return "H4"
+    if raw in {"M1", "M5", "M15", "M30", "D"}:
+        return raw
+    raise ValidationError("granularity must be M1, M5, M15, M30, H1, H4, or D.")
+
+
+def _resolve_oanda_account(*, request: Request, task: Any) -> OandaAccounts:
+    task_account = getattr(task, "oanda_account", None)
+    if task_account is not None:
+        return task_account
+
+    user_id = getattr(getattr(request, "user", None), "pk", None) or getattr(task, "user_id", None)
+    if user_id is None:
+        raise ValidationError("OANDA account is required to fetch candles.")
+
+    account_ref = request.query_params.get("account_id")
+    accounts = OandaAccounts.objects.filter(user_id=user_id, is_active=True)
+    if account_ref:
+        account_query = Q(account_id=str(account_ref))
+        try:
+            account_query |= Q(pk=int(account_ref))
+        except (TypeError, ValueError):
+            pass
+        account = accounts.filter(account_query).first()
+        if account is None:
+            raise ValidationError("OANDA account not found.")
+        return account
+
+    account = accounts.filter(is_default=True).first() or accounts.first()
+    if account is None:
+        raise ValidationError("No OANDA account found. Please configure an account first.")
+    return account
+
+
 def _load_candles(
     *,
+    account: OandaAccounts,
     instrument: str,
     since: datetime,
     until: datetime,
-    granularity_seconds: int,
+    granularity: str,
 ) -> list[dict[str, Any]]:
     if not instrument:
         return []
-    rows = (
-        TickData.objects.filter(
-            instrument=instrument,
-            timestamp__gte=since,
-            timestamp__lte=until,
-        )
-        .order_by("timestamp")
-        .values_list("timestamp", "mid")
+    fetch_until = min(until, timezone.now())
+    if since >= fetch_until:
+        return []
+
+    api_context = v20.Context(
+        hostname=account.api_hostname,
+        token=account.get_api_token(),
+        application="auto-forex-trading",
+        poll_timeout=int(getattr(settings, "OANDA_REST_TIMEOUT", 10)),
     )
-    buckets: dict[int, dict[str, Any]] = {}
-    for timestamp, mid in rows.iterator(chunk_size=5000):
-        bucket = _bucket(timestamp, granularity_seconds)
-        value = float(mid)
-        candle = buckets.get(bucket)
-        if candle is None:
-            buckets[bucket] = {
-                "time": bucket,
-                "open": value,
-                "high": value,
-                "low": value,
-                "close": value,
-                "volume": 1,
-            }
-            continue
-        candle["high"] = max(candle["high"], value)
-        candle["low"] = min(candle["low"], value)
-        candle["close"] = value
-        candle["volume"] += 1
-    return [buckets[key] for key in sorted(buckets)]
+    try:
+        raw_candles = _fetch_oanda_candles_for_window(
+            api_context=api_context,
+            instrument=instrument,
+            granularity=granularity,
+            since=since,
+            until=fetch_until,
+        )
+    except OandaCandleFetchError as exc:
+        raise OandaCandleUnavailable("Failed to fetch candles from OANDA.") from exc
+    except V20Timeout as exc:
+        raise OandaCandleUnavailable("OANDA candle request timed out.") from exc
+    return _parse_candles(raw_candles)
+
+
+def _fetch_oanda_candles_for_window(
+    *,
+    api_context: v20.Context,
+    instrument: str,
+    granularity: str,
+    since: datetime,
+    until: datetime,
+) -> list[Any]:
+    step = granularity_seconds(granularity) or 3600
+    estimated = int((until - since).total_seconds() / step) + 2
+    if estimated <= OANDA_CANDLE_MAX_BATCH:
+        return _fetch_oanda_candles(
+            api_context,
+            instrument,
+            granularity=granularity,
+            fromTime=_format_oanda_time(since),
+            toTime=_format_oanda_time(until),
+        )
+
+    candles: list[Any] = []
+    current_from = since
+    while current_from < until:
+        current_to = datetime.fromtimestamp(
+            min(
+                current_from.timestamp() + OANDA_CANDLE_MAX_BATCH * step,
+                until.timestamp(),
+            ),
+            tz=UTC,
+        )
+        batch = _fetch_oanda_candles(
+            api_context,
+            instrument,
+            granularity=granularity,
+            fromTime=_format_oanda_time(current_from),
+            toTime=_format_oanda_time(current_to),
+        )
+        if not batch:
+            break
+        candles.extend(batch)
+
+        last_dt = _parse_candle_time(batch[-1])
+        if last_dt is None:
+            break
+        next_from = datetime.fromtimestamp(last_dt.timestamp() + step, tz=UTC)
+        if next_from <= current_from:
+            break
+        current_from = next_from
+    return candles
+
+
+def _format_oanda_time(value: datetime) -> str:
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return aware.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _load_price_lines(
@@ -437,6 +550,15 @@ def _current_state(
         "pending_action": strategy_state.get("pending_action") or {},
         "last_action": strategy_state.get("last_action") or {},
     }
+
+
+def _resolve_current_timestamp(
+    strategy_state: dict[str, Any], last_tick_timestamp: str | None
+) -> str | None:
+    state_timestamp = strategy_state.get("last_tick_timestamp")
+    if state_timestamp:
+        return str(state_timestamp)
+    return last_tick_timestamp
 
 
 def _trade_action(execution_method: str) -> str:

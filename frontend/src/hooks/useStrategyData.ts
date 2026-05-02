@@ -23,6 +23,7 @@ export interface StrategyDataParams {
   after_bars?: number;
   follow?: string;
   merge_markers?: string;
+  account_id?: string | number;
 }
 
 function cleanParams(params?: StrategyDataParams) {

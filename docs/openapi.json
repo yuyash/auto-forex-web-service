@@ -4096,6 +4096,13 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
                         "name": "after_bars",
                         "schema": {
                             "type": "integer"
@@ -6186,6 +6193,13 @@
                 "operationId": "trading_tasks_trading_strategy_net_chart_retrieve",
                 "description": "Retrieve SnowballNet OHLC, average-price lines, metrics, and markers.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
                     {
                         "in": "query",
                         "name": "after_bars",

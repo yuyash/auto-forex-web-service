@@ -163,6 +163,7 @@ class TaskStrategyDataMixin:
             OpenApiParameter("after_bars", int, required=False),
             OpenApiParameter("follow", bool, required=False),
             OpenApiParameter("merge_markers", bool, required=False),
+            OpenApiParameter("account_id", str, required=False),
         ],
         responses={
             200: inline_serializer(
