@@ -36,6 +36,7 @@ logger: Logger = logging.getLogger(name=__name__)
 timezone = _timezone
 stop_backtest_task = _stop_backtest_task
 stop_trading_task = _stop_trading_task
+_UNSET = object()
 
 
 class TaskServiceError(Exception):
@@ -148,10 +149,19 @@ class TaskService:
         dispatch_idempotency_key = uuid4()
         model_objects = getattr(type(task), "objects", None)
         if model_objects is not None:
-            model_objects.filter(pk=task.pk).update(
+            rows_updated = model_objects.filter(
+                pk=task.pk,
+                status=TaskStatus.STARTING,
+                celery_task_id=celery_task_id,
+            ).update(
                 dispatch_idempotency_key=dispatch_idempotency_key,
                 updated_at=timezone.now(),
             )
+            if rows_updated == 0:
+                raise TaskConflictError(
+                    "Task dispatch was superseded by another lifecycle transition. "
+                    "Reload the task before retrying."
+                )
         task.dispatch_idempotency_key = dispatch_idempotency_key
         celery_task.apply_async(
             args=[task.pk, str(dispatch_idempotency_key)],
@@ -391,7 +401,12 @@ class TaskService:
             )
             raise TaskSubmissionError(f"Failed to submit task to Celery: {str(e)}") from e
 
-    def recover_trading_task(self, task: TradingTask) -> TradingTask:
+    def recover_trading_task(
+        self,
+        task: TradingTask,
+        *,
+        expected_celery_task_id: object = _UNSET,
+    ) -> TradingTask:
         """Requeue an orphaned trading task in the same execution run."""
 
         previous_status = task.status
@@ -401,12 +416,17 @@ class TaskService:
             locked_task = TradingTask.objects.select_for_update().get(pk=task.pk)
 
             if locked_task.status not in (TaskStatus.STARTING, TaskStatus.RUNNING):
-                raise ValueError(
+                raise TaskConflictError(
                     "Orphan recovery requires task in STARTING/RUNNING state; "
                     f"got {locked_task.status}"
                 )
             if not locked_task.execution_id:
                 raise ValueError("Cannot recover trading task without an execution_id")
+            if _identifier_mismatch(locked_task.celery_task_id, expected_celery_task_id):
+                raise TaskConflictError(
+                    "Trading task recovery was already claimed by another dispatch. "
+                    "Reload the task before retrying."
+                )
             self._ensure_dispatch_risk_guard_allows(locked_task)
 
             locked_task.status = TaskStatus.STARTING
@@ -433,6 +453,9 @@ class TaskService:
         try:
             self._dispatch_task(task, "trading")
             return task
+        except TaskConflictError:
+            task.refresh_from_db()
+            raise
         except Exception as exc:
             TradingTask.objects.filter(pk=task.pk).update(
                 status=TaskStatus.FAILED,
@@ -666,3 +689,11 @@ class TaskService:
                 extra={"task_id": str(task_id)},
             )
             raise TaskServiceError("Failed to resume task due to an internal error") from exc
+
+
+def _identifier_mismatch(current: object, expected: object) -> bool:
+    """Return whether an optional lifecycle identifier no longer matches."""
+
+    if expected is _UNSET:
+        return False
+    return str(current or "") != str(expected or "")

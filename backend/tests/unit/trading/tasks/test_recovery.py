@@ -143,10 +143,8 @@ class TestRecoverOrphanedTasks:
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        tt.objects.filter.side_effect = [
-            _make_qs([task]),
-            MagicMock(update=MagicMock(return_value=1)),
-        ]
+        task.celery_task_id = "old-celery-id"
+        tt.objects.filter.return_value = _make_qs([task])
 
         recent_cts = MagicMock()
         recent_cts.instance_key = f"{task.pk}:{task.execution_id}"
@@ -160,7 +158,10 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="worker_ready")
         assert result["trading"] == 1
-        service_instance.recover_trading_task.assert_called_once_with(task)
+        service_instance.recover_trading_task.assert_called_once_with(
+            task,
+            expected_celery_task_id="old-celery-id",
+        )
 
     @pytest.mark.usefixtures("_mock_models")
     def test_worker_ready_skips_task_when_execution_is_still_active(self, _mock_models):
@@ -243,10 +244,7 @@ class TestRecoverOrphanedTasks:
         task.celery_task_id = "old-celery-id"
         task.execution_run_id = 5
 
-        # Calls: 1) recovery queryset, 2) optimistic lock update
-        optimistic_lock_qs = MagicMock()
-        optimistic_lock_qs.update.return_value = 1
-        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs]
+        tt.objects.filter.return_value = _make_qs([task])
 
         cts.objects.filter.return_value.first.return_value = None
 
@@ -257,7 +255,10 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["trading"] == 1
-        service_instance.recover_trading_task.assert_called_once_with(task)
+        service_instance.recover_trading_task.assert_called_once_with(
+            task,
+            expected_celery_task_id="old-celery-id",
+        )
         service_instance.start_task.assert_not_called()
         tl.objects.create.assert_called_once()
         assert "persisted strategy and grid state" in tl.objects.create.call_args.kwargs["message"]
@@ -347,13 +348,12 @@ class TestRecoverOrphanedTasks:
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
+        task.celery_task_id = "old-celery-id"
 
-        # Calls: 1) recovery queryset, 2) optimistic lock update, 3) FAILED update
-        optimistic_lock_qs = MagicMock()
-        optimistic_lock_qs.update.return_value = 1  # lock acquired
+        # Calls: 1) recovery queryset, 2) FAILED update
         failed_update_qs = MagicMock()
         failed_update_qs.update.return_value = 1
-        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs, failed_update_qs]
+        tt.objects.filter.side_effect = [_make_qs([task]), failed_update_qs]
         cts.objects.filter.return_value.first.return_value = None
 
         service_instance = MagicMock()
@@ -372,10 +372,9 @@ class TestRecoverOrphanedTasks:
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
+        task.celery_task_id = "old-celery-id"
 
-        optimistic_lock_qs = MagicMock()
-        optimistic_lock_qs.update.return_value = 1
-        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs]
+        tt.objects.filter.return_value = _make_qs([task])
 
         stale_for_trading = MagicMock()
         stale_for_trading.instance_key = f"{task.pk}:{task.execution_id}"
@@ -389,7 +388,36 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["trading"] == 1
-        service_instance.recover_trading_task.assert_called_once_with(task)
+        service_instance.recover_trading_task.assert_called_once_with(
+            task,
+            expected_celery_task_id="old-celery-id",
+        )
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_claimed_trading_recovery_is_skipped_not_failed(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+        from apps.trading.tasks.service import TaskConflictError
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.celery_task_id = "old-celery-id"
+        tt.objects.filter.return_value = _make_qs([task])
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        service_instance = MagicMock()
+        service_instance.recover_trading_task.side_effect = TaskConflictError("claimed")
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+
+        assert result["trading"] == 0
+        service_instance.recover_trading_task.assert_called_once_with(
+            task,
+            expected_celery_task_id="old-celery-id",
+        )
 
     @pytest.mark.usefixtures("_mock_models")
     def test_task_cooldown_blocks_duplicate_task_recovery(self, _mock_models):
