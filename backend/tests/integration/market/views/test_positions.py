@@ -13,6 +13,7 @@ from apps.market.models import OandaAccounts
 from apps.market.services.broker_order_guard import BrokerOrderGuardError
 from apps.market.services.compliance import ComplianceViolationError
 from apps.market.services.oanda import OandaAPIError
+from apps.market.views.order_errors import ORDER_COMPLIANCE_ERROR, ORDER_GUARD_ERROR
 
 
 def _guarded_oanda_error(message: str) -> OandaAPIError:
@@ -187,7 +188,8 @@ class TestPositionView:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
-        assert "Instrument USD_JPY" in response.data["error"]
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Instrument USD_JPY" not in response.data["error"]
 
     @patch("apps.market.views.positions.OandaService")
     def test_put_position_compliance_failure_returns_422(
@@ -218,7 +220,8 @@ class TestPositionView:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.data["error_code"] == "ORDER_COMPLIANCE_VIOLATION"
-        assert "maximum leverage" in response.data["error"]
+        assert response.data["error"] == ORDER_COMPLIANCE_ERROR
+        assert "maximum leverage" not in response.data["error"]
 
 
 @pytest.mark.django_db
@@ -299,7 +302,8 @@ class TestPositionDetailView:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
-        assert "Live OANDA accounts are disabled" in response.data["error"]
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Live OANDA accounts are disabled" not in response.data["error"]
 
     @patch("apps.market.views.positions.OandaService")
     def test_patch_position_upstream_failure_returns_502(

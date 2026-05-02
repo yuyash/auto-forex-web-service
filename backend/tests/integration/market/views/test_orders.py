@@ -13,6 +13,7 @@ from apps.market.models import OandaAccounts
 from apps.market.services.broker_order_guard import BrokerOrderGuardError
 from apps.market.services.compliance import ComplianceViolationError
 from apps.market.services.oanda import OandaAPIError
+from apps.market.views.order_errors import ORDER_COMPLIANCE_ERROR, ORDER_GUARD_ERROR
 
 
 def _guarded_oanda_error(message: str) -> OandaAPIError:
@@ -184,7 +185,8 @@ class TestOrderView:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error_code"] == "ORDER_GUARD_VIOLATION"
-        assert "Order size exceeds" in response.data["error"]
+        assert response.data["error"] == ORDER_GUARD_ERROR
+        assert "Order size exceeds" not in response.data["error"]
 
     @patch("apps.market.views.orders.OandaService")
     def test_post_order_compliance_failure_returns_422(self, mock_service: Any, user: Any) -> None:
@@ -214,7 +216,8 @@ class TestOrderView:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.data["error_code"] == "ORDER_COMPLIANCE_VIOLATION"
-        assert "Hedging is not allowed" in response.data["error"]
+        assert response.data["error"] == ORDER_COMPLIANCE_ERROR
+        assert "Hedging is not allowed" not in response.data["error"]
 
     @patch("apps.market.views.orders.OandaService")
     def test_post_order_upstream_failure_returns_502(self, mock_service: Any, user: Any) -> None:
