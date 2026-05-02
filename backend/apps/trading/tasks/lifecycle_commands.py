@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from celery.result import AsyncResult
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
@@ -256,15 +257,19 @@ class TaskLifecycleCommands:
         else:
             next_status = TaskStatus.STOPPING
 
-        task.status = next_status
-        update_fields = ["status", "updated_at"]
+        extra_updates: dict[str, object] = {}
         # Both trading and backtest tasks persist the ``sell_on_stop`` flag
         # so the worker that runs the shutdown logic can close open
         # positions at current market / tick prices.
         if stop_mode == StopMode.GRACEFUL_CLOSE:
-            task.sell_on_stop = True
-            update_fields.append("sell_on_stop")
-        task.save(update_fields=update_fields)
+            extra_updates["sell_on_stop"] = True
+        self._transition_task_status(
+            command="stop",
+            task=task,
+            from_status=previous_status,
+            to_status=next_status,
+            extra_updates=extra_updates,
+        )
         self._audit_lifecycle_transition(
             command="stop",
             task_id=task.pk,
@@ -338,7 +343,12 @@ class TaskLifecycleCommands:
             if task_type == "backtest"
             else "trading.tasks.run_trading_task"
         )
-        self.service.writer.persist_state(task, status=TaskStatus.PAUSED)
+        self._transition_task_status(
+            command="pause",
+            task=task,
+            from_status=previous_status,
+            to_status=TaskStatus.PAUSED,
+        )
         self._audit_lifecycle_transition(
             command="pause",
             task_id=task.pk,
@@ -370,6 +380,15 @@ class TaskLifecycleCommands:
             )
             return False
 
+        previous_status = task.status
+        self._transition_task_status(
+            command="cancel",
+            task=task,
+            from_status=previous_status,
+            to_status=TaskStatus.STOPPED,
+            extra_updates={"completed_at": timezone.now()},
+        )
+
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field.
         celery_id = getattr(task, "celery_task_id", None) or task.execution_id
@@ -377,12 +396,11 @@ class TaskLifecycleCommands:
         if result:
             result.revoke(terminate=True)
 
-        self.service._finalize_terminal_task(
+        self.events.publish(
             task=task,
             task_type=task_type,
-            status=TaskStatus.STOPPED,
-            description="Task cancelled",
             kind="task_cancelled",
+            description="Task cancelled",
         )
         return True
 
@@ -421,14 +439,19 @@ class TaskLifecycleCommands:
             self._revoke_execution(celery_id)
 
         self.service.writer.clear_execution_history(task=task, task_type=task_type)
-        type(task).objects.filter(pk=task.pk).update(
-            execution_id=None,
-            celery_task_id=None,
-            status=TaskStatus.CREATED,
-            started_at=None,
-            completed_at=None,
-            error_message=None,
-            error_traceback=None,
+        self._conditional_task_update(
+            command="restart",
+            task=task,
+            expected_status=task.status,
+            updates={
+                "execution_id": None,
+                "celery_task_id": None,
+                "status": TaskStatus.CREATED,
+                "started_at": None,
+                "completed_at": None,
+                "error_message": None,
+                "error_traceback": None,
+            },
         )
         task.refresh_from_db()
         if task.status != TaskStatus.CREATED:
@@ -592,6 +615,68 @@ class TaskLifecycleCommands:
         if is_trading:
             self._kick_market_supervisor()
         return task
+
+    def _transition_task_status(
+        self,
+        *,
+        command: str,
+        task: BacktestTask | TradingTask,
+        from_status: TaskStatus | str,
+        to_status: TaskStatus,
+        extra_updates: dict[str, object] | None = None,
+    ) -> None:
+        updates: dict[str, object] = {"status": to_status, **(extra_updates or {})}
+        self._conditional_task_update(
+            command=command,
+            task=task,
+            expected_status=from_status,
+            updates=updates,
+        )
+
+    def _conditional_task_update(
+        self,
+        *,
+        command: str,
+        task: BacktestTask | TradingTask,
+        expected_status: TaskStatus | str,
+        updates: dict[str, object],
+    ) -> None:
+        model_objects = getattr(type(task), "objects", None)
+        update_values = {"updated_at": timezone.now(), **updates}
+
+        if model_objects is None:
+            self._save_detached_task_update(task=task, updates=update_values)
+            return
+
+        rows_updated = model_objects.filter(pk=task.pk, status=expected_status).update(
+            **update_values
+        )
+        if rows_updated == 0:
+            refresh_from_db = getattr(task, "refresh_from_db", None)
+            if callable(refresh_from_db):
+                refresh_from_db()
+            from apps.trading.tasks.service import TaskConflictError
+
+            raise TaskConflictError(
+                f"Task {command} was superseded by another lifecycle transition. "
+                "Reload the task before retrying."
+            )
+
+        for field, value in update_values.items():
+            setattr(task, field, value)
+
+    @staticmethod
+    def _save_detached_task_update(
+        *,
+        task: BacktestTask | TradingTask,
+        updates: dict[str, object],
+    ) -> None:
+        for field, value in updates.items():
+            setattr(task, field, value)
+        try:
+            task.save(update_fields=list(updates.keys()))
+        except TypeError:
+            task.save()
 
     def _prepare_start(
         self,
