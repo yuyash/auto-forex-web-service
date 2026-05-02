@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.60.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.59.1...frontend-v1.60.0) (2026-05-02)
+
+
+### Features
+
+* rebuild take profit mode ([#624](https://github.com/yuyash/auto-forex-web-service/issues/624)) ([9d68b8a](https://github.com/yuyash/auto-forex-web-service/commit/9d68b8a8490ca9c818d803654e121b92b31c86fd))
+* refactoring and improve separation of concerns. ([#627](https://github.com/yuyash/auto-forex-web-service/issues/627)) ([670a0c8](https://github.com/yuyash/auto-forex-web-service/commit/670a0c872bb8a5a03d69b6d6587b9b0801280851))
+* **snowball:** recover stop-loss pips on rebuild ([#626](https://github.com/yuyash/auto-forex-web-service/issues/626)) ([406b8ea](https://github.com/yuyash/auto-forex-web-service/commit/406b8ead4d31703c3c82881c2ecf5454b8ea8956))
+* task detail controls and snowball docs ([#629](https://github.com/yuyash/auto-forex-web-service/issues/629)) ([60cc632](https://github.com/yuyash/auto-forex-web-service/commit/60cc63209aae517518f95dba0be26b1fbb8de67e))
+
+
+### Bug Fixes
+
+* **frontend:** improve mobile task filter layouts ([#620](https://github.com/yuyash/auto-forex-web-service/issues/620)) ([3f46035](https://github.com/yuyash/auto-forex-web-service/commit/3f4603596eb964dc4693057fd393e4429b27e32f))
+* harden auth session ([#628](https://github.com/yuyash/auto-forex-web-service/issues/628)) ([b6e798b](https://github.com/yuyash/auto-forex-web-service/commit/b6e798b53cf567a10e406fd351f4591ee42205c5))
+
+
+### Refactoring
+
+* **adaptive-net:** add cost-aware decision gates ([#623](https://github.com/yuyash/auto-forex-web-service/issues/623)) ([ec3a623](https://github.com/yuyash/auto-forex-web-service/commit/ec3a623537bceef65110e89912d6242694d3eec3))
+* **frontend:** harden task detail mobile layouts ([#622](https://github.com/yuyash/auto-forex-web-service/issues/622)) ([d92706f](https://github.com/yuyash/auto-forex-web-service/commit/d92706f213f2aed839894a9f297eab69386c80b1))
+
 ## [1.59.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.59.0...frontend-v1.59.1) (2026-04-26)
 
 ### Refactoring
