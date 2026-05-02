@@ -30,6 +30,7 @@ from apps.trading.tasks.lifecycle_plans import (
     build_stop_command_plan,
 )
 from apps.trading.tasks.lifecycle_state_machine import allowed_statuses_for_command
+from apps.trading.tasks.lifecycle_validators import ResumeCommandValidator
 
 if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
@@ -50,6 +51,10 @@ class TaskLifecycleCommands:
         self.logger = logger
         self.events = events or TaskLifecycleEventPublisher(logger=logger)
         self.adapters = adapters or create_default_lifecycle_adapters()
+        self.resume_validator = ResumeCommandValidator(
+            logger=logger,
+            ensure_dispatch_risk_guard_allows=service._ensure_dispatch_risk_guard_allows,
+        )
 
     def start(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         self._assert_transition_allowed(
@@ -381,58 +386,11 @@ class TaskLifecycleCommands:
         model_class = self.service._get_task_model(task_type)
         is_trading = task_type == "trading"
 
-        # Trading tasks can resume from PAUSED, STOPPED, or FAILED.
-        # Backtests can resume from PAUSED or STOPPED while preserving their
-        # execution_id and ExecutionState; the publisher continues from the
-        # last processed tick instead of replaying from task.start_time.
-        if is_trading:
-            allowed_statuses = allowed_statuses_for_command("resume_trading")
-        else:
-            allowed_statuses = allowed_statuses_for_command("resume_backtest")
-
         transition: LifecycleCommandResult
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
             previous_status = locked_task.status
-            self._assert_transition_allowed(
-                command="resume_trading" if is_trading else "resume_backtest",
-                task_status=locked_task.status,
-                message=(
-                    f"Task cannot be resumed from {locked_task.status} state. "
-                    f"Only {', '.join(str(s.value).upper() for s in allowed_statuses)} tasks can be resumed."
-                ),
-            )
-            if not locked_task.execution_id:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError("Cannot resume task without an execution_id")
-
-            try:
-                from apps.trading.services.resume_config import (
-                    ResumeConfigurationError,
-                    log_effective_resume_configuration,
-                    validate_resume_configuration,
-                )
-
-                audit = validate_resume_configuration(task=locked_task, task_type=task_type)
-                log_effective_resume_configuration(
-                    logger=self.logger,
-                    audit=audit,
-                    task=locked_task,
-                )
-            except ResumeConfigurationError as exc:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError(
-                    str(exc),
-                    resume_config_error=exc.as_payload(),
-                ) from exc
-            except ValueError as exc:
-                from apps.trading.tasks.service import TaskValidationError
-
-                raise TaskValidationError(str(exc)) from exc
-
-            self.service._ensure_dispatch_risk_guard_allows(locked_task)
+            self.resume_validator.validate(task=locked_task, task_type=task_type)
 
             previous_celery_task_id = locked_task.celery_task_id
             result = self.service.get_celery_result(
