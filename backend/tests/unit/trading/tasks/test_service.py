@@ -535,7 +535,7 @@ class TestResumeTask:
 
         with (
             patch.object(TaskService, "get_celery_result", return_value=None),
-            patch("apps.trading.tasks.lifecycle_commands._default_revoke_execution"),
+            patch("apps.trading.tasks.lifecycle_adapters._default_revoke_execution"),
             patch(
                 "apps.trading.tasks.lifecycle_commands."
                 "TaskLifecycleCommands._kick_market_supervisor"

@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 
 from apps.trading.enums import StopMode, TaskStatus
+from apps.trading.tasks.lifecycle_adapters import LifecycleCommandAdapters
 from apps.trading.tasks.lifecycle_commands import (
-    LifecycleCommandAdapters,
     TaskLifecycleCommands,
 )
 from apps.trading.tasks.lifecycle_events import TaskLifecycleKind
