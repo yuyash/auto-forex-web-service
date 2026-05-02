@@ -61,22 +61,41 @@ def parse_datetime(value: str | None) -> datetime | None:
 
 
 def normalise_granularity(value: str | None) -> str:
+    """Normalise a granularity string to an OANDA-compatible token.
+
+    Accepts ``raw``/``tick``/``1`` as the tick-level sentinel, a bare integer
+    interpreted as a minute count (``"240"`` -> ``"M240"``), or OANDA-style
+    tokens ``M{n}``, ``H{n}``, ``D``, ``W`` and ``MO`` (month). The trailing
+    ``MO`` alias exists because bare ``M`` collides with the minute prefix.
+    """
+
     raw = str(value or "raw").strip().upper()
     if raw in {"", "RAW", "TICK", "1"}:
         return "raw"
     if raw.isdigit():
         return f"M{raw}"
-    if raw in {"M1", "M5", "M15", "M30", "H1", "H4", "D"}:
+    if raw in {"D", "W", "MO"}:
         return raw
-    raise ValidationError("granularity must be raw, M1, M5, M15, M30, H1, H4, D, or minute count.")
+    if len(raw) >= 2 and raw[0] in {"M", "H"} and raw[1:].isdigit():
+        minutes = int(raw[1:]) * (60 if raw[0] == "H" else 1)
+        if minutes >= 1:
+            return f"M{minutes}" if raw[0] == "H" else raw
+    raise ValidationError(
+        "granularity must be raw, tick, a positive minute count, or an "
+        "OANDA-style token such as M1, M5, M15, H1, H4, D, W, or MO."
+    )
 
 
 def granularity_seconds(value: str) -> int | None:
+    """Convert a normalised granularity token to seconds (``None`` for ``raw``)."""
+
     if value == "raw":
         return None
     if value.startswith("M") and value[1:].isdigit():
         return int(value[1:]) * 60
-    return {"H1": 3600, "H4": 14400, "D": 86400}.get(value)
+    if value.startswith("H") and value[1:].isdigit():
+        return int(value[1:]) * 3600
+    return {"D": 86400, "W": 604800, "MO": 2592000}.get(value)
 
 
 def positive_int(value: str | None, default: int) -> int:
