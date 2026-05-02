@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -35,6 +36,309 @@ def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock
         ),
         adapters,
     )
+
+
+def _track_writer_state(service: MagicMock) -> None:
+    def persist_state_if_current(
+        *,
+        command: str,
+        task: Any,
+        from_status: TaskStatus | str,
+        to_status: TaskStatus,
+        extra_updates: dict[str, object] | None = None,
+    ) -> None:
+        _ = command
+        assert task.status == from_status
+        for field, value in (extra_updates or {}).items():
+            setattr(task, field, value)
+        task.status = to_status
+
+    def persist_terminal_state_if_current(
+        *,
+        command: str,
+        task: Any,
+        from_status: TaskStatus | str,
+        to_status: TaskStatus,
+        extra_updates: dict[str, object] | None = None,
+    ) -> None:
+        persist_state_if_current(
+            command=command,
+            task=task,
+            from_status=from_status,
+            to_status=to_status,
+            extra_updates={"completed_at": object(), **(extra_updates or {})},
+        )
+
+    def update_if_current(
+        *,
+        command: str,
+        task: Any,
+        expected_status: TaskStatus | str,
+        updates: dict[str, object],
+    ) -> None:
+        _ = command
+        assert task.status == expected_status
+        for field, value in updates.items():
+            setattr(task, field, value)
+
+    service.writer.persist_state_if_current.side_effect = persist_state_if_current
+    service.writer.persist_terminal_state_if_current.side_effect = persist_terminal_state_if_current
+    service.writer.update_if_current.side_effect = update_if_current
+
+
+def _make_lifecycle_task(
+    *,
+    status: TaskStatus,
+    task_id: object | None = None,
+    execution_id: object | None = None,
+    celery_task_id: object | None = None,
+) -> MagicMock:
+    return MagicMock(
+        pk=task_id or uuid4(),
+        status=status,
+        execution_id=execution_id or uuid4(),
+        celery_task_id=celery_task_id or uuid4(),
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "task_type",
+        "previous_status",
+        "mode",
+        "expected_status",
+        "expected_mode",
+        "expected_event_kind",
+        "expected_dispatch",
+        "expected_revoke",
+        "expected_extra_updates",
+    ),
+    [
+        (
+            "backtest",
+            TaskStatus.STARTING,
+            "graceful",
+            TaskStatus.STOPPING,
+            StopMode.GRACEFUL,
+            TaskLifecycleKind.STOP_REQUESTED,
+            True,
+            False,
+            {},
+        ),
+        (
+            "trading",
+            TaskStatus.RUNNING,
+            "immediate",
+            TaskStatus.STOPPING,
+            StopMode.IMMEDIATE,
+            TaskLifecycleKind.STOP_REQUESTED,
+            True,
+            True,
+            {},
+        ),
+        (
+            "trading",
+            TaskStatus.RUNNING,
+            "drain",
+            TaskStatus.DRAINING,
+            StopMode.DRAIN,
+            TaskLifecycleKind.DRAIN_REQUESTED,
+            False,
+            False,
+            {},
+        ),
+        (
+            "trading",
+            TaskStatus.RUNNING,
+            "graceful_close",
+            TaskStatus.STOPPING,
+            StopMode.GRACEFUL_CLOSE,
+            TaskLifecycleKind.STOP_REQUESTED,
+            True,
+            False,
+            {"sell_on_stop": True},
+        ),
+        (
+            "trading",
+            TaskStatus.DRAINING,
+            "drain",
+            TaskStatus.STOPPING,
+            StopMode.IMMEDIATE,
+            TaskLifecycleKind.STOP_REQUESTED,
+            True,
+            True,
+            {},
+        ),
+    ],
+)
+def test_stop_transition_contract(
+    task_type: str,
+    previous_status: TaskStatus,
+    mode: str,
+    expected_status: TaskStatus,
+    expected_mode: StopMode,
+    expected_event_kind: str,
+    expected_dispatch: bool,
+    expected_revoke: bool,
+    expected_extra_updates: dict[str, object],
+) -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(status=previous_status, task_id=task_id)
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, task_type)
+    _track_writer_state(service)
+    commands, adapters = _make_commands(service)
+
+    result = commands.stop(task_id, mode)
+
+    assert result is True
+    assert task.status == expected_status
+    service.writer.persist_state_if_current.assert_called_once_with(
+        command="stop",
+        task=task,
+        from_status=previous_status,
+        to_status=expected_status,
+        extra_updates=expected_extra_updates,
+    )
+    expected_task_name = (
+        "trading.tasks.run_backtest_task"
+        if task_type == "backtest"
+        else "trading.tasks.run_trading_task"
+    )
+    adapters.signal_stop.assert_called_once_with(
+        task_id,
+        expected_task_name,
+        task.execution_id,
+    )
+    if expected_revoke:
+        adapters.revoke_execution.assert_called_once_with(task.celery_task_id)
+    else:
+        adapters.revoke_execution.assert_not_called()
+    if expected_dispatch:
+        adapters.dispatch_stop.assert_called_once_with(
+            task_id,
+            task_type == "backtest",
+            expected_mode,
+        )
+    else:
+        adapters.dispatch_stop.assert_not_called()
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == expected_event_kind
+    assert event.extra_details == {"mode": expected_mode.value}
+
+
+@pytest.mark.parametrize("previous_status", [TaskStatus.STARTING, TaskStatus.RUNNING])
+def test_pause_transition_contract_for_backtests(previous_status: TaskStatus) -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(status=previous_status, task_id=task_id)
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+    _track_writer_state(service)
+    commands, adapters = _make_commands(service)
+
+    result = commands.pause(task_id)
+
+    assert result is True
+    assert task.status == TaskStatus.PAUSED
+    service.writer.persist_state_if_current.assert_called_once_with(
+        command="pause",
+        task=task,
+        from_status=previous_status,
+        to_status=TaskStatus.PAUSED,
+    )
+    adapters.signal_pause.assert_called_once_with(
+        task_id,
+        "trading.tasks.run_backtest_task",
+        task.execution_id,
+    )
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == TaskLifecycleKind.PAUSE_REQUESTED
+
+
+@pytest.mark.parametrize(
+    "previous_status",
+    [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.PAUSED],
+)
+def test_cancel_transition_contract(previous_status: TaskStatus) -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(status=previous_status, task_id=task_id)
+    celery_result = MagicMock()
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+    service.get_celery_result.return_value = celery_result
+    _track_writer_state(service)
+    commands, adapters = _make_commands(service)
+
+    result = commands.cancel(task_id)
+
+    assert result is True
+    assert task.status == TaskStatus.STOPPED
+    service.writer.persist_terminal_state_if_current.assert_called_once_with(
+        command="cancel",
+        task=task,
+        from_status=previous_status,
+        to_status=TaskStatus.STOPPED,
+    )
+    service.get_celery_result.assert_called_once_with(str(task.celery_task_id))
+    celery_result.revoke.assert_called_once_with(terminate=True)
+    adapters.revoke_execution.assert_not_called()
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == TaskLifecycleKind.CANCELLED
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("task_type", "previous_status", "expected_revoke", "expected_market_kick"),
+    [
+        ("backtest", TaskStatus.PAUSED, False, False),
+        ("backtest", TaskStatus.STOPPED, True, False),
+        ("trading", TaskStatus.FAILED, True, True),
+    ],
+)
+def test_resume_transition_contract(
+    task_type: str,
+    previous_status: TaskStatus,
+    expected_revoke: bool,
+    expected_market_kick: bool,
+) -> None:
+    task_id = uuid4()
+    old_celery_task_id = uuid4()
+    task = _make_lifecycle_task(
+        status=previous_status,
+        task_id=task_id,
+        celery_task_id=old_celery_task_id,
+    )
+    task.save = MagicMock()
+    task_model = MagicMock()
+    task_model.objects.select_for_update.return_value.get.return_value = task
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, task_type)
+    service._get_task_model.return_value = task_model
+    service.get_celery_result.return_value = None
+    service._dispatch_task = MagicMock()
+    commands, adapters = _make_commands(service)
+    commands.resume_validator = MagicMock()
+    commands._kick_market_supervisor = MagicMock()
+
+    result = commands.resume(task_id)
+
+    assert result is task
+    assert task.status == TaskStatus.STARTING
+    assert task.celery_task_id != old_celery_task_id
+    commands.resume_validator.validate.assert_called_once_with(task=task, task_type=task_type)
+    task.save.assert_called_once()
+    service._dispatch_task.assert_called_once_with(task, task_type)
+    if expected_revoke:
+        adapters.revoke_execution.assert_called_once_with(old_celery_task_id)
+    else:
+        adapters.revoke_execution.assert_not_called()
+    if expected_market_kick:
+        commands._kick_market_supervisor.assert_called_once_with()
+    else:
+        commands._kick_market_supervisor.assert_not_called()
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == TaskLifecycleKind.RESUME_REQUESTED
+    assert event.description == f"Task resume requested (from {previous_status.value})"
 
 
 def test_stop_uses_injected_adapters() -> None:
