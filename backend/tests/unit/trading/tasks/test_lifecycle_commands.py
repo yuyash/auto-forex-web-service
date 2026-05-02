@@ -12,6 +12,7 @@ from apps.trading.tasks.lifecycle_commands import (
     LifecycleCommandAdapters,
     TaskLifecycleCommands,
 )
+from apps.trading.tasks.lifecycle_events import TaskLifecycleKind
 
 
 def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock]:
@@ -57,6 +58,9 @@ def test_stop_uses_injected_adapters() -> None:
     adapters.signal_stop.assert_called_once()
     adapters.revoke_execution.assert_called_once_with(celery_task_id)
     adapters.dispatch_stop.assert_called_once_with(task_id, False, StopMode.IMMEDIATE)
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == TaskLifecycleKind.STOP_REQUESTED
+    assert event.extra_details == {"mode": StopMode.IMMEDIATE.value}
 
 
 def test_restart_uses_injected_sleep() -> None:
@@ -258,6 +262,9 @@ def test_resume_emits_audit_log_payload() -> None:
         if c.args and isinstance(c.args[0], str) and c.args[0].startswith("[LIFECYCLE:AUDIT]")
     ]
     assert audit_calls
+    payload = audit_calls[-1].args[1]
+    assert payload["from_status"] == TaskStatus.STOPPED.value
+    assert payload["to_status"] == TaskStatus.STARTING.value
 
 
 @pytest.mark.django_db
@@ -290,6 +297,9 @@ def test_resume_allows_stopped_backtest_and_rotates_only_celery_task_id() -> Non
     assert task.celery_task_id != old_celery_task_id
     adapters.revoke_execution.assert_called_once_with(old_celery_task_id)
     service._dispatch_task.assert_called_once_with(task, "backtest")
+    event = commands.events.publish_spec.call_args.kwargs["event"]
+    assert event.kind == TaskLifecycleKind.RESUME_REQUESTED
+    assert event.description == f"Task resume requested (from {TaskStatus.STOPPED.value})"
 
 
 @patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")

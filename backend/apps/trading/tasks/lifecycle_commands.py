@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable
 from uuid import UUID, uuid4
@@ -16,6 +16,7 @@ from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
 from apps.trading.tasks.lifecycle_events import (
     TaskLifecycleEventPublisher,
+    TaskLifecycleEventSpec,
     build_cancelled_event_spec,
     build_pause_requested_event_spec,
     build_restart_requested_event_spec,
@@ -39,6 +40,18 @@ class LifecycleCommandAdapters:
     revoke_execution: Callable[[object], None]
     dispatch_stop: Callable[[UUID, bool, StopMode], None]
     sleep: Callable[[float], None]
+
+
+@dataclass(frozen=True)
+class LifecycleCommandResult:
+    """Transition metadata produced by a lifecycle command."""
+
+    command: str
+    previous_status: TaskStatus | str
+    current_status: TaskStatus | str
+    event: TaskLifecycleEventSpec
+    dispatch_task: bool = False
+    audit_details: dict[str, object] = field(default_factory=dict)
 
 
 def _default_inspect_workers() -> dict[str, object] | None:
@@ -147,7 +160,15 @@ class TaskLifecycleCommands:
                 task.pk,
                 task.execution_id,
             )
-            self.service._dispatch_task(task, task_type)
+            transition = LifecycleCommandResult(
+                command="start",
+                previous_status=TaskStatus.CREATED,
+                current_status=task.status,
+                event=build_start_requested_event_spec(),
+                dispatch_task=True,
+            )
+            if transition.dispatch_task:
+                self.service._dispatch_task(task, task_type)
             if task_type == "trading":
                 self._kick_market_supervisor()
             self.logger.info(
@@ -156,20 +177,8 @@ class TaskLifecycleCommands:
                 task.execution_id,
                 task.status,
             )
-            self._audit_lifecycle_transition(
-                command="start",
-                task_id=task.pk,
-                task_type=task_type,
-                from_status=TaskStatus.CREATED,
-                to_status=task.status,
-                execution_id=task.execution_id,
-                celery_task_id=getattr(task, "celery_task_id", None),
-            )
-            self.events.publish_spec(
-                task=task,
-                task_type=task_type,
-                event=build_start_requested_event_spec(),
-            )
+            self._audit_command_transition(task=task, task_type=task_type, transition=transition)
+            self._publish_command_event(task=task, task_type=task_type, transition=transition)
             self._log_worker_state(task)
             return task
         except Exception:
@@ -276,17 +285,17 @@ class TaskLifecycleCommands:
             to_status=next_status,
             extra_updates=extra_updates,
         )
-        self._audit_lifecycle_transition(
+        transition = LifecycleCommandResult(
             command="stop",
-            task_id=task.pk,
-            task_type=task_type,
-            from_status=previous_status,
-            to_status=task.status,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
-            mode=stop_mode.value,
-            drain_duration_minutes=drain_duration_minutes,
+            previous_status=previous_status,
+            current_status=task.status,
+            event=build_stop_requested_event_spec(mode=stop_mode),
+            audit_details={
+                "mode": stop_mode.value,
+                "drain_duration_minutes": drain_duration_minutes,
+            },
         )
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
 
         # Persist per-stop drain duration override so the executor picks
         # it up on the next drain evaluation. Written only when drain is
@@ -313,11 +322,7 @@ class TaskLifecycleCommands:
         if stop_mode != StopMode.DRAIN:
             self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
 
-        self.events.publish_spec(
-            task=task,
-            task_type=task_type,
-            event=build_stop_requested_event_spec(mode=stop_mode),
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
     def pause(self, task_id: UUID, *, user: Any | None = None) -> bool:
@@ -351,25 +356,19 @@ class TaskLifecycleCommands:
             from_status=previous_status,
             to_status=TaskStatus.PAUSED,
         )
-        self._audit_lifecycle_transition(
+        transition = LifecycleCommandResult(
             command="pause",
-            task_id=task.pk,
-            task_type=task_type,
-            from_status=previous_status,
-            to_status=TaskStatus.PAUSED,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
+            previous_status=previous_status,
+            current_status=TaskStatus.PAUSED,
+            event=build_pause_requested_event_spec(),
         )
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
         self._signal_redis_pause(
             task_id=task_id,
             task_name=task_name,
             execution_id=task.execution_id,
         )
-        self.events.publish_spec(
-            task=task,
-            task_type=task_type,
-            event=build_pause_requested_event_spec(),
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
     def cancel(self, task_id: UUID, *, user: Any | None = None) -> bool:
@@ -388,6 +387,12 @@ class TaskLifecycleCommands:
             from_status=previous_status,
             to_status=TaskStatus.STOPPED,
         )
+        transition = LifecycleCommandResult(
+            command="cancel",
+            previous_status=previous_status,
+            current_status=TaskStatus.STOPPED,
+            event=build_cancelled_event_spec(),
+        )
 
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field.
@@ -396,11 +401,7 @@ class TaskLifecycleCommands:
         if result:
             result.revoke(terminate=True)
 
-        self.events.publish_spec(
-            task=task,
-            task_type=task_type,
-            event=build_cancelled_event_spec(),
-        )
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         return True
 
     def restart(
@@ -455,20 +456,14 @@ class TaskLifecycleCommands:
         task.refresh_from_db()
         if task.status != TaskStatus.CREATED:
             raise RuntimeError(f"Failed to reset task status: expected CREATED, got {task.status}")
-        self._audit_lifecycle_transition(
+        transition = LifecycleCommandResult(
             command="restart",
-            task_id=task.pk,
-            task_type=task_type,
-            from_status=previous_status,
-            to_status=TaskStatus.CREATED,
-            execution_id=task.execution_id,
-            celery_task_id=getattr(task, "celery_task_id", None),
-        )
-        self.events.publish_spec(
-            task=task,
-            task_type=task_type,
+            previous_status=previous_status,
+            current_status=TaskStatus.CREATED,
             event=build_restart_requested_event_spec(),
         )
+        self._audit_command_transition(task=task, task_type=task_type, transition=transition)
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
         if user is None:
             return self.service.start_task(task)
         return self.service.start_task(task, user=user)
@@ -492,6 +487,7 @@ class TaskLifecycleCommands:
         else:
             allowed_statuses = allowed_statuses_for_command("resume_backtest")
 
+        transition: LifecycleCommandResult
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
             previous_status = locked_task.status
@@ -592,23 +588,23 @@ class TaskLifecycleCommands:
 
             locked_task.status = TaskStatus.STARTING
             locked_task.save(update_fields=update_fields)
-            self._audit_lifecycle_transition(
+            transition = LifecycleCommandResult(
                 command="resume",
-                task_id=locked_task.pk,
+                previous_status=previous_status,
+                current_status=locked_task.status,
+                event=build_resume_requested_event_spec(from_status=previous_status),
+                dispatch_task=True,
+            )
+            self._audit_command_transition(
+                task=locked_task,
                 task_type=task_type,
-                from_status=previous_status,
-                to_status=locked_task.status,
-                execution_id=locked_task.execution_id,
-                celery_task_id=locked_task.celery_task_id,
+                transition=transition,
             )
             task = locked_task
 
-        self.events.publish_spec(
-            task=task,
-            task_type=task_type,
-            event=build_resume_requested_event_spec(from_status=locked_task.status),
-        )
-        self.service._dispatch_task(task, task_type)
+        self._publish_command_event(task=task, task_type=task_type, transition=transition)
+        if transition.dispatch_task:
+            self.service._dispatch_task(task, task_type)
         if is_trading:
             self._kick_market_supervisor()
         return task
@@ -820,6 +816,37 @@ class TaskLifecycleCommands:
         from apps.trading.tasks.service import TaskValidationError
 
         raise TaskValidationError(message)
+
+    def _audit_command_transition(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        transition: LifecycleCommandResult,
+    ) -> None:
+        self._audit_lifecycle_transition(
+            command=transition.command,
+            task_id=task.pk,
+            task_type=task_type,
+            from_status=transition.previous_status,
+            to_status=transition.current_status,
+            execution_id=task.execution_id,
+            celery_task_id=getattr(task, "celery_task_id", None),
+            **transition.audit_details,
+        )
+
+    def _publish_command_event(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        transition: LifecycleCommandResult,
+    ) -> None:
+        self.events.publish_spec(
+            task=task,
+            task_type=task_type,
+            event=transition.event,
+        )
 
     def _audit_lifecycle_transition(
         self,
