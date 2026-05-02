@@ -18,6 +18,7 @@ from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import TaskControl
 from apps.trading.enums import TaskStatus
+from apps.trading.tasks.lifecycle_coordination import build_task_coordination_key
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -60,8 +61,10 @@ class StateManager:
         self.heartbeat_interval_seconds = float(heartbeat_interval_seconds)
         self.ttl_seconds = int(ttl_seconds)
 
-        # Redis key for this task instance
-        self.redis_key = f"task:coord:{task_name}:{instance_key}"
+        self.redis_key = build_task_coordination_key(
+            task_name=task_name,
+            instance_key=instance_key,
+        )
 
         # Redis client
         url = redis_url or settings.MARKET_REDIS_URL

@@ -8,6 +8,10 @@ from typing import Callable
 from uuid import UUID
 
 from apps.trading.enums import StopMode
+from apps.trading.tasks.lifecycle_coordination import (
+    build_task_coordination_key,
+    build_task_execution_instance_key,
+)
 
 
 @dataclass(frozen=True)
@@ -46,8 +50,13 @@ def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) ->
     from django.conf import settings
 
     redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-    redis_instance_key = f"{task_id}:{execution_id}"
-    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
+    redis_key = build_task_coordination_key(
+        task_name=task_name,
+        instance_key=build_task_execution_instance_key(
+            task_id=task_id,
+            execution_id=execution_id,
+        ),
+    )
     redis_client.hset(redis_key, "status", "stopping")
     redis_client.expire(redis_key, 3600)
     redis_client.close()
@@ -58,8 +67,13 @@ def _default_signal_pause(task_id: UUID, task_name: str, execution_id: object) -
     from django.conf import settings
 
     redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-    redis_instance_key = f"{task_id}:{execution_id}"
-    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
+    redis_key = build_task_coordination_key(
+        task_name=task_name,
+        instance_key=build_task_execution_instance_key(
+            task_id=task_id,
+            execution_id=execution_id,
+        ),
+    )
     redis_client.hset(redis_key, "status", "pausing")
     redis_client.expire(redis_key, 3600)
     redis_client.close()
