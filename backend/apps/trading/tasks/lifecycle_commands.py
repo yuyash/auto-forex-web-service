@@ -512,6 +512,8 @@ class TaskLifecycleCommands:
 
                 raise TaskValidationError(str(exc)) from exc
 
+            self.service._ensure_dispatch_risk_guard_allows(locked_task)
+
             previous_celery_task_id = locked_task.celery_task_id
             result = self.service.get_celery_result(
                 str(previous_celery_task_id) if previous_celery_task_id else None

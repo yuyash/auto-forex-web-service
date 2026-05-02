@@ -30,7 +30,12 @@ class LiveTradingRiskGuard:
     """Validate executable task settings before worker ownership begins."""
 
     def validate_task_start(self, task: Any) -> None:
-        """Validate guardrails that must hold before dispatching a task."""
+        """Validate guardrails before a fresh task start."""
+
+        self.validate_task_dispatch(task)
+
+    def validate_task_dispatch(self, task: Any) -> None:
+        """Validate guardrails that must hold before dispatching a worker."""
 
         self._validate_debug_options(task)
         if not isinstance(task, TradingTask):

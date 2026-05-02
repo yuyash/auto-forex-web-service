@@ -281,7 +281,7 @@ class TaskService:
             is_valid, error_message = locked_task.validate_configuration()
             if not is_valid:
                 raise TaskValidationError(f"Task configuration is invalid: {error_message}")
-            self._ensure_start_risk_guard_allows(locked_task)
+            self._ensure_dispatch_risk_guard_allows(locked_task)
 
             locked_task.execution_id = uuid4()
             locked_task.celery_task_id = uuid4()
@@ -306,7 +306,7 @@ class TaskService:
         is_valid, error_message = task.validate_configuration()
         if not is_valid:
             raise TaskValidationError(f"Task configuration is invalid: {error_message}")
-        self._ensure_start_risk_guard_allows(task)
+        self._ensure_dispatch_risk_guard_allows(task)
 
         task.execution_id = uuid4()
         task.celery_task_id = uuid4()
@@ -323,11 +323,11 @@ class TaskService:
             return
         raise TaskCapacityError(admission.reason, decision=admission)
 
-    def _ensure_start_risk_guard_allows(self, task: BacktestTask | TradingTask) -> None:
+    def _ensure_dispatch_risk_guard_allows(self, task: BacktestTask | TradingTask) -> None:
         from apps.trading.services.live_risk import LiveTradingRiskError
 
         try:
-            self.risk_guard.validate_task_start(task)
+            self.risk_guard.validate_task_dispatch(task)
         except LiveTradingRiskError as exc:
             raise TaskValidationError(str(exc)) from exc
 
@@ -407,6 +407,7 @@ class TaskService:
                 )
             if not locked_task.execution_id:
                 raise ValueError("Cannot recover trading task without an execution_id")
+            self._ensure_dispatch_risk_guard_allows(locked_task)
 
             locked_task.status = TaskStatus.STARTING
             locked_task.completed_at = None
