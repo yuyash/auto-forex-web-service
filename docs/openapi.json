@@ -3110,6 +3110,28 @@
                     },
                     {
                         "in": "query",
+                        "name": "message",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log message text filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message_match",
+                        "schema": {
+                            "enum": [
+                                "partial",
+                                "exact",
+                                "regex"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Message filter match mode: partial, exact, or regex.\n\n* `partial` - partial\n* `exact` - exact\n* `regex` - regex"
+                    },
+                    {
+                        "in": "query",
                         "name": "ordering",
                         "schema": {
                             "type": "string"
@@ -5076,6 +5098,28 @@
                             "type": "string"
                         },
                         "description": "Log level filter (comma-separated for multiple)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Log message text filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "message_match",
+                        "schema": {
+                            "enum": [
+                                "partial",
+                                "exact",
+                                "regex"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Message filter match mode: partial, exact, or regex.\n\n* `partial` - partial\n* `exact` - exact\n* `regex` - regex"
                     },
                     {
                         "in": "query",
@@ -7679,6 +7723,9 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_superuser": {
+                        "type": "boolean"
+                    },
                     "timezone": {
                         "type": "string"
                     },
@@ -7690,6 +7737,7 @@
                     "email",
                     "id",
                     "is_staff",
+                    "is_superuser",
                     "language",
                     "timezone",
                     "username"
@@ -11051,6 +11099,9 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_superuser": {
+                        "type": "boolean"
+                    },
                     "timezone": {
                         "type": "string"
                     },
@@ -11062,6 +11113,7 @@
                     "email",
                     "id",
                     "is_staff",
+                    "is_superuser",
                     "language",
                     "timezone",
                     "username"
@@ -11907,6 +11959,18 @@
                         "type": "string",
                         "maxLength": 150
                     },
+                    "is_staff": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "Staff status",
+                        "description": "Designates whether the user can log into this admin site."
+                    },
+                    "is_superuser": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "Superuser status",
+                        "description": "Designates that this user has all permissions without explicitly assigning them."
+                    },
                     "timezone": {
                         "type": "string",
                         "description": "User's preferred timezone (IANA timezone identifier)",
@@ -11930,6 +11994,8 @@
                     "email",
                     "email_verified",
                     "id",
+                    "is_staff",
+                    "is_superuser",
                     "username"
                 ]
             },

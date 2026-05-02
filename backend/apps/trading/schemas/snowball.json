@@ -490,7 +490,7 @@
       "title_ja": "再建後ロスカット無効",
       "description": "When enabled, rebuilt positions are kept open and will not be loss-cut again after a stop-loss rebuild.",
       "description_ja": "有効時、ロスカット後に再建されたポジションはそのまま保持され、再度ロスカットされません。",
-      "default": false,
+      "default": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Stop Loss",
       "group_ja": "ロスカット"

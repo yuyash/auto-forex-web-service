@@ -26,10 +26,15 @@ import {
   type OandaOrder,
 } from '../../services/api/oandaMarket';
 import { buildCopyHandler } from '../../utils/tableCopyUtils';
-import { fmtQuoteValue, fmtTs, toOrdering, type SortOrder } from './formatters';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
+import { fmtQuoteValue, toOrdering, type SortOrder } from './formatters';
 
 export function OrdersTable({ accountDbId }: { accountDbId: number }) {
   const { t } = useTranslation('common');
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [sortField, setSortField] = useState('create_time');
@@ -89,6 +94,11 @@ export function OrdersTable({ accountDbId }: { accountDbId: number }) {
     setSortOrder(order);
     setPage(0);
   }, []);
+  const fmtTimestamp = useCallback(
+    (timestamp: string | null) =>
+      timestamp ? formatDateTime(timestamp) : '\u2014',
+    [formatDateTime]
+  );
 
   const columns: Column<OandaOrder>[] = [
     { id: 'id', label: t('tables.orders.orderId'), width: 100, minWidth: 80 },
@@ -124,8 +134,9 @@ export function OrdersTable({ accountDbId }: { accountDbId: number }) {
     {
       id: 'create_time',
       label: t('tables.orders.timestamp'),
-      width: 180,
-      render: (row) => fmtTs(row.create_time),
+      width: 220,
+      minWidth: 220,
+      render: (row) => fmtTimestamp(row.create_time),
     },
     {
       id: 'take_profit',
@@ -159,7 +170,7 @@ export function OrdersTable({ accountDbId }: { accountDbId: number }) {
     units: (r: OandaOrder) => r.units,
     state: (r: OandaOrder) => r.state,
     time_in_force: (r: OandaOrder) => r.time_in_force,
-    create_time: (r: OandaOrder) => r.create_time ?? '',
+    create_time: (r: OandaOrder) => fmtTimestamp(r.create_time),
     price: (r: OandaOrder) => fmtQuoteValue(r.price, r.instrument),
     take_profit: (r: OandaOrder) => fmtQuoteValue(r.take_profit, r.instrument),
     stop_loss: (r: OandaOrder) => fmtQuoteValue(r.stop_loss, r.instrument),

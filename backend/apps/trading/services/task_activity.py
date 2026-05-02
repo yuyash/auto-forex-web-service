@@ -171,6 +171,13 @@ class TaskActivityQueryService:
                 queryset = queryset.filter(level__in=resolved)
         if query.components:
             queryset = queryset.filter(component__in=query.components)
+        if query.message:
+            if query.message_match == "exact":
+                queryset = queryset.filter(message=query.message)
+            elif query.message_match == "regex":
+                queryset = queryset.filter(message__regex=query.message)
+            else:
+                queryset = queryset.filter(message__icontains=query.message)
         if query.position_id:
             queryset = queryset.annotate(
                 _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details")),

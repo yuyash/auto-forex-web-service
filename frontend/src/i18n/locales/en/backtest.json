@@ -198,6 +198,7 @@
     "instrumentHelperText": "Trading pair to backtest",
     "tickGranularity": "Replay Granularity",
     "tickWindowValueMode": "Window Value Mode",
+    "restartRequiredForExecutionEdits": "Execution setting changes apply to the next restart. Name and description changes apply immediately.",
     "replaySettingsRestartNotice": "Changing replay granularity or window value mode disables continuation of the current run. After saving, never-started tasks can only be started, and tasks with execution history can only be restarted.",
     "closePositionsAtCompletion": "Close all positions at backtest completion",
     "closePositionsDescription": "When enabled, all open positions will be automatically closed at the final market price when the backtest finishes.",

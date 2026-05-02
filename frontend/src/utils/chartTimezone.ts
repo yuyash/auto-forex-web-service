@@ -6,6 +6,7 @@
  */
 
 import { formatInTimeZone } from 'date-fns-tz';
+import { formatDateTimeInTimezone, getTimezoneAbbreviation } from './timezone';
 
 /**
  * Format a date for chart display in the specified timezone
@@ -48,10 +49,10 @@ export function configureTimeAxis(timezone: string) {
      * Shows full date, time, and timezone abbreviation
      */
     tooltipFormat: (date: Date) => {
-      if (timezone && timezone !== 'UTC') {
-        return formatInTimeZone(date, timezone, 'yyyy-MM-dd HH:mm:ss zzz');
-      }
-      return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss') + ' UTC';
+      return formatDateTimeInTimezone(date, timezone || 'UTC', undefined, {
+        includeSeconds: true,
+        includeTimezone: true,
+      });
     },
   };
 }
@@ -81,10 +82,10 @@ export function formatTooltipDate(
   date: Date,
   timezone: string = 'UTC'
 ): string {
-  if (timezone && timezone !== 'UTC') {
-    return formatInTimeZone(date, timezone, 'yyyy-MM-dd HH:mm:ss zzz');
-  }
-  return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss') + ' UTC';
+  return formatDateTimeInTimezone(date, timezone || 'UTC', undefined, {
+    includeSeconds: true,
+    includeTimezone: true,
+  });
 }
 
 /**
@@ -95,10 +96,5 @@ export function formatTooltipDate(
  * @returns Short abbreviation like "JST", "EST", "CET"
  */
 export function getTimezoneAbbr(timezone: string): string {
-  if (!timezone || timezone === 'UTC') return 'UTC';
-  try {
-    return formatInTimeZone(new Date(), timezone, 'zzz');
-  } catch {
-    return timezone;
-  }
+  return getTimezoneAbbreviation(timezone || 'UTC');
 }

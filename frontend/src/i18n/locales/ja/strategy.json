@@ -56,6 +56,28 @@
     "paused": "ボラティリティにより一時停止",
     "error": "エラーが発生しました"
   },
+  "snapshot": {
+    "protection_level": "保護レベル",
+    "active_cycles": "アクティブサイクル",
+    "pending_cycles": "保留サイクル",
+    "completed_cycles": "完了サイクル",
+    "open_entries": "オープンエントリー",
+    "open_long_units": "オープンLONGサイズ",
+    "open_short_units": "オープンSHORTサイズ",
+    "account_balance": "口座残高",
+    "account_nav": "口座NAV",
+    "lock_entered_at": "ロック開始日時",
+    "cooldown_until": "クールダウン終了日時"
+  },
+  "snapshotValues": {
+    "protection_level": {
+      "normal": "通常",
+      "shrink": "縮小",
+      "locked": "ロック",
+      "emergency": "緊急",
+      "unknown": "不明"
+    }
+  },
   "messages": {
     "startSuccess": "戦略が正常に開始されました",
     "stopSuccess": "戦略が正常に停止されました",

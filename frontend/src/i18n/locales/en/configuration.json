@@ -4,13 +4,14 @@
     "subtitle": "Manage reusable strategy configurations for backtesting and live trading",
     "createTitle": "Create New Configuration",
     "createSubtitle": "Create a reusable strategy configuration for backtesting and live trading",
-    "editTitle": "Edit Strategy Parameters",
-    "editSubtitle": "Update the parameters for your strategy configuration",
+    "editTitle": "Edit Strategy Configuration",
+    "editSubtitle": "Update the name, description, and strategy parameters",
     "detailSubtitle": "Strategy configuration details"
   },
   "filters": {
     "searchConfigurations": "Search configurations...",
     "strategyType": "Strategy Type",
+    "allConfigurations": "All configurations",
     "allTypes": "All Types",
     "sortBy": "Sort By",
     "newestFirst": "Newest First",
@@ -24,9 +25,17 @@
     "noConfigurationsYet": "No configurations yet",
     "tryAdjustingFilters": "Try adjusting your search or filters",
     "createFirstConfig": "Create your first strategy configuration to get started",
+    "typeToSearchConfigurations": "Type to search configurations",
+    "noConfigurationsAvailable": "No configurations available",
     "noParametersSaved": "No parameters saved for this configuration.",
     "noParametersConfigured": "No parameters configured.",
     "noParametersAvailable": "No parameters available for this strategy type. Please select a strategy type first."
+  },
+  "feedback": {
+    "loadingConfigurations": "Loading configurations..."
+  },
+  "status": {
+    "currentlyInUse": "Currently in use"
   },
   "form": {
     "basicInformation": "Basic Information",

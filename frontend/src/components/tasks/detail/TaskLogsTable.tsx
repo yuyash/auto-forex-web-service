@@ -20,6 +20,7 @@ import {
   Typography,
   Alert,
   TablePagination,
+  TextField,
   type SelectChangeEvent,
 } from '@mui/material';
 import { useMediaQuery, useTheme } from '@mui/material';
@@ -31,7 +32,11 @@ import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { TableFilterBar } from '../../common/TableFilterBar';
 import { tableFilterDateRangeSx } from '../../common/tableFilterLayout';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
-import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
+import {
+  useTaskLogs,
+  type TaskLog,
+  type TaskLogMessageMatchMode,
+} from '../../../hooks/useTaskLogs';
 import { useTaskLogComponents } from '../../../hooks/useTaskLogComponents';
 import type { TaskType } from '../../../types/common';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
@@ -42,6 +47,7 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { useStrategies } from '../../../hooks/useStrategies';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 
 interface TaskLogsTableProps {
   taskId: string;
@@ -66,8 +72,16 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const { t } = useTranslation('common');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeMilliseconds: true,
+    includeTimezone: true,
+  });
   const [levelFilter, setLevelFilter] = useState<string[]>([]);
   const [componentFilter, setComponentFilter] = useState<string[]>([]);
+  const [messageFilter, setMessageFilter] = useState('');
+  const [messageMatchMode, setMessageMatchMode] =
+    useState<TaskLogMessageMatchMode>('partial');
   const [timestampFrom, setTimestampFrom] = useState<string>('');
   const [timestampTo, setTimestampTo] = useState<string>('');
   const [page, setPage] = useState(0);
@@ -88,6 +102,17 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     taskType,
     executionRunId,
   });
+  const messageRegexError = useMemo(() => {
+    if (messageMatchMode !== 'regex' || !messageFilter) {
+      return '';
+    }
+    try {
+      new RegExp(messageFilter);
+      return '';
+    } catch {
+      return t('tables.logs.invalidRegex');
+    }
+  }, [messageFilter, messageMatchMode, t]);
 
   const { logs, totalCount, isLoading, error, refresh } = useTaskLogs({
     taskId,
@@ -95,6 +120,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     executionRunId,
     level: levelFilter.length > 0 ? levelFilter : undefined,
     component: componentFilter.length > 0 ? componentFilter : undefined,
+    message: messageFilter && !messageRegexError ? messageFilter : undefined,
+    messageMatchMode,
     timestampFrom: timestampFrom
       ? new Date(timestampFrom).toISOString()
       : undefined,
@@ -144,6 +171,12 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     setComponentFilter(value);
     setPage(0);
   };
+  const handleMessageMatchModeChange = (
+    event: SelectChangeEvent<TaskLogMessageMatchMode>
+  ) => {
+    setMessageMatchMode(event.target.value as TaskLogMessageMatchMode);
+    setPage(0);
+  };
   const auditComponents = availableComponents.filter((component) =>
     ['task.audit', 'config.audit'].includes(component)
   );
@@ -155,17 +188,10 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     if (page !== 0) setPage(0);
   }
 
-  const formatTimestamp = (timestamp: string): string => {
-    return new Date(timestamp).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3,
-    });
-  };
+  const formatTimestamp = useCallback(
+    (timestamp: string): string => formatDateTime(timestamp),
+    [formatDateTime]
+  );
 
   const getLevelColor = (
     level: string
@@ -206,8 +232,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'timestamp',
       label: t('tables.logs.timestamp'),
-      width: 260,
-      minWidth: 200,
+      width: 280,
+      minWidth: 240,
       render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
@@ -276,7 +302,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     const logsMap = new Map(logs.map((l) => [String(l.id), l]));
     const extractors: Record<string, (r: TaskLog) => string> = {
       timestamp: (r) =>
-        r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
+        r.timestamp ? formatTimestamp(r.timestamp as string) : '-',
       level: (r) => (r.level as string) ?? '-',
       component: (r) => (r.component as string) ?? '-',
       message: (r) => {
@@ -292,7 +318,14 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       logsMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [getStrategyEventLabel, logs, pageRowIds, selection, visibleColumns]);
+  }, [
+    formatTimestamp,
+    getStrategyEventLabel,
+    logs,
+    pageRowIds,
+    selection,
+    visibleColumns,
+  ]);
 
   const renderMobileCell = useCallback(
     (column: Column<TaskLog>, row: TaskLog) => {
@@ -330,6 +363,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
               onClick={() => {
                 setLevelFilter([]);
                 setComponentFilter([]);
+                setMessageFilter('');
+                setMessageMatchMode('partial');
                 setTimestampFrom('');
                 setTimestampTo('');
                 setPage(0);
@@ -441,6 +476,46 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           toLabel={t('tables.logs.timestampTo')}
           sx={tableFilterDateRangeSx}
         />
+        <TextField
+          size="small"
+          label={t('tables.logs.messageFilter')}
+          placeholder={t('tables.logs.messageFilterPlaceholder')}
+          value={messageFilter}
+          onChange={(event) => {
+            setMessageFilter(event.target.value);
+            setPage(0);
+          }}
+          error={Boolean(messageRegexError)}
+          helperText={messageRegexError || undefined}
+          sx={{
+            flex: { xs: '1 1 100%', md: '1 1 340px' },
+            minWidth: 0,
+          }}
+        />
+        <FormControl
+          sx={{
+            flex: { xs: '1 1 100%', sm: '0 1 190px' },
+            minWidth: 0,
+          }}
+          size="small"
+        >
+          <InputLabel>{t('tables.logs.messageMatchMode')}</InputLabel>
+          <Select<TaskLogMessageMatchMode>
+            value={messageMatchMode}
+            label={t('tables.logs.messageMatchMode')}
+            onChange={handleMessageMatchModeChange}
+          >
+            <MenuItem value="partial">
+              {t('tables.logs.messageMatchPartial')}
+            </MenuItem>
+            <MenuItem value="exact">
+              {t('tables.logs.messageMatchExact')}
+            </MenuItem>
+            <MenuItem value="regex">
+              {t('tables.logs.messageMatchRegex')}
+            </MenuItem>
+          </Select>
+        </FormControl>
         {auditComponents.length > 0 && (
           <Box
             sx={{

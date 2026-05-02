@@ -3,6 +3,7 @@ export interface User {
   email: string;
   username: string;
   is_staff: boolean;
+  is_superuser: boolean;
   timezone: string;
   language: string;
 }

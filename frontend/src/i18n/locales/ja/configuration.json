@@ -4,13 +4,14 @@
     "subtitle": "バックテストとライブ取引用の再利用可能な戦略設定を管理",
     "createTitle": "新規設定構成を作成",
     "createSubtitle": "バックテストとライブ取引用の再利用可能な戦略設定を作成",
-    "editTitle": "戦略パラメータを編集",
-    "editSubtitle": "戦略設定のパラメータを更新",
+    "editTitle": "戦略設定を編集",
+    "editSubtitle": "設定名、説明、戦略パラメータを更新",
     "detailSubtitle": "戦略設定の詳細"
   },
   "filters": {
     "searchConfigurations": "設定を検索...",
     "strategyType": "戦略タイプ",
+    "allConfigurations": "すべての設定",
     "allTypes": "すべてのタイプ",
     "sortBy": "並び替え",
     "newestFirst": "新しい順",
@@ -24,9 +25,17 @@
     "noConfigurationsYet": "設定がまだありません",
     "tryAdjustingFilters": "検索条件やフィルターを調整してみてください",
     "createFirstConfig": "最初の戦略設定を作成して始めましょう",
+    "typeToSearchConfigurations": "入力して設定を検索してください",
+    "noConfigurationsAvailable": "利用可能な設定がありません",
     "noParametersSaved": "この設定にはパラメータが保存されていません。",
     "noParametersConfigured": "パラメータが設定されていません。",
     "noParametersAvailable": "この戦略タイプにはパラメータがありません。先に戦略タイプを選択してください。"
+  },
+  "feedback": {
+    "loadingConfigurations": "設定を読み込み中..."
+  },
+  "status": {
+    "currentlyInUse": "使用中"
   },
   "form": {
     "basicInformation": "基本情報",

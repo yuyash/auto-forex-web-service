@@ -6,6 +6,7 @@ import type {
   Time,
   UTCTimestamp,
 } from 'lightweight-charts';
+import { useNumberFormatter } from '../../hooks/useNumberFormatter';
 
 interface CandlePoint {
   time: UTCTimestamp;
@@ -29,6 +30,8 @@ export function useMarketChartTooltip({
   tooltipRef,
   candlesRef,
 }: UseMarketChartTooltipOptions) {
+  const { formatNumber } = useNumberFormatter();
+
   useEffect(() => {
     const chart = chartRef.current;
     const series = seriesRef.current;
@@ -58,23 +61,31 @@ export function useMarketChartTooltip({
       };
       const change = point.close - point.open;
       const changeColor = change >= 0 ? '#16a34a' : '#ef4444';
-      const changeSign = change >= 0 ? '+' : '';
+      const changeSign = change >= 0 ? '+' : '-';
       const timestamp = typeof param.time === 'number' ? param.time : 0;
       const candle = candlesRef.current.find(
         (entry) => Number(entry.time) === timestamp
       );
       const volumeDisplay =
         candle?.volume !== undefined
-          ? `  Vol: ${candle.volume.toLocaleString()}`
+          ? `  Vol: ${formatNumber(candle.volume, {
+              maximumFractionDigits: 0,
+            })}`
           : '';
+      const formatPrice = (value: number) =>
+        formatNumber(value, {
+          minimumFractionDigits: 5,
+          maximumFractionDigits: 5,
+          useGrouping: false,
+        });
 
       tooltip.style.display = 'block';
       tooltip.innerHTML =
-        `<span style="color:#64748b">O</span> ${point.open.toFixed(5)}` +
-        `  <span style="color:#64748b">H</span> ${point.high.toFixed(5)}` +
-        `  <span style="color:#64748b">L</span> ${point.low.toFixed(5)}` +
-        `  <span style="color:#64748b">C</span> ${point.close.toFixed(5)}` +
-        `  <span style="color:${changeColor}">${changeSign}${change.toFixed(5)}</span>` +
+        `<span style="color:#64748b">O</span> ${formatPrice(point.open)}` +
+        `  <span style="color:#64748b">H</span> ${formatPrice(point.high)}` +
+        `  <span style="color:#64748b">L</span> ${formatPrice(point.low)}` +
+        `  <span style="color:#64748b">C</span> ${formatPrice(point.close)}` +
+        `  <span style="color:${changeColor}">${changeSign}${formatPrice(Math.abs(change))}</span>` +
         `<span style="color:#94a3b8">${volumeDisplay}</span>`;
     };
 
@@ -82,5 +93,5 @@ export function useMarketChartTooltip({
     return () => {
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
     };
-  }, [candlesRef, chartRef, seriesRef, tooltipRef]);
+  }, [candlesRef, chartRef, formatNumber, seriesRef, tooltipRef]);
 }

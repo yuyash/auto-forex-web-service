@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
@@ -248,6 +249,19 @@ COMPONENT_SPEC = QueryFieldSpec(
     kind="string",
     allow_blank=True,
     help_text="Logger/component name filter (comma-separated for multiple).",
+)
+MESSAGE_SPEC = QueryFieldSpec(
+    name="message",
+    kind="string",
+    allow_blank=True,
+    help_text="Log message text filter.",
+)
+MESSAGE_MATCH_SPEC = QueryFieldSpec(
+    name="message_match",
+    kind="choice",
+    default="partial",
+    choices=("partial", "exact", "regex"),
+    help_text="Message filter match mode: partial, exact, or regex.",
 )
 POSITION_ID_SPEC = QueryFieldSpec(
     name="position_id",
@@ -521,6 +535,8 @@ QUERY_GROUP_SPECS = {
             *EXECUTION_SCOPED_ACTIVITY_GROUP,
             LEVEL_SPEC,
             COMPONENT_SPEC,
+            MESSAGE_SPEC,
+            MESSAGE_MATCH_SPEC,
             POSITION_ID_SPEC,
             TIMESTAMP_FROM_SPEC,
             TIMESTAMP_TO_SPEC,
@@ -933,6 +949,8 @@ class LogsQueryParams:
     execution: ExecutionScopedQuery
     levels: list[str]
     components: list[str]
+    message: str
+    message_match: str
     position_id: str
     timestamp_range: DateRangeQuery
     ordering: str
@@ -951,6 +969,13 @@ class LogsQueryParams:
         component_param = cast(str, parsed["component"]) or request.query_params.get(
             "components", ""
         )
+        message = cast(str, parsed["message"])
+        message_match = cast(str, parsed["message_match"]) or "partial"
+        if message and message_match == "regex":
+            try:
+                re.compile(message)
+            except re.error as exc:
+                raise _invalid_query_param(f"Invalid message regex: {exc}") from exc
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -960,6 +985,8 @@ class LogsQueryParams:
             ),
             levels=[v.strip().upper() for v in level_param.split(",") if v.strip()],
             components=[v.strip() for v in component_param.split(",") if v.strip()],
+            message=message,
+            message_match=message_match,
             position_id=cast(str, parsed["position_id"]),
             timestamp_range=_build_date_range_query(
                 request,

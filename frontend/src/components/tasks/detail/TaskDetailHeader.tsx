@@ -14,11 +14,13 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
-import { formatInTimeZone } from 'date-fns-tz';
 import { TaskControlButtons } from '../../common/TaskControlButtons';
 import { StatusBadge } from '../display/StatusBadge';
 import { type TickInfo } from '../../../hooks/useTaskSummary';
 import { TaskStatus, type TaskActionPolicy } from '../../../types/common';
+import { useAppSettings } from '../../../hooks/useAppSettings';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { formatAppNumber } from '../../../utils/numberFormat';
 
 interface TaskDetailHeaderProps {
   taskId: string;
@@ -55,12 +57,37 @@ function buildTickText(tick: TickInfo, pipSize?: string) {
   const pipSizeNum = pipSize ? parseFloat(pipSize) : 0.01;
 
   return {
-    mid: tick.mid?.toFixed(2),
-    bid: tick.bid?.toFixed(2),
-    ask: tick.ask?.toFixed(2),
+    mid:
+      tick.mid != null
+        ? formatAppNumber(tick.mid, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: false,
+          })
+        : undefined,
+    bid:
+      tick.bid != null
+        ? formatAppNumber(tick.bid, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: false,
+          })
+        : undefined,
+    ask:
+      tick.ask != null
+        ? formatAppNumber(tick.ask, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: false,
+          })
+        : undefined,
     spreadPips:
       tick.ask != null && tick.bid != null && pipSizeNum > 0
-        ? ((tick.ask - tick.bid) / pipSizeNum).toFixed(1)
+        ? formatAppNumber((tick.ask - tick.bid) / pipSizeNum, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+            useGrouping: false,
+          })
         : null,
   };
 }
@@ -128,6 +155,7 @@ export function TaskDetailHeader({
   onEdit,
   onDelete,
 }: TaskDetailHeaderProps) {
+  const { settings } = useAppSettings();
   const status = currentStatus || taskStatus;
   const actionDisabled =
     status === TaskStatus.RUNNING ||
@@ -331,10 +359,15 @@ export function TaskDetailHeader({
                     sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
                   >
                     @{' '}
-                    {formatInTimeZone(
-                      new Date(tick.timestamp),
+                    {formatDateTimeInTimezone(
+                      tick.timestamp,
                       timezone,
-                      'yyyy-MM-dd HH:mm:ss zzz'
+                      undefined,
+                      {
+                        includeSeconds: true,
+                        includeTimezone: true,
+                        dateFormat: settings.dateFormat,
+                      }
                     )}
                   </Typography>
                 )}
@@ -345,7 +378,12 @@ export function TaskDetailHeader({
                     component="span"
                     sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
                   >
-                    ATR {currentAtr.toFixed(5)}
+                    ATR{' '}
+                    {formatAppNumber(currentAtr, {
+                      minimumFractionDigits: 5,
+                      maximumFractionDigits: 5,
+                      useGrouping: false,
+                    })}
                   </Typography>
                 )}
               </Box>

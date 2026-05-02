@@ -132,6 +132,7 @@
     "liveAccount": "本番アカウント",
     "total": "合計",
     "parameters": "パラメータ",
+    "executionStatus": "実行状況",
     "strategySnapshot": "戦略スナップショット",
     "pageSize": "ページサイズ"
   },
@@ -263,6 +264,7 @@
       "counter": "逆行方向",
       "trend": "順行方向",
       "active": "進行中",
+      "pending": "保留中",
       "completed": "完了",
       "intervened": "介入あり",
       "long": "買い",
@@ -601,6 +603,13 @@
       "levelFilter": "レベルフィルター",
       "allLevels": "すべてのレベル",
       "componentFilter": "ロガーフィルター",
+      "messageFilter": "メッセージフィルター",
+      "messageFilterPlaceholder": "ログメッセージを検索",
+      "messageMatchMode": "一致方法",
+      "messageMatchPartial": "部分一致",
+      "messageMatchExact": "完全一致",
+      "messageMatchRegex": "正規表現",
+      "invalidRegex": "正規表現が正しくありません",
       "timestampFrom": "開始日時",
       "timestampTo": "終了日時",
       "noLogs": "ログなし",
@@ -611,6 +620,11 @@
       "executionId": "実行ID",
       "status": "状態",
       "progress": "進捗",
+      "configSegment": "設定セグメント",
+      "configSegmentTooltip": "この実行の設定セグメント番号です。設定変更後に実行を再開すると増えます。通常は Config Rev の方が有用なのでデフォルトでは非表示です。",
+      "configRevisions": "設定Rev",
+      "configRevisionsTooltip": "記録された設定Rev: {{count}}件。現在の設定ハッシュ: {{hash}}",
+      "configRevisionsTooltipNoHash": "記録された設定Rev: {{count}}件。設定ハッシュはありません。",
       "started": "開始日時",
       "completed": "完了日時",
       "duration": "所要時間",
@@ -628,7 +642,14 @@
       "deleteTitle": "実行履歴の削除",
       "deleteMessage": "{{count}}件の実行履歴を削除してもよろしいですか？関連するすべてのデータが完全に削除されます。",
       "notesDialogTitle": "実行ノート",
-      "notesPlaceholder": "この実行に関するノートを入力..."
+      "notesPlaceholder": "この実行に関するノートを入力...",
+      "configRevisionsTitle": "設定Rev",
+      "executionSegment": "実行 {{execution}} / 設定セグメント {{segment}}",
+      "currentConfigHash": "現在のハッシュ",
+      "strategy": "戦略",
+      "revisionHistory": "Rev履歴",
+      "changedFields": "変更フィールド",
+      "noConfigRevisions": "この実行に記録された設定Revはありません。"
     }
   },
   "debug": {
@@ -655,6 +676,16 @@
     "moveUp": "上に移動",
     "moveDown": "下に移動",
     "configureTabs": "タブ設定"
+  },
+  "itemOrder": {
+    "reset": "順序をリセット",
+    "moveUp": "上に移動",
+    "moveDown": "下に移動"
+  },
+  "executionStatusOrder": {
+    "configureTiles": "実行状態タイル設定",
+    "title": "実行状態タイルの順序",
+    "description": "ドラッグまたは矢印ボタンでタイルの表示順序を変更できます。"
   },
   "footer": {
     "oandaApiReachable": "OANDA APIに接続可能",

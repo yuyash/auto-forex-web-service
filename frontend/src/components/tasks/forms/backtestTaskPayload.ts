@@ -43,7 +43,7 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     instrument: data.instrument,
     tick_granularity: data.tick_granularity,
     tick_window_value_mode: data.tick_window_value_mode,
-    sell_on_stop: data.sell_at_completion,
+    sell_on_stop: data.sell_at_completion ?? false,
     hedging_enabled: data.hedging_enabled,
     drain_duration_hours: data.drain_duration_hours,
     market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
@@ -58,12 +58,16 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
 }
 
 export function buildBacktestTaskCreatePayload(
-  data: BacktestTaskPayloadFormData & { name: string }
+  data: BacktestTaskPayloadFormData & { name: string },
+  options?: { tracemalloc?: boolean }
 ): BacktestTaskCreateData {
   return {
     ...sharedBacktestTaskPayload(data),
     name: data.name,
     description: data.description,
+    debug_options: options
+      ? { tracemalloc: Boolean(options.tracemalloc) }
+      : undefined,
   };
 }
 

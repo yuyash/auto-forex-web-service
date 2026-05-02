@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { Alert, Box, Divider, Grid, Link, Typography } from '@mui/material';
+import { Alert, Box, Divider, Grid, Link } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
-import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
-import { StrategySnapshotSummary } from '../../tasks/detail/StrategySnapshotSummary';
+import { ExecutionStatusSummary } from '../../tasks/detail/ExecutionStatusSummary';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildTradingTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -14,7 +13,9 @@ import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
 import type { StrategySnapshotResponse } from '../../../types/strategyVisualization';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
-import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 
 interface TradingOverviewTabProps {
   taskId: string;
@@ -27,6 +28,8 @@ interface TradingOverviewTabProps {
   strategySnapshot?: StrategySnapshotResponse | null;
   strategySnapshotLoading?: boolean;
   strategySnapshotError?: Error | null;
+  onRefreshExecutionStatus?: () => void | Promise<unknown>;
+  executionStatusRefreshing?: boolean;
   isViewingHistorical?: boolean;
   historicalStrategyConfig?: {
     id: string;
@@ -51,12 +54,21 @@ export function TradingOverviewTab({
   strategySnapshot,
   strategySnapshotLoading,
   strategySnapshotError,
+  onRefreshExecutionStatus,
+  executionStatusRefreshing = false,
   isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
+  const { user } = useAuth();
+  const { formatDateTime } = useDateTimeFormatter({
+    includeSeconds: true,
+    includeTimezone: true,
+  });
+  const { separators } = useNumberFormatter();
+  const isSuperuser = Boolean(user?.is_superuser);
 
   // When viewing a historical execution, prefer snapshot values
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
@@ -70,7 +82,10 @@ export function TradingOverviewTab({
 
   const taskSettings = useMemo(
     () =>
-      buildTradingTaskSettingDefinitions(t).map((definition) => {
+      buildTradingTaskSettingDefinitions(t, {
+        includeDebugOptions: isSuperuser,
+        numberSeparators: separators,
+      }).map((definition) => {
         if (definition.key === 'config_name') {
           return {
             ...definition,
@@ -128,8 +143,10 @@ export function TradingOverviewTab({
       historicalStrategyConfig?.id,
       historicalStrategyConfig?.name,
       historicalStrategyConfig?.strategy_type,
+      isSuperuser,
       isViewingHistorical,
       onOpenConfiguration,
+      separators,
       strategies,
       t,
       task.config_id,
@@ -139,6 +156,26 @@ export function TradingOverviewTab({
   );
   const recoveryBlockers = summary.execution.recoveryBlockers ?? [];
   const recoveryWarnings = summary.execution.recoveryWarnings ?? [];
+  const executionStatusExtraItems = [
+    ...(summary.execution.resumeCursorTimestamp
+      ? [
+          {
+            id: 'resume_cursor',
+            label: t('trading:detail.resumeCursor'),
+            value: formatDateTime(summary.execution.resumeCursorTimestamp),
+          },
+        ]
+      : []),
+    ...(summary.execution.reconciledAt
+      ? [
+          {
+            id: 'broker_reconciled',
+            label: t('trading:detail.brokerReconciled'),
+            value: formatDateTime(summary.execution.reconciledAt),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -163,198 +200,18 @@ export function TradingOverviewTab({
               {recoveryWarnings[0]}
             </Alert>
           ) : null}
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" gutterBottom>
-            {t('trading:detail.results')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.realizedPnl')} ({pnlCurrency})
-              </Typography>
-              <Typography
-                variant="body1"
-                color={
-                  summary.pnl.realized >= 0 ? 'success.main' : 'error.main'
-                }
-              >
-                {summary.pnl.realized >= 0 ? '+' : ''}
-                {formatAppNumber(summary.pnl.realized, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{' '}
-                {pnlCurrency}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.unrealizedPnl')} ({pnlCurrency})
-              </Typography>
-              <Typography
-                variant="body1"
-                color={
-                  summary.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
-                }
-              >
-                {summary.pnl.unrealized >= 0 ? '+' : ''}
-                {formatAppNumber(summary.pnl.unrealized, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{' '}
-                {pnlCurrency}
-              </Typography>
-            </Box>
-            {summary.execution.currentBalance != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('trading:detail.currentBalance')}
-                </Typography>
-                <Typography variant="body1">
-                  {summary.execution.currentBalanceDisplay != null &&
-                  summary.execution.displayCurrency &&
-                  summary.execution.displayCurrency !==
-                    summary.execution.accountCurrency ? (
-                    <>
-                      {formatAppNumber(
-                        summary.execution.currentBalanceDisplay,
-                        {
-                          maximumFractionDigits: 0,
-                        }
-                      )}{' '}
-                      {summary.execution.displayCurrency}
-                      <Typography
-                        component="span"
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ ml: 1 }}
-                      >
-                        (
-                        {formatAppNumber(summary.execution.currentBalance, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{' '}
-                        {summary.execution.accountCurrency})
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      {formatAppNumber(summary.execution.currentBalance, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      {summary.execution.accountCurrency || pnlCurrency}
-                    </>
-                  )}
-                </Typography>
-              </Box>
-            )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.totalTradesCount')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.totalTrades)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.openPositions')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openPositions)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.closedPositions')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.closedPositions)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.openLongUnits')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openLongUnits ?? 0)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('trading:detail.openShortUnits')}
-              </Typography>
-              <Typography variant="body1">
-                {formatAppNumber(summary.counts.openShortUnits ?? 0)}
-              </Typography>
-            </Box>
-            {summary.execution.ticksProcessed > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('trading:detail.ticksProcessed')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppNumber(summary.execution.ticksProcessed)}
-                </Typography>
-              </Box>
-            )}
-            {displayedMarginRatio != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:labels.marginRatio')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppPercent(displayedMarginRatio * 100, 1)}
-                </Typography>
-              </Box>
-            )}
-            {summary.execution.currentAtr != null && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:labels.currentAtr')}
-                </Typography>
-                <Typography variant="body1">
-                  {formatAppNumber(summary.execution.currentAtr, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </Typography>
-              </Box>
-            )}
-            {summary.execution.resumeCursorTimestamp && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Resume Cursor
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(
-                    summary.execution.resumeCursorTimestamp
-                  ).toLocaleString()}
-                </Typography>
-              </Box>
-            )}
-            {summary.execution.reconciledAt && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Broker Reconciled
-                </Typography>
-                <Typography variant="body1">
-                  {new Date(summary.execution.reconciledAt).toLocaleString()}
-                </Typography>
-              </Box>
-            )}
-            <LatestMetricsSummary
-              latest={latestMetrics ?? null}
-              pnlCurrency={pnlCurrency}
-              summary={summary}
-            />
-          </Box>
-        </Grid>
-        <Grid size={{ xs: 12 }}>
-          <StrategySnapshotSummary
+          <ExecutionStatusSummary
+            taskNamespace="trading"
+            summary={summary}
+            latestMetrics={latestMetrics ?? null}
+            pnlCurrency={pnlCurrency}
+            displayedMarginRatio={displayedMarginRatio}
             snapshot={strategySnapshot ?? null}
-            isLoading={strategySnapshotLoading}
-            error={strategySnapshotError}
+            isSnapshotLoading={strategySnapshotLoading}
+            snapshotError={strategySnapshotError}
+            extraItems={executionStatusExtraItems}
+            onRefresh={onRefreshExecutionStatus}
+            isRefreshing={executionStatusRefreshing}
           />
         </Grid>
         <Grid size={{ xs: 12 }}>

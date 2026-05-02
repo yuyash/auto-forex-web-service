@@ -19,6 +19,8 @@ export interface TaskLog {
   details?: Record<string, unknown>;
 }
 
+export type TaskLogMessageMatchMode = 'partial' | 'exact' | 'regex';
+
 interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
@@ -26,6 +28,8 @@ interface UseTaskLogsOptions {
   executionRunId?: string;
   level?: string[];
   component?: string[];
+  message?: string;
+  messageMatchMode?: TaskLogMessageMatchMode;
   /** Filter logs by position ID (supports prefix match for truncated UUIDs). */
   positionId?: string;
   timestampFrom?: string;
@@ -57,12 +61,44 @@ function getLatestTimestamp(logs: TaskLog[]): string | null {
   return latest;
 }
 
+function getSortValue(log: TaskLog, field: string): string | number {
+  if (field === 'timestamp') {
+    const parsed = Date.parse(log.timestamp);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const value = (log as unknown as Record<string, unknown>)[field];
+  if (typeof value === 'number') return value;
+  return String(value ?? '');
+}
+
+function mergeLogsByOrdering(
+  currentItems: TaskLog[],
+  incoming: TaskLog[],
+  ordering: string
+): TaskLog[] {
+  const field = ordering.startsWith('-') ? ordering.slice(1) : ordering;
+  const direction = ordering.startsWith('-') ? 'desc' : 'asc';
+  const merged = new Map(currentItems.map((log) => [log.id, log]));
+  for (const log of incoming) {
+    merged.set(log.id, log);
+  }
+  return Array.from(merged.values()).sort((a, b) => {
+    const aValue = getSortValue(a, field || 'timestamp');
+    const bValue = getSortValue(b, field || 'timestamp');
+    if (aValue < bValue) return direction === 'desc' ? 1 : -1;
+    if (aValue > bValue) return direction === 'desc' ? -1 : 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export const useTaskLogs = ({
   taskId,
   taskType,
   executionRunId,
   level,
   component,
+  message,
+  messageMatchMode = 'partial',
   positionId,
   timestampFrom,
   timestampTo,
@@ -72,7 +108,7 @@ export const useTaskLogs = ({
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${ordering}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${message ?? ''}-${message ? messageMatchMode : ''}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${ordering}-${page}-${pageSize}`;
   const {
     items: logs,
     totalCount,
@@ -101,6 +137,10 @@ export const useTaskLogs = ({
       if (component && component.length > 0) {
         params.component = component.join(',');
       }
+      if (message) {
+        params.message = message;
+        params.message_match = messageMatchMode;
+      }
       if (positionId) params.position_id = positionId;
       if (timestampFrom) params.timestamp_from = timestampFrom;
       if (timestampTo) params.timestamp_to = timestampTo;
@@ -109,6 +149,8 @@ export const useTaskLogs = ({
     },
     getLatestCursor: getLatestTimestamp,
     getItemId: (log) => log.id,
+    mergeIncremental: ({ currentItems, incoming }) =>
+      mergeLogsByOrdering(currentItems, incoming, ordering),
   });
 
   return {

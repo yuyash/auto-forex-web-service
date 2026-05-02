@@ -190,15 +190,22 @@ export function ExecutionHistoryTable({
       },
       {
         id: 'segment_index',
-        label: t('tables.executions.segment', 'Segment'),
+        label: t('tables.executions.configSegment'),
         width: 100,
         minWidth: 80,
         align: 'right' as const,
-        render: (row: TaskExecution) => row.segment_index ?? 1,
+        defaultVisible: false,
+        render: (row: TaskExecution) => (
+          <Tooltip title={t('tables.executions.configSegmentTooltip')}>
+            <Typography variant="body2" sx={{ display: 'inline-block' }}>
+              {row.segment_index ?? 1}
+            </Typography>
+          </Tooltip>
+        ),
       },
       {
         id: 'config_revision_count',
-        label: t('tables.executions.configRevisions', 'Config revs'),
+        label: t('tables.executions.configRevisions'),
         width: 120,
         minWidth: 90,
         align: 'right' as const,
@@ -206,7 +213,18 @@ export function ExecutionHistoryTable({
           const count = row.config_revision_count ?? 0;
           const hash = row.strategy_config?.config_hash;
           return (
-            <Tooltip title={hash ? `Current config hash: ${hash}` : ''}>
+            <Tooltip
+              title={
+                hash
+                  ? t('tables.executions.configRevisionsTooltip', {
+                      count,
+                      hash,
+                    })
+                  : t('tables.executions.configRevisionsTooltipNoHash', {
+                      count,
+                    })
+              }
+            >
               <Chip
                 label={count}
                 size="small"
@@ -429,7 +447,7 @@ export function ExecutionHistoryTable({
   }, [formatDate, pnlCurrency, t, taskType]);
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);
-  const storageKey = `exec_history_${taskType}_v2`;
+  const storageKey = `exec_history_${taskType}_v3`;
   const {
     columns: colConfig,
     updateColumns,
@@ -731,28 +749,30 @@ export function ExecutionHistoryTable({
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Config revisions</DialogTitle>
+        <DialogTitle>{t('tables.executions.configRevisionsTitle')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Execution {revisionTarget?.execution_number} segment{' '}
-            {revisionTarget?.segment_index ?? 1}
+            {t('tables.executions.executionSegment', {
+              execution: revisionTarget?.execution_number ?? '-',
+              segment: revisionTarget?.segment_index ?? 1,
+            })}
           </Typography>
           <Box sx={{ display: 'grid', gap: 1.5 }}>
             <Typography variant="body2">
-              Current hash:{' '}
+              {t('tables.executions.currentConfigHash')}:{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
                 {revisionTarget?.strategy_config?.config_hash ?? '-'}
               </Box>
             </Typography>
             <Typography variant="body2">
-              Strategy:{' '}
+              {t('tables.executions.strategy')}:{' '}
               {revisionTarget?.strategy_config?.current?.name ??
                 revisionTarget?.strategy_config?.name ??
                 '-'}
             </Typography>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Revision history
+                {t('tables.executions.revisionHistory')}
               </Typography>
               {revisionTarget?.strategy_config?.revisions?.length ? (
                 revisionTarget.strategy_config.revisions.map(
@@ -770,7 +790,7 @@ export function ExecutionHistoryTable({
                         {String(revision.to_hash ?? '-')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Changed fields:{' '}
+                        {t('tables.executions.changedFields')}:{' '}
                         {Array.isArray(revision.changed_fields)
                           ? revision.changed_fields.join(', ')
                           : '-'}
@@ -780,7 +800,7 @@ export function ExecutionHistoryTable({
                 )
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  No config revisions recorded for this execution.
+                  {t('tables.executions.noConfigRevisions')}
                 </Typography>
               )}
             </Box>

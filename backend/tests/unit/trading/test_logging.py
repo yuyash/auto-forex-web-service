@@ -8,6 +8,7 @@ from apps.trading.logging import (
     DEFAULT_TASK_LOGGER_NAMES,
     JSONLoggingHandler,
     TaskLoggingSession,
+    flush_task_log_handlers,
     get_task_logger,
 )
 
@@ -137,3 +138,43 @@ class TestTaskLoggingSession:
 
     def test_default_logger_names(self):
         assert DEFAULT_TASK_LOGGER_NAMES == ("apps.trading", "position.lifecycle")
+
+    def test_flush_task_log_handlers_flushes_buffered_session_logs(self, monkeypatch):
+        task = MagicMock()
+        task.pk = 14
+        task.execution_id = None
+        name = "test.session.flush-buffered"
+        logger_obj = logging.getLogger(name)
+        original_level = logger_obj.level
+        original_propagate = logger_obj.propagate
+        for handler in list(logger_obj.handlers):
+            logger_obj.removeHandler(handler)
+
+        created = []
+
+        def fake_bulk_create(objs, batch_size=None):
+            del batch_size
+            created.extend(objs)
+            return objs
+
+        monkeypatch.setattr("apps.trading.logging.TaskLog.objects.bulk_create", fake_bulk_create)
+
+        session = TaskLoggingSession(task, logger_names=[name])
+        try:
+            logger_obj.setLevel(logging.INFO)
+            logger_obj.propagate = False
+            session.start()
+
+            logger_obj.info("visible after flush")
+            assert created == []
+
+            flush_task_log_handlers(task, logger_names=[name])
+
+            assert len(created) == 1
+            assert created[0].message == "visible after flush"
+        finally:
+            session.stop()
+            logger_obj.setLevel(original_level)
+            logger_obj.propagate = original_propagate
+            for handler in list(logger_obj.handlers):
+                logger_obj.removeHandler(handler)

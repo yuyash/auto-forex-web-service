@@ -4,22 +4,32 @@ import {
   formatDateTimeSetting,
   type TaskSettingValue,
 } from './taskSettingsFormat';
-import { formatAppNumber } from '../../../utils/numberFormat';
+import {
+  formatAppNumber,
+  type NumberFormatSeparators,
+} from '../../../utils/numberFormat';
 
 function formatBooleanWithTranslation(t: TFunction) {
   return (value: TaskSettingValue): string =>
     value ? t('common:labels.yes') : t('common:labels.no');
 }
 
-function formatPipSize(value: TaskSettingValue): string {
+function formatPipSize(
+  value: TaskSettingValue,
+  separators?: NumberFormatSeparators
+): string {
   if (value === null || value === undefined || value === '') return '-';
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return String(value);
-  return formatAppNumber(numericValue, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    useGrouping: false,
-  });
+  return formatAppNumber(
+    numericValue,
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: false,
+    },
+    separators
+  );
 }
 
 function formatWeekday(t: TFunction) {
@@ -44,15 +54,20 @@ function formatWeekday(t: TFunction) {
 function formatInitialBalance(
   value: TaskSettingValue,
   source: Record<string, unknown>,
-  task: Record<string, unknown>
+  task: Record<string, unknown>,
+  separators?: NumberFormatSeparators
 ): string {
   if (value === null || value === undefined || value === '') return '-';
   const numericValue = Number(value);
   const formatted = Number.isFinite(numericValue)
-    ? formatAppNumber(numericValue, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      })
+    ? formatAppNumber(
+        numericValue,
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        },
+        separators
+      )
     : String(value);
   const currency = source.account_currency ?? task.account_currency;
   return currency ? `${formatted} ${String(currency)}` : formatted;
@@ -61,7 +76,11 @@ function formatInitialBalance(
 export function buildBacktestTaskSettingDefinitions(
   t: TFunction,
   timezone: string,
-  language?: string
+  language?: string,
+  options: {
+    includeDebugOptions?: boolean;
+    numberSeparators?: NumberFormatSeparators;
+  } = {}
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
   const formatBoolean = formatBooleanWithTranslation(t);
   const formatWeekdayValue = formatWeekday(t);
@@ -81,7 +100,7 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: formatPipSize,
+      format: (value) => formatPipSize(value, options.numberSeparators),
     },
     {
       key: 'start_time',
@@ -97,7 +116,7 @@ export function buildBacktestTaskSettingDefinitions(
       key: 'initial_balance',
       label: t('backtest:detail.initialBalance'),
       render: (value, { source, task }) =>
-        formatInitialBalance(value, source, task),
+        formatInitialBalance(value, source, task, options.numberSeparators),
     },
     {
       key: 'account_currency',
@@ -113,8 +132,8 @@ export function buildBacktestTaskSettingDefinitions(
       format: formatBoolean,
     },
     {
-      key: 'sell_on_stop',
-      label: t('common:labels.sellOnStop'),
+      key: 'sell_at_completion',
+      label: t('backtest:form.closePositionsAtCompletion'),
       format: formatBoolean,
     },
     { key: 'tick_granularity', label: t('backtest:detail.tickGranularity') },
@@ -173,12 +192,18 @@ export function buildBacktestTaskSettingDefinitions(
         'Max tick gap before fail (hours)'
       ),
     },
-    { key: 'debug_options', label: t('common:debug.title') },
+    ...(options.includeDebugOptions
+      ? [{ key: 'debug_options', label: t('common:debug.title') }]
+      : []),
   ];
 }
 
 export function buildTradingTaskSettingDefinitions(
-  t: TFunction
+  t: TFunction,
+  options: {
+    includeDebugOptions?: boolean;
+    numberSeparators?: NumberFormatSeparators;
+  } = {}
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
   const formatBoolean = formatBooleanWithTranslation(t);
 
@@ -196,7 +221,7 @@ export function buildTradingTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: formatPipSize,
+      format: (value) => formatPipSize(value, options.numberSeparators),
     },
     { key: 'account_name', label: t('trading:detail.account', 'Account') },
     {
@@ -254,6 +279,8 @@ export function buildTradingTaskSettingDefinitions(
         'Market resume delay (minutes)'
       ),
     },
-    { key: 'debug_options', label: t('common:debug.title') },
+    ...(options.includeDebugOptions
+      ? [{ key: 'debug_options', label: t('common:debug.title') }]
+      : []),
   ];
 }

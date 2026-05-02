@@ -11,10 +11,26 @@ from typing import Any
 from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
+LOCAL_FRONTEND_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
+
 
 def _csv_env(name: str, default: str = "") -> list[str]:
     """Return a comma-separated environment variable as a clean list."""
     return [value.strip() for value in os.getenv(name, default).split(",") if value.strip()]
+
+
+def _append_missing(values: list[str], additions: tuple[str, ...]) -> list[str]:
+    """Return values with additions appended once, preserving order."""
+    result = list(values)
+    for value in additions:
+        if value not in result:
+            result.append(value)
+    return result
 
 
 def build_runtime_environment(*, debug: bool) -> dict[str, Any]:
@@ -151,12 +167,20 @@ def build_secret_settings(*, debug: bool) -> dict[str, Any]:
 
 def build_security_settings(*, debug: bool) -> dict[str, Any]:
     """Return Django security and CORS settings."""
-    default_cors_origins = "http://localhost:3000,http://127.0.0.1:3000"
+    runtime = build_runtime_environment(debug=debug)
+    is_non_production_env = runtime["IS_NON_PRODUCTION_ENV"]
+
+    default_cors_origins = ",".join(LOCAL_FRONTEND_ORIGINS)
     cors_allowed_origins = _csv_env("CORS_ALLOWED_ORIGINS", default_cors_origins)
+    if is_non_production_env:
+        cors_allowed_origins = _append_missing(cors_allowed_origins, LOCAL_FRONTEND_ORIGINS)
+
     csrf_trusted_origins = _csv_env(
         "CSRF_TRUSTED_ORIGINS",
         ",".join(cors_allowed_origins),
     )
+    if is_non_production_env:
+        csrf_trusted_origins = _append_missing(csrf_trusted_origins, LOCAL_FRONTEND_ORIGINS)
 
     data: dict[str, Any] = {
         "CSP_DEFAULT_SRC": os.getenv("CSP_DEFAULT_SRC", "'self'"),

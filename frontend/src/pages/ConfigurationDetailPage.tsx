@@ -23,18 +23,10 @@ import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyCo
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
 import { orderConfigEntries } from '../utils/configFieldOrder';
 import { isParameterVisible } from '../utils/strategySchemaDependsOn';
+import { useDateTimeFormatter } from '../hooks/useDateTimeFormatter';
 
 /** Keys excluded from the detail view (not user-facing). */
 const HIDDEN_KEYS = new Set(['pip_size']);
-
-function formatDate(dateString?: string) {
-  if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -50,6 +42,7 @@ function formatValue(value: unknown): string {
 
 export default function ConfigurationDetailPage() {
   const { t, i18n } = useTranslation(['configuration', 'common']);
+  const { formatDate } = useDateTimeFormatter();
   const { id } = useParams<{ id: string }>();
   const configId = id || '';
   const navigate = useNavigate();

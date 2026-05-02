@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = ("apps.trading", "position.lifecycle")
 DEFAULT_TASK_LOG_BUFFER_SIZE = 100
+_FALLBACK_LOGGER_NAME = "task_logging"
 
 
 _STANDARD_LOG_RECORD_KEYS = frozenset(
@@ -291,3 +292,29 @@ class TaskLoggingSession:
     ) -> bool:
         self.stop()
         return False
+
+
+def flush_task_log_handlers(
+    task: BacktestTask | TradingTask,
+    *,
+    logger_names: Sequence[str] | None = None,
+) -> None:
+    """Flush buffered task log handlers attached for a running task."""
+    names = tuple(dict.fromkeys(logger_names or DEFAULT_TASK_LOGGER_NAMES))
+    for name in names:
+        logger_obj = logging.getLogger(name)
+        for handler in list(logger_obj.handlers):
+            if not isinstance(handler, BufferedJSONLoggingHandler):
+                continue
+            handler_task = getattr(handler, "task", None)
+            if handler_task is None or getattr(handler_task, "pk", None) != getattr(
+                task, "pk", None
+            ):
+                continue
+            try:
+                handler.flush()
+            except Exception:
+                logging.getLogger(_FALLBACK_LOGGER_NAME).exception(
+                    "Failed to flush task log buffer",
+                    extra={"task_id": str(getattr(task, "pk", ""))},
+                )

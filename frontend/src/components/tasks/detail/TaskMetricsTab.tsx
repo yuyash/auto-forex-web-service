@@ -26,6 +26,13 @@ import {
 } from './MetricsChartOrderDialog';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
 import { layoutTokens, spacingTokens } from '../../../theme/density';
+import { useAppSettings } from '../../../hooks/useAppSettings';
+import {
+  formatDateInTimezone,
+  formatDateTimeInTimezone,
+  type DateTimeFormatOptions,
+} from '../../../utils/timezone';
+import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -52,6 +59,7 @@ interface TaskMetricsTabProps {
   currentTickTimestamp?: string | null;
   /** Current tick price for the sequence position line */
   currentTickPrice?: number | null;
+  timezone?: string;
 }
 
 /** Metrics to chart and their display order */
@@ -85,102 +93,71 @@ const RATIO_KEYS = new Set(['margin_ratio']);
 function formatTickLabel(
   date: Date,
   rangeMs: number,
-  intervalMin: number
+  intervalMin: number,
+  timezone: string,
+  dateFormat: DateTimeFormatOptions['dateFormat']
 ): string {
   const DAY = 86_400_000;
   if (rangeMs <= DAY) {
-    return date.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    return formatShortTime(date, timezone);
   }
   if (rangeMs <= 7 * DAY) {
     // Up to ~1 week: show MM/DD HH:mm
-    return (
-      date.toLocaleDateString(undefined, {
-        month: '2-digit',
-        day: '2-digit',
-      }) +
-      ' ' +
-      date.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
-    );
+    return `${formatMonthDay(date, timezone)} ${formatShortTime(date, timezone)}`;
   }
   if (rangeMs <= 90 * DAY) {
     // Up to ~3 months: show MM/DD
     if (intervalMin < 60) {
-      return (
-        date.toLocaleDateString(undefined, {
-          month: '2-digit',
-          day: '2-digit',
-        }) +
-        ' ' +
-        date.toLocaleTimeString(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        })
-      );
+      return `${formatMonthDay(date, timezone)} ${formatShortTime(date, timezone)}`;
     }
-    return date.toLocaleDateString(undefined, {
-      month: '2-digit',
-      day: '2-digit',
-    });
+    return formatMonthDay(date, timezone);
   }
   // Longer: show YYYY/MM/DD
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  return formatDateInTimezone(date, timezone, undefined, { dateFormat });
 }
 
 /**
  * Format tooltip date/time based on granularity.
  */
-function formatTooltipDate(date: Date, intervalMin: number): string {
-  if (intervalMin >= 1440) {
-    // Daily: date only
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  }
-  if (intervalMin >= 240) {
-    // 4h: date + hour
-    return (
-      date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }) +
-      ' ' +
-      date.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
-    );
-  }
-  // Sub-hourly: full date + time
-  return (
-    date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }) +
-    ' ' +
-    date.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-  );
+function formatTooltipDate(
+  date: Date,
+  timezone: string,
+  dateFormat: DateTimeFormatOptions['dateFormat']
+): string {
+  return formatDateTimeInTimezone(date, timezone, undefined, {
+    includeSeconds: true,
+    includeTimezone: true,
+    dateFormat,
+  });
+}
+
+function formatShortTime(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string | undefined>;
+  return `${values.hour === '24' ? '00' : values.hour}:${values.minute}`;
+}
+
+function formatMonthDay(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string | undefined>;
+  return `${values.month}/${values.day}`;
 }
 
 /**
@@ -208,10 +185,15 @@ const MIN_Y_AXIS_WIDTH = 34;
  * small chart cards and do not add useful precision for trend reading.
  */
 function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
-  if (format === 'pct') return `${v.toFixed(1)}%`;
-  if (format === 'currency') return v.toFixed(0);
-  if (format === 'int') return Math.round(v).toLocaleString();
-  return v.toFixed(1);
+  if (format === 'pct') return formatAppPercent(v, 1);
+  if (format === 'currency')
+    return formatAppNumber(v, { maximumFractionDigits: 0 });
+  if (format === 'int')
+    return formatAppNumber(Math.round(v), { maximumFractionDigits: 0 });
+  return formatAppNumber(v, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -337,8 +319,10 @@ export function TaskMetricsTab({
   endTime,
   currentTickTimestamp,
   currentTickPrice,
+  timezone = 'UTC',
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
+  const { settings } = useAppSettings();
   const [ohlcRefreshToken, setOhlcRefreshToken] = useState(0);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
@@ -558,10 +542,17 @@ export function TaskMetricsTab({
   const currencySuffix = currency ? ` ${currency}` : '';
 
   const formatValue = (val: number, format?: string) => {
-    if (format === 'pct') return `${val.toFixed(1)}%`;
-    if (format === 'int') return Math.round(val).toLocaleString();
-    if (format === 'currency') return `${val.toFixed(0)}${currencySuffix}`;
-    return val.toFixed(1);
+    if (format === 'pct') return formatAppPercent(val, 1);
+    if (format === 'int')
+      return formatAppNumber(Math.round(val), { maximumFractionDigits: 0 });
+    if (format === 'currency')
+      return `${formatAppNumber(val, {
+        maximumFractionDigits: 0,
+      })}${currencySuffix}`;
+    return formatAppNumber(val, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
   };
 
   return (
@@ -572,8 +563,7 @@ export function TaskMetricsTab({
         py: { xs: 0.5, sm: 1.5 },
         minWidth: 0,
         width: '100%',
-        maxWidth: { xs: '100%', xl: 1920 },
-        mx: 'auto',
+        maxWidth: '100%',
       }}
     >
       <MetricsToolbar
@@ -596,7 +586,7 @@ export function TaskMetricsTab({
       <Grid
         container
         spacing={{ xs: 1, sm: layoutTokens.sectionGap.sm }}
-        justifyContent="center"
+        justifyContent="flex-start"
         alignItems="stretch"
         sx={{ mt: 0, minWidth: 0, width: '100%' }}
       >
@@ -639,6 +629,7 @@ export function TaskMetricsTab({
                   currentTickTimestamp={currentTickTimestamp}
                   currentTickPrice={currentTickPrice}
                   refreshToken={ohlcRefreshToken}
+                  timezone={timezone}
                 />
               </Grid>
             );
@@ -712,9 +703,19 @@ export function TaskMetricsTab({
                         context: { location: string }
                       ) => {
                         if (context.location === 'tooltip') {
-                          return formatTooltipDate(v, effectiveInterval);
+                          return formatTooltipDate(
+                            v,
+                            timezone,
+                            settings.dateFormat
+                          );
                         }
-                        return formatTickLabel(v, rangeMs, effectiveInterval);
+                        return formatTickLabel(
+                          v,
+                          rangeMs,
+                          effectiveInterval,
+                          timezone,
+                          settings.dateFormat
+                        );
                       },
                     },
                   ]}

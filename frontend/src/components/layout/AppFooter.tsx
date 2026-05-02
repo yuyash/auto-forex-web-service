@@ -11,6 +11,7 @@ import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
 import { usePollingPolicy } from '../../hooks/usePollingPolicy';
 import { useSequentialPolling } from '../../hooks/useSequentialPolling';
+import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -28,6 +29,7 @@ interface OandaHealthStatus {
 const AppFooter = () => {
   const { t } = useTranslation('common');
   const { settings: appSettings } = useAppSettings();
+  const { formatDateTime } = useDateTimeFormatter();
   const { hasAccounts } = useOandaAccounts();
   const { data: oandaData } = useOandaHealthStatus({
     enabled: hasAccounts,
@@ -91,11 +93,9 @@ const AppFooter = () => {
 
   const formatLastChecked = (date?: Date): string => {
     if (!date) return 'Never';
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
+    return formatDateTime(date, {
+      includeSeconds: true,
+      includeTimezone: true,
     });
   };
 

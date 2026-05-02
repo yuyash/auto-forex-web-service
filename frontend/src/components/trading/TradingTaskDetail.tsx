@@ -5,7 +5,13 @@
  * Mirrors BacktestTaskDetail's structure for consistency.
  */
 
-import React, { Suspense, useState, useEffect, useMemo } from 'react';
+import React, {
+  Suspense,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -86,6 +92,8 @@ export const TradingTaskDetail: React.FC = () => {
   // start/resume/restart confirmation flow. Keeping them separate lets the
   // user pick Stop / Stop+Close / Drain at the point of stopping.
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [isRefreshingExecutionStatus, setIsRefreshingExecutionStatus] =
+    useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const deleteTask = useDeleteTradingTask();
@@ -176,7 +184,7 @@ export const TradingTaskDetail: React.FC = () => {
       interval: statusPollingIntervalMs,
     }
   );
-  const { summary: s } = overviewSummary;
+  const { summary: s, refresh: refreshOverviewSummary } = overviewSummary;
   const overviewStrategySnapshot = useStrategySnapshot({
     taskId,
     taskType: TaskType.TRADING,
@@ -235,6 +243,29 @@ export const TradingTaskDetail: React.FC = () => {
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
   });
+
+  const handleRefreshExecutionStatus = useCallback(async () => {
+    setIsRefreshingExecutionStatus(true);
+    try {
+      await Promise.all([
+        refreshOverviewSummary(),
+        metricsResult.refresh(),
+        overviewStrategySnapshot.refetch(),
+      ]);
+    } catch (err) {
+      showError(
+        err instanceof Error ? err.message : t('common:errors.refreshFailed')
+      );
+    } finally {
+      setIsRefreshingExecutionStatus(false);
+    }
+  }, [
+    metricsResult,
+    overviewStrategySnapshot,
+    refreshOverviewSummary,
+    showError,
+    t,
+  ]);
 
   const polledTick = s.tick.timestamp
     ? {
@@ -409,6 +440,8 @@ export const TradingTaskDetail: React.FC = () => {
               strategySnapshot={overviewStrategySnapshot.data ?? null}
               strategySnapshotLoading={overviewStrategySnapshot.isLoading}
               strategySnapshotError={overviewStrategySnapshot.error}
+              onRefreshExecutionStatus={handleRefreshExecutionStatus}
+              executionStatusRefreshing={isRefreshingExecutionStatus}
               isViewingHistorical={isViewingHistorical}
               historicalStrategyConfig={historicalStrategyConfig}
               historicalTaskConfig={
@@ -541,6 +574,7 @@ export const TradingTaskDetail: React.FC = () => {
                     ? parseFloat(polledTick.price)
                     : null
                 }
+                timezone={timezone}
               />
             </Suspense>
           </LazyTabPanel>

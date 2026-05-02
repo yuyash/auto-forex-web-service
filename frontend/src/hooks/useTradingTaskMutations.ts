@@ -48,6 +48,7 @@ export function useCreateTradingTask(options?: {
         market_idle_pre_close_minutes: variables.market_idle_pre_close_minutes,
         market_idle_resume_delay_minutes:
           variables.market_idle_resume_delay_minutes,
+        debug_options: variables.debug_options,
       }),
     {
       onSuccess: async (data) => {

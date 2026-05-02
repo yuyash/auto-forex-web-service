@@ -62,6 +62,24 @@ class TestTokenRefreshView:
         assert stored_token.revoked_at is not None
         assert RefreshToken.objects.filter(user=user).count() == 2
 
+    def test_successful_token_refresh_accepts_vite_proxy_origin(self) -> None:
+        """Vite dev proxy requests are trusted for cookie-auth CSRF checks."""
+        user = self._create_user()
+        refresh_token = self.jwt.create_refresh_token(user)
+
+        request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE=self._refresh_cookie_header(refresh_token),
+            HTTP_X_CSRFTOKEN=CSRF_TOKEN,
+            HTTP_HOST="127.0.0.1:8000",
+            HTTP_ORIGIN="http://localhost:5173",
+        )
+        response = self.view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_refresh_requires_csrf_for_cookie_token(self) -> None:
         """Test refresh-token cookies require a matching CSRF token."""
         user = self._create_user()

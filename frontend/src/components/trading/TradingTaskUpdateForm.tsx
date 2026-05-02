@@ -25,6 +25,8 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
+import { useAuth } from '../../contexts/AuthContext';
+import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 
 // Update schema - editable fields for trading tasks
 const tradingTaskUpdateSchema = z.object({
@@ -99,11 +101,13 @@ export default function TradingTaskUpdateForm({
   restartRequiredForExecutionEdits = false,
 }: TradingTaskUpdateFormProps) {
   const { t } = useTranslation(['trading', 'common']);
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tracemalloc, setTracemalloc] = useState(
     Boolean(debugOptions?.tracemalloc)
   );
+  const isSuperuser = Boolean(user?.is_superuser);
   const updateTask = useUpdateTradingTask();
 
   const {
@@ -182,7 +186,7 @@ export default function TradingTaskUpdateForm({
           market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
           market_idle_resume_delay_minutes:
             data.market_idle_resume_delay_minutes,
-          debug_options: { tracemalloc },
+          debug_options: isSuperuser ? { tracemalloc } : undefined,
         },
       });
 
@@ -232,9 +236,9 @@ export default function TradingTaskUpdateForm({
 
   return (
     <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          {t('common:labels.taskDetails', 'Task details')}
+          {t('common:labels.taskDetails')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
@@ -288,15 +292,12 @@ export default function TradingTaskUpdateForm({
           severity={showRestartRequiredGuard ? 'warning' : 'info'}
           sx={{ mb: 3 }}
         >
-          {t(
-            'trading:updateForm.restartRequiredForExecutionEdits',
-            'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
-          )}
+          {t('trading:updateForm.restartRequiredForExecutionEdits')}
         </Alert>
       )}
 
       <Typography variant="h6" gutterBottom>
-        {t('common:labels.configuration')}
+        {t('common:labels.strategyConfiguration')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         {t('trading:updateForm.updateStrategyConfig')}
@@ -592,27 +593,13 @@ export default function TradingTaskUpdateForm({
         </Grid>
       </Grid>
 
-      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-        {t('common:debug.title')}
-      </Typography>
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={tracemalloc}
-            onChange={(e) => setTracemalloc(e.target.checked)}
-          />
-        }
-        label={
-          <Box>
-            <Typography variant="body1">
-              {t('common:debug.tracemalloc')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {t('common:debug.tracemallocDescription')}
-            </Typography>
-          </Box>
-        }
-      />
+      {isSuperuser && (
+        <DebugOptionsSection
+          tracemalloc={tracemalloc}
+          onTracemallocChange={setTracemalloc}
+          sx={{ mt: 4 }}
+        />
+      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
         <Button

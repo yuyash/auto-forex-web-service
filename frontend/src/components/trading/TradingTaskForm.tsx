@@ -42,6 +42,10 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useSupportedInstruments } from '../../hooks/useMarketConfig';
+import { useAuth } from '../../contexts/AuthContext';
+import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import { useNumberFormatter } from '../../hooks/useNumberFormatter';
+import { currencySymbol } from '../../utils/numberFormat';
 
 const steps = [
   'trading:form.steps.account',
@@ -106,12 +110,16 @@ export default function TradingTaskForm({
   initialData,
 }: TradingTaskFormProps) {
   const { t } = useTranslation(['trading', 'common']);
+  const { user } = useAuth();
+  const { formatNumber } = useNumberFormatter();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
     initialData || {}
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [tracemalloc, setTracemalloc] = useState(false);
+  const isSuperuser = Boolean(user?.is_superuser);
   const createTask = useCreateTradingTask();
   const updateTask = useUpdateTradingTask();
 
@@ -196,6 +204,13 @@ export default function TradingTaskForm({
   const selectedAccount = accountDetail
     ? (accountDetail as Account)
     : selectedAccountFromList;
+  const selectedAccountCurrencySymbol = selectedAccount
+    ? currencySymbol(selectedAccount.currency)
+    : '';
+  const selectedAccountCurrencyPrefix =
+    selectedAccountCurrencySymbol === selectedAccount?.currency?.toUpperCase()
+      ? `${selectedAccountCurrencySymbol} `
+      : selectedAccountCurrencySymbol;
 
   const { strategies } = useStrategies();
 
@@ -318,6 +333,7 @@ export default function TradingTaskForm({
           completeData.market_idle_pre_close_minutes,
         market_idle_resume_delay_minutes:
           completeData.market_idle_resume_delay_minutes,
+        debug_options: isSuperuser ? { tracemalloc } : undefined,
       };
 
       if (taskId) {
@@ -431,8 +447,12 @@ export default function TradingTaskForm({
                       />
                     </Typography>
                     <Typography variant="body2">
-                      <strong>{t('trading:form.balance')}:</strong> $
-                      {parseFloat(selectedAccount.balance).toFixed(2)}
+                      <strong>{t('trading:form.balance')}:</strong>{' '}
+                      {selectedAccountCurrencyPrefix}
+                      {formatNumber(parseFloat(selectedAccount.balance), {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </Typography>
                     <Typography variant="body2">
                       <strong>{t('trading:form.currency')}:</strong>{' '}
@@ -962,6 +982,15 @@ export default function TradingTaskForm({
                       {t('trading:form.dryRunWarning')}
                     </Typography>
                   </Alert>
+                </Grid>
+              )}
+
+              {isSuperuser && (
+                <Grid size={{ xs: 12 }}>
+                  <DebugOptionsSection
+                    tracemalloc={tracemalloc}
+                    onTracemallocChange={setTracemalloc}
+                  />
                 </Grid>
               )}
 

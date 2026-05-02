@@ -5,8 +5,13 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import {
   fromTimezonePickerDate,
+  getTimezoneAbbreviation,
   toTimezonePickerDate,
 } from '../../../utils/timezone';
+import {
+  useAppSettings,
+  type AppSettings,
+} from '../../../hooks/useAppSettings';
 
 interface DateRangePickerProps {
   startDate: Date | string | null;
@@ -39,10 +44,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   maxDate,
   timezone = 'UTC',
 }) => {
+  const { settings } = useAppSettings();
   const startDateValue = toTimezonePickerDate(startDate, timezone);
   const endDateValue = toTimezonePickerDate(endDate, timezone);
   const minDateValue = toTimezonePickerDate(minDate ?? null, timezone);
   const maxDateValue = toTimezonePickerDate(maxDate ?? null, timezone);
+  const pickerFormat = toDateFnsDateTimeFormat(settings.dateFormat);
 
   const isValidDate = (d: Date | null): d is Date =>
     d instanceof Date && !isNaN(d.getTime());
@@ -81,10 +88,19 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(startDateValue) &&
       startDateValue > maxDateValue
     ) {
-      return `Start date must be before ${maxDateValue.toLocaleDateString()}`;
+      return `Start date must be before ${formatPickerDate(
+        maxDateValue,
+        settings.dateFormat
+      )}`;
     }
     return null;
-  }, [endDateValue, maxDateValue, required, startDateValue]);
+  }, [
+    endDateValue,
+    maxDateValue,
+    required,
+    settings.dateFormat,
+    startDateValue,
+  ]);
 
   const endError = React.useMemo(() => {
     if (!endDateValue && required) {
@@ -108,25 +124,26 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(endDateValue) &&
       endDateValue < minDateValue
     ) {
-      return `End date must be after ${minDateValue.toLocaleDateString()}`;
+      return `End date must be after ${formatPickerDate(
+        minDateValue,
+        settings.dateFormat
+      )}`;
     }
     return null;
-  }, [endDateValue, minDateValue, required, startDateValue]);
+  }, [
+    endDateValue,
+    minDateValue,
+    required,
+    settings.dateFormat,
+    startDateValue,
+  ]);
 
   const hasError = !!error || !!startError || !!endError;
   const displayError = error || startError || endError;
 
   // Derive a short timezone label (e.g. "JST", "UTC") for display.
   const tzLabel = React.useMemo(() => {
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeZoneName: 'short',
-      }).formatToParts(new Date());
-      return parts.find((p) => p.type === 'timeZoneName')?.value ?? timezone;
-    } catch {
-      return timezone;
-    }
+    return getTimezoneAbbreviation(timezone);
   }, [timezone]);
 
   return (
@@ -137,6 +154,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             <DateTimePicker
               label={`${startLabel} (${tzLabel})`}
               value={startDateValue}
+              format={pickerFormat}
               onChange={handleStartChange}
               disabled={disabled}
               minDate={minDateValue ?? undefined}
@@ -154,6 +172,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             <DateTimePicker
               label={`${endLabel} (${tzLabel})`}
               value={endDateValue}
+              format={pickerFormat}
               onChange={handleEndChange}
               disabled={disabled}
               minDate={startDateValue || minDateValue || undefined}
@@ -185,6 +204,27 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     </LocalizationProvider>
   );
 };
+
+function toDateFnsDateTimeFormat(
+  dateFormat: AppSettings['dateFormat']
+): string {
+  if (dateFormat === 'MM/DD/YYYY') return 'MM/dd/yyyy HH:mm';
+  if (dateFormat === 'DD/MM/YYYY') return 'dd/MM/yyyy HH:mm';
+  return 'yyyy-MM-dd HH:mm';
+}
+
+function formatPickerDate(
+  date: Date,
+  dateFormat: AppSettings['dateFormat']
+): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  if (dateFormat === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+  if (dateFormat === 'DD/MM/YYYY') return `${day}/${month}/${year}`;
+  return `${year}-${month}-${day}`;
+}
 
 function calculateDuration(start: Date, end: Date): string {
   const diffMs = end.getTime() - start.getTime();

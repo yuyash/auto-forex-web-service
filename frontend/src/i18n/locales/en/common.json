@@ -132,6 +132,7 @@
     "liveAccount": "LIVE ACCOUNT",
     "total": "Total",
     "parameters": "Parameters",
+    "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
     "pageSize": "Page size"
   },
@@ -263,6 +264,7 @@
       "counter": "Counter",
       "trend": "Trend",
       "active": "Active",
+      "pending": "Pending",
       "completed": "Completed",
       "intervened": "Intervened",
       "long": "Long",
@@ -601,6 +603,13 @@
       "levelFilter": "Level Filter",
       "allLevels": "All Levels",
       "componentFilter": "Logger Filter",
+      "messageFilter": "Message Filter",
+      "messageFilterPlaceholder": "Search log messages",
+      "messageMatchMode": "Match Mode",
+      "messageMatchPartial": "Partial Match",
+      "messageMatchExact": "Exact Match",
+      "messageMatchRegex": "Regular Expression",
+      "invalidRegex": "Invalid regular expression",
       "timestampFrom": "From",
       "timestampTo": "To",
       "noLogs": "No logs available",
@@ -611,6 +620,11 @@
       "executionId": "Execution ID",
       "status": "Status",
       "progress": "Progress",
+      "configSegment": "Config Segment",
+      "configSegmentTooltip": "1-based config segment for this execution. It increments when an execution resumes after a config change. Hidden by default because Config Rev usually carries the useful signal.",
+      "configRevisions": "Config Rev",
+      "configRevisionsTooltip": "{{count}} config revision(s) recorded. Current config hash: {{hash}}",
+      "configRevisionsTooltipNoHash": "{{count}} config revision(s) recorded. No config hash is available.",
       "started": "Started",
       "completed": "Completed",
       "duration": "Duration",
@@ -628,7 +642,14 @@
       "deleteTitle": "Delete Executions",
       "deleteMessage": "Are you sure you want to delete {{count}} execution(s)? This will permanently remove all associated data.",
       "notesDialogTitle": "Execution Notes",
-      "notesPlaceholder": "Enter notes for this execution..."
+      "notesPlaceholder": "Enter notes for this execution...",
+      "configRevisionsTitle": "Config Revisions",
+      "executionSegment": "Execution {{execution}} / Config Segment {{segment}}",
+      "currentConfigHash": "Current Hash",
+      "strategy": "Strategy",
+      "revisionHistory": "Revision History",
+      "changedFields": "Changed Fields",
+      "noConfigRevisions": "No config revisions recorded for this execution."
     }
   },
   "debug": {
@@ -655,6 +676,16 @@
     "moveUp": "Move up",
     "moveDown": "Move down",
     "configureTabs": "Configure tabs"
+  },
+  "itemOrder": {
+    "reset": "Reset order",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
+  "executionStatusOrder": {
+    "configureTiles": "Configure execution status tiles",
+    "title": "Execution status tile order",
+    "description": "Drag tiles or use the arrow buttons to change their display order."
   },
   "footer": {
     "oandaApiReachable": "OANDA API is reachable",

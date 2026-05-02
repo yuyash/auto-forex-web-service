@@ -1,14 +1,23 @@
 import { readAppSettings } from '../hooks/useAppSettings';
+import type { AppSettings } from '../hooks/useAppSettings';
 
-interface FormatAppNumberOptions {
+export interface FormatAppNumberOptions {
   minimumFractionDigits?: number;
   maximumFractionDigits?: number;
   useGrouping?: boolean;
   signed?: boolean;
 }
 
-function applySeparators(value: string): string {
-  const { decimalSeparator, thousandsSeparator } = readAppSettings();
+export type NumberFormatSeparators = Pick<
+  AppSettings,
+  'decimalSeparator' | 'thousandsSeparator'
+>;
+
+function applySeparators(
+  value: string,
+  separators: NumberFormatSeparators = readAppSettings()
+): string {
+  const { decimalSeparator, thousandsSeparator } = separators;
   const [integerPart, fractionPart] = value.split('.');
   const normalizedInteger = integerPart.replace(/,/g, thousandsSeparator);
 
@@ -21,7 +30,8 @@ function applySeparators(value: string): string {
 
 export function formatAppNumber(
   value: number,
-  options: FormatAppNumberOptions = {}
+  options: FormatAppNumberOptions = {},
+  separators?: NumberFormatSeparators
 ): string {
   if (!Number.isFinite(value)) return '-';
 
@@ -40,19 +50,24 @@ export function formatAppNumber(
   }).format(absoluteValue);
 
   const sign = signed ? (value >= 0 ? '+' : '-') : value < 0 ? '-' : '';
-  return `${sign}${applySeparators(formatted)}`;
+  return `${sign}${applySeparators(formatted, separators)}`;
 }
 
 export function formatAppPercent(
   value: number,
   fractionDigits = 2,
-  signed = false
+  signed = false,
+  separators?: NumberFormatSeparators
 ): string {
-  return `${formatAppNumber(value, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-    signed,
-  })}%`;
+  return `${formatAppNumber(
+    value,
+    {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+      signed,
+    },
+    separators
+  )}%`;
 }
 
 /**
