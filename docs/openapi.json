@@ -3756,11 +3756,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/BacktestTaskRequest"
+                                "$ref": "#/components/schemas/BacktestTaskStopCommandRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -5726,7 +5725,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TradingTaskStopRequestRequest"
+                                "$ref": "#/components/schemas/TradingTaskStopCommandRequest"
                             }
                         }
                     }
@@ -7094,21 +7093,57 @@
                     "start_time"
                 ]
             },
+            "BacktestTaskStopCommandRequest": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": "graceful",
+                        "description": "Stop mode. Defaults to graceful."
+                    },
+                    "drain_duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional drain duration override in minutes."
+                    }
+                }
+            },
             "BacktestTaskStopResponse": {
                 "type": "object",
                 "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
                     "message": {
+                        "type": "string"
+                    },
+                    "command": {
                         "type": "string"
                     },
                     "task_id": {
                         "type": "string"
                     },
+                    "previous_status": {
+                        "type": "string"
+                    },
+                    "next_status": {
+                        "type": "string"
+                    },
                     "status": {
                         "type": "string"
+                    },
+                    "accepted": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
+                    "accepted",
+                    "command",
                     "message",
+                    "mode",
+                    "next_status",
+                    "previous_status",
                     "status",
                     "task_id"
                 ]
@@ -11767,7 +11802,7 @@
                     "name"
                 ]
             },
-            "TradingTaskStopRequestRequest": {
+            "TradingTaskStopCommandRequest": {
                 "type": "object",
                 "properties": {
                     "mode": {
@@ -11775,28 +11810,49 @@
                         "minLength": 1,
                         "default": "graceful",
                         "description": "Stop mode. Defaults to graceful."
+                    },
+                    "drain_duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional drain duration override in minutes."
                     }
                 }
             },
             "TradingTaskStopResponse": {
                 "type": "object",
                 "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
                     "message": {
+                        "type": "string"
+                    },
+                    "command": {
                         "type": "string"
                     },
                     "task_id": {
                         "type": "string"
                     },
-                    "mode": {
+                    "previous_status": {
+                        "type": "string"
+                    },
+                    "next_status": {
                         "type": "string"
                     },
                     "status": {
                         "type": "string"
+                    },
+                    "accepted": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
+                    "accepted",
+                    "command",
                     "message",
                     "mode",
+                    "next_status",
+                    "previous_status",
                     "status",
                     "task_id"
                 ]

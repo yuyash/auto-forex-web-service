@@ -34,6 +34,17 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   created_at: string;
 }
 
+export interface BackendTaskStopResponse {
+  message: string;
+  command?: 'stop';
+  task_id: string;
+  previous_status?: string;
+  next_status?: string;
+  status: string;
+  accepted?: boolean;
+  mode?: string;
+}
+
 export interface BackendBacktestTask {
   id: string;
   user_id: number;

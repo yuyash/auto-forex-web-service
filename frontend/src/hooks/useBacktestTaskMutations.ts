@@ -1,4 +1,5 @@
 import { backtestTasksApi } from '../services/api';
+import type { BackendTaskStopResponse } from '../services/api/contracts';
 import type {
   BacktestTask,
   BacktestTaskCreateData,
@@ -71,7 +72,7 @@ export function useUpdateBacktestTask(options?: {
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close' | 'drain';
 
 export function useStopBacktestTask(options?: {
-  onSuccess?: (data: Record<string, unknown>) => void;
+  onSuccess?: (data: BackendTaskStopResponse) => void;
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
@@ -90,7 +91,10 @@ export function useStopBacktestTask(options?: {
         // The optimistic status depends on the stop mode: DRAIN keeps
         // the task running in DRAINING state; everything else
         // transitions to STOPPING → STOPPED.
-        const nextStatus = variables.mode === 'drain' ? 'draining' : 'stopping';
+        const fallbackStatus =
+          variables.mode === 'drain' ? 'draining' : 'stopping';
+        const nextStatus =
+          (data.next_status ?? data.status).toLowerCase() || fallbackStatus;
         await patchTaskStatusCache('backtest', variables.id, nextStatus);
         await invalidateTaskDerivedCaches('backtest', variables.id);
         options?.onSuccess?.(data);

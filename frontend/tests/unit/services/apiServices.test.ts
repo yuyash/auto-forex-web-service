@@ -129,20 +129,51 @@ describe('API service contracts', () => {
   it('sends stop mode for trading task stop requests', async () => {
     mockApi.post.mockResolvedValue({
       message: 'Task stop requested',
+      command: 'stop',
       task_id: 'task-1',
       mode: 'immediate',
-      status: 'STOPPING',
+      previous_status: 'running',
+      next_status: 'stopping',
+      status: 'stopping',
+      accepted: true,
     });
 
     await expect(
       tradingTasksApi.stop('task-1', 'immediate')
     ).resolves.toMatchObject({
+      command: 'stop',
       mode: 'immediate',
+      next_status: 'stopping',
     });
 
     expect(mockApi.post).toHaveBeenCalledWith(
       '/api/trading/tasks/trading/task-1/stop/',
       { mode: 'immediate' }
+    );
+  });
+
+  it('sends drain overrides for backtest task stop requests', async () => {
+    mockApi.post.mockResolvedValue({
+      message: 'Task stop requested',
+      command: 'stop',
+      task_id: 'task-1',
+      mode: 'drain',
+      previous_status: 'running',
+      next_status: 'draining',
+      status: 'draining',
+      accepted: true,
+    });
+
+    await expect(
+      backtestTasksApi.stop('task-1', 'drain', 15)
+    ).resolves.toMatchObject({
+      mode: 'drain',
+      next_status: 'draining',
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/api/trading/tasks/backtest/task-1/stop/',
+      { mode: 'drain', drain_duration_minutes: 15 }
     );
   });
 

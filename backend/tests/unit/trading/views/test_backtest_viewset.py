@@ -294,10 +294,42 @@ class TestStop:
 
         response = vs.stop(request, pk=1)
         assert response.status_code == http_status.HTTP_202_ACCEPTED
+        assert response.data == {
+            "message": "Task stop requested",
+            "command": "stop",
+            "task_id": str(task.pk),
+            "previous_status": TaskStatus.RUNNING.value,
+            "next_status": TaskStatus.STOPPING.value,
+            "status": TaskStatus.STOPPING.value,
+            "accepted": True,
+            "mode": "graceful",
+        }
         vs.task_service.stop_task.assert_called_once_with(
             task.pk,
             mode="graceful",
             drain_duration_minutes=None,
+            user=request.user,
+        )
+
+    def test_stop_drain_response_reports_draining(self):
+        task = _make_task(task_status=TaskStatus.RUNNING)
+        vs = _build_viewset(action="stop")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.stop_task.return_value = True
+
+        request = _drf_post(data={"mode": "drain", "drain_duration_minutes": 15})
+        vs.request = request
+
+        response = vs.stop(request, pk=1)
+        assert response.status_code == http_status.HTTP_202_ACCEPTED
+        assert response.data["mode"] == "drain"
+        assert response.data["previous_status"] == TaskStatus.RUNNING.value
+        assert response.data["next_status"] == TaskStatus.DRAINING.value
+        assert response.data["status"] == TaskStatus.DRAINING.value
+        vs.task_service.stop_task.assert_called_once_with(
+            task.pk,
+            mode="drain",
+            drain_duration_minutes=15,
             user=request.user,
         )
 

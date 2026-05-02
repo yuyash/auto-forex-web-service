@@ -5,6 +5,7 @@
  * This factory eliminates the duplication by parameterising on task kind and
  * the concrete API object.
  */
+import type { BackendTaskStopResponse } from '../services/api/contracts';
 import type { BacktestTask, TradingTask } from '../types';
 import {
   invalidateTaskDerivedCaches,
@@ -28,7 +29,7 @@ interface MutationOptions<T> {
 /** Minimal contract every task API must satisfy for the lifecycle hooks. */
 interface TaskLifecycleApi<TTask extends TaskEntity> {
   start: (id: string) => Promise<TTask>;
-  stop: (...args: never[]) => Promise<Record<string, unknown>>;
+  stop: (...args: never[]) => Promise<BackendTaskStopResponse>;
   pause: (id: string) => Promise<TTask>;
   resume: (id: string) => Promise<TTask>;
   restart: (id: string) => Promise<TTask>;
