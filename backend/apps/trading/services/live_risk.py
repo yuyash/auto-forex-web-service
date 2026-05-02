@@ -6,12 +6,10 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from django.conf import settings
-
+from apps.market.services.live_trading_policy import LiveTradingPolicy, get_live_trading_policy
 from apps.trading.models import TradingTask
 
 _SUPPORTED_DEBUG_OPTIONS = frozenset({"tracemalloc"})
-_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 class LiveTradingRiskError(ValueError):
@@ -44,17 +42,18 @@ class LiveTradingRiskGuard:
         if bool(getattr(task, "dry_run", False)):
             return
 
-        self._validate_account_mode(task)
-        self._validate_instrument(task)
-        self._validate_unit_limits(task)
+        policy = get_live_trading_policy()
+        self._validate_account_mode(task, policy)
+        self._validate_instrument(task, policy)
+        self._validate_unit_limits(task, policy)
 
-    def _validate_account_mode(self, task: TradingTask) -> None:
+    def _validate_account_mode(self, task: TradingTask, policy: LiveTradingPolicy) -> None:
         account = task.oanda_account
         api_type = str(getattr(account, "api_type", "")).lower()
         if api_type != "live":
             return
 
-        if _setting_bool("TRADING_ALLOW_LIVE_OANDA", default=False):
+        if policy.allow_live_oanda:
             return
 
         raise LiveTradingRiskError(
@@ -62,21 +61,9 @@ class LiveTradingRiskGuard:
             "starting non-dry-run tasks on live accounts."
         )
 
-    def _validate_instrument(self, task: TradingTask) -> None:
-        allowed = _setting_instruments(
-            "TRADING_LIVE_ALLOWED_INSTRUMENTS",
-            default=(
-                "USD_JPY",
-                "EUR_USD",
-                "GBP_USD",
-                "AUD_USD",
-                "USD_CAD",
-                "USD_CHF",
-                "NZD_USD",
-            ),
-        )
+    def _validate_instrument(self, task: TradingTask, policy: LiveTradingPolicy) -> None:
         instrument = str(getattr(task, "instrument", "")).strip().upper()
-        if "*" in allowed or instrument in allowed:
+        if policy.allows_instrument(instrument):
             return
 
         raise LiveTradingRiskError(
@@ -84,13 +71,10 @@ class LiveTradingRiskGuard:
             "Update TRADING_LIVE_ALLOWED_INSTRUMENTS to allow it."
         )
 
-    def _validate_unit_limits(self, task: TradingTask) -> None:
+    def _validate_unit_limits(self, task: TradingTask, policy: LiveTradingPolicy) -> None:
         estimate = self._estimate_task_units(task)
-        max_initial = _setting_positive_int("TRADING_LIVE_MAX_INITIAL_UNITS", default=10_000)
-        max_exposure = _setting_positive_int(
-            "TRADING_LIVE_MAX_ESTIMATED_EXPOSURE_UNITS",
-            default=200_000,
-        )
+        max_initial = policy.max_initial_units
+        max_exposure = policy.max_estimated_exposure_units
 
         if max_initial and estimate.initial_order_units > max_initial:
             raise LiveTradingRiskError(
@@ -215,28 +199,6 @@ def _positive_decimal(value: Any, *, default: Decimal) -> Decimal:
     except (InvalidOperation, ValueError):
         return default
     return max(parsed, Decimal("0"))
-
-
-def _setting_bool(name: str, *, default: bool) -> bool:
-    value = getattr(settings, name, default)
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in _TRUE_VALUES
-
-
-def _setting_positive_int(name: str, *, default: int) -> int:
-    value = getattr(settings, name, default)
-    return _positive_int(value, default=default)
-
-
-def _setting_instruments(name: str, *, default: tuple[str, ...]) -> set[str]:
-    value = getattr(settings, name, default)
-    if isinstance(value, str):
-        items = value.split(",")
-    else:
-        items = value
-
-    return {str(item).strip().upper() for item in items if str(item).strip()}
 
 
 def _is_mock_value(value: Any) -> bool:
