@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.60.0...frontend-v1.60.1) (2026-05-02)
+
+
+### Performance
+
+* metrics api pagination and mobile layout ([#632](https://github.com/yuyash/auto-forex-web-service/issues/632)) ([810c267](https://github.com/yuyash/auto-forex-web-service/commit/810c267593b9be01d338d9d4b25a2e80681ff263))
+
 ## [1.60.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.59.1...frontend-v1.60.0) (2026-05-02)
 
 
