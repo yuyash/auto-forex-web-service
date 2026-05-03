@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.2...frontend-v1.62.3) (2026-05-03)
+
+
+### Bug Fixes
+
+* **frontend:** inline custom date range fields into the selector row ([#644](https://github.com/yuyash/auto-forex-web-service/issues/644)) ([8980258](https://github.com/yuyash/auto-forex-web-service/commit/898025809c68284e1e091393261f9dba6e533cc2))
+
 ## [1.62.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.1...frontend-v1.62.2) (2026-05-03)
 
 
