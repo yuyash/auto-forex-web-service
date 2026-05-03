@@ -53,8 +53,10 @@ import { useNumberFormatter } from '../../hooks/useNumberFormatter';
 import { useToast } from '../common/useToast';
 import { currencySymbol } from '../../utils/numberFormat';
 import {
+  fromTimezonePickerDate,
   formatDateTimeInTimezone,
   formatTimestampWithTimezone,
+  toTimezonePickerDate,
 } from '../../utils/timezone';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
@@ -80,14 +82,36 @@ const weekdayOptions: ReadonlyArray<{
   { value: 6, key: 'sunday', label: 'Sunday' },
 ];
 
-const createDefaultDateRange = () => {
-  const end = new Date();
-  const start = new Date(
-    end.getTime() - DEFAULT_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000
+function getTodayAtMidnightForTimezone(timezone: string): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string | undefined>;
+  return new Date(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    0,
+    0,
+    0,
+    0
   );
+}
+
+const createDefaultDateRange = (timezone: string) => {
+  const end = getTodayAtMidnightForTimezone(timezone);
+  const start = new Date(end);
+  start.setDate(start.getDate() - DEFAULT_DATE_RANGE_DAYS);
   return {
-    start_time: start.toISOString(),
-    end_time: end.toISOString(),
+    start_time: fromTimezonePickerDate(start, timezone) ?? start.toISOString(),
+    end_time: fromTimezonePickerDate(end, timezone) ?? end.toISOString(),
   };
 };
 
@@ -307,12 +331,12 @@ export default function BacktestTaskForm({
     t('backtest:form.steps.review'),
   ];
   const defaultDateRange = useMemo(() => {
-    const range = createDefaultDateRange();
+    const range = createDefaultDateRange(timezone);
     return {
       start_time: initialData?.start_time || range.start_time,
       end_time: initialData?.end_time || range.end_time,
     };
-  }, [initialData?.start_time, initialData?.end_time]);
+  }, [initialData?.start_time, initialData?.end_time, timezone]);
 
   const resolvedDefaultValues = useMemo(() => {
     const baseDefaults: BacktestTaskSchemaOutput = {
@@ -441,8 +465,8 @@ export default function BacktestTaskForm({
   } = useTickDataRange(watchedInstrument);
 
   // When tick data range is loaded for a new task (no initialData dates),
-  // set the default date range to [max - 1 month, max] with minutes/seconds
-  // truncated to the hour.
+  // set the default date range to [max - 1 month, max] at 12:00 AM in
+  // the user's configured timezone.
   const dataRangeAppliedRef = useRef(false);
   useEffect(() => {
     if (
@@ -453,15 +477,28 @@ export default function BacktestTaskForm({
       !dataRangeAppliedRef.current
     ) {
       dataRangeAppliedRef.current = true;
-      const maxDate = new Date(dataRange.max_timestamp);
-      // Truncate to the hour
-      maxDate.setMinutes(0, 0, 0);
+      const maxDate =
+        toTimezonePickerDate(dataRange.max_timestamp, timezone) ??
+        new Date(dataRange.max_timestamp);
+      maxDate.setHours(0, 0, 0, 0);
       const startDate = new Date(maxDate);
       startDate.setMonth(startDate.getMonth() - 1);
-      setValue('end_time', maxDate.toISOString());
-      setValue('start_time', startDate.toISOString());
+      setValue(
+        'end_time',
+        fromTimezonePickerDate(maxDate, timezone) ?? maxDate.toISOString()
+      );
+      setValue(
+        'start_time',
+        fromTimezonePickerDate(startDate, timezone) ?? startDate.toISOString()
+      );
     }
-  }, [dataRange, initialData?.start_time, initialData?.end_time, setValue]);
+  }, [
+    dataRange,
+    initialData?.start_time,
+    initialData?.end_time,
+    setValue,
+    timezone,
+  ]);
 
   // Reset when instrument changes so the next dataRange load re-applies defaults
   useEffect(() => {
@@ -630,11 +667,11 @@ export default function BacktestTaskForm({
 
         // Map backend field names to frontend field names
         const fieldMapping: Record<string, string> = {
-          config: 'Configuration',
-          name: 'Task Name',
-          start_time: 'Start Date',
-          end_time: 'End Date',
-          initial_balance: 'Initial Balance',
+          config: t('common:labels.configuration'),
+          name: t('backtest:form.taskName'),
+          start_time: t('backtest:config.startDate'),
+          end_time: t('backtest:config.endDate'),
+          initial_balance: t('backtest:detail.initialBalance'),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -770,6 +807,8 @@ export default function BacktestTaskForm({
                           endDate={endField.value}
                           onStartDateChange={startField.onChange}
                           onEndDateChange={endField.onChange}
+                          startLabel={t('backtest:config.startDate')}
+                          endLabel={t('backtest:config.endDate')}
                           minDate={
                             dataRange?.min_timestamp
                               ? new Date(dataRange.min_timestamp)
@@ -1408,18 +1447,18 @@ export default function BacktestTaskForm({
         };
 
         const fieldNameMapping: Record<string, string> = {
-          config_id: 'Configuration',
-          name: 'Task Name',
-          description: 'Description',
-          data_source: 'Data Source',
-          start_time: 'Start Date',
-          end_time: 'End Date',
-          initial_balance: 'Initial Balance',
-          commission_per_trade: 'Commission Per Trade',
-          pip_size: 'Pip Size',
-          instrument: 'Instrument',
-          tick_granularity: 'Tick Granularity',
-          tick_window_value_mode: 'Tick Window Value Mode',
+          config_id: t('common:labels.configuration'),
+          name: t('backtest:form.taskName'),
+          description: t('common:labels.description'),
+          data_source: t('backtest:detail.dataSource'),
+          start_time: t('backtest:config.startDate'),
+          end_time: t('backtest:config.endDate'),
+          initial_balance: t('backtest:detail.initialBalance'),
+          commission_per_trade: t('backtest:detail.commissionPerTrade'),
+          pip_size: t('common:labels.pipSize'),
+          instrument: t('common:labels.instrument'),
+          tick_granularity: t('backtest:form.tickGranularity'),
+          tick_window_value_mode: t('backtest:form.tickWindowValueMode'),
         };
 
         return (
@@ -1434,8 +1473,8 @@ export default function BacktestTaskForm({
             <TaskReviewErrors
               errors={errors}
               fieldLabels={fieldNameMapping}
-              title="Please fix the following errors before submitting:"
-              correctionHint="Click Back to return to previous steps and correct these errors."
+              title={t('common:validation.pleaseFixErrors')}
+              correctionHint={t('backtest:form.reviewErrorsCorrectionHint')}
             />
 
             <Paper sx={{ p: 3 }}>
@@ -1448,8 +1487,7 @@ export default function BacktestTaskForm({
                 />
               ) : (
                 <Alert severity="error">
-                  Configuration not found. Please go back and select a valid
-                  configuration.
+                  {t('backtest:form.configurationNotFound')}
                 </Alert>
               )}
             </Paper>

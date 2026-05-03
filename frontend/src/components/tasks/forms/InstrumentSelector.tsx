@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FormControl,
   InputLabel,
@@ -55,13 +56,15 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
   value,
   onChange,
   availableInstrument = DEFAULT_INSTRUMENT,
-  label = 'Instrument',
+  label,
   required = false,
   disabled = false,
   error,
   helperText,
 }) => {
+  const { t } = useTranslation(['common']);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const resolvedLabel = label ?? t('common:labels.instrument');
 
   const filteredInstrument = React.useMemo(() => {
     if (!searchTerm) return availableInstrument;
@@ -78,10 +81,10 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
 
   const validationError = React.useMemo(() => {
     if (required && !value) {
-      return 'Instrument is required';
+      return t('common:validation.instrumentRequired');
     }
     return null;
-  }, [value, required]);
+  }, [value, required, t]);
 
   const displayError = error || validationError;
 
@@ -92,13 +95,13 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
       required={required}
       disabled={disabled}
     >
-      <InputLabel id="instrument-selector-label">{label}</InputLabel>
+      <InputLabel id="instrument-selector-label">{resolvedLabel}</InputLabel>
       <Select
         labelId="instrument-selector-label"
         id="instrument-selector"
         value={value}
         onChange={handleChange}
-        label={label}
+        label={resolvedLabel}
         renderValue={(selected) =>
           selected ? formatInstrumentLabel(selected as string) : ''
         }
@@ -122,7 +125,7 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
           }}
         >
           <TextField
-            placeholder="Search instrument..."
+            placeholder={t('common:instrument.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => {
               e.stopPropagation();
@@ -142,7 +145,9 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
         </Box>
 
         {filteredInstrument.length === 0 ? (
-          <MenuItem disabled>No instrument found</MenuItem>
+          <MenuItem disabled>
+            {t('common:instrument.noInstrumentFound')}
+          </MenuItem>
         ) : (
           filteredInstrument.map((instrument) => (
             <MenuItem key={instrument} value={instrument}>

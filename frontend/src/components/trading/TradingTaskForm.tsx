@@ -348,15 +348,18 @@ export default function TradingTaskForm({
         message?: string;
       };
 
-      let errorMessage = 'Failed to create trading task';
+      let errorMessage = t(
+        'trading:form.createFailed',
+        'Failed to create trading task'
+      );
       if (err?.details && typeof err.details === 'object') {
         const backendErrors = err.details as Record<string, string | string[]>;
         const errorMessages: string[] = [];
         const fieldMapping: Record<string, string> = {
-          account_id: 'Account',
-          config_id: 'Configuration',
-          name: 'Task Name',
-          hedging_enabled: 'Hedging',
+          account_id: t('trading:form.account'),
+          config_id: t('common:labels.configuration'),
+          name: t('trading:form.taskName'),
+          hedging_enabled: t('trading:form.hedgingEnabled'),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {

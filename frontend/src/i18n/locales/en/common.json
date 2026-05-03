@@ -136,6 +136,21 @@
     "strategySnapshot": "Strategy Snapshot",
     "pageSize": "Page size"
   },
+  "dateRange": {
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "startDateRequired": "Start date is required",
+    "endDateRequired": "End date is required",
+    "invalidDate": "Invalid date",
+    "startBeforeEnd": "Start date must be before end date",
+    "endAfterStart": "End date must be after start date",
+    "startBeforeDate": "Start date must be before {{date}}",
+    "endAfterDate": "End date must be after {{date}}"
+  },
+  "instrument": {
+    "searchPlaceholder": "Search instrument...",
+    "noInstrumentFound": "No instrument found"
+  },
   "messages": {
     "loading": "Loading...",
     "noData": "No data available",

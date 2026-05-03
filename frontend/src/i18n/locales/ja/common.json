@@ -136,6 +136,21 @@
     "strategySnapshot": "戦略スナップショット",
     "pageSize": "ページサイズ"
   },
+  "dateRange": {
+    "startDate": "開始日",
+    "endDate": "終了日",
+    "startDateRequired": "開始日は必須です",
+    "endDateRequired": "終了日は必須です",
+    "invalidDate": "日付が無効です",
+    "startBeforeEnd": "開始日は終了日より前である必要があります",
+    "endAfterStart": "終了日は開始日より後である必要があります",
+    "startBeforeDate": "開始日は {{date}} より前である必要があります",
+    "endAfterDate": "終了日は {{date}} より後である必要があります"
+  },
+  "instrument": {
+    "searchPlaceholder": "通貨ペアを検索...",
+    "noInstrumentFound": "通貨ペアが見つかりません"
+  },
   "messages": {
     "loading": "読み込み中...",
     "noData": "データがありません",

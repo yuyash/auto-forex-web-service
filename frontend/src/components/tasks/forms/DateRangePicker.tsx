@@ -3,6 +3,7 @@ import { Box, FormHelperText } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { useTranslation } from 'react-i18next';
 import {
   fromTimezonePickerDate,
   getTimezoneAbbreviation,
@@ -34,8 +35,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   endDate,
   onStartDateChange,
   onEndDateChange,
-  startLabel = 'Start Date',
-  endLabel = 'End Date',
+  startLabel,
+  endLabel,
   required = false,
   disabled = false,
   error,
@@ -44,12 +45,20 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   maxDate,
   timezone = 'UTC',
 }) => {
+  const { t } = useTranslation(['common']);
   const { settings } = useAppSettings();
   const startDateValue = toTimezonePickerDate(startDate, timezone);
   const endDateValue = toTimezonePickerDate(endDate, timezone);
   const minDateValue = toTimezonePickerDate(minDate ?? null, timezone);
   const maxDateValue = toTimezonePickerDate(maxDate ?? null, timezone);
   const pickerFormat = toDateFnsDateTimeFormat(settings.dateFormat);
+  const resolvedStartLabel = startLabel ?? t('common:dateRange.startDate');
+  const resolvedEndLabel = endLabel ?? t('common:dateRange.endDate');
+  const referenceDate = React.useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
 
   const isValidDate = (d: Date | null): d is Date =>
     d instanceof Date && !isNaN(d.getTime());
@@ -68,10 +77,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   // Validation
   const startError = React.useMemo(() => {
     if (!startDateValue && required) {
-      return 'Start date is required';
+      return t('common:dateRange.startDateRequired');
     }
     if (startDateValue && !isValidDate(startDateValue)) {
-      return 'Invalid date';
+      return t('common:dateRange.invalidDate');
     }
     if (
       startDateValue &&
@@ -80,7 +89,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(endDateValue) &&
       startDateValue >= endDateValue
     ) {
-      return 'Start date must be before end date';
+      return t('common:dateRange.startBeforeEnd');
     }
     if (
       startDateValue &&
@@ -88,10 +97,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(startDateValue) &&
       startDateValue > maxDateValue
     ) {
-      return `Start date must be before ${formatPickerDate(
-        maxDateValue,
-        settings.dateFormat
-      )}`;
+      return t('common:dateRange.startBeforeDate', {
+        date: formatPickerDate(maxDateValue, settings.dateFormat),
+      });
     }
     return null;
   }, [
@@ -100,14 +108,15 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     required,
     settings.dateFormat,
     startDateValue,
+    t,
   ]);
 
   const endError = React.useMemo(() => {
     if (!endDateValue && required) {
-      return 'End date is required';
+      return t('common:dateRange.endDateRequired');
     }
     if (endDateValue && !isValidDate(endDateValue)) {
-      return 'Invalid date';
+      return t('common:dateRange.invalidDate');
     }
     if (
       startDateValue &&
@@ -116,7 +125,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(endDateValue) &&
       endDateValue <= startDateValue
     ) {
-      return 'End date must be after start date';
+      return t('common:dateRange.endAfterStart');
     }
     if (
       endDateValue &&
@@ -124,10 +133,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       isValidDate(endDateValue) &&
       endDateValue < minDateValue
     ) {
-      return `End date must be after ${formatPickerDate(
-        minDateValue,
-        settings.dateFormat
-      )}`;
+      return t('common:dateRange.endAfterDate', {
+        date: formatPickerDate(minDateValue, settings.dateFormat),
+      });
     }
     return null;
   }, [
@@ -136,6 +144,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     required,
     settings.dateFormat,
     startDateValue,
+    t,
   ]);
 
   const hasError = !!error || !!startError || !!endError;
@@ -152,13 +161,14 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
-              label={`${startLabel} (${tzLabel})`}
+              label={`${resolvedStartLabel} (${tzLabel})`}
               value={startDateValue}
               format={pickerFormat}
               onChange={handleStartChange}
               disabled={disabled}
               minDate={minDateValue ?? undefined}
               maxDate={endDateValue || maxDateValue || undefined}
+              referenceDate={referenceDate}
               slotProps={{
                 textField: {
                   required,
@@ -170,13 +180,14 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           </Box>
           <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
-              label={`${endLabel} (${tzLabel})`}
+              label={`${resolvedEndLabel} (${tzLabel})`}
               value={endDateValue}
               format={pickerFormat}
               onChange={handleEndChange}
               disabled={disabled}
               minDate={startDateValue || minDateValue || undefined}
               maxDate={maxDateValue ?? undefined}
+              referenceDate={referenceDate}
               slotProps={{
                 textField: {
                   required,

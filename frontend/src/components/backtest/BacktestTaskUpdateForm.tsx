@@ -287,13 +287,13 @@ export default function BacktestTaskUpdateForm({
         const errorMessages: string[] = [];
 
         const fieldMapping: Record<string, string> = {
-          config: 'Configuration',
-          name: 'Task name',
-          description: 'Description',
-          start_time: 'Start Date',
-          end_time: 'End Date',
-          initial_balance: 'Initial Balance',
-          instrument: 'Instrument',
+          config: t('common:labels.configuration'),
+          name: t('backtest:form.taskName'),
+          description: t('common:labels.description'),
+          start_time: t('backtest:config.startDate'),
+          end_time: t('backtest:config.endDate'),
+          initial_balance: t('backtest:detail.initialBalance'),
+          instrument: t('common:labels.instrument'),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -444,6 +444,8 @@ export default function BacktestTaskUpdateForm({
                     endDate={endField.value}
                     onStartDateChange={startField.onChange}
                     onEndDateChange={endField.onChange}
+                    startLabel={t('backtest:config.startDate')}
+                    endLabel={t('backtest:config.endDate')}
                     maxDate={new Date()}
                     required
                     helperText={t('backtest:form.dateRangeHelperText')}
