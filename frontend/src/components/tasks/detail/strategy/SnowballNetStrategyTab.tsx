@@ -174,10 +174,21 @@ const SNOWBALL_NET_RANGE_PRESETS = [
   { value: '1y', labelKey: 'last1Year', seconds: 365 * DAY },
   { value: 'custom', labelKey: 'custom' },
 ] as const;
+const GRANULARITY_OPTIONS = [
+  'Auto',
+  'M1',
+  'M5',
+  'M15',
+  'M30',
+  'H1',
+  'H4',
+  'D',
+] as const;
 
 type SnowballNetChartKey = (typeof SNOWBALL_NET_CHART_KEYS)[number];
 type SnowballNetRangePreset =
   (typeof SNOWBALL_NET_RANGE_PRESETS)[number]['value'];
+type SnowballNetGranularitySelection = (typeof GRANULARITY_OPTIONS)[number];
 
 const SNOWBALL_NET_CHART_COLORS: Record<SnowballNetChartKey, string> = {
   ohlc: '#26a69a',
@@ -1032,6 +1043,8 @@ export function SnowballNetStrategyTab({
     useOhlcChartOverlays(containerRef);
   const [rangePreset, setRangePreset] =
     useState<SnowballNetRangePreset>('full');
+  const [granularitySelection, setGranularitySelection] =
+    useState<SnowballNetGranularitySelection>('Auto');
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
   const [rangeNowMs, setRangeNowMs] = useState(() => Date.now());
@@ -1274,7 +1287,7 @@ export function SnowballNetStrategyTab({
     };
   }, [customSince, customUntil, rangePreset, taskRange]);
 
-  const selectedGranularity = useMemo(() => {
+  const autoGranularity = useMemo(() => {
     if (!selectedRange) return DEFAULT_GRANULARITY;
     const seconds = Math.max(
       MINUTE,
@@ -1282,6 +1295,8 @@ export function SnowballNetStrategyTab({
     );
     return granularityForRangeSeconds(seconds);
   }, [selectedRange]);
+  const selectedGranularity =
+    granularitySelection === 'Auto' ? autoGranularity : granularitySelection;
 
   const handleRangePresetChange = useCallback(
     (value: SnowballNetRangePreset) => {
@@ -1310,7 +1325,7 @@ export function SnowballNetStrategyTab({
   const queryParams = useMemo(() => {
     if (!selectedRange) {
       return {
-        granularity: DEFAULT_GRANULARITY,
+        granularity: selectedGranularity,
         before_bars: DEFAULT_SIDE_BARS,
         after_bars: DEFAULT_SIDE_BARS,
         follow: 'false',
@@ -1730,13 +1745,34 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
-          <Chip
+          <FormControl
             size="small"
-            label={t('strategy:snowballNet.chart.controls.granularity', {
-              granularity: data?.window.granularity ?? selectedGranularity,
-            })}
-            sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
-          />
+            sx={{ flex: { xs: '1 1 100%', sm: '0 1 160px' }, minWidth: 0 }}
+          >
+            <InputLabel id="snowball-net-granularity-label">
+              {t('strategy:snowballNet.chart.controls.granularityLabel')}
+            </InputLabel>
+            <Select
+              labelId="snowball-net-granularity-label"
+              value={granularitySelection}
+              label={t('strategy:snowballNet.chart.controls.granularityLabel')}
+              onChange={(event) =>
+                setGranularitySelection(
+                  event.target.value as SnowballNetGranularitySelection
+                )
+              }
+            >
+              {GRANULARITY_OPTIONS.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option === 'Auto'
+                    ? t('strategy:snowballNet.chart.controls.autoGranularity', {
+                        granularity: autoGranularity,
+                      })
+                    : option}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <Box
             sx={{
               display: 'flex',

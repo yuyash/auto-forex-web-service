@@ -128,6 +128,8 @@
       "controls": {
         "range": "表示範囲",
         "granularity": "粒度: {{granularity}}",
+        "granularityLabel": "粒度",
+        "autoGranularity": "Auto ({{granularity}})",
         "customSince": "開始",
         "customUntil": "終了",
         "refreshInterval": "更新間隔",
