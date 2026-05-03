@@ -519,6 +519,8 @@ export const BacktestTaskDetail: React.FC = () => {
                 taskId={taskId}
                 taskType={TaskType.BACKTEST}
                 instrument={detailTask.instrument}
+                taskStartTime={detailTask.start_time}
+                taskEndTime={detailTask.end_time}
                 executionRunId={activeExecutionId}
                 enableRealTimeUpdates={enableRealtime}
                 timezone={timezone}

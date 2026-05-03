@@ -466,6 +466,8 @@ export const TradingTaskDetail: React.FC = () => {
                 taskId={taskId}
                 taskType={TaskType.TRADING}
                 instrument={detailTask.instrument}
+                taskStartTime={detailTask.started_at ?? detailTask.created_at}
+                taskEndTime={detailTask.completed_at}
                 executionRunId={activeExecutionId}
                 enableRealTimeUpdates={enableRealtime}
                 timezone={timezone}
