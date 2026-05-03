@@ -7,18 +7,21 @@ const tabs: TabItem[] = [
   { id: 'strategy', label: 'Strategy', visible: true },
   { id: 'positions', label: 'Positions', visible: true },
   { id: 'trades', label: 'Trades', visible: true },
+  { id: 'metrics', label: 'Metrics', visible: true },
 ];
 
 describe('visibleTabsForStrategy', () => {
-  it('keeps positions for all strategy types', () => {
-    expect(
-      visibleTabsForStrategy(tabs, 'unknown').map((tab) => tab.id)
-    ).toContain('positions');
+  it('keeps positions and metrics for all strategy types', () => {
+    const ids = visibleTabsForStrategy(tabs, 'unknown').map((tab) => tab.id);
+    expect(ids).toContain('positions');
+    expect(ids).toContain('metrics');
   });
 
-  it('hides positions for SnowballNet', () => {
-    expect(
-      visibleTabsForStrategy(tabs, 'snowball_net').map((tab) => tab.id)
-    ).not.toContain('positions');
+  it('hides positions and metrics for SnowballNet', () => {
+    const ids = visibleTabsForStrategy(tabs, 'snowball_net').map(
+      (tab) => tab.id
+    );
+    expect(ids).not.toContain('positions');
+    expect(ids).not.toContain('metrics');
   });
 });
