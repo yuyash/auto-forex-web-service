@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.63.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.3...frontend-v1.63.0) (2026-05-03)
+
+
+### Features
+
+* **tasks:** add pnl summaries and localize forms ([#648](https://github.com/yuyash/auto-forex-web-service/issues/648)) ([e7bdadd](https://github.com/yuyash/auto-forex-web-service/commit/e7bdadd3492572ed08b16102f80ee46c627505d7))
+
+
+### Bug Fixes
+
+* **frontend:** show X-axis labels when zoomed into few data points ([#646](https://github.com/yuyash/auto-forex-web-service/issues/646)) ([ff65fd6](https://github.com/yuyash/auto-forex-web-service/commit/ff65fd66651206b3e10630f578d15aade0d71934))
+
 ## [1.62.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.2...frontend-v1.62.3) (2026-05-03)
 
 
