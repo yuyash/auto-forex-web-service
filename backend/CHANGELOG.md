@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.47.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.46.2...backend-v1.47.0) (2026-05-03)
+
+
+### Features
+
+* snowball net strategy ([#634](https://github.com/yuyash/auto-forex-web-service/issues/634)) ([a8ad8a0](https://github.com/yuyash/auto-forex-web-service/commit/a8ad8a07029c8716ace199b6d202f2f5dfffd388))
+
+
+### Bug Fixes
+
+* **snowball:** clamp layer initial take profit ([#636](https://github.com/yuyash/auto-forex-web-service/issues/636)) ([34b7c26](https://github.com/yuyash/auto-forex-web-service/commit/34b7c26501e6ab9f75a83b6a686207c209249aa3))
+
 ## [1.46.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.46.1...backend-v1.46.2) (2026-05-02)
 
 
