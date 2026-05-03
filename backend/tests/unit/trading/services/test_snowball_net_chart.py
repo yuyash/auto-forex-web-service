@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from rest_framework.exceptions import ValidationError
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 from apps.trading.models.metrics import Metrics
 from apps.trading.services.snowball_net_chart import (
@@ -13,7 +16,47 @@ from apps.trading.services.snowball_net_chart import (
     _load_oscillator_lines,
     _load_price_lines,
     _margin_threshold_lines,
+    _window_from_request,
 )
+
+
+def _chart_request(query_string: str = "") -> Request:
+    return Request(APIRequestFactory().get(f"/strategy/net-chart/{query_string}"))
+
+
+def test_window_from_request_defaults_to_m1_following_day_each_side():
+    center = "2026-01-15T12:00:00Z"
+
+    window = _window_from_request(
+        _chart_request(),
+        last_tick_timestamp=center,
+    )
+
+    assert window.granularity == "M1"
+    assert window.granularity_seconds == 60
+    assert window.follow is True
+    assert window.center == datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
+    assert window.since == datetime(2026, 1, 14, 12, 0, tzinfo=UTC)
+    assert window.until == datetime(2026, 1, 16, 12, 0, tzinfo=UTC)
+
+
+def test_window_from_request_allows_m1_two_week_range():
+    window = _window_from_request(
+        _chart_request("?granularity=M1&since=2026-01-01T00:00:00Z&until=2026-01-15T00:00:00Z"),
+        last_tick_timestamp=None,
+    )
+
+    assert window.granularity == "M1"
+    assert window.since == datetime(2026, 1, 1, tzinfo=UTC)
+    assert window.until == datetime(2026, 1, 15, tzinfo=UTC)
+
+
+def test_window_from_request_rejects_m1_range_over_two_weeks():
+    with pytest.raises(ValidationError):
+        _window_from_request(
+            _chart_request("?granularity=M1&since=2026-01-01T00:00:00Z&until=2026-01-16T00:00:00Z"),
+            last_tick_timestamp=None,
+        )
 
 
 @pytest.mark.django_db

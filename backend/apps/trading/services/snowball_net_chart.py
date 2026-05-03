@@ -35,8 +35,9 @@ from apps.trading.strategies.snowball_net.config import SnowballNetConfig
 from apps.trading.utils import pip_size_for_instrument, quote_to_account_rate
 
 
-DEFAULT_GRANULARITY = "H1"
-DEFAULT_SIDE_BARS = 250
+DEFAULT_GRANULARITY = "M1"
+DEFAULT_SIDE_BARS = 24 * 60
+MAX_CHART_RANGE_BARS = 14 * 24 * 60
 MAX_SIDE_BARS = 2000
 OANDA_CANDLE_MAX_BATCH = 5000
 
@@ -243,6 +244,12 @@ def _window_from_request(
         until = center + timedelta(seconds=seconds * after_bars)
     if since > until:
         raise ValidationError("since must be earlier than until.")
+    _validate_chart_window_range(
+        granularity=granularity,
+        granularity_seconds=seconds,
+        since=since,
+        until=until,
+    )
     return NetChartWindow(
         granularity=granularity,
         granularity_seconds=seconds,
@@ -267,6 +274,32 @@ def _normalise_chart_granularity(value: Any) -> str:
     if raw in {"M1", "M5", "M15", "M30", "D"}:
         return raw
     raise ValidationError("granularity must be M1, M5, M15, M30, H1, H4, or D.")
+
+
+def _validate_chart_window_range(
+    *,
+    granularity: str,
+    granularity_seconds: int,
+    since: datetime,
+    until: datetime,
+) -> None:
+    max_seconds = granularity_seconds * MAX_CHART_RANGE_BARS
+    if (until - since).total_seconds() <= max_seconds:
+        return
+    raise ValidationError(
+        f"granularity {granularity} supports ranges up to {_format_duration_seconds(max_seconds)}."
+    )
+
+
+def _format_duration_seconds(seconds: int) -> str:
+    if seconds % 86400 == 0:
+        days = seconds // 86400
+        return f"{days} day{'s' if days != 1 else ''}"
+    if seconds % 3600 == 0:
+        hours = seconds // 3600
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    minutes = seconds // 60
+    return f"{minutes} minute{'s' if minutes != 1 else ''}"
 
 
 def _resolve_oanda_account(*, request: Request, task: Any) -> OandaAccounts:
