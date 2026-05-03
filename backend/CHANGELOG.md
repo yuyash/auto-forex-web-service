@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.0...backend-v1.48.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* safari chart sizing ([#642](https://github.com/yuyash/auto-forex-web-service/issues/642)) ([e472bb8](https://github.com/yuyash/auto-forex-web-service/commit/e472bb84a46bcbe15aae15602805213a7b26a573))
+
 ## [1.48.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.47.0...backend-v1.48.0) (2026-05-03)
 
 
