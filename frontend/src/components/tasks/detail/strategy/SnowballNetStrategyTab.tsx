@@ -39,6 +39,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import ArrowDownIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpIcon from '@mui/icons-material/ArrowUpward';
@@ -2680,6 +2681,8 @@ function LineChartCard({
   seriesLabelUnit?: string | null;
   headerPrefix?: ReactNode;
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { t } = useTranslation('strategy');
   const visible = lines.filter((line) => line.points.length >= 2);
   const isEmpty = visible.length === 0;
@@ -2774,7 +2777,7 @@ function LineChartCard({
         useFlexGap
         flexWrap="wrap"
         alignItems="center"
-        sx={{ mb: 0.5 }}
+        sx={{ mb: { xs: 0.25, sm: 0.5 } }}
       >
         {headerPrefix}
         <Typography variant="subtitle2">{title}</Typography>
@@ -2825,7 +2828,7 @@ function LineChartCard({
             {
               data: x,
               scaleType: 'time',
-              tickNumber: 6,
+              tickNumber: isMobile ? 4 : 6,
               min: timeDomain?.min,
               max: timeDomain?.max,
               tickLabelStyle: { fontSize: 10, lineHeight: 1.15 },
@@ -2845,13 +2848,13 @@ function LineChartCard({
           ]}
           series={series}
           margin={{
-            left: LINE_CHART_LEFT_MARGIN,
-            right: LINE_CHART_RIGHT_MARGIN,
-            top: LINE_CHART_TOP_MARGIN,
-            bottom: LINE_CHART_BOTTOM_MARGIN,
+            left: isMobile ? 0 : LINE_CHART_LEFT_MARGIN,
+            right: isMobile ? 0 : LINE_CHART_RIGHT_MARGIN,
+            top: isMobile ? 0 : LINE_CHART_TOP_MARGIN,
+            bottom: isMobile ? 22 : LINE_CHART_BOTTOM_MARGIN,
           }}
           grid={{ vertical: true, horizontal: true }}
-          hideLegend={visible.length <= 1}
+          hideLegend={isMobile || visible.length <= 1}
         />
         {isEmpty ? (
           <Box
