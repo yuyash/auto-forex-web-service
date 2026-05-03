@@ -2782,7 +2782,7 @@ function LineChartCard({
           <Chip
             key={line.id}
             size="small"
-            sx={{ height: 20 }}
+            sx={{ display: { xs: 'none', sm: 'inline-flex' }, height: 20 }}
             label={`${lineLabel(line, t)} ${
               percent
                 ? formatAppPercent(point.value, 1)
