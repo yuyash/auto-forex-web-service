@@ -5,10 +5,14 @@ import type {
   TradingTaskCreateData,
   TradingTaskUpdateData,
 } from '../types';
+import { TaskStatus } from '../types/common';
 import {
+  beginTaskStatusTransition,
+  clearTaskStatusTransitionByKind,
   invalidateTaskDerivedCaches,
   patchTaskDerivedCaches,
   patchTaskStatusCache,
+  refreshTaskStatusCaches,
   upsertTaskCaches,
 } from './taskMutationCache';
 import {
@@ -22,6 +26,27 @@ import {
 import { useWrappedMutation } from './useWrappedMutation';
 
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close' | 'drain';
+
+function optimisticStopStatus(mode?: StopMode): TaskStatus {
+  return mode === 'drain' ? TaskStatus.DRAINING : TaskStatus.STOPPING;
+}
+
+function stopSettleStatuses(mode?: StopMode): TaskStatus[] {
+  return mode === 'drain'
+    ? [
+        TaskStatus.DRAINING,
+        TaskStatus.STOPPING,
+        TaskStatus.STOPPED,
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+      ]
+    : [
+        TaskStatus.STOPPING,
+        TaskStatus.STOPPED,
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+      ];
+}
 
 // --- hooks that need custom create/update logic (not generic) -------------
 
@@ -125,6 +150,14 @@ export function useStopTradingTask(options?: {
         variables.drainDurationMinutes
       ),
     {
+      onMutate: (variables) => {
+        beginTaskStatusTransition(
+          'trading',
+          variables.id,
+          optimisticStopStatus(variables.mode),
+          stopSettleStatuses(variables.mode)
+        );
+      },
       onSuccess: async (data, variables) => {
         const fallbackStatus =
           variables.mode === 'drain' ? 'draining' : 'stopping';
@@ -134,7 +167,11 @@ export function useStopTradingTask(options?: {
         await invalidateTaskDerivedCaches('trading', variables.id);
         options?.onSuccess?.(data);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, variables) => {
+        clearTaskStatusTransitionByKind('trading', variables.id);
+        void refreshTaskStatusCaches('trading', variables.id);
+        options?.onError?.(error);
+      },
     }
   );
 }

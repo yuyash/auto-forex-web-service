@@ -14,6 +14,10 @@ import type {
   TradingTaskListParams,
 } from '../types';
 import { TaskType } from '../types/common';
+import {
+  applyPaginatedTaskStatusTransitions,
+  applyTaskStatusTransition,
+} from './taskStatusTransitions';
 import type { StrategyCyclesResponse } from '../types/strategyVisualization';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import type { TaskSummary } from './useTaskSummary';
@@ -114,6 +118,7 @@ export function createTaskListQuery<TTask extends TaskEntity>(
         : (tradingTasksApi.list(params as TradingTaskListParams) as Promise<
             PaginatedResponse<TTask>
           >),
+    select: (data) => applyPaginatedTaskStatusTransitions(taskType, data),
     enabled: params !== undefined,
   };
 }
@@ -140,6 +145,7 @@ export function createTaskDetailQuery<TTask extends TaskEntity>(
       taskType === TaskType.BACKTEST
         ? (backtestTasksApi.get(id!) as Promise<TTask>)
         : (tradingTasksApi.get(id!) as Promise<TTask>),
+    select: (data) => applyTaskStatusTransition(taskType, data),
     enabled: Boolean(id) && options?.enabled !== false,
   };
 }

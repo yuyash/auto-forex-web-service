@@ -7,9 +7,13 @@
  */
 import type { BackendTaskStopResponse } from '../services/api/contracts';
 import type { BacktestTask, TradingTask } from '../types';
+import { TaskStatus } from '../types/common';
 import {
+  beginTaskStatusTransition,
+  clearTaskStatusTransitionByKind,
   invalidateTaskDerivedCaches,
   patchTaskDerivedCaches,
+  refreshTaskStatusCaches,
   removeTaskCaches,
   removeTaskListEntry,
   upsertTaskCaches,
@@ -20,6 +24,20 @@ import { useWrappedMutation } from './useWrappedMutation';
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
+
+const STARTING_SETTLE_STATUSES = [
+  TaskStatus.RUNNING,
+  TaskStatus.IDLE,
+  TaskStatus.DRAINING,
+];
+
+const PAUSED_SETTLE_STATUSES = [
+  TaskStatus.PAUSED,
+  TaskStatus.STOPPING,
+  TaskStatus.STOPPED,
+  TaskStatus.COMPLETED,
+  TaskStatus.FAILED,
+];
 
 interface MutationOptions<T> {
   onSuccess?: (data: T) => void;
@@ -51,6 +69,18 @@ async function standardSuccess<TTask extends TaskEntity>(
   cb?.(data);
 }
 
+function clearTransitionAfterError(
+  kind: TaskKind,
+  taskId: string,
+  cb?: (error: Error) => void
+) {
+  return (error: Error) => {
+    clearTaskStatusTransitionByKind(kind, taskId);
+    void refreshTaskStatusCaches(kind, taskId);
+    cb?.(error);
+  };
+}
+
 // ---- factory -------------------------------------------------------------
 
 export function createStartHook<TTask extends TaskEntity>(
@@ -59,10 +89,19 @@ export function createStartHook<TTask extends TaskEntity>(
 ) {
   return function useStartTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.start(id), {
+      onMutate: (id) => {
+        beginTaskStatusTransition(
+          kind,
+          id,
+          TaskStatus.STARTING,
+          STARTING_SETTLE_STATUSES
+        );
+      },
       onSuccess: async (data) => {
         await standardSuccess(kind, data, options?.onSuccess);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, id) =>
+        clearTransitionAfterError(kind, id, options?.onError)(error),
     });
   };
 }
@@ -73,10 +112,19 @@ export function createPauseHook<TTask extends TaskEntity>(
 ) {
   return function usePauseTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.pause(id), {
+      onMutate: (id) => {
+        beginTaskStatusTransition(
+          kind,
+          id,
+          TaskStatus.PAUSED,
+          PAUSED_SETTLE_STATUSES
+        );
+      },
       onSuccess: async (data) => {
         await standardSuccess(kind, data, options?.onSuccess);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, id) =>
+        clearTransitionAfterError(kind, id, options?.onError)(error),
     });
   };
 }
@@ -87,10 +135,19 @@ export function createResumeHook<TTask extends TaskEntity>(
 ) {
   return function useResumeTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.resume(id), {
+      onMutate: (id) => {
+        beginTaskStatusTransition(
+          kind,
+          id,
+          TaskStatus.STARTING,
+          STARTING_SETTLE_STATUSES
+        );
+      },
       onSuccess: async (data) => {
         await standardSuccess(kind, data, options?.onSuccess);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, id) =>
+        clearTransitionAfterError(kind, id, options?.onError)(error),
     });
   };
 }
@@ -101,10 +158,19 @@ export function createRestartHook<TTask extends TaskEntity>(
 ) {
   return function useRestartTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.restart(id), {
+      onMutate: (id) => {
+        beginTaskStatusTransition(
+          kind,
+          id,
+          TaskStatus.STARTING,
+          STARTING_SETTLE_STATUSES
+        );
+      },
       onSuccess: async (data) => {
         await standardSuccess(kind, data, options?.onSuccess);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, id) =>
+        clearTransitionAfterError(kind, id, options?.onError)(error),
     });
   };
 }
