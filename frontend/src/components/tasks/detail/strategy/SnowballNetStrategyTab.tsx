@@ -2738,6 +2738,11 @@ function LineChartCard({
       ): item is { line: SnowballNetLineSeries; point: SnowballNetLinePoint } =>
         item.point !== null
     );
+  const legendItems = visible.map((line) => ({
+    id: line.id,
+    color: line.color,
+    label: appendUnitLabel(lineLabel(line, t), seriesLabelUnit),
+  }));
   const formatAxisValue = (value: number) =>
     percent
       ? `${formatAppNumber(value, { maximumFractionDigits: 1 })}%`
@@ -2775,12 +2780,67 @@ function LineChartCard({
         direction="row"
         spacing={0.75}
         useFlexGap
-        flexWrap="wrap"
+        flexWrap={{ xs: 'nowrap', sm: 'wrap' }}
         alignItems="center"
-        sx={{ mb: { xs: 0.25, sm: 0.5 } }}
+        sx={{
+          mb: { xs: 0.25, sm: 0.5 },
+          minHeight: { xs: 24, sm: 'auto' },
+          overflow: 'hidden',
+        }}
       >
         {headerPrefix}
-        <Typography variant="subtitle2">{title}</Typography>
+        <Typography
+          variant="subtitle2"
+          noWrap
+          sx={{ flex: { xs: '0 1 auto', sm: '0 0 auto' }, minWidth: 0 }}
+        >
+          {title}
+        </Typography>
+        <Box
+          sx={{
+            display: {
+              xs: legendItems.length > 1 ? 'flex' : 'none',
+              sm: 'none',
+            },
+            alignItems: 'center',
+            gap: 0.75,
+            flex: '1 1 auto',
+            minWidth: 0,
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            whiteSpace: 'nowrap',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {legendItems.map((item) => (
+            <Box
+              key={item.id}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.4,
+                flex: '0 0 auto',
+                minWidth: 0,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 12,
+                  height: 3,
+                  borderRadius: 999,
+                  bgcolor: item.color,
+                }}
+              />
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ color: 'text.secondary', fontSize: '0.7rem' }}
+              >
+                {item.label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
         {thresholdChips.map(({ line, point }) => (
           <Chip
             key={line.id}
@@ -2854,7 +2914,7 @@ function LineChartCard({
             bottom: isMobile ? 22 : LINE_CHART_BOTTOM_MARGIN,
           }}
           grid={{ vertical: true, horizontal: true }}
-          hideLegend={visible.length <= 1}
+          hideLegend={isMobile || visible.length <= 1}
           slotProps={{
             axisTickLabel: {
               style: { fontSize: 10 },
