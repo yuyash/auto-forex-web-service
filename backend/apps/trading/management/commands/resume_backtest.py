@@ -26,9 +26,14 @@ class Command(BaseCommand):
             raise CommandError(f"Invalid UUID: {options['task_id']}")
 
         try:
-            BacktestTask.objects.get(pk=task_id)
+            task = BacktestTask.objects.get(pk=task_id)
         except BacktestTask.DoesNotExist:
             raise CommandError(f"Backtest task '{task_id}' not found")
+
+        self.stdout.write(
+            f"Pre-resume state: task_id={task.pk}, status={task.status}, "
+            f"execution_id={task.execution_id}"
+        )
 
         service = TaskService()
         try:
@@ -37,5 +42,8 @@ class Command(BaseCommand):
             raise CommandError(str(e))
 
         self.stdout.write(
-            self.style.SUCCESS(f"Resumed backtest task: {task.pk} '{task.name}' -> {task.status}")
+            self.style.SUCCESS(
+                f"Resumed backtest task: {task.pk} '{task.name}' -> {task.status}, "
+                f"execution_id={task.execution_id}"
+            )
         )

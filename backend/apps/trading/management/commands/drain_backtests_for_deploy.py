@@ -88,7 +88,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"- Requesting {stop_mode} for {task.pk} "
                 f"({task.name}, strategy={task.config.strategy_type}, instrument={task.instrument}, "
-                f"status={task.status})"
+                f"status={task.status}, execution_id={task.execution_id})"
             )
             try:
                 if stop_mode == "pause":

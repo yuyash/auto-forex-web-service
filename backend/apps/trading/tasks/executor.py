@@ -272,9 +272,34 @@ class TaskExecutor:
                 task_id=self.task.pk,
                 execution_id=self.task.execution_id,
             )
+            logger.info(
+                "Existing ExecutionState found (resume) - task_id=%s, "
+                "execution_id=%s, balance=%s, ticks=%d",
+                self.task.pk,
+                self.task.execution_id,
+                state.current_balance,
+                state.ticks_processed,
+            )
             return state, True
         except ExecutionState.DoesNotExist:
             pass
+
+        # Log why we are creating a fresh state — this is the path that
+        # causes the "state reset" symptom when it fires unexpectedly
+        # during what should have been a resume.
+        existing_count = ExecutionState.objects.filter(
+            task_type=self.task_type.value,
+            task_id=self.task.pk,
+        ).count()
+        logger.info(
+            "No ExecutionState for current execution_id — creating fresh state. "
+            "task_id=%s, execution_id=%s, task_type=%s, "
+            "other_execution_states_for_task=%d",
+            self.task.pk,
+            self.task.execution_id,
+            self.task_type.value,
+            existing_count,
+        )
 
         from apps.trading.models import BacktestTask
 
