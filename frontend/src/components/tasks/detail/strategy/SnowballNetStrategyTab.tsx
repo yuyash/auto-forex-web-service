@@ -2330,7 +2330,6 @@ function SnowballNetCharts({
   if (visibleKeys.length === 0) return null;
 
   const renderLineChart = (key: SnowballNetChartKey) => {
-    if (!data) return null;
     const headerPrefix = (
       <DragIndicatorIcon
         sx={{
@@ -2346,10 +2345,9 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.netUnits')}
-            lines={netUnitsChartLines(data.oscillator_lines)}
+            lines={data ? netUnitsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
-            showWhenEmpty
             headerPrefix={headerPrefix}
           />
         );
@@ -2357,10 +2355,9 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.pipsFromAverage')}
-            lines={pipsChartLines(data.oscillator_lines)}
+            lines={data ? pipsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
-            showWhenEmpty
             headerPrefix={headerPrefix}
           />
         );
@@ -2368,7 +2365,7 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.marginRatio')}
-            lines={marginChartLines(data.oscillator_lines)}
+            lines={data ? marginChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
             percent
@@ -2382,7 +2379,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.pnl'),
               pnlCurrency
             )}
-            lines={pnlChartLines(data.oscillator_lines)}
+            lines={data ? pnlChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
             valueUnit={pnlCurrency}
@@ -2397,7 +2394,9 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.averagePrice'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'averagePrice')}
+            lines={
+              data ? priceChartLines(data.price_lines, 'averagePrice') : []
+            }
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2410,7 +2409,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.takeProfit'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'takeProfit')}
+            lines={data ? priceChartLines(data.price_lines, 'takeProfit') : []}
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2423,7 +2422,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.nextAdd'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'nextAdd')}
+            lines={data ? priceChartLines(data.price_lines, 'nextAdd') : []}
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2679,7 +2678,7 @@ function LineChartCard({
   lines,
   timezone,
   timeDomain,
-  showWhenEmpty = false,
+  showWhenEmpty = true,
   percent = false,
   valueUnit,
   seriesLabelUnit,
