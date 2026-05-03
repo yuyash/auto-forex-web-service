@@ -39,6 +39,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import ArrowDownIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpIcon from '@mui/icons-material/ArrowUpward';
@@ -1067,8 +1068,14 @@ export function SnowballNetStrategyTab({
   timezone = 'UTC',
 }: SnowballNetStrategyTabProps) {
   const theme = useTheme();
+  const hideTooltips = useMediaQuery(theme.breakpoints.down('sm'));
   const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation(['common', 'strategy']);
+  const toolbarTooltipProps = {
+    disableFocusListener: hideTooltips,
+    disableHoverListener: hideTooltips,
+    disableTouchListener: hideTooltips,
+  };
   const noDataRegionStyle = useMemo<NoDataRegionStyle>(
     () => ({
       fill: isDark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(100, 116, 139, 0.1)',
@@ -1966,6 +1973,7 @@ export function SnowballNetStrategyTab({
           }}
         >
           <Tooltip
+            {...toolbarTooltipProps}
             title={
               follow
                 ? t('strategy:snowballNet.chart.tooltips.followingCurrentTick')
@@ -1984,6 +1992,7 @@ export function SnowballNetStrategyTab({
             </IconButton>
           </Tooltip>
           <Tooltip
+            {...toolbarTooltipProps}
             title={
               mergeMarkers
                 ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
@@ -1999,7 +2008,10 @@ export function SnowballNetStrategyTab({
               <MergeIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t('common:metrics.refreshAllCharts')}>
+          <Tooltip
+            {...toolbarTooltipProps}
+            title={t('common:metrics.refreshAllCharts')}
+          >
             <span>
               <IconButton
                 onClick={handleRefresh}
@@ -2011,7 +2023,10 @@ export function SnowballNetStrategyTab({
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
+          <Tooltip
+            {...toolbarTooltipProps}
+            title={t('strategy:snowballNet.chart.settings.title')}
+          >
             <IconButton
               onClick={() => setSettingsOpen(true)}
               size="small"
