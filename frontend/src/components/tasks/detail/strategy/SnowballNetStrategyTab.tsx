@@ -103,6 +103,10 @@ import {
   readStoredValue,
   writeStoredValue,
 } from '../../../../utils/persistentState';
+import {
+  measureContainer,
+  measureContainerWidth,
+} from '../../../../utils/measureContainer';
 
 interface SnowballNetStrategyTabProps {
   taskId: string | number;
@@ -1691,7 +1695,7 @@ export function SnowballNetStrategyTab({
       const { upColor, downColor } = getCandleColors();
       const chart = createChart(host, {
         height: ohlcChartHeightRef.current,
-        width: Math.max(1, host.clientWidth),
+        width: Math.max(1, measureContainerWidth(host)),
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
           textColor: isDark ? '#d1d4dc' : '#334155',
@@ -1753,7 +1757,7 @@ export function SnowballNetStrategyTab({
       });
 
       const observer = new ResizeObserver(() => {
-        const width = Math.floor(host.clientWidth);
+        const width = measureContainerWidth(host);
         if (width > 0) chart.applyOptions({ width });
       });
       observer.observe(host);
@@ -2600,15 +2604,13 @@ function FillLineChart({
     if (!host) return undefined;
 
     const updateSize = () => {
-      const rect = host.getBoundingClientRect();
-      const nextWidth = Math.max(
-        MIN_CHART_MEASURE_PX,
-        Math.floor(host.clientWidth || rect.width)
-      );
-      const measuredHeight = Math.floor(host.clientHeight || rect.height);
+      const measured = measureContainer(host);
+      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
       const nextHeight = Math.max(
         MIN_CHART_MEASURE_PX,
-        measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight
+        measured.height > MIN_CHART_MEASURE_PX
+          ? measured.height
+          : fallbackHeight
       );
       setSize((current) =>
         current.width === nextWidth && current.height === nextHeight
@@ -2617,16 +2619,24 @@ function FillLineChart({
       );
     };
 
-    updateSize();
+    const rafId = requestAnimationFrame(() => {
+      updateSize();
+    });
 
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', updateSize);
-      return () => window.removeEventListener('resize', updateSize);
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updateSize);
+      };
     }
 
     const observer = new ResizeObserver(updateSize);
     observer.observe(host);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [fallbackHeight]);
 
   return (
@@ -2635,8 +2645,8 @@ function FillLineChart({
       sx={{
         width: '100%',
         height: '100%',
-        flex: '1 1 auto',
-        alignSelf: 'stretch',
+        position: 'absolute',
+        inset: 0,
         minWidth: 0,
         minHeight: 0,
         '& > *': {
@@ -2653,9 +2663,13 @@ function FillLineChart({
         },
       }}
     >
-      {size.width > 0 && size.height > 0 ? (
-        <LineChart {...chartProps} width={size.width} height={size.height} />
-      ) : null}
+      <LineChart
+        {...chartProps}
+        {...(size.width > 0 ? { width: size.width } : {})}
+        height={
+          size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight
+        }
+      />
     </Box>
   );
 }

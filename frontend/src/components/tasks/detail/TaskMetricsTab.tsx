@@ -33,6 +33,7 @@ import {
   type DateTimeFormatOptions,
 } from '../../../utils/timezone';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
+import { measureContainer } from '../../../utils/measureContainer';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -259,15 +260,13 @@ function FillLineChart({
     if (!host) return undefined;
 
     const updateSize = () => {
-      const rect = host.getBoundingClientRect();
-      const nextWidth = Math.max(
-        MIN_CHART_MEASURE_PX,
-        Math.floor(host.clientWidth || rect.width)
-      );
-      const measuredHeight = Math.floor(host.clientHeight || rect.height);
+      const measured = measureContainer(host);
+      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
       const nextHeight = Math.max(
         MIN_CHART_MEASURE_PX,
-        measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight
+        measured.height > MIN_CHART_MEASURE_PX
+          ? measured.height
+          : fallbackHeight
       );
       setSize((current) =>
         current.width === nextWidth && current.height === nextHeight
@@ -276,17 +275,37 @@ function FillLineChart({
       );
     };
 
-    updateSize();
+    // Safari may not have resolved flex layout yet at mount time.
+    // A rAF delay gives WebKit a chance to finish layout before we
+    // measure. In test environments (jsdom) where rAF fires
+    // synchronously and all sizes are 0, the fallbackHeight path
+    // ensures the chart still renders.
+    const rafId = requestAnimationFrame(() => {
+      updateSize();
+    });
 
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', updateSize);
-      return () => window.removeEventListener('resize', updateSize);
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updateSize);
+      };
     }
 
     const observer = new ResizeObserver(updateSize);
     observer.observe(host);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [fallbackHeight]);
+
+  // In test environments (jsdom) the container has no layout, so
+  // width/height stay at 0. Use fallbackHeight and a reasonable
+  // default width so the chart still renders.
+  const effectiveWidth = size.width > 0 ? size.width : undefined;
+  const effectiveHeight =
+    size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight;
 
   return (
     <Box
@@ -294,8 +313,8 @@ function FillLineChart({
       sx={{
         width: '100%',
         height: '100%',
-        flex: '1 1 auto',
-        alignSelf: 'stretch',
+        position: 'absolute',
+        inset: 0,
         minWidth: 0,
         minHeight: 0,
         '& > *': {
@@ -312,9 +331,11 @@ function FillLineChart({
         },
       }}
     >
-      {size.width > 0 && size.height > 0 ? (
-        <LineChart {...chartProps} width={size.width} height={size.height} />
-      ) : null}
+      <LineChart
+        {...chartProps}
+        {...(effectiveWidth != null ? { width: effectiveWidth } : {})}
+        height={effectiveHeight}
+      />
     </Box>
   );
 }

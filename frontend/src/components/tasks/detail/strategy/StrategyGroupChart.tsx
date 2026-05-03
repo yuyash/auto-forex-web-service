@@ -33,6 +33,7 @@ import type { CycleTrade } from '../../../../types/strategyVisualization';
 import type { TaskType } from '../../../../types/common';
 import { buildCycleMarkers } from './buildCycleMarkers';
 import { useMetricsOverlay } from '../MetricsOverlayChart';
+import { measureContainerWidth } from '../../../../utils/measureContainer';
 
 interface StrategyGroupChartProps {
   instrument: string;
@@ -183,7 +184,7 @@ export function StrategyGroupChart({
       const { upColor, downColor } = getCandleColors();
       const chart = createChart(container, {
         height,
-        width: container.clientWidth,
+        width: measureContainerWidth(container) || container.clientWidth,
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
           textColor: isDark ? '#d1d4dc' : '#334155',
@@ -248,7 +249,7 @@ export function StrategyGroupChart({
       }
 
       const observer = new ResizeObserver(() => {
-        const w = container.clientWidth;
+        const w = measureContainerWidth(container);
         if (w > 0) chart.applyOptions({ width: w });
       });
       observer.observe(container);
