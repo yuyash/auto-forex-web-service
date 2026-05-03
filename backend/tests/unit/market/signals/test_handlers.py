@@ -61,14 +61,16 @@ class TestBacktestSignalHandler:
         start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC)
 
-        request_id = request_backtest_tick_stream(
-            instrument="EUR_USD",
-            start=start,
-            end=end,
-        )
+        with patch("apps.market.tasks.publish_ticks_for_backtest") as publish_task:
+            request_id = request_backtest_tick_stream(
+                instrument="EUR_USD",
+                start=start,
+                end=end,
+            )
 
         assert request_id is not None
         assert isinstance(request_id, str)
+        publish_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db

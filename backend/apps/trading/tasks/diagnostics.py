@@ -42,12 +42,9 @@ class ExecutionDiagnostics:
 
     def check_memory(self, *, batch_count: int, ticks_processed: int) -> None:
         """Log RSS and take tracemalloc snapshot when memory grows."""
-        import resource
-        import sys
+        import psutil
 
-        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        # macOS returns bytes, Linux returns KB.
-        rss_mb = rss_kb // 1024 if sys.platform == "linux" else rss_kb // (1024 * 1024)
+        rss_mb = psutil.Process().memory_info().rss // (1024 * 1024)
 
         if batch_count % 100 == 0:
             logger.info(
