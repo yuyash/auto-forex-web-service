@@ -107,6 +107,15 @@ import {
   measureContainer,
   measureContainerWidth,
 } from '../../../../utils/measureContainer';
+import {
+  DEFAULT_SNOWBALL_NET_GRANULARITY,
+  DEFAULT_SNOWBALL_NET_SIDE_BARS,
+  SNOWBALL_NET_GRANULARITY_OPTIONS,
+  constrainSnowballNetGranularityForRange,
+  granularityForRangeSeconds,
+  isSnowballNetGranularityAllowedForRange,
+  type SnowballNetGranularitySelection,
+} from './snowballNetChartRange';
 
 interface SnowballNetStrategyTabProps {
   taskId: string | number;
@@ -120,8 +129,8 @@ interface SnowballNetStrategyTabProps {
 }
 
 const REFRESH_OPTIONS = [5, 15, 30, 60, 0] as const;
-const DEFAULT_GRANULARITY = 'H1';
-const DEFAULT_SIDE_BARS = 250;
+const DEFAULT_GRANULARITY = DEFAULT_SNOWBALL_NET_GRANULARITY;
+const DEFAULT_SIDE_BARS = DEFAULT_SNOWBALL_NET_SIDE_BARS;
 const MIN_NO_DATA_BUCKETS = 2;
 const SCROLL_FETCH_DEBOUNCE_MS = 450;
 const EDGE_PREFETCH_RATIO = 0.2;
@@ -166,6 +175,7 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 const SNOWBALL_NET_RANGE_PRESETS = [
+  { value: 'follow', labelKey: 'follow' },
   { value: 'full', labelKey: 'full' },
   { value: '5m', labelKey: 'last5Minutes', seconds: 5 * MINUTE },
   { value: '15m', labelKey: 'last15Minutes', seconds: 15 * MINUTE },
@@ -183,21 +193,11 @@ const SNOWBALL_NET_RANGE_PRESETS = [
   { value: '1y', labelKey: 'last1Year', seconds: 365 * DAY },
   { value: 'custom', labelKey: 'custom' },
 ] as const;
-const GRANULARITY_OPTIONS = [
-  'Auto',
-  'M1',
-  'M5',
-  'M15',
-  'M30',
-  'H1',
-  'H4',
-  'D',
-] as const;
+const GRANULARITY_OPTIONS = SNOWBALL_NET_GRANULARITY_OPTIONS;
 
 type SnowballNetChartKey = (typeof SNOWBALL_NET_CHART_KEYS)[number];
 type SnowballNetRangePreset =
   (typeof SNOWBALL_NET_RANGE_PRESETS)[number]['value'];
-type SnowballNetGranularitySelection = (typeof GRANULARITY_OPTIONS)[number];
 
 const SNOWBALL_NET_CHART_COLORS: Record<SnowballNetChartKey, string> = {
   ohlc: '#26a69a',
@@ -376,13 +376,6 @@ function isoFromDateTimeLocal(value: string): string | null {
   if (!value) return null;
   const millis = new Date(value).getTime();
   return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
-}
-
-function granularityForRangeSeconds(seconds: number): string {
-  if (seconds <= 12 * HOUR) return 'M1';
-  if (seconds <= 28 * DAY) return 'M5';
-  if (seconds <= 93 * DAY) return 'H1';
-  return 'D';
 }
 
 function rangePresetSeconds(preset: SnowballNetRangePreset): number | null {
@@ -1112,15 +1105,15 @@ export function SnowballNetStrategyTab({
   const { applyOverlays: applyOhlcOverlays, clear: clearOhlcOverlays } =
     useOhlcChartOverlays(containerRef);
   const [rangePreset, setRangePreset] =
-    useState<SnowballNetRangePreset>('full');
+    useState<SnowballNetRangePreset>('follow');
   const [queryRangePreset, setQueryRangePreset] =
-    useState<SnowballNetRangePreset>('full');
+    useState<SnowballNetRangePreset>('follow');
   const [granularitySelection, setGranularitySelection] =
-    useState<SnowballNetGranularitySelection>('Auto');
+    useState<SnowballNetGranularitySelection>(DEFAULT_GRANULARITY);
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
   const [rangeNowMs, setRangeNowMs] = useState(() => Date.now());
-  const [follow, setFollow] = useState(false);
+  const [follow, setFollow] = useState(true);
   const [mergeMarkers, setMergeMarkers] = useState(true);
   const [refreshSeconds, setRefreshSeconds] = useState<number>(15);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1332,6 +1325,10 @@ export function SnowballNetStrategyTab({
   }, [rangeNowMs, taskEndTime, taskStartTime]);
 
   const selectedRange = useMemo(() => {
+    if (queryRangePreset === 'follow') {
+      return null;
+    }
+
     if (queryRangePreset === 'custom') {
       const since = isoFromDateTimeLocal(customSince);
       const until = isoFromDateTimeLocal(customUntil);
@@ -1361,7 +1358,18 @@ export function SnowballNetStrategyTab({
     };
   }, [customSince, customUntil, queryRangePreset, taskRange]);
 
+  const requestedRangeSeconds = useMemo(() => {
+    if (follow) return null;
+    if (viewRange) return Math.max(MINUTE, viewRange.to - viewRange.from);
+    if (!selectedRange) return null;
+    return Math.max(
+      MINUTE,
+      Math.floor((selectedRange.untilMs - selectedRange.sinceMs) / 1000)
+    );
+  }, [follow, selectedRange, viewRange]);
+
   const autoGranularity = useMemo(() => {
+    if (follow) return DEFAULT_GRANULARITY;
     if (viewRange) {
       return granularityForRangeSeconds(
         Math.max(MINUTE, Math.floor(viewRange.to - viewRange.from))
@@ -1373,9 +1381,15 @@ export function SnowballNetStrategyTab({
       Math.floor((selectedRange.untilMs - selectedRange.sinceMs) / 1000)
     );
     return granularityForRangeSeconds(seconds);
-  }, [selectedRange, viewRange]);
-  const selectedGranularity =
+  }, [follow, selectedRange, viewRange]);
+  const selectedGranularityCandidate =
     granularitySelection === 'Auto' ? autoGranularity : granularitySelection;
+  const selectedGranularity = constrainSnowballNetGranularityForRange(
+    selectedGranularityCandidate,
+    requestedRangeSeconds
+  );
+  const displayedGranularitySelection =
+    granularitySelection === 'Auto' ? 'Auto' : selectedGranularity;
 
   const handleRangePresetChange = useCallback(
     (value: SnowballNetRangePreset) => {
@@ -1384,6 +1398,11 @@ export function SnowballNetStrategyTab({
       lastRequestedRangeRef.current = null;
       setRangePreset(value);
       setQueryRangePreset(value);
+      if (value === 'follow') {
+        setFollow(true);
+        setViewRange(null);
+        return;
+      }
       setFollow(false);
       setViewRange(null);
       if (value === 'custom' && !customSince && !customUntil && taskRange) {
@@ -1941,6 +1960,8 @@ export function SnowballNetStrategyTab({
     forceWindowRangeRef.current = true;
     visibleRangeRef.current = null;
     lastRequestedRangeRef.current = null;
+    setRangePreset('follow');
+    setQueryRangePreset('follow');
     setFollow(true);
     setViewRange(null);
     void chartQuery.refetch();
@@ -2084,16 +2105,33 @@ export function SnowballNetStrategyTab({
             </InputLabel>
             <Select
               labelId="snowball-net-granularity-label"
-              value={granularitySelection}
+              value={displayedGranularitySelection}
               label={t('strategy:snowballNet.chart.controls.granularityLabel')}
-              onChange={(event) =>
-                setGranularitySelection(
-                  event.target.value as SnowballNetGranularitySelection
-                )
-              }
+              onChange={(event) => {
+                const next = event.target
+                  .value as SnowballNetGranularitySelection;
+                if (
+                  !isSnowballNetGranularityAllowedForRange(
+                    next,
+                    requestedRangeSeconds
+                  )
+                ) {
+                  return;
+                }
+                setGranularitySelection(next);
+              }}
             >
               {GRANULARITY_OPTIONS.map((option) => (
-                <MenuItem key={option} value={option}>
+                <MenuItem
+                  key={option}
+                  value={option}
+                  disabled={
+                    !isSnowballNetGranularityAllowedForRange(
+                      option,
+                      requestedRangeSeconds
+                    )
+                  }
+                >
                   {option === 'Auto'
                     ? t('strategy:snowballNet.chart.controls.autoGranularity', {
                         granularity: autoGranularity,

@@ -136,6 +136,7 @@
         "off": "Off",
         "seconds": "{{seconds}}s",
         "ranges": {
+          "follow": "Follow current tick",
           "full": "Full range",
           "last5Minutes": "Last 5 minutes",
           "last15Minutes": "Last 15 minutes",

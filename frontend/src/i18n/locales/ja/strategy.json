@@ -136,6 +136,7 @@
         "off": "オフ",
         "seconds": "{{seconds}}秒",
         "ranges": {
+          "follow": "現在ティックに追従",
           "full": "全範囲",
           "last5Minutes": "直近5分",
           "last15Minutes": "直近15分",
