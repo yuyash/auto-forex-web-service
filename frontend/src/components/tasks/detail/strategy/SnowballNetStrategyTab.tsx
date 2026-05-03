@@ -2854,7 +2854,23 @@ function LineChartCard({
             bottom: isMobile ? 22 : LINE_CHART_BOTTOM_MARGIN,
           }}
           grid={{ vertical: true, horizontal: true }}
-          hideLegend={isMobile || visible.length <= 1}
+          hideLegend={visible.length <= 1}
+          slotProps={{
+            axisTickLabel: {
+              style: { fontSize: 10 },
+            },
+            legend: {
+              direction: 'row',
+              position: {
+                vertical: 'top',
+                horizontal: 'left',
+              },
+              padding: 0,
+              itemMarkWidth: isMobile ? 10 : 12,
+              itemMarkHeight: isMobile ? 4 : 6,
+              labelStyle: { fontSize: isMobile ? 11 : 12 },
+            } as Record<string, unknown>,
+          }}
         />
         {isEmpty ? (
           <Box
