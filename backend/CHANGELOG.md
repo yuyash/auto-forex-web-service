@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.1...backend-v1.48.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **market:** persist daily tick load events ([#649](https://github.com/yuyash/auto-forex-web-service/issues/649)) ([739d250](https://github.com/yuyash/auto-forex-web-service/commit/739d25009a30d0ebc0c2277278f5f98f07731c86))
+
 ## [1.48.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.0...backend-v1.48.1) (2026-05-03)
 
 
