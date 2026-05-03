@@ -111,7 +111,8 @@ def _snowball_net_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "last_action": parsed.last_action,
         }
     except Exception:  # noqa: BLE001
-        metrics = state.get("metrics") if isinstance(state.get("metrics"), dict) else {}
+        raw_metrics = state.get("metrics")
+        metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
         values = {
             "status": "unknown",
             "direction": state.get("direction"),

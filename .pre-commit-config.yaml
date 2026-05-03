@@ -33,13 +33,13 @@ repos:
     hooks:
       - id: ruff-strict-refactor-surfaces
         name: Ruff strict checks for refactored surfaces
-        entry: backend/.venv/bin/ruff check --config=backend/pyproject.toml --select B,C4,SIM,UP,RET
+        entry: uv run --project backend --extra dev ruff check --config=backend/pyproject.toml --select B,C4,SIM,UP,RET
         language: system
         files: ^backend/(apps/(market/services/oanda_transport|trading/(services/(task_activity|task_metrics)|tasks/market_session))\.py|scripts/check_openapi_schema\.py|tests/unit/(market/services/test_oanda_transport|trading/(services/test_task_(activity|metrics)|strategies/snowball/test_grid_policy|tasks/test_event_processor))\.py)$
 
       - id: ty
         name: ty
-        entry: bash -c 'cd backend && source .venv/bin/activate && ty check'
+        entry: uv run --directory backend --extra dev ty check
         language: system
         types: [python]
         files: ^backend/
@@ -76,21 +76,21 @@ repos:
     hooks:
       - id: django-check
         name: Django System Check
-        entry: bash -c 'cd backend && source .venv/bin/activate && python manage.py check --fail-level WARNING'
+        entry: uv run --directory backend --extra dev python manage.py check --fail-level WARNING
         language: system
         pass_filenames: false
         files: ^backend/
 
       - id: openapi-schema-generate
         name: OpenAPI Schema Generate
-        entry: bash -c 'cd backend && .venv/bin/python scripts/check_openapi_schema.py'
+        entry: uv run --directory backend --extra dev python scripts/check_openapi_schema.py
         language: system
         pass_filenames: false
         files: ^backend/
 
       - id: django-migrations-check
         name: Django Migrations Check
-        entry: bash -c 'cd backend && source .venv/bin/activate && python manage.py makemigrations --check --dry-run'
+        entry: uv run --directory backend --extra dev python manage.py makemigrations --check --dry-run
         language: system
         pass_filenames: false
         files: ^backend/

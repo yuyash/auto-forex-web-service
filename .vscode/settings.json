@@ -95,14 +95,16 @@
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
   "ruff.configuration": "backend/pyproject.toml",
-  "ruff.interpreter": [
-    "${workspaceFolder}/backend/.venv/bin/python"
+  "ruff.path": [
+    "${workspaceFolder}/backend/.venv/Scripts/ruff.exe",
+    "${workspaceFolder}/backend/.venv/bin/ruff"
   ],
+  "ruff.importStrategy": "useBundled",
   "python.createEnvironment.contentButton": "show",
-  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestPath": "${workspaceFolder}/backend/.venv/bin/pytest",
+  "python.testing.pytestPath": "pytest",
   "python.testing.pytestArgs": [
     "tests"
   ],

@@ -233,7 +233,7 @@ class TestSnowballStrategyClassMethods:
         from django.conf import settings
 
         schema_path = Path(settings.BASE_DIR) / "apps" / "trading" / "schemas" / "snowball.json"
-        with open(schema_path) as f:
+        with schema_path.open(encoding="utf-8") as f:
             schema = json.load(f)
 
         params = SnowballStrategy.default_parameters()
@@ -247,7 +247,7 @@ class TestSnowballStrategyClassMethods:
         from django.conf import settings
 
         schema_path = Path(settings.BASE_DIR) / "apps" / "trading" / "schemas" / "snowball.json"
-        with open(schema_path) as f:
+        with schema_path.open(encoding="utf-8") as f:
             schema = json.load(f)
 
         params = SnowballStrategy.default_parameters()

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -22,15 +23,17 @@ class TestBacktestSignalHandlerIntegration:
         start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC)
 
-        request_id = request_backtest_tick_stream(
-            instrument="EUR_USD",
-            start=start,
-            end=end,
-        )
+        with patch("apps.market.tasks.publish_ticks_for_backtest") as publish_task:
+            request_id = request_backtest_tick_stream(
+                instrument="EUR_USD",
+                start=start,
+                end=end,
+            )
 
         assert request_id is not None
         assert isinstance(request_id, str)
         assert len(request_id) > 0
+        publish_task.apply_async.assert_called_once()
 
     def test_request_backtest_with_custom_request_id(self) -> None:
         """Test requesting backtest with custom request ID."""
@@ -38,14 +41,16 @@ class TestBacktestSignalHandlerIntegration:
         end = datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC)
         custom_id = "custom-request-123"
 
-        request_id = request_backtest_tick_stream(
-            instrument="EUR_USD",
-            start=start,
-            end=end,
-            request_id=custom_id,
-        )
+        with patch("apps.market.tasks.publish_ticks_for_backtest") as publish_task:
+            request_id = request_backtest_tick_stream(
+                instrument="EUR_USD",
+                start=start,
+                end=end,
+                request_id=custom_id,
+            )
 
         assert request_id == custom_id
+        publish_task.apply_async.assert_called_once()
 
 
 @pytest.mark.django_db

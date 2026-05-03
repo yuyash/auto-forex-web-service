@@ -47,18 +47,73 @@ fi
 
 if [[ "$run_backend" -eq 1 ]]; then
   echo "Running backend pre-push checks..."
-  (cd backend && source .venv/bin/activate && python scripts/ci_pytest.py prepush)
+  uv run --directory backend --extra dev python scripts/ci_pytest.py prepush
 fi
+
+frontend_npm_mode=""
+frontend_deps_ready=0
+
+frontend_npm() {
+  if [[ -z "$frontend_npm_mode" ]]; then
+    if command -v npm >/dev/null 2>&1; then
+      frontend_npm_mode="npm"
+    elif command -v npm.cmd >/dev/null 2>&1; then
+      frontend_npm_mode="npm.cmd"
+    elif command -v docker >/dev/null 2>&1; then
+      frontend_npm_mode="docker"
+      echo "npm not found; running frontend npm commands in Docker."
+    else
+      echo "npm is required for frontend pre-push checks but was not found." >&2
+      return 127
+    fi
+  fi
+
+  case "$frontend_npm_mode" in
+    npm)
+      (cd frontend && npm "$@")
+      ;;
+    npm.cmd)
+      (cd frontend && npm.cmd "$@")
+      ;;
+    docker)
+      docker_frontend_dir="$ROOT_DIR/frontend"
+      if command -v cygpath >/dev/null 2>&1; then
+        docker_frontend_dir="$(cygpath -m "$docker_frontend_dir")"
+      fi
+      MSYS_NO_PATHCONV=1 docker run --rm \
+        -v "$docker_frontend_dir:/app" \
+        -v auto_forex_frontend_node_modules:/app/node_modules \
+        -w /app \
+        node:24-alpine npm "$@"
+      ;;
+  esac
+}
+
+ensure_frontend_deps() {
+  if [[ "$frontend_deps_ready" -eq 1 ]]; then
+    return 0
+  fi
+
+  if grep -Eq '^(frontend/(package\.json|package-lock\.json|\.npmrc|Dockerfile))$' <<< "$changed_files"; then
+    frontend_npm ci --ignore-scripts --no-audit --no-fund
+    frontend_deps_ready=1
+    return 0
+  fi
+
+  if [[ "$frontend_npm_mode" == "docker" || ! -d frontend/node_modules ]]; then
+    echo "Frontend dependencies are missing; running npm ci."
+    frontend_npm ci --ignore-scripts --no-audit --no-fund
+    frontend_deps_ready=1
+    return 0
+  fi
+
+  echo "No frontend dependency metadata changed; skipping npm ci check."
+}
 
 if [[ "$run_frontend" -eq 1 ]]; then
   echo "Running frontend pre-push checks..."
-  (cd frontend && npm run build)
-
-  if grep -Eq '^(frontend/(package\.json|package-lock\.json|\.npmrc|Dockerfile))$' <<< "$changed_files"; then
-    (cd frontend && npm ci --ignore-scripts --no-audit --no-fund)
-  else
-    echo "No frontend dependency metadata changed; skipping npm ci check."
-  fi
-
-  (cd frontend && npm run test)
+  frontend_npm --version >/dev/null
+  ensure_frontend_deps
+  frontend_npm run build
+  frontend_npm run test
 fi
