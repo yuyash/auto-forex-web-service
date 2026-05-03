@@ -1955,20 +1955,85 @@ export function SnowballNetStrategyTab({
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, minWidth: 0 }}>
-      <Stack spacing={1} sx={{ mb: 1.5, minWidth: 0 }}>
+      <Stack spacing={{ xs: 0.75, sm: 1 }} sx={{ mb: 1.5, minWidth: 0 }}>
         <Box
           sx={{
             display: 'flex',
-            alignItems: { xs: 'stretch', sm: 'center' },
-            gap: 1,
-            flexWrap: 'wrap',
+            gap: 0.5,
+            alignItems: 'center',
+            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
             minWidth: 0,
           }}
         >
-          <FormControl
-            size="small"
-            sx={{ flex: { xs: '1 1 100%', sm: '0 1 240px' }, minWidth: 0 }}
+          <Tooltip
+            title={
+              follow
+                ? t('strategy:snowballNet.chart.tooltips.followingCurrentTick')
+                : t('strategy:snowballNet.chart.tooltips.followCurrentTick')
+            }
           >
+            <IconButton
+              onClick={handleFollow}
+              size="small"
+              color={follow ? 'primary' : 'default'}
+              aria-label={t(
+                'strategy:snowballNet.chart.tooltips.followCurrentTick'
+              )}
+            >
+              <CenterFocusStrongIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip
+            title={
+              mergeMarkers
+                ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
+                : t('strategy:snowballNet.chart.tooltips.rawMarkers')
+            }
+          >
+            <IconButton
+              onClick={() => setMergeMarkers((value) => !value)}
+              size="small"
+              color={mergeMarkers ? 'primary' : 'default'}
+              aria-label={t('strategy:snowballNet.chart.tooltips.mergeMarkers')}
+            >
+              <MergeIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('common:metrics.refreshAllCharts')}>
+            <span>
+              <IconButton
+                onClick={handleRefresh}
+                size="small"
+                disabled={chartQuery.isFetching}
+                aria-label={t('common:metrics.refreshAllCharts')}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
+            <IconButton
+              onClick={() => setSettingsOpen(true)}
+              size="small"
+              aria-label={t('strategy:snowballNet.chart.settings.title')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              md: '240px 160px 140px',
+            },
+            gap: { xs: 0.75, sm: 1 },
+            alignItems: 'center',
+            minWidth: 0,
+          }}
+        >
+          <FormControl size="small" sx={{ minWidth: 0 }}>
             <InputLabel id="snowball-net-range-label">
               {t('strategy:snowballNet.chart.controls.range')}
             </InputLabel>
@@ -1991,10 +2056,7 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
-          <FormControl
-            size="small"
-            sx={{ flex: { xs: '1 1 100%', sm: '0 1 160px' }, minWidth: 0 }}
-          >
+          <FormControl size="small" sx={{ minWidth: 0 }}>
             <InputLabel id="snowball-net-granularity-label">
               {t('strategy:snowballNet.chart.controls.granularityLabel')}
             </InputLabel>
@@ -2019,78 +2081,13 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 0.5,
-              alignItems: 'center',
-              justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-              flex: { xs: '1 1 auto', sm: '0 0 auto' },
-            }}
-          >
-            <Tooltip
-              title={
-                follow
-                  ? t(
-                      'strategy:snowballNet.chart.tooltips.followingCurrentTick'
-                    )
-                  : t('strategy:snowballNet.chart.tooltips.followCurrentTick')
-              }
-            >
-              <IconButton
-                onClick={handleFollow}
-                size="small"
-                color={follow ? 'primary' : 'default'}
-                aria-label={t(
-                  'strategy:snowballNet.chart.tooltips.followCurrentTick'
-                )}
-              >
-                <CenterFocusStrongIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip
-              title={
-                mergeMarkers
-                  ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
-                  : t('strategy:snowballNet.chart.tooltips.rawMarkers')
-              }
-            >
-              <IconButton
-                onClick={() => setMergeMarkers((value) => !value)}
-                size="small"
-                color={mergeMarkers ? 'primary' : 'default'}
-                aria-label={t(
-                  'strategy:snowballNet.chart.tooltips.mergeMarkers'
-                )}
-              >
-                <MergeIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('common:metrics.refreshAllCharts')}>
-              <span>
-                <IconButton
-                  onClick={handleRefresh}
-                  size="small"
-                  disabled={chartQuery.isFetching}
-                  aria-label={t('common:metrics.refreshAllCharts')}
-                >
-                  <RefreshIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
-              <IconButton
-                onClick={() => setSettingsOpen(true)}
-                size="small"
-                aria-label={t('strategy:snowballNet.chart.settings.title')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
           <FormControl
             size="small"
-            sx={{ flex: { xs: '1 1 100%', sm: '0 1 140px' }, minWidth: 0 }}
+            sx={{
+              minWidth: 0,
+              gridColumn: { xs: '1 / -1', md: 'auto' },
+              maxWidth: { xs: '100%', sm: 180, md: 'none' },
+            }}
           >
             <InputLabel id="snowball-net-refresh-label">
               {t('strategy:snowballNet.chart.controls.refreshInterval')}
@@ -2120,8 +2117,9 @@ export function SnowballNetStrategyTab({
             sx={{
               display: { xs: 'grid', sm: 'flex' },
               gridTemplateColumns: { xs: '1fr', sm: 'unset' },
-              gap: 1,
+              gap: { xs: 0.75, sm: 1 },
               flexWrap: 'wrap',
+              pt: { xs: 0.25, sm: 0 },
               minWidth: 0,
             }}
           >
