@@ -394,6 +394,20 @@ class TaskExecutor:
         Returns:
             Tuple of (state, resumed) where resumed indicates whether this
             execution is continuing from a previous run.
+
+        IMPORTANT — Resume state preservation contract:
+            When ``resumed`` is True the following invariants MUST hold:
+
+            1. ``execution_id`` is unchanged from the previous run.
+            2. ``ExecutionState`` (balance, strategy_state, ticks_processed,
+               positions, orders) is loaded from the database — NOT recreated.
+            3. Cumulative metric counters (realized_pnl, total_trades, …) are
+               restored via ``_restore_metric_counters`` so dashboard values
+               do not jump back to zero.
+            4. The strategy receives ``on_resume`` (not ``on_start``).
+
+            Breaking any of these causes the user-visible symptom of "state
+            reset on resume". See ``TestResumeLifecycle`` for regression tests.
         """
         logger.info("Starting task execution")
         celery_task_id = getattr(self.task, "celery_task_id", None)

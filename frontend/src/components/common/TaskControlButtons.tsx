@@ -133,9 +133,11 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
   ].includes(status);
   const statusAllowsPause = !isTrading && status === TaskStatusEnum.RUNNING;
-  const statusAllowsResume = isTrading
-    ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
-    : status === TaskStatusEnum.PAUSED;
+  const statusAllowsResume = [
+    TaskStatusEnum.PAUSED,
+    TaskStatusEnum.STOPPED,
+    ...(isTrading ? [TaskStatusEnum.FAILED] : []),
+  ].includes(status);
   const statusAllowsRestart = [
     TaskStatusEnum.STOPPED,
     TaskStatusEnum.COMPLETED,
