@@ -9,7 +9,7 @@ price of that net exposure.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR, ROUND_HALF_UP
 from logging import getLogger
 from typing import Any
 
@@ -91,6 +91,7 @@ class SnowballNetStrategy(Strategy):
             "events": {
                 "close_reason_labels": {
                     "net_take_profit": "Net take profit",
+                    "net_loss_cut": "Net loss cut",
                     "margin_protection": "Margin protection",
                     "manual_close": "Manual close",
                 },
@@ -99,6 +100,7 @@ class SnowballNetStrategy(Strategy):
                     "snowball_net_add": "SnowballNet add",
                     "snowball_net_take_profit": "SnowballNet take profit",
                     "snowball_net_margin_reduce": "SnowballNet margin reduce",
+                    "snowball_net_loss_cut": "SnowballNet loss cut",
                 },
             },
             "resume": {
@@ -117,18 +119,19 @@ class SnowballNetStrategy(Strategy):
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
         result = super().on_start(state=state)
         snowball_net = SnowballNetState.from_strategy_state(state.strategy_state)
-        snowball_net.direction = self.config.trade_direction
+        self._sync_direction_mode(snowball_net)
         state.strategy_state = snowball_net.to_dict()
         result.state = state
         return result
 
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         sn = SnowballNetState.from_strategy_state(state.strategy_state)
-        sn.direction = self.config.trade_direction
+        self._sync_direction_mode(sn)
         sn.last_bid = tick.bid
         sn.last_ask = tick.ask
         sn.last_mid = tick.mid
         sn.last_tick_timestamp = tick.timestamp.isoformat()
+        self._update_auto_direction_signal(sn, tick)
 
         self._update_metrics(sn, tick)
 
@@ -137,20 +140,30 @@ class SnowballNetStrategy(Strategy):
             return StrategyResult.from_state(state)
 
         if self._emergency_stop_triggered(sn):
+            margin_pct = self._margin_pct(sn)
             state.strategy_state = sn.to_dict()
             return StrategyResult(
                 state=state,
                 events=[],
                 should_stop=True,
-                stop_reason=(
-                    "SnowballNet emergency margin threshold reached: "
-                    f"{sn.metrics.get('margin_ratio_pct')}%"
-                ),
+                stop_reason=(f"SnowballNet emergency margin threshold reached: {margin_pct}%"),
                 is_error=True,
             )
 
         if sn.net_units <= 0 or sn.average_price is None or not sn.initialised:
+            direction = self._direction_for_new_position(sn, tick)
+            if direction is None:
+                self._update_metrics(sn, tick)
+                state.strategy_state = sn.to_dict()
+                return StrategyResult.from_state(state)
+            sn.direction = direction.value
             events = [self._build_open_event(sn, tick, role="initial")]
+            self._update_metrics(sn, tick)
+            state.strategy_state = sn.to_dict()
+            return StrategyResult(state=state, events=events)
+
+        if self._loss_cut_triggered(sn, tick):
+            events = [self._build_close_event(sn, tick, reason="loss_cut")]
             self._update_metrics(sn, tick)
             state.strategy_state = sn.to_dict()
             return StrategyResult(state=state, events=events)
@@ -204,40 +217,142 @@ class SnowballNetStrategy(Strategy):
     # Signal decisions
     # ------------------------------------------------------------------
 
-    def _direction(self) -> Direction:
-        return Direction.LONG if self.config.trade_direction == "long" else Direction.SHORT
+    def _sync_direction_mode(self, sn: SnowballNetState) -> None:
+        if self.config.trade_direction == "auto":
+            sn.direction_mode = "auto"
+            if sn.net_units <= 0 and not sn.initialised and not sn.has_pending_action:
+                sn.direction = "auto"
+            return
+        sn.direction_mode = "fixed"
+        sn.direction = self.config.trade_direction
 
-    def _entry_price(self, tick: Tick) -> Decimal:
-        return tick.ask if self._direction() == Direction.LONG else tick.bid
+    def _update_auto_direction_signal(self, sn: SnowballNetState, tick: Tick) -> None:
+        if self.config.trade_direction != "auto":
+            return
 
-    def _exit_price(self, tick: Tick) -> Decimal:
-        return tick.bid if self._direction() == Direction.LONG else tick.ask
+        fast = self._ema_next(
+            current=sn.auto_direction_fast_ema,
+            price=tick.mid,
+            period=self.config.auto_direction_fast_period,
+        )
+        slow = self._ema_next(
+            current=sn.auto_direction_slow_ema,
+            price=tick.mid,
+            period=self.config.auto_direction_slow_period,
+        )
+        sn.auto_direction_fast_ema = fast
+        sn.auto_direction_slow_ema = slow
+        sn.auto_direction_samples += 1
 
-    def _target_price(self, average_price: Decimal) -> Decimal:
+        diff_pips = (fast - slow) / self.pip_size
+        threshold = self.config.auto_direction_threshold_pips
+        if diff_pips >= threshold:
+            sn.auto_direction_signal = "long"
+        elif diff_pips <= -threshold:
+            sn.auto_direction_signal = "short"
+        else:
+            sn.auto_direction_signal = None
+
+    @staticmethod
+    def _ema_next(*, current: Decimal | None, price: Decimal, period: int) -> Decimal:
+        if current is None:
+            return price
+        alpha = Decimal("2") / Decimal(period + 1)
+        return current + (price - current) * alpha
+
+    def _direction_for_new_position(self, sn: SnowballNetState, tick: Tick) -> Direction | None:
+        if self.config.trade_direction != "auto":
+            direction = self._direction(sn)
+            sn.direction = direction.value
+            return direction
+
+        if sn.auto_direction_samples < self.config.auto_direction_min_samples:
+            sn.last_action = {
+                "kind": "wait",
+                "action": "auto_direction_warmup",
+                "timestamp": tick.timestamp.isoformat(),
+                "samples": sn.auto_direction_samples,
+                "required_samples": self.config.auto_direction_min_samples,
+            }
+            return None
+
+        if sn.auto_direction_signal not in {Direction.LONG.value, Direction.SHORT.value}:
+            sn.last_action = {
+                "kind": "wait",
+                "action": "auto_direction_neutral",
+                "timestamp": tick.timestamp.isoformat(),
+                "fast_ema": str(sn.auto_direction_fast_ema)
+                if sn.auto_direction_fast_ema is not None
+                else None,
+                "slow_ema": str(sn.auto_direction_slow_ema)
+                if sn.auto_direction_slow_ema is not None
+                else None,
+            }
+            return None
+
+        direction = Direction(str(sn.auto_direction_signal))
+        diff_pips = Decimal("0")
+        if sn.auto_direction_fast_ema is not None and sn.auto_direction_slow_ema is not None:
+            diff_pips = (sn.auto_direction_fast_ema - sn.auto_direction_slow_ema) / self.pip_size
+        sn.direction = direction.value
+        sn.auto_direction_last_decision = {
+            "direction": direction.value,
+            "reason": "ema_trend",
+            "timestamp": tick.timestamp.isoformat(),
+            "samples": sn.auto_direction_samples,
+            "fast_ema": str(sn.auto_direction_fast_ema)
+            if sn.auto_direction_fast_ema is not None
+            else None,
+            "slow_ema": str(sn.auto_direction_slow_ema)
+            if sn.auto_direction_slow_ema is not None
+            else None,
+            "difference_pips": str(diff_pips),
+            "threshold_pips": str(self.config.auto_direction_threshold_pips),
+        }
+        return direction
+
+    def _direction(self, sn: SnowballNetState) -> Direction:
+        if self.config.trade_direction != "auto":
+            return Direction.LONG if self.config.trade_direction == "long" else Direction.SHORT
+        if sn.direction in {Direction.LONG.value, Direction.SHORT.value}:
+            return Direction(str(sn.direction))
+        if sn.auto_direction_signal in {Direction.LONG.value, Direction.SHORT.value}:
+            return Direction(str(sn.auto_direction_signal))
+        return Direction.LONG
+
+    def _entry_price(self, sn: SnowballNetState, tick: Tick) -> Decimal:
+        return tick.ask if self._direction(sn) == Direction.LONG else tick.bid
+
+    def _exit_price(self, sn: SnowballNetState, tick: Tick) -> Decimal:
+        return tick.bid if self._direction(sn) == Direction.LONG else tick.ask
+
+    def _target_price(self, sn: SnowballNetState, average_price: Decimal) -> Decimal:
         offset = self.config.take_profit_pips * self.pip_size
-        if self._direction() == Direction.LONG:
+        if self._direction(sn) == Direction.LONG:
             return average_price + offset
         return average_price - offset
 
-    def _next_add_price(self, average_price: Decimal, add_step: int) -> Decimal:
+    def _next_add_price(
+        self, sn: SnowballNetState, average_price: Decimal, add_step: int
+    ) -> Decimal:
         offset = self.config.add_interval_pips(add_step) * self.pip_size
-        if self._direction() == Direction.LONG:
+        if self._direction(sn) == Direction.LONG:
             return average_price - offset
         return average_price + offset
 
     def _favorable_pips(self, sn: SnowballNetState, tick: Tick) -> Decimal:
         if sn.average_price is None:
             return Decimal("0")
-        price = self._exit_price(tick)
-        if self._direction() == Direction.LONG:
+        price = self._exit_price(sn, tick)
+        if self._direction(sn) == Direction.LONG:
             return (price - sn.average_price) / self.pip_size
         return (sn.average_price - price) / self.pip_size
 
     def _adverse_pips(self, sn: SnowballNetState, tick: Tick) -> Decimal:
         if sn.average_price is None:
             return Decimal("0")
-        price = self._entry_price(tick)
-        if self._direction() == Direction.LONG:
+        price = self._entry_price(sn, tick)
+        if self._direction(sn) == Direction.LONG:
             return (sn.average_price - price) / self.pip_size
         return (price - sn.average_price) / self.pip_size
 
@@ -254,12 +369,19 @@ class SnowballNetStrategy(Strategy):
 
     def _margin_pct(self, sn: SnowballNetState) -> Decimal:
         raw = sn.metrics.get("margin_ratio")
-        if raw in (None, ""):
-            return Decimal("0")
-        try:
-            return Decimal(str(raw)) * Decimal("100")
-        except (InvalidOperation, TypeError, ValueError):
-            return Decimal("0")
+        if raw not in (None, ""):
+            try:
+                return Decimal(str(raw)) * Decimal("100")
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        pct_raw = sn.metrics.get("snowball_net_margin_ratio_pct")
+        if pct_raw not in (None, ""):
+            try:
+                return Decimal(str(pct_raw))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+        return Decimal("0")
 
     def _margin_reduce_triggered(self, sn: SnowballNetState) -> bool:
         if not self.config.margin_reduce_enabled or sn.net_units <= self.config.initial_units:
@@ -270,6 +392,11 @@ class SnowballNetStrategy(Strategy):
         if not self.config.emergency_enabled or sn.net_units <= 0:
             return False
         return self._margin_pct(sn) >= self.config.emergency_threshold_pct
+
+    def _loss_cut_triggered(self, sn: SnowballNetState, tick: Tick) -> bool:
+        if not self.config.loss_cut_enabled or sn.net_units <= 0:
+            return False
+        return self._favorable_pips(sn, tick) <= -self.config.loss_cut_threshold_pips
 
     # ------------------------------------------------------------------
     # Event builders
@@ -282,15 +409,15 @@ class SnowballNetStrategy(Strategy):
         *,
         role: str,
     ) -> StrategyEvent:
-        direction = self._direction()
-        price = self._entry_price(tick)
+        direction = self._direction(sn)
+        price = self._entry_price(sn, tick)
         units = self._open_units(sn, role=role)
         entry_id = sn.allocate_entry_id()
         previous_units = sn.net_units
         previous_average = sn.average_price
         add_step = sn.add_count + 1 if role == "add" else 0
         provisional_average = self._weighted_average(previous_average, previous_units, price, units)
-        target_price = self._target_price(provisional_average)
+        target_price = self._target_price(sn, provisional_average)
         event_type = "snowball_net_initial" if role == "initial" else "snowball_net_add"
         interval = self.config.add_interval_pips(add_step) if add_step else None
         description = self._open_description(
@@ -357,17 +484,19 @@ class SnowballNetStrategy(Strategy):
         *,
         reason: str,
     ) -> StrategyEvent:
-        direction = self._direction()
-        exit_price = self._exit_price(tick)
+        direction = self._direction(sn)
+        exit_price = self._exit_price(sn, tick)
         average = sn.average_price or exit_price
         units = self._close_units(sn, reason=reason)
         favorable_pips = self._favorable_pips(sn, tick)
-        strategy_event_type = (
-            "snowball_net_margin_reduce"
-            if reason == "margin_reduce"
-            else "snowball_net_take_profit"
-        )
-        close_reason = "margin_protection" if reason == "margin_reduce" else "net_take_profit"
+        strategy_event_type = {
+            "loss_cut": "snowball_net_loss_cut",
+            "margin_reduce": "snowball_net_margin_reduce",
+        }.get(reason, "snowball_net_take_profit")
+        close_reason = {
+            "loss_cut": "net_loss_cut",
+            "margin_reduce": "margin_protection",
+        }.get(reason, "net_take_profit")
         description = self._close_description(
             reason=reason,
             units=units,
@@ -426,17 +555,33 @@ class SnowballNetStrategy(Strategy):
         return max(0, min(configured, available))
 
     def _close_units(self, sn: SnowballNetState, *, reason: str) -> int:
+        if reason == "loss_cut":
+            return sn.net_units
         if sn.net_units <= self.config.min_close_units:
             return sn.net_units
         if reason == "margin_reduce":
-            raw_units = Decimal(sn.net_units) * self.config.margin_reduce_ratio
+            calculated = self._margin_reduce_close_units(sn)
         else:
             raw_units = Decimal(sn.net_units) * self.config.partial_close_ratio
-        calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
+            calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
         units = max(self.config.min_close_units, calculated)
         if sn.net_units - units < self.config.min_close_units:
             return sn.net_units
         return min(sn.net_units, units)
+
+    def _margin_reduce_close_units(self, sn: SnowballNetState) -> int:
+        current_margin_pct = self._margin_pct(sn)
+        if current_margin_pct > 0 and self.config.margin_reduce_target_pct > 0:
+            target_units = (
+                Decimal(sn.net_units) * self.config.margin_reduce_target_pct / current_margin_pct
+            ).to_integral_value(rounding=ROUND_FLOOR)
+            remaining_units = max(self.config.initial_units, int(target_units))
+            close_units = max(0, sn.net_units - remaining_units)
+            if close_units > 0:
+                return close_units
+
+        raw_units = Decimal(sn.net_units) * self.config.margin_reduce_ratio
+        return int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
 
     # ------------------------------------------------------------------
     # Execution feedback
@@ -495,6 +640,8 @@ class SnowballNetStrategy(Strategy):
             sn.average_price = None
             sn.position_id = None
             sn.add_count = 0
+            if self.config.trade_direction == "auto":
+                sn.direction = "auto"
         else:
             sn.average_price = self._decimal_from_pending(pending, "previous_average_price")
             sn.add_count = self._recalculate_add_count(remaining_units)
@@ -523,22 +670,24 @@ class SnowballNetStrategy(Strategy):
     # ------------------------------------------------------------------
 
     def _update_metrics(self, sn: SnowballNetState, tick: Tick) -> None:
-        current_price = self._exit_price(tick)
+        current_price = self._exit_price(sn, tick)
         average = sn.average_price
         favorable = self._favorable_pips(sn, tick)
         adverse = self._adverse_pips(sn, tick)
         next_step = sn.add_count + 1
-        next_interval = (
-            self.config.add_interval_pips(next_step)
-            if sn.net_units > 0 and sn.add_count < self.config.max_add_count
+        can_add = (
+            sn.net_units > 0
+            and sn.add_count < self.config.max_add_count
+            and sn.net_units < self.config.effective_max_net_units
+        )
+        next_interval = self.config.add_interval_pips(next_step) if can_add else None
+        target_price = self._target_price(sn, average) if average is not None else None
+        theoretical_next_add_price = (
+            self._next_add_price(sn, average, next_step)
+            if average is not None and sn.net_units > 0
             else None
         )
-        target_price = self._target_price(average) if average is not None else None
-        next_add_price = (
-            self._next_add_price(average, next_step)
-            if average is not None and next_interval is not None
-            else None
-        )
+        next_add_price = theoretical_next_add_price if next_interval is not None else None
         next_add_distance = (
             max(Decimal("0"), next_interval - adverse) if next_interval is not None else None
         )
@@ -553,18 +702,61 @@ class SnowballNetStrategy(Strategy):
         metrics.update(
             {
                 "snowball_net_net_units": str(sn.net_units),
+                "snowball_net_direction": sn.direction,
+                "snowball_net_direction_mode": sn.direction_mode,
+                "snowball_net_auto_direction_signal": sn.auto_direction_signal,
+                "snowball_net_auto_direction_samples": str(sn.auto_direction_samples),
+                "snowball_net_auto_direction_fast_ema": (
+                    str(sn.auto_direction_fast_ema)
+                    if sn.auto_direction_fast_ema is not None
+                    else None
+                ),
+                "snowball_net_auto_direction_slow_ema": (
+                    str(sn.auto_direction_slow_ema)
+                    if sn.auto_direction_slow_ema is not None
+                    else None
+                ),
                 "snowball_net_average_price": str(average) if average is not None else None,
                 "snowball_net_current_price": str(current_price),
                 "snowball_net_pips_from_average": str(favorable),
                 "snowball_net_adverse_pips": str(max(Decimal("0"), adverse)),
+                "snowball_net_loss_cut_enabled": self.config.loss_cut_enabled,
+                "snowball_net_loss_cut_threshold_pips": (
+                    str(self.config.loss_cut_threshold_pips)
+                    if self.config.loss_cut_enabled
+                    else None
+                ),
                 "snowball_net_target_price": str(target_price) if target_price else None,
                 "snowball_net_next_add_price": str(next_add_price) if next_add_price else None,
+                "snowball_net_theoretical_next_add_price": (
+                    str(theoretical_next_add_price)
+                    if theoretical_next_add_price is not None
+                    else None
+                ),
+                "snowball_net_can_add": can_add,
                 "snowball_net_next_add_distance_pips": str(next_add_distance)
                 if next_add_distance is not None
                 else None,
                 "snowball_net_add_count": str(sn.add_count),
                 "snowball_net_exposure_pct": str(exposure_pct),
                 "snowball_net_margin_ratio_pct": str(margin_pct),
+                "snowball_net_margin_reduce_enabled": self.config.margin_reduce_enabled,
+                "snowball_net_margin_reduce_threshold_pct": (
+                    str(self.config.margin_reduce_threshold_pct)
+                    if self.config.margin_reduce_enabled
+                    else None
+                ),
+                "snowball_net_margin_reduce_target_pct": (
+                    str(self.config.margin_reduce_target_pct)
+                    if self.config.margin_reduce_enabled
+                    else None
+                ),
+                "snowball_net_emergency_enabled": self.config.emergency_enabled,
+                "snowball_net_emergency_threshold_pct": (
+                    str(self.config.emergency_threshold_pct)
+                    if self.config.emergency_enabled
+                    else None
+                ),
                 "snowball_net_pending_action": str(sn.pending_action.get("kind") or ""),
             }
         )
@@ -603,7 +795,10 @@ class SnowballNetStrategy(Strategy):
         exit_price: Decimal,
         favorable_pips: Decimal,
     ) -> str:
-        label = "margin reduce" if reason == "margin_reduce" else "take profit"
+        label = {
+            "loss_cut": "loss cut",
+            "margin_reduce": "margin reduce",
+        }.get(reason, "take profit")
         return (
             f"SnowballNet {label} | units={units}, avg={average:.5f}, "
             f"exit={exit_price:.5f}, pips_from_avg={favorable_pips:.1f}"

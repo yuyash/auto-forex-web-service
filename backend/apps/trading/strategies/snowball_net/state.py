@@ -30,6 +30,12 @@ class SnowballNetState:
     version: int = 1
     initialised: bool = False
     direction: str = "long"
+    direction_mode: str = "fixed"
+    auto_direction_samples: int = 0
+    auto_direction_fast_ema: Decimal | None = None
+    auto_direction_slow_ema: Decimal | None = None
+    auto_direction_signal: str | None = None
+    auto_direction_last_decision: dict[str, Any] = field(default_factory=dict)
     net_units: int = 0
     average_price: Decimal | None = None
     position_id: str | None = None
@@ -51,6 +57,14 @@ class SnowballNetState:
             version=_int_or_default(raw.get("version"), 1),
             initialised=bool(raw.get("initialised", False)),
             direction=str(raw.get("direction") or "long"),
+            direction_mode=str(raw.get("direction_mode") or "fixed"),
+            auto_direction_samples=max(0, _int_or_default(raw.get("auto_direction_samples"), 0)),
+            auto_direction_fast_ema=_decimal_or_none(raw.get("auto_direction_fast_ema")),
+            auto_direction_slow_ema=_decimal_or_none(raw.get("auto_direction_slow_ema")),
+            auto_direction_signal=(
+                str(raw["auto_direction_signal"]) if raw.get("auto_direction_signal") else None
+            ),
+            auto_direction_last_decision=dict(raw.get("auto_direction_last_decision") or {}),
             net_units=_int_or_default(raw.get("net_units"), 0),
             average_price=_decimal_or_none(raw.get("average_price")),
             position_id=str(raw["position_id"]) if raw.get("position_id") else None,
@@ -72,6 +86,20 @@ class SnowballNetState:
             "version": self.version,
             "initialised": self.initialised,
             "direction": self.direction,
+            "direction_mode": self.direction_mode,
+            "auto_direction_samples": self.auto_direction_samples,
+            "auto_direction_fast_ema": (
+                str(self.auto_direction_fast_ema)
+                if self.auto_direction_fast_ema is not None
+                else None
+            ),
+            "auto_direction_slow_ema": (
+                str(self.auto_direction_slow_ema)
+                if self.auto_direction_slow_ema is not None
+                else None
+            ),
+            "auto_direction_signal": self.auto_direction_signal,
+            "auto_direction_last_decision": dict(self.auto_direction_last_decision),
             "net_units": self.net_units,
             "average_price": str(self.average_price) if self.average_price is not None else None,
             "position_id": self.position_id,

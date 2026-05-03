@@ -217,6 +217,7 @@ export interface SnowballNetLineSeries {
   label?: string | null;
   label_key?: string | null;
   color: string;
+  line_style?: StrategyOhlcLineStyle;
   points: SnowballNetLinePoint[];
 }
 

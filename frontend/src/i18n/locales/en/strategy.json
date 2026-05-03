@@ -73,10 +73,10 @@
     "status": "Status",
     "direction": "Direction",
     "net_units": "Net Units",
-    "average_price": "Average Entry",
+    "average_price": "Average Order Price",
     "current_price": "Current Price",
-    "pips_from_average": "Pips From Average",
-    "target_price": "Take-Profit Price",
+    "pips_from_average": "Pips From Average Order Price",
+    "target_price": "Exit Price",
     "next_add_price": "Next Add Price",
     "next_add_distance_pips": "Next Add Distance",
     "add_count": "Add Count",
@@ -91,6 +91,71 @@
       "locked": "Locked",
       "emergency": "Emergency",
       "unknown": "Unknown"
+    },
+    "direction": {
+      "long": "Long",
+      "short": "Short",
+      "auto": "Auto"
+    }
+  },
+  "snowballNet": {
+    "chart": {
+      "averagePrice": "Average order price",
+      "takeProfit": "Exit price",
+      "nextAdd": "Next add price",
+      "nextAddDisabled": "Next add off",
+      "currentPrice": "Current price",
+      "netUnits": "Net position size",
+      "pipsFromAverage": "Pips from average order price",
+      "lossCutThreshold": "Loss cut threshold",
+      "marginRatio": "Margin %",
+      "pnl": "PnL",
+      "realizedPnl": "Realized PnL",
+      "unrealizedPnl": "Unrealized PnL",
+      "marginReduceThreshold": "Margin reduce threshold",
+      "marginReduceTarget": "Margin reduce target",
+      "emergencyThreshold": "Emergency stop threshold",
+      "noData": "No Data",
+      "marketClosed": "Market closed",
+      "resizeOhlcChart": "Resize OHLC chart",
+      "tooltips": {
+        "followingCurrentTick": "Following current tick",
+        "followCurrentTick": "Follow current tick",
+        "mergedMarkers": "Merged markers",
+        "rawMarkers": "Raw markers",
+        "mergeMarkers": "Toggle marker merging"
+      },
+      "controls": {
+        "refreshInterval": "Refresh",
+        "off": "Off",
+        "seconds": "{{seconds}}s"
+      },
+      "settings": {
+        "title": "Chart settings",
+        "chartPanels": "Visible charts",
+        "ohlc": "OHLC",
+        "ohlcItems": "OHLC items",
+        "tradeMarkers": "Trade markers",
+        "currentTick": "Current tick line",
+        "marginOverlay": "Overlay margin on OHLC"
+      },
+      "markers": {
+        "add": "Add",
+        "close": "Close",
+        "count": "{{action}} x{{count}}"
+      },
+      "current": {
+        "direction": "Direction",
+        "net": "Net",
+        "average": "Avg",
+        "price": "Price",
+        "pips": "Pips",
+        "margin": "Margin",
+        "realizedPnl": "Realized PnL",
+        "unrealizedPnl": "Unrealized PnL",
+        "reduceThreshold": "Reduce",
+        "emergencyThreshold": "Emergency"
+      }
     }
   },
   "messages": {

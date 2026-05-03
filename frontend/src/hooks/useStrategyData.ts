@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { TaskType } from '../types/common';
 import type {
   StrategyHistoryResponse,
@@ -174,6 +174,7 @@ export function useSnowballNetChart({
         'strategy/net-chart',
         queryParams
       ),
+    placeholderData: keepPreviousData,
     staleTime: 0,
     refetchInterval,
   });

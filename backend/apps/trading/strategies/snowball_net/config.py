@@ -15,6 +15,7 @@ INTERVAL_MODES = {
     "divisive",
     "manual",
 }
+TRADE_DIRECTIONS = {"long", "short", "auto"}
 
 
 def _parse_decimal(value: Any, default: str) -> Decimal:
@@ -57,6 +58,10 @@ class SnowballNetConfig:
     """Normalised SnowballNet strategy configuration."""
 
     trade_direction: str
+    auto_direction_fast_period: int
+    auto_direction_slow_period: int
+    auto_direction_min_samples: int
+    auto_direction_threshold_pips: Decimal
     base_units: int
     initial_lot_size: int
     add_lot_size: int
@@ -76,6 +81,8 @@ class SnowballNetConfig:
     margin_reduce_threshold_pct: Decimal
     margin_reduce_target_pct: Decimal
     margin_reduce_ratio: Decimal
+    loss_cut_enabled: bool
+    loss_cut_threshold_pips: Decimal
     emergency_enabled: bool
     emergency_threshold_pct: Decimal
     margin_rate: Decimal
@@ -127,6 +134,12 @@ class SnowballNetConfig:
 
         return SnowballNetConfig(
             trade_direction=_parse_str(raw.get("trade_direction"), "long").lower(),
+            auto_direction_fast_period=_parse_int(raw.get("auto_direction_fast_period"), 12),
+            auto_direction_slow_period=_parse_int(raw.get("auto_direction_slow_period"), 48),
+            auto_direction_min_samples=_parse_int(raw.get("auto_direction_min_samples"), 48),
+            auto_direction_threshold_pips=_parse_decimal(
+                raw.get("auto_direction_threshold_pips"), "0"
+            ),
             base_units=_parse_int(raw.get("base_units"), 1000),
             initial_lot_size=_parse_int(raw.get("initial_lot_size"), 1),
             add_lot_size=_parse_int(raw.get("add_lot_size"), 1),
@@ -148,6 +161,8 @@ class SnowballNetConfig:
             ),
             margin_reduce_target_pct=_parse_decimal(raw.get("margin_reduce_target_pct"), "50"),
             margin_reduce_ratio=_parse_decimal(raw.get("margin_reduce_ratio"), "0.25"),
+            loss_cut_enabled=_parse_bool(raw.get("loss_cut_enabled"), False),
+            loss_cut_threshold_pips=_parse_decimal(raw.get("loss_cut_threshold_pips"), "100"),
             emergency_enabled=_parse_bool(raw.get("emergency_enabled"), True),
             emergency_threshold_pct=_parse_decimal(raw.get("emergency_threshold_pct"), "95"),
             margin_rate=_parse_decimal(raw.get("margin_rate"), "0.04"),
@@ -160,6 +175,10 @@ class SnowballNetConfig:
     def to_dict(self) -> dict[str, Any]:
         return {
             "trade_direction": self.trade_direction,
+            "auto_direction_fast_period": self.auto_direction_fast_period,
+            "auto_direction_slow_period": self.auto_direction_slow_period,
+            "auto_direction_min_samples": self.auto_direction_min_samples,
+            "auto_direction_threshold_pips": str(self.auto_direction_threshold_pips),
             "base_units": self.base_units,
             "initial_lot_size": self.initial_lot_size,
             "add_lot_size": self.add_lot_size,
@@ -179,14 +198,26 @@ class SnowballNetConfig:
             "margin_reduce_threshold_pct": str(self.margin_reduce_threshold_pct),
             "margin_reduce_target_pct": str(self.margin_reduce_target_pct),
             "margin_reduce_ratio": str(self.margin_reduce_ratio),
+            "loss_cut_enabled": self.loss_cut_enabled,
+            "loss_cut_threshold_pips": str(self.loss_cut_threshold_pips),
             "emergency_enabled": self.emergency_enabled,
             "emergency_threshold_pct": str(self.emergency_threshold_pct),
             "margin_rate": str(self.margin_rate),
         }
 
     def validate(self) -> None:
-        if self.trade_direction not in {"long", "short"}:
-            raise ValueError("trade_direction must be 'long' or 'short'")
+        if self.trade_direction not in TRADE_DIRECTIONS:
+            raise ValueError("trade_direction must be 'long', 'short', or 'auto'")
+        if self.auto_direction_fast_period <= 0:
+            raise ValueError("auto_direction_fast_period must be greater than 0")
+        if self.auto_direction_slow_period <= self.auto_direction_fast_period:
+            raise ValueError(
+                "auto_direction_slow_period must be greater than auto_direction_fast_period"
+            )
+        if self.auto_direction_min_samples <= 0:
+            raise ValueError("auto_direction_min_samples must be greater than 0")
+        if self.auto_direction_threshold_pips < 0:
+            raise ValueError("auto_direction_threshold_pips must be greater than or equal to 0")
         if self.base_units <= 0:
             raise ValueError("base_units must be greater than 0")
         if self.initial_lot_size <= 0:
@@ -226,6 +257,8 @@ class SnowballNetConfig:
             raise ValueError("round_step_pips must be greater than 0")
         if not (Decimal("0") < self.margin_reduce_ratio <= Decimal("1")):
             raise ValueError("margin_reduce_ratio must be in the range (0, 1]")
+        if self.loss_cut_threshold_pips <= 0:
+            raise ValueError("loss_cut_threshold_pips must be greater than 0")
         if self.margin_reduce_enabled:
             if not (
                 Decimal("0")

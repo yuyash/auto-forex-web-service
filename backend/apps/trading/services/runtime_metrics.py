@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from apps.trading.models.positions import Position
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import quote_currency, quote_to_account_rate
 
 
 @dataclass(slots=True)
@@ -136,6 +136,7 @@ class RuntimeMetricsTracker:
         # Convert to account currency using current mid rate (same as overview tab)
         realized_pnl = self._realized_pnl_quote * conv
         unrealized_pnl = unrealized_pnl_quote * conv
+        total_pnl_quote = self._realized_pnl_quote + unrealized_pnl_quote
         total_pnl = realized_pnl + unrealized_pnl
         total_return = (
             (total_pnl / self._initial_balance * 100) if self._initial_balance > 0 else Decimal("0")
@@ -160,7 +161,9 @@ class RuntimeMetricsTracker:
             "realized_pnl": str(self._realized_pnl),
             "realized_pnl_quote": str(self._realized_pnl_quote),
             "unrealized_pnl": str(unrealized_pnl),
+            "unrealized_pnl_quote": str(unrealized_pnl_quote),
             "total_pnl": str(total_pnl),
+            "total_pnl_quote": str(total_pnl_quote),
             "total_return": str(total_return),
             "open_positions": str(len(self._open_positions)),
             "closed_positions": str(self._closed_positions),
@@ -169,6 +172,8 @@ class RuntimeMetricsTracker:
             "losing_trades": str(self._losing_trades),
             "win_rate": str(win_rate),
             "ticks_processed": str(ticks_processed),
+            "pnl_currency": str(self.account_currency or "").upper(),
+            "quote_currency": quote_currency(self.instrument),
         }
 
         current_atr = self._calculate_atr(self.atr_period)
