@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.47.0...backend-v1.48.0) (2026-05-03)
+
+
+### Features
+
+* snowball net chart order UI ([#637](https://github.com/yuyash/auto-forex-web-service/issues/637)) ([6509b87](https://github.com/yuyash/auto-forex-web-service/commit/6509b873f0a4d9a7839689e0b6429f939796a98c))
+
 ## [1.47.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.46.2...backend-v1.47.0) (2026-05-03)
 
 
