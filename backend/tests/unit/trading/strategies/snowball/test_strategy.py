@@ -22,6 +22,7 @@ from apps.trading.strategies.snowball.models import (
     StopLossClosedEntry,
 )
 from apps.trading.strategies.snowball.pricing import (
+    layer_initial_close_price,
     rebuild_take_profit_price,
     sync_weighted_average_counter_take_profits,
 )
@@ -72,6 +73,100 @@ def _strategy(overrides: dict[str, Any] | None = None) -> SnowballStrategy:
         params.update(overrides)
     config = SnowballStrategyConfig.from_dict(params)
     return SnowballStrategy("USD_JPY", Decimal("0.01"), config)
+
+
+class TestSnowballLayerInitialPricing:
+    def _previous_layer(
+        self,
+        *,
+        direction: Direction = Direction.LONG,
+        close_price: Decimal = Decimal("157.8686666667"),
+        pending: bool = False,
+    ) -> Layer:
+        layer = Layer.create(layer_number=1, r_max=5, base_units=1000)
+        slot = layer.slot_at(5)
+        assert slot is not None
+        if pending:
+            slot.pending_rebuild = StopLossClosedEntry(
+                entry_price=Decimal("157.524"),
+                close_price=close_price,
+                units=9000,
+                direction=direction,
+                role="counter",
+                layer_number=1,
+                retracement_count=5,
+                step=6,
+                cycle_id=1,
+            )
+        else:
+            slot.entry = Entry(
+                entry_id=1,
+                step=6,
+                direction=direction,
+                entry_price=Decimal("157.524"),
+                close_price=close_price,
+                units=9000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                layer_number=1,
+                retracement_count=5,
+            )
+        return layer
+
+    def test_long_layer_initial_uses_fixed_tp_when_previous_tp_is_farther(self):
+        close_price, formula = layer_initial_close_price(
+            new_price=Decimal("141.299"),
+            prev_layer=self._previous_layer(pending=True),
+            direction=Direction.LONG,
+            pip_size=Decimal("0.01"),
+            m_pips=Decimal("15"),
+        )
+
+        assert close_price == Decimal("141.449")
+        assert formula == "141.299 + 15 * 0.01"
+
+    def test_long_layer_initial_clamps_to_previous_tp_when_fixed_tp_crosses_it(self):
+        close_price, formula = layer_initial_close_price(
+            new_price=Decimal("157.800"),
+            prev_layer=self._previous_layer(close_price=Decimal("157.8686666667")),
+            direction=Direction.LONG,
+            pip_size=Decimal("0.01"),
+            m_pips=Decimal("15"),
+        )
+
+        assert close_price == Decimal("157.8686666667")
+        assert formula == "min(157.800 + 15 * 0.01, 157.86867)"
+
+    def test_short_layer_initial_uses_fixed_tp_when_previous_tp_is_farther(self):
+        close_price, formula = layer_initial_close_price(
+            new_price=Decimal("157.800"),
+            prev_layer=self._previous_layer(
+                direction=Direction.SHORT,
+                close_price=Decimal("142.280"),
+                pending=True,
+            ),
+            direction=Direction.SHORT,
+            pip_size=Decimal("0.01"),
+            m_pips=Decimal("15"),
+        )
+
+        assert close_price == Decimal("157.650")
+        assert formula == "157.800 - 15 * 0.01"
+
+    def test_short_layer_initial_clamps_to_previous_tp_when_fixed_tp_crosses_it(self):
+        close_price, formula = layer_initial_close_price(
+            new_price=Decimal("157.800"),
+            prev_layer=self._previous_layer(
+                direction=Direction.SHORT,
+                close_price=Decimal("157.700"),
+            ),
+            direction=Direction.SHORT,
+            pip_size=Decimal("0.01"),
+            m_pips=Decimal("15"),
+        )
+
+        assert close_price == Decimal("157.700")
+        assert formula == "max(157.800 - 15 * 0.01, 157.70000)"
 
 
 # ===================================================================
