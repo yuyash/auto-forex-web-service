@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.0...frontend-v1.62.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* snowball net chart range ([#639](https://github.com/yuyash/auto-forex-web-service/issues/639)) ([6ddef22](https://github.com/yuyash/auto-forex-web-service/commit/6ddef22e54e159dada621f3c480e07ab60d5b7a7))
+
 ## [1.62.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.61.0...frontend-v1.62.0) (2026-05-03)
 
 
