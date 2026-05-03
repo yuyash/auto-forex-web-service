@@ -401,7 +401,7 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
 
     const si = Math.max(0, Math.floor(logicalRange.from));
     const ei = Math.min(data.length - 1, Math.ceil(logicalRange.to));
-    if (si >= ei) return null;
+    if (si > ei) return null;
 
     const visiblePoints: Array<{ x: number; sec: number }> = [];
     for (const point of data.slice(si, ei + 1)) {
