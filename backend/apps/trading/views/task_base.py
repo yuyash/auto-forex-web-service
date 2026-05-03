@@ -331,10 +331,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 return Response(
                     api_error(
                         "Cannot submit a stopped task",
-                        code="stopped_task_requires_restart",
+                        code="stopped_task_requires_resume_or_restart",
                         detail=(
-                            "Use 'restart' to clear execution data and start fresh. "
-                            "Resume is only available while the task is paused."
+                            "Use 'resume' to continue from where the task left off, "
+                            "or 'restart' to clear execution data and start fresh."
                         ),
                     ),
                     status=status.HTTP_400_BAD_REQUEST,

@@ -654,6 +654,132 @@ class TestResumeLifecycle:
         assert order == ["replay", "resume"]
         mock_replay.assert_called_once_with(state)
 
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_resume_restores_metric_counters_from_persisted_state(self, mock_handler):
+        """Metric counters (realized_pnl, total_trades, …) must be restored
+        from the persisted strategy_state on resume so that dashboard values
+        do not jump back to zero.
+
+        This is a critical safeguard: if a future refactor accidentally
+        removes the ``_restore_metric_counters`` call from
+        ``_start_execution``, this test will fail.
+        """
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-resume-metrics"
+        task.oanda_account.balance = Decimal("10000")
+
+        state = MagicMock()
+        state.current_balance = Decimal("12345.67")
+        state.ticks_processed = 5000
+        state.strategy_state = {
+            "metrics": {
+                "current_balance": "12345.67",
+                "realized_pnl": "2345.67",
+                "total_trades": 42,
+                "closed_positions": 20,
+                "winning_trades": 15,
+                "losing_trades": 5,
+            }
+        }
+
+        resume_result = MagicMock()
+        resume_result.state = state
+        resume_result.events = []
+
+        engine = MagicMock()
+        engine.on_resume.return_value = resume_result
+
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        with (
+            patch.object(
+                executor,
+                "_load_state_with_metadata",
+                return_value=(state, True),
+            ),
+            patch.object(executor, "_replay_unprocessed_events"),
+            patch.object(executor, "save_events"),
+            patch.object(executor, "save_state"),
+        ):
+            returned_state, resumed = executor._start_execution()
+
+        assert resumed is True
+        # The runtime metrics tracker must have had restore_counters called
+        # with the values from strategy_state["metrics"].
+        tracker = executor._runtime_metrics
+        assert tracker._realized_pnl == Decimal("2345.67")
+        assert tracker._total_trades == 42
+        assert tracker._closed_positions == 20
+        assert tracker._winning_trades == 15
+        assert tracker._losing_trades == 5
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_resume_preserves_current_balance_from_execution_state(self, mock_handler):
+        """On resume the executor must use the balance from the persisted
+        ExecutionState, not the task's initial_balance.  If this invariant
+        breaks, the user sees the balance jump back to the starting value.
+        """
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.celery_task_id = "celery-resume-balance"
+        task.oanda_account.balance = Decimal("10000")
+
+        persisted_balance = Decimal("13579.24")
+        state = MagicMock()
+        state.current_balance = persisted_balance
+        state.ticks_processed = 8000
+        state.strategy_state = {}
+
+        resume_result = MagicMock()
+        resume_result.state = state
+        resume_result.events = []
+
+        engine = MagicMock()
+        engine.on_resume.return_value = resume_result
+
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        with (
+            patch.object(
+                executor,
+                "_load_state_with_metadata",
+                return_value=(state, True),
+            ),
+            patch.object(executor, "_replay_unprocessed_events"),
+            patch.object(executor, "_restore_metric_counters"),
+            patch.object(executor, "save_events"),
+            patch.object(executor, "save_state"),
+        ):
+            returned_state, resumed = executor._start_execution()
+
+        assert resumed is True
+        assert returned_state.current_balance == persisted_balance
+
 
 class TestTradingDurability:
     """Tests for trading-specific durability behavior."""

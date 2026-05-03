@@ -14,6 +14,10 @@ import {
   createSuppressedTickMarkFormatter,
   createTooltipTimeFormatter,
 } from '../../utils/adaptiveTimeScalePlugin';
+import {
+  measureContainerWidth,
+  measureContainerHeight,
+} from '../../utils/measureContainer';
 import type { OverlaySettings } from './chartOverlaySettings';
 
 const SECONDS_GRANULARITIES = new Set<string>(['M1', 'M2', 'M4', 'M5']);
@@ -72,7 +76,7 @@ export function useMarketChartLifecycle({
 
     const container = containerRef.current;
     const initialHeight = fillHeight
-      ? container.clientHeight || height
+      ? measureContainerHeight(container) || height
       : height;
     const chart = createChart(container, {
       height: initialHeight,
@@ -143,18 +147,18 @@ export function useMarketChartLifecycle({
       .subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
 
     const observer = new ResizeObserver(() => {
-      const width = container.clientWidth;
+      const width = measureContainerWidth(container);
       if (width > 0) chart.applyOptions({ width });
       if (fillHeight) {
-        const nextHeight = container.clientHeight;
+        const nextHeight = measureContainerHeight(container);
         if (nextHeight > 0) chart.applyOptions({ height: nextHeight });
       }
     });
 
     observer.observe(container);
-    chart.applyOptions({ width: container.clientWidth });
+    chart.applyOptions({ width: measureContainerWidth(container) });
     if (fillHeight) {
-      const nextHeight = container.clientHeight;
+      const nextHeight = measureContainerHeight(container);
       if (nextHeight > 0) chart.applyOptions({ height: nextHeight });
     }
 

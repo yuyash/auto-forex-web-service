@@ -39,6 +39,7 @@ import {
 } from '../../../utils/adaptiveTimeScalePlugin';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 import { buildMetricsOhlcVisibleRange } from './metricsOhlcViewport';
+import { measureContainer } from '../../../utils/measureContainer';
 
 interface MetricsOhlcChartProps {
   instrument: string;
@@ -181,8 +182,9 @@ export function MetricsOhlcChart({
     if (!chartRef.current) {
       const container = containerRef.current;
       const { upColor, downColor } = getCandleColors();
-      const initialWidth = Math.max(1, Math.floor(container.clientWidth));
-      const initialHeight = Math.max(100, Math.floor(container.clientHeight));
+      const measured = measureContainer(container);
+      const initialWidth = Math.max(1, measured.width);
+      const initialHeight = Math.max(100, measured.height);
       const chart = createChart(container, {
         height: initialHeight,
         width: initialWidth,
@@ -232,10 +234,9 @@ export function MetricsOhlcChart({
       seqLineRef.current = seqLine;
 
       const observer = new ResizeObserver(() => {
-        const w = Math.floor(container.clientWidth);
-        const h = Math.floor(container.clientHeight);
-        if (w > 0 && h > 0) {
-          chart.applyOptions({ width: w, height: h });
+        const m = measureContainer(container);
+        if (m.width > 0 && m.height > 0) {
+          chart.applyOptions({ width: m.width, height: m.height });
         }
       });
       observer.observe(container);

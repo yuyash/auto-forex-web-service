@@ -67,6 +67,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   taskType,
   executionRunId,
   enableRealTimeUpdates = false,
+  pipSize,
   strategyType,
 }) => {
   const { t } = useTranslation('common');
@@ -274,6 +275,61 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       render: (row: TaskTrade) => formatPrice(row.price, 5),
     },
     {
+      id: 'pnl',
+      label: t('tables.trades.pnl', { defaultValue: 'PnL' }),
+      width: 120,
+      minWidth: 90,
+      align: 'right',
+      render: (row: TaskTrade) => {
+        if (row.pnl == null || row.pnl === '') return '-';
+        const value = parseFloat(row.pnl);
+        if (!Number.isFinite(value)) return '-';
+        return (
+          <Typography
+            variant="body2"
+            color={value >= 0 ? 'success.main' : 'error.main'}
+            fontWeight="bold"
+          >
+            {`¥${formatAppNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 0, signed: true })}`}
+          </Typography>
+        );
+      },
+    },
+    {
+      id: 'pips',
+      label: t('tables.trades.pips', { defaultValue: 'Pips' }),
+      width: 90,
+      minWidth: 70,
+      align: 'right',
+      render: (row: TaskTrade) => {
+        if (!pipSize || !row.entry_price || !row.price) return '-';
+        const isClose =
+          row.execution_method !== 'open_position' &&
+          row.execution_method !== 'rebuild_position';
+        if (!isClose) return '-';
+        const entry = parseFloat(row.entry_price);
+        const exit = parseFloat(row.price);
+        if (!Number.isFinite(entry) || !Number.isFinite(exit)) return '-';
+        const dir = row.direction ? String(row.direction).toLowerCase() : '';
+        const pips =
+          dir === 'long' ? (exit - entry) / pipSize : (entry - exit) / pipSize;
+        if (!Number.isFinite(pips)) return '-';
+        return (
+          <Typography
+            variant="body2"
+            color={pips >= 0 ? 'success.main' : 'error.main'}
+            fontWeight="bold"
+          >
+            {formatAppNumber(pips, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+              signed: true,
+            })}
+          </Typography>
+        );
+      },
+    },
+    {
       id: 'order_id',
       label: 'Order',
       width: 140,
@@ -404,6 +460,31 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
       units: (r) => (r.units != null ? formatAppNumber(Number(r.units)) : '-'),
       price: (r) => formatPrice(r.price, 5),
+      pnl: (r) => {
+        if (r.pnl == null || r.pnl === '') return '-';
+        const value = parseFloat(r.pnl);
+        if (!Number.isFinite(value)) return '-';
+        return `¥${formatAppNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 0, signed: true })}`;
+      },
+      pips: (r) => {
+        if (!pipSize || !r.entry_price || !r.price) return '-';
+        const isClose =
+          r.execution_method !== 'open_position' &&
+          r.execution_method !== 'rebuild_position';
+        if (!isClose) return '-';
+        const entry = parseFloat(r.entry_price);
+        const exit = parseFloat(r.price);
+        if (!Number.isFinite(entry) || !Number.isFinite(exit)) return '-';
+        const dir = r.direction ? String(r.direction).toLowerCase() : '';
+        const pips =
+          dir === 'long' ? (exit - entry) / pipSize : (entry - exit) / pipSize;
+        if (!Number.isFinite(pips)) return '-';
+        return formatAppNumber(pips, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+          signed: true,
+        });
+      },
       order_id: (r) => r.order_id ?? '-',
       oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
       layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
@@ -424,6 +505,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     formatPrice,
     formatTimestamp,
     pageRowIds,
+    pipSize,
     selection,
     t,
     trades,

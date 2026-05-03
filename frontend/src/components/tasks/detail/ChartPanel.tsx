@@ -48,34 +48,43 @@ export function ChartPanel({
           </Typography>
         ) : null}
       </Box>
+      {/* position:relative wrapper gives the absolute child a concrete
+          reference rectangle, which Safari needs to resolve flex-based
+          dimensions for the chart canvas. */}
       <Box
         sx={{
           flex: 1,
+          position: 'relative',
           minHeight: 0,
           minWidth: 0,
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'flex-start',
-          alignItems: 'stretch',
-          '& .MuiCharts-root': {
-            width: '100%',
-            height: '100%',
-          },
-          '& [class*="MuiChartsWrapper-root"]': {
-            width: '100% !important',
-            height: '100% !important',
-          },
-          '& .MuiChartsSurface-root': {
-            width: '100% !important',
-            height: '100% !important',
-          },
-          '& svg': {
-            display: 'block',
-          },
         }}
       >
-        {children}
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            justifyContent: 'flex-start',
+            alignItems: 'stretch',
+            '& .MuiCharts-root': {
+              width: '100%',
+              height: '100%',
+            },
+            '& [class*="MuiChartsWrapper-root"]': {
+              width: '100% !important',
+              height: '100% !important',
+            },
+            '& .MuiChartsSurface-root': {
+              width: '100% !important',
+              height: '100% !important',
+            },
+            '& svg': {
+              display: 'block',
+            },
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Paper>
   );

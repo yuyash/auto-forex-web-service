@@ -103,6 +103,10 @@ import {
   readStoredValue,
   writeStoredValue,
 } from '../../../../utils/persistentState';
+import {
+  measureContainer,
+  measureContainerWidth,
+} from '../../../../utils/measureContainer';
 
 interface SnowballNetStrategyTabProps {
   taskId: string | number;
@@ -1691,7 +1695,7 @@ export function SnowballNetStrategyTab({
       const { upColor, downColor } = getCandleColors();
       const chart = createChart(host, {
         height: ohlcChartHeightRef.current,
-        width: Math.max(1, host.clientWidth),
+        width: Math.max(1, measureContainerWidth(host)),
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
           textColor: isDark ? '#d1d4dc' : '#334155',
@@ -1753,7 +1757,7 @@ export function SnowballNetStrategyTab({
       });
 
       const observer = new ResizeObserver(() => {
-        const width = Math.floor(host.clientWidth);
+        const width = measureContainerWidth(host);
         if (width > 0) chart.applyOptions({ width });
       });
       observer.observe(host);
@@ -1954,87 +1958,98 @@ export function SnowballNetStrategyTab({
     return <Alert severity="warning">{String(chartQuery.error)}</Alert>;
   }
 
+  const controlButtons = (
+    <>
+      <Tooltip
+        title={
+          follow
+            ? t('strategy:snowballNet.chart.tooltips.followingCurrentTick')
+            : t('strategy:snowballNet.chart.tooltips.followCurrentTick')
+        }
+      >
+        <IconButton
+          onClick={handleFollow}
+          size="small"
+          color={follow ? 'primary' : 'default'}
+          aria-label={t(
+            'strategy:snowballNet.chart.tooltips.followCurrentTick'
+          )}
+        >
+          <CenterFocusStrongIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip
+        title={
+          mergeMarkers
+            ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
+            : t('strategy:snowballNet.chart.tooltips.rawMarkers')
+        }
+      >
+        <IconButton
+          onClick={() => setMergeMarkers((value) => !value)}
+          size="small"
+          color={mergeMarkers ? 'primary' : 'default'}
+          aria-label={t('strategy:snowballNet.chart.tooltips.mergeMarkers')}
+        >
+          <MergeIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={t('common:metrics.refreshAllCharts')}>
+        <span>
+          <IconButton
+            onClick={handleRefresh}
+            size="small"
+            disabled={chartQuery.isFetching}
+            aria-label={t('common:metrics.refreshAllCharts')}
+          >
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
+        <IconButton
+          onClick={() => setSettingsOpen(true)}
+          size="small"
+          aria-label={t('strategy:snowballNet.chart.settings.title')}
+        >
+          <SettingsIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </>
+  );
+
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, minWidth: 0 }}>
       <Stack spacing={{ xs: 0.75, sm: 1 }} sx={{ mb: 1.5, minWidth: 0 }}>
+        {/* Desktop: icon buttons right-aligned on the same row as selectors.
+            Mobile: icon buttons on their own row. */}
         <Box
           sx={{
-            display: 'flex',
+            display: { xs: 'flex', sm: 'none' },
             gap: 0.5,
             alignItems: 'center',
-            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+            justifyContent: 'flex-end',
             minWidth: 0,
           }}
         >
-          <Tooltip
-            title={
-              follow
-                ? t('strategy:snowballNet.chart.tooltips.followingCurrentTick')
-                : t('strategy:snowballNet.chart.tooltips.followCurrentTick')
-            }
-          >
-            <IconButton
-              onClick={handleFollow}
-              size="small"
-              color={follow ? 'primary' : 'default'}
-              aria-label={t(
-                'strategy:snowballNet.chart.tooltips.followCurrentTick'
-              )}
-            >
-              <CenterFocusStrongIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip
-            title={
-              mergeMarkers
-                ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
-                : t('strategy:snowballNet.chart.tooltips.rawMarkers')
-            }
-          >
-            <IconButton
-              onClick={() => setMergeMarkers((value) => !value)}
-              size="small"
-              color={mergeMarkers ? 'primary' : 'default'}
-              aria-label={t('strategy:snowballNet.chart.tooltips.mergeMarkers')}
-            >
-              <MergeIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('common:metrics.refreshAllCharts')}>
-            <span>
-              <IconButton
-                onClick={handleRefresh}
-                size="small"
-                disabled={chartQuery.isFetching}
-                aria-label={t('common:metrics.refreshAllCharts')}
-              >
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
-            <IconButton
-              onClick={() => setSettingsOpen(true)}
-              size="small"
-              aria-label={t('strategy:snowballNet.chart.settings.title')}
-            >
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {controlButtons}
         </Box>
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'repeat(2, minmax(0, 1fr))',
-              md: '240px 160px 140px',
-            },
+            display: 'flex',
             gap: { xs: 0.75, sm: 1 },
             alignItems: 'center',
+            flexWrap: { xs: 'wrap', sm: 'nowrap' },
             minWidth: 0,
           }}
         >
-          <FormControl size="small" sx={{ minWidth: 0 }}>
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: { xs: 0, sm: 180 },
+              flex: { xs: '1 1 45%', sm: '0 0 auto' },
+            }}
+          >
             <InputLabel id="snowball-net-range-label">
               {t('strategy:snowballNet.chart.controls.range')}
             </InputLabel>
@@ -2057,7 +2072,13 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 0 }}>
+          <FormControl
+            size="small"
+            sx={{
+              minWidth: { xs: 0, sm: 130 },
+              flex: { xs: '1 1 45%', sm: '0 0 auto' },
+            }}
+          >
             <InputLabel id="snowball-net-granularity-label">
               {t('strategy:snowballNet.chart.controls.granularityLabel')}
             </InputLabel>
@@ -2085,9 +2106,9 @@ export function SnowballNetStrategyTab({
           <FormControl
             size="small"
             sx={{
-              minWidth: 0,
-              gridColumn: { xs: '1 / -1', md: 'auto' },
-              maxWidth: { xs: '100%', sm: 180, md: 'none' },
+              minWidth: { xs: 0, sm: 120 },
+              flex: { xs: '1 1 100%', sm: '0 0 auto' },
+              maxWidth: { xs: '100%', sm: 180 },
             }}
           >
             <InputLabel id="snowball-net-refresh-label">
@@ -2112,6 +2133,18 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
+          {/* Desktop only: icon buttons at the end of the selector row */}
+          <Box
+            sx={{
+              display: { xs: 'none', sm: 'flex' },
+              gap: 0.5,
+              alignItems: 'center',
+              ml: 'auto',
+              flexShrink: 0,
+            }}
+          >
+            {controlButtons}
+          </Box>
         </Box>
         {rangePreset === 'custom' ? (
           <Box
@@ -2326,7 +2359,6 @@ function SnowballNetCharts({
   if (visibleKeys.length === 0) return null;
 
   const renderLineChart = (key: SnowballNetChartKey) => {
-    if (!data) return null;
     const headerPrefix = (
       <DragIndicatorIcon
         sx={{
@@ -2342,10 +2374,9 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.netUnits')}
-            lines={netUnitsChartLines(data.oscillator_lines)}
+            lines={data ? netUnitsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
-            showWhenEmpty
             headerPrefix={headerPrefix}
           />
         );
@@ -2353,10 +2384,9 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.pipsFromAverage')}
-            lines={pipsChartLines(data.oscillator_lines)}
+            lines={data ? pipsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
-            showWhenEmpty
             headerPrefix={headerPrefix}
           />
         );
@@ -2364,7 +2394,7 @@ function SnowballNetCharts({
         return (
           <LineChartCard
             title={t('strategy:snowballNet.chart.marginRatio')}
-            lines={marginChartLines(data.oscillator_lines)}
+            lines={data ? marginChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
             percent
@@ -2378,7 +2408,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.pnl'),
               pnlCurrency
             )}
-            lines={pnlChartLines(data.oscillator_lines)}
+            lines={data ? pnlChartLines(data.oscillator_lines) : []}
             timezone={timezone}
             timeDomain={timeDomain}
             valueUnit={pnlCurrency}
@@ -2393,7 +2423,9 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.averagePrice'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'averagePrice')}
+            lines={
+              data ? priceChartLines(data.price_lines, 'averagePrice') : []
+            }
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2406,7 +2438,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.takeProfit'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'takeProfit')}
+            lines={data ? priceChartLines(data.price_lines, 'takeProfit') : []}
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2419,7 +2451,7 @@ function SnowballNetCharts({
               t('strategy:snowballNet.chart.nextAdd'),
               priceCurrency
             )}
-            lines={priceChartLines(data.price_lines, 'nextAdd')}
+            lines={data ? priceChartLines(data.price_lines, 'nextAdd') : []}
             timezone={timezone}
             timeDomain={timeDomain}
             headerPrefix={headerPrefix}
@@ -2600,15 +2632,13 @@ function FillLineChart({
     if (!host) return undefined;
 
     const updateSize = () => {
-      const rect = host.getBoundingClientRect();
-      const nextWidth = Math.max(
-        MIN_CHART_MEASURE_PX,
-        Math.floor(host.clientWidth || rect.width)
-      );
-      const measuredHeight = Math.floor(host.clientHeight || rect.height);
+      const measured = measureContainer(host);
+      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
       const nextHeight = Math.max(
         MIN_CHART_MEASURE_PX,
-        measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight
+        measured.height > MIN_CHART_MEASURE_PX
+          ? measured.height
+          : fallbackHeight
       );
       setSize((current) =>
         current.width === nextWidth && current.height === nextHeight
@@ -2617,16 +2647,24 @@ function FillLineChart({
       );
     };
 
-    updateSize();
+    const rafId = requestAnimationFrame(() => {
+      updateSize();
+    });
 
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', updateSize);
-      return () => window.removeEventListener('resize', updateSize);
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updateSize);
+      };
     }
 
     const observer = new ResizeObserver(updateSize);
     observer.observe(host);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [fallbackHeight]);
 
   return (
@@ -2635,8 +2673,8 @@ function FillLineChart({
       sx={{
         width: '100%',
         height: '100%',
-        flex: '1 1 auto',
-        alignSelf: 'stretch',
+        position: 'absolute',
+        inset: 0,
         minWidth: 0,
         minHeight: 0,
         '& > *': {
@@ -2653,9 +2691,13 @@ function FillLineChart({
         },
       }}
     >
-      {size.width > 0 && size.height > 0 ? (
-        <LineChart {...chartProps} width={size.width} height={size.height} />
-      ) : null}
+      <LineChart
+        {...chartProps}
+        {...(size.width > 0 ? { width: size.width } : {})}
+        height={
+          size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight
+        }
+      />
     </Box>
   );
 }
@@ -2665,7 +2707,7 @@ function LineChartCard({
   lines,
   timezone,
   timeDomain,
-  showWhenEmpty = false,
+  showWhenEmpty = true,
   percent = false,
   valueUnit,
   seriesLabelUnit,
