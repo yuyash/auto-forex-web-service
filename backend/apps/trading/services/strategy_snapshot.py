@@ -31,6 +31,11 @@ SNOWBALL_NET_SNAPSHOT_CARD_KEYS = (
     "add_count",
     "exposure_pct",
     "margin_ratio_pct",
+    "max_unrealized_loss",
+    "max_net_units_seen",
+    "max_margin_ratio_pct",
+    "max_consecutive_add_count",
+    "max_trend_loss",
     "pending_action",
 )
 
@@ -107,6 +112,11 @@ def _snowball_net_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "add_count": parsed.add_count,
             "exposure_pct": metrics.get("snowball_net_exposure_pct"),
             "margin_ratio_pct": metrics.get("snowball_net_margin_ratio_pct"),
+            "max_unrealized_loss": str(parsed.max_unrealized_loss),
+            "max_net_units_seen": parsed.max_net_units_seen,
+            "max_margin_ratio_pct": str(parsed.max_margin_ratio_pct),
+            "max_consecutive_add_count": parsed.max_consecutive_add_count,
+            "max_trend_loss": str(parsed.max_trend_loss),
             "pending_action": parsed.pending_action.get("kind") if parsed.pending_action else None,
             "last_action": parsed.last_action,
         }

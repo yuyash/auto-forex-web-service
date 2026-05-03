@@ -8,6 +8,7 @@ from apps.trading.services.strategy_snapshot import build_strategy_snapshot
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry
 from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid
+from apps.trading.strategies.snowball_net.state import SnowballNetState
 
 
 def test_snowball_snapshot_omits_internal_metric_cards() -> None:
@@ -81,3 +82,31 @@ def test_snowball_snapshot_groups_open_entry_counts_and_units() -> None:
     assert cards["open_short_units"] == 2000
     assert card_ids.index("open_entries") < card_ids.index("open_long_units")
     assert card_ids.index("open_long_units") < card_ids.index("open_short_units")
+
+
+def test_snowball_net_snapshot_includes_risk_extreme_cards() -> None:
+    state = SnowballNetState(
+        initialised=True,
+        direction="long",
+        net_units=2000,
+        average_price=Decimal("150.00"),
+        max_unrealized_loss=Decimal("123.45"),
+        max_net_units_seen=4000,
+        max_margin_ratio_pct=Decimal("72.5"),
+        max_consecutive_add_count=3,
+        max_trend_loss=Decimal("234.56"),
+        metrics={
+            "snowball_net_current_price": "149.90",
+            "snowball_net_pips_from_average": "-10",
+            "snowball_net_margin_ratio_pct": "40",
+        },
+    )
+
+    snapshot = build_strategy_snapshot("snowball_net", state.to_dict())
+    cards = {card["id"]: card["value"] for card in snapshot["cards"]}
+
+    assert cards["max_unrealized_loss"] == "123.45"
+    assert cards["max_net_units_seen"] == 4000
+    assert cards["max_margin_ratio_pct"] == "72.5"
+    assert cards["max_consecutive_add_count"] == 3
+    assert cards["max_trend_loss"] == "234.56"

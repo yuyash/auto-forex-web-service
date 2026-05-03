@@ -82,6 +82,11 @@
     "add_count": "増し玉回数",
     "exposure_pct": "エクスポージャー",
     "margin_ratio_pct": "証拠金精算割合",
+    "max_unrealized_loss": "最大含み損",
+    "max_net_units_seen": "最大ネットユニット数",
+    "max_margin_ratio_pct": "最大証拠金精算割合",
+    "max_consecutive_add_count": "最大連続増し玉数",
+    "max_trend_loss": "1トレンド最大損失",
     "pending_action": "未処理アクション"
   },
   "snapshotValues": {
