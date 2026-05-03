@@ -2133,6 +2133,41 @@ export function SnowballNetStrategyTab({
               ))}
             </Select>
           </FormControl>
+          {/* Custom date range fields — inline on desktop, stacked on mobile */}
+          {rangePreset === 'custom' ? (
+            <>
+              <TextField
+                label={t('strategy:snowballNet.chart.controls.customSince')}
+                type="datetime-local"
+                size="small"
+                value={customSince}
+                onChange={(event) =>
+                  handleCustomSinceChange(event.target.value)
+                }
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{
+                  minWidth: 0,
+                  width: { xs: '100%', sm: 200 },
+                  flex: { xs: '1 1 100%', sm: '0 0 auto' },
+                }}
+              />
+              <TextField
+                label={t('strategy:snowballNet.chart.controls.customUntil')}
+                type="datetime-local"
+                size="small"
+                value={customUntil}
+                onChange={(event) =>
+                  handleCustomUntilChange(event.target.value)
+                }
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{
+                  minWidth: 0,
+                  width: { xs: '100%', sm: 200 },
+                  flex: { xs: '1 1 100%', sm: '0 0 auto' },
+                }}
+              />
+            </>
+          ) : null}
           {/* Desktop only: icon buttons at the end of the selector row */}
           <Box
             sx={{
@@ -2146,37 +2181,6 @@ export function SnowballNetStrategyTab({
             {controlButtons}
           </Box>
         </Box>
-        {rangePreset === 'custom' ? (
-          <Box
-            sx={{
-              display: { xs: 'grid', sm: 'flex' },
-              gridTemplateColumns: { xs: '1fr', sm: 'unset' },
-              gap: { xs: 0.75, sm: 1 },
-              flexWrap: 'wrap',
-              pt: { xs: 0.25, sm: 0 },
-              minWidth: 0,
-            }}
-          >
-            <TextField
-              label={t('strategy:snowballNet.chart.controls.customSince')}
-              type="datetime-local"
-              size="small"
-              value={customSince}
-              onChange={(event) => handleCustomSinceChange(event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ minWidth: 0, width: { xs: '100%', sm: 220 } }}
-            />
-            <TextField
-              label={t('strategy:snowballNet.chart.controls.customUntil')}
-              type="datetime-local"
-              size="small"
-              value={customUntil}
-              onChange={(event) => handleCustomUntilChange(event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ minWidth: 0, width: { xs: '100%', sm: 220 } }}
-            />
-          </Box>
-        ) : null}
         <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
           <CurrentChips data={data} instrument={instrument} />
         </Box>
