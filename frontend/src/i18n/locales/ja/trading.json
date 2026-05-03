@@ -79,6 +79,7 @@
     "reviewBeforeCreating": "作成前にトレーディングタスクの設定を確認してください",
     "taskSummary": "タスク概要",
     "taskName": "タスク名",
+    "createFailed": "トレーディングタスクの作成に失敗しました",
     "account": "アカウント",
     "accountDetails": "アカウント詳細",
     "accountId": "アカウントID",
@@ -111,6 +112,8 @@
     "activeTaskWarning": "このアカウントには既にアクティブなトレーディングタスクがあります：",
     "activeTaskInstruction": "1つのアカウントで同時に実行できるタスクは1つだけです。新しいタスクを開始する前に、既存のタスクを停止してください。",
     "selectAnAccount": "アカウントを選択",
+    "selectInstrument": "通貨ペアを選択",
+    "hedgingUnsupported": "このOANDAアカウントはネッティング方式のため両建てに対応していません。このタスクでは両建てを無効にしました。",
     "loadingAccounts": "アカウントを読み込み中...",
     "noAccountsAvailable": "利用可能なOANDAアカウントがありません",
     "steps": {

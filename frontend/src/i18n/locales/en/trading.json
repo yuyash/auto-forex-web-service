@@ -79,6 +79,7 @@
     "reviewBeforeCreating": "Review your trading task configuration before creating",
     "taskSummary": "Task Summary",
     "taskName": "Task Name",
+    "createFailed": "Failed to create trading task",
     "account": "Account",
     "accountDetails": "Account Details",
     "accountId": "Account ID",
@@ -111,6 +112,8 @@
     "activeTaskWarning": "This account already has an active trading task:",
     "activeTaskInstruction": "Only one task can run per account at a time. Please stop the existing task before starting a new one.",
     "selectAnAccount": "Select an account",
+    "selectInstrument": "Select an instrument",
+    "hedgingUnsupported": "This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.",
     "loadingAccounts": "Loading accounts...",
     "noAccountsAvailable": "No OANDA accounts available",
     "steps": {

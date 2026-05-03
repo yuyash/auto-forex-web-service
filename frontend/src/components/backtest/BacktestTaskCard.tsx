@@ -56,6 +56,7 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
+import { currencySymbol, formatAppNumber } from '../../utils/numberFormat';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BacktestTaskCardProps {
@@ -333,7 +334,41 @@ export default function BacktestTaskCard({
     polling: pollingEnabled,
     interval: activePollingIntervalMs,
   });
-  const progress = summaryData.summary.task.progress;
+  const { summary } = summaryData;
+  const progress = summary.task.progress;
+  const quoteCurrency = currencySymbol(
+    currentTask.instrument.split('_').at(-1) ||
+      summary.execution.displayCurrency ||
+      currentTask.account_currency ||
+      ''
+  );
+  const realizedPnl = summary.pnl.realized;
+  const unrealizedPnl = summary.pnl.unrealized;
+  const totalPnl = realizedPnl + unrealizedPnl;
+  const formatPnl = (value: number): string =>
+    `${formatAppNumber(value, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: true,
+    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
+  const pnlItems = [
+    {
+      key: 'total',
+      label: t('common:metrics.total_pnl'),
+      value: totalPnl,
+    },
+    {
+      key: 'realized',
+      label: t('common:metrics.realized_pnl'),
+      value: realizedPnl,
+    },
+    {
+      key: 'unrealized',
+      label: t('common:metrics.unrealized_pnl'),
+      value: unrealizedPnl,
+    },
+  ];
+  const shouldShowPnlSnapshot = displayStatus !== TaskStatus.CREATED;
 
   return (
     <Card
@@ -445,6 +480,50 @@ export default function BacktestTaskCard({
               showPercentage={true}
             />
           </Box>
+        )}
+
+        {shouldShowPnlSnapshot && (
+          <Grid container spacing={1} sx={{ mt: 1, mb: 1.5 }}>
+            {pnlItems.map((item) => (
+              <Grid key={item.key} size={{ xs: 12, sm: 4 }}>
+                <Box
+                  sx={{
+                    height: '100%',
+                    minHeight: 64,
+                    p: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    bgcolor: 'action.hover',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontWeight: 600 }}
+                  >
+                    {item.label}
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    component="div"
+                    color={item.value >= 0 ? 'success.main' : 'error.main'}
+                    sx={{
+                      fontWeight: 700,
+                      lineHeight: 1.25,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {formatPnl(item.value)}
+                  </Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
         )}
 
         {/* Stats for completed tasks */}

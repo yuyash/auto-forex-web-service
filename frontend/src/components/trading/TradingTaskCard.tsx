@@ -28,7 +28,6 @@ import { useTaskSummary } from '../../hooks/useTaskSummary';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus, TaskType } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
-import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
@@ -50,11 +49,7 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
-import {
-  formatAppNumber,
-  formatAppPercent,
-  currencySymbol,
-} from '../../utils/numberFormat';
+import { formatAppNumber, currencySymbol } from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 
@@ -123,14 +118,13 @@ export default function TradingTaskCard({
 
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = polledTask || task;
-  const shouldShowLiveSummary =
-    displayStatus === TaskStatus.RUNNING || displayStatus === TaskStatus.PAUSED;
-  const { summary: liveSummary } = useTaskSummary(
-    shouldShowLiveSummary ? task.id : '',
+  const shouldShowPnlSnapshot = displayStatus !== TaskStatus.CREATED;
+  const { summary: taskSummary } = useTaskSummary(
+    shouldShowPnlSnapshot ? task.id : '',
     TaskType.TRADING,
     undefined,
     {
-      polling: shouldShowLiveSummary,
+      polling: shouldShowPnlSnapshot && pollingEnabled,
       interval: activePollingIntervalMs,
     }
   );
@@ -347,34 +341,37 @@ export default function TradingTaskCard({
   const quoteCurrency = currencySymbol(
     currentTask.instrument.split('_').at(-1) ||
       currentTask.latest_execution?.quote_currency ||
-      liveSummary.execution.displayCurrency ||
+      taskSummary.execution.displayCurrency ||
       'JPY'
   );
-  const formatPnl = (value: number, currency: string): string => {
+  const formatPnl = (value: number): string => {
     return `${formatAppNumber(value, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       signed: true,
-    })} ${currency}`;
+    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
   };
 
-  const currentPnL = currentTask.latest_execution?.total_pnl_quote
-    ? parseFloat(currentTask.latest_execution.total_pnl_quote)
-    : currentTask.latest_execution?.total_pnl
-      ? parseFloat(currentTask.latest_execution.total_pnl)
-      : 0;
-  const livePnl = shouldShowLiveSummary
-    ? liveSummary.pnl.realized + liveSummary.pnl.unrealized
-    : currentPnL;
-  const openPositions = shouldShowLiveSummary
-    ? liveSummary.counts.openPositions
-    : 0;
-  const closedPositions = shouldShowLiveSummary
-    ? liveSummary.counts.closedPositions
-    : 0;
-  const marginRatio = shouldShowLiveSummary
-    ? liveSummary.execution.marginRatio
-    : null;
+  const realizedPnl = taskSummary.pnl.realized;
+  const unrealizedPnl = taskSummary.pnl.unrealized;
+  const totalPnl = realizedPnl + unrealizedPnl;
+  const pnlItems = [
+    {
+      key: 'total',
+      label: t('common:metrics.total_pnl'),
+      value: totalPnl,
+    },
+    {
+      key: 'realized',
+      label: t('common:metrics.realized_pnl'),
+      value: realizedPnl,
+    },
+    {
+      key: 'unrealized',
+      label: t('common:metrics.unrealized_pnl'),
+      value: unrealizedPnl,
+    },
+  ];
 
   return (
     <Card
@@ -499,84 +496,49 @@ export default function TradingTaskCard({
           />
         </Box>
 
-        {/* Live Stats for Running/Paused Tasks */}
-        {(displayStatus === TaskStatus.RUNNING ||
-          displayStatus === TaskStatus.PAUSED) && (
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid size={{ xs: 6, sm: 4 }}>
-              <StatCard
-                title={t('common:cards.livePnl')}
-                value={formatPnl(livePnl, quoteCurrency)}
-                color={livePnl >= 0 ? 'success' : 'error'}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4 }}>
-              <StatCard
-                title={t('common:tables.summary.open_positions')}
-                value={openPositions.toString()}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4 }}>
-              <StatCard
-                title={t('common:tables.summary.closed_positions')}
-                value={closedPositions.toString()}
-              />
-            </Grid>
-            {marginRatio != null && (
-              <Grid size={{ xs: 6, sm: 4 }}>
-                <StatCard
-                  title={t('common:tables.summary.margin_ratio')}
-                  value={formatAppPercent(marginRatio * 100, 2)}
-                />
+        {shouldShowPnlSnapshot && (
+          <Grid container spacing={1} sx={{ mt: 1, mb: 1.5 }}>
+            {pnlItems.map((item) => (
+              <Grid key={item.key} size={{ xs: 12, sm: 4 }}>
+                <Box
+                  sx={{
+                    height: '100%',
+                    minHeight: 64,
+                    p: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    bgcolor: 'action.hover',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontWeight: 600 }}
+                  >
+                    {item.label}
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    component="div"
+                    color={item.value >= 0 ? 'success.main' : 'error.main'}
+                    sx={{
+                      fontWeight: 700,
+                      lineHeight: 1.25,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {formatPnl(item.value)}
+                  </Typography>
+                </Box>
               </Grid>
-            )}
-            {currentTask.latest_execution?.total_trades !== undefined && (
-              <Grid size={{ xs: 6, sm: 4 }}>
-                <StatCard
-                  title={t('common:cards.totalTrades')}
-                  value={currentTask.latest_execution.total_trades.toString()}
-                />
-              </Grid>
-            )}
+            ))}
           </Grid>
         )}
-
-        {/* Performance Stats for Stopped/Completed Tasks */}
-        {(displayStatus === TaskStatus.STOPPED ||
-          displayStatus === TaskStatus.COMPLETED) &&
-          currentTask.latest_execution && (
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              {currentTask.latest_execution.total_return && (
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <StatCard
-                    title="Total Return"
-                    value={`${currentTask.latest_execution.total_return}%`}
-                    color={
-                      parseFloat(currentTask.latest_execution.total_return) >= 0
-                        ? 'success'
-                        : 'error'
-                    }
-                  />
-                </Grid>
-              )}
-              {currentTask.latest_execution.win_rate && (
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <StatCard
-                    title="Win Rate"
-                    value={`${currentTask.latest_execution.win_rate}%`}
-                  />
-                </Grid>
-              )}
-              {currentTask.latest_execution.total_trades !== undefined && (
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <StatCard
-                    title="Total Trades"
-                    value={currentTask.latest_execution.total_trades.toString()}
-                  />
-                </Grid>
-              )}
-            </Grid>
-          )}
 
         {/* Error message for failed tasks */}
         {displayStatus === TaskStatus.FAILED && (

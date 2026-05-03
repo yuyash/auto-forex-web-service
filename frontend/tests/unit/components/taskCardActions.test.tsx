@@ -19,6 +19,7 @@ const {
   mockBacktestRestart,
   mockShowSuccess,
   mockShowError,
+  mockTaskSummary,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockTradingStart: vi.fn(),
@@ -33,6 +34,21 @@ const {
   mockBacktestRestart: vi.fn(),
   mockShowSuccess: vi.fn(),
   mockShowError: vi.fn(),
+  mockTaskSummary: {
+    pnl: {
+      realized: 0,
+      unrealized: 0,
+    },
+    counts: {
+      openPositions: 0,
+      closedPositions: 0,
+    },
+    execution: {
+      displayCurrency: null,
+      marginRatio: null,
+    },
+    task: { progress: 42 },
+  },
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -60,6 +76,9 @@ vi.mock('react-i18next', () => ({
         'backtest:toast.resumedSuccessfully': 'Backtest resumed successfully',
         'backtest:toast.restartedSuccessfully':
           'Backtest restarted successfully',
+        'common:metrics.total_pnl': 'Total PnL',
+        'common:metrics.realized_pnl': 'Realized PnL',
+        'common:metrics.unrealized_pnl': 'Unrealized PnL',
         'common:actions.cancel': 'Cancel',
         'common:taskActionDialog.start.title': 'Start Task',
         'common:taskActionDialog.start.confirm': 'Start',
@@ -110,20 +129,7 @@ vi.mock('../../../src/hooks/useStrategies', () => ({
 
 vi.mock('../../../src/hooks/useTaskSummary', () => ({
   useTaskSummary: () => ({
-    summary: {
-      pnl: {
-        realized: 0,
-        unrealized: 0,
-      },
-      counts: {
-        openPositions: 0,
-        closedPositions: 0,
-      },
-      execution: {
-        marginRatio: null,
-      },
-      task: { progress: 42 },
-    },
+    summary: mockTaskSummary,
   }),
 }));
 
@@ -293,6 +299,10 @@ describe('Task card control actions', () => {
     mockBacktestPause.mockResolvedValue({});
     mockBacktestResume.mockResolvedValue({});
     mockBacktestRestart.mockResolvedValue({});
+    mockTaskSummary.pnl.realized = 0;
+    mockTaskSummary.pnl.unrealized = 0;
+    mockTaskSummary.execution.displayCurrency = null;
+    mockTaskSummary.execution.marginRatio = null;
   });
 
   it('trading task card starts created tasks', async () => {
@@ -312,6 +322,36 @@ describe('Task card control actions', () => {
     expect(mockShowSuccess).toHaveBeenCalledWith(
       'Trading started successfully'
     );
+  });
+
+  it('trading task card hides pnl boxes for created tasks', () => {
+    render(
+      <TradingTaskCard
+        task={{ ...tradingTaskBase, status: TaskStatus.CREATED }}
+      />
+    );
+
+    expect(screen.queryByText('Total PnL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Realized PnL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unrealized PnL')).not.toBeInTheDocument();
+  });
+
+  it('trading task card shows pnl boxes after execution starts', () => {
+    mockTaskSummary.pnl.realized = 250;
+    mockTaskSummary.pnl.unrealized = -40.5;
+
+    render(
+      <TradingTaskCard
+        task={{ ...tradingTaskBase, status: TaskStatus.RUNNING }}
+      />
+    );
+
+    expect(screen.getByText('Total PnL')).toBeInTheDocument();
+    expect(screen.getByText('+209.50 $')).toBeInTheDocument();
+    expect(screen.getByText('Realized PnL')).toBeInTheDocument();
+    expect(screen.getByText('+250.00 $')).toBeInTheDocument();
+    expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
+    expect(screen.getByText('-40.50 $')).toBeInTheDocument();
   });
 
   it('trading task card stops running tasks', async () => {
@@ -388,6 +428,36 @@ describe('Task card control actions', () => {
     expect(mockShowSuccess).toHaveBeenCalledWith(
       'Backtest started successfully'
     );
+  });
+
+  it('backtest task card hides pnl boxes for created tasks', () => {
+    render(
+      <BacktestTaskCard
+        task={{ ...backtestTaskBase, status: TaskStatus.CREATED }}
+      />
+    );
+
+    expect(screen.queryByText('Total PnL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Realized PnL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unrealized PnL')).not.toBeInTheDocument();
+  });
+
+  it('backtest task card shows pnl boxes after execution starts', () => {
+    mockTaskSummary.pnl.realized = 125.5;
+    mockTaskSummary.pnl.unrealized = -25.25;
+
+    render(
+      <BacktestTaskCard
+        task={{ ...backtestTaskBase, status: TaskStatus.RUNNING }}
+      />
+    );
+
+    expect(screen.getByText('Total PnL')).toBeInTheDocument();
+    expect(screen.getByText('+100.25 $')).toBeInTheDocument();
+    expect(screen.getByText('Realized PnL')).toBeInTheDocument();
+    expect(screen.getByText('+125.50 $')).toBeInTheDocument();
+    expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
+    expect(screen.getByText('-25.25 $')).toBeInTheDocument();
   });
 
   it('backtest task card stops running tasks through the confirm dialog', async () => {
