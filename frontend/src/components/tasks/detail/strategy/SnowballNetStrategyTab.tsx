@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MutableRefObject,
@@ -35,14 +36,12 @@ import {
   Paper,
   Select,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowDownIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpIcon from '@mui/icons-material/ArrowUpward';
-import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import MergeIcon from '@mui/icons-material/Merge';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -108,18 +107,16 @@ interface SnowballNetStrategyTabProps {
   taskType: TaskType;
   executionRunId?: string;
   instrument?: string;
+  taskStartTime?: string | null;
+  taskEndTime?: string | null;
   enableRealTimeUpdates?: boolean;
   timezone?: string;
 }
 
-const GRANULARITIES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D'] as const;
 const REFRESH_OPTIONS = [5, 15, 30, 60, 0] as const;
 const DEFAULT_GRANULARITY = 'H1';
 const DEFAULT_SIDE_BARS = 250;
 const MIN_NO_DATA_BUCKETS = 2;
-const SCROLL_FETCH_DEBOUNCE_MS = 450;
-const EDGE_PREFETCH_RATIO = 0.2;
-const MIN_EDGE_PREFETCH_BARS = 12;
 const MARGIN_LINE_ID = 'margin_ratio_pct';
 const LOSS_CUT_THRESHOLD_LINE_ID = 'loss_cut_threshold_pips';
 const MARGIN_REDUCE_THRESHOLD_LINE_ID = 'margin_reduce_threshold_pct';
@@ -145,8 +142,42 @@ const SNOWBALL_NET_CHART_KEYS = [
   'takeProfit',
   'nextAdd',
 ] as const;
+const LINE_CHART_FALLBACK_HEIGHT = 170;
+const MIN_CHART_MEASURE_PX = 1;
+const Y_AXIS_CHAR_WIDTH_PX = 6;
+const Y_AXIS_OVERHEAD_PX = 8;
+const MIN_Y_AXIS_WIDTH = 34;
+const LINE_CHART_LEFT_MARGIN = 8;
+const LINE_CHART_RIGHT_MARGIN = 8;
+const LINE_CHART_TOP_MARGIN = 4;
+const LINE_CHART_BOTTOM_MARGIN = 34;
+const SECOND = 1;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+const SNOWBALL_NET_RANGE_PRESETS = [
+  { value: 'full', labelKey: 'full' },
+  { value: '5m', labelKey: 'last5Minutes', seconds: 5 * MINUTE },
+  { value: '15m', labelKey: 'last15Minutes', seconds: 15 * MINUTE },
+  { value: '1h', labelKey: 'last1Hour', seconds: HOUR },
+  { value: '4h', labelKey: 'last4Hours', seconds: 4 * HOUR },
+  { value: '12h', labelKey: 'last12Hours', seconds: 12 * HOUR },
+  { value: '1d', labelKey: 'last1Day', seconds: DAY },
+  { value: '3d', labelKey: 'last3Days', seconds: 3 * DAY },
+  { value: '1w', labelKey: 'last1Week', seconds: 7 * DAY },
+  { value: '2w', labelKey: 'last2Weeks', seconds: 14 * DAY },
+  { value: '4w', labelKey: 'last4Weeks', seconds: 28 * DAY },
+  { value: '1mo', labelKey: 'last1Month', seconds: 30 * DAY },
+  { value: '3mo', labelKey: 'last3Months', seconds: 93 * DAY },
+  { value: '6mo', labelKey: 'last6Months', seconds: 183 * DAY },
+  { value: '1y', labelKey: 'last1Year', seconds: 365 * DAY },
+  { value: 'custom', labelKey: 'custom' },
+] as const;
 
 type SnowballNetChartKey = (typeof SNOWBALL_NET_CHART_KEYS)[number];
+type SnowballNetRangePreset =
+  (typeof SNOWBALL_NET_RANGE_PRESETS)[number]['value'];
 
 const SNOWBALL_NET_CHART_COLORS: Record<SnowballNetChartKey, string> = {
   ohlc: '#26a69a',
@@ -215,14 +246,18 @@ function normalizeSnowballNetChartOrder(
   keys: readonly string[] | null | undefined
 ): SnowballNetChartKey[] {
   const validKeys = new Set<string>(SNOWBALL_NET_CHART_KEYS);
-  const next: SnowballNetChartKey[] = [];
+  const next: SnowballNetChartKey[] = ['ohlc'];
   for (const key of keys ?? []) {
-    if (validKeys.has(key) && !next.includes(key as SnowballNetChartKey)) {
+    if (
+      key !== 'ohlc' &&
+      validKeys.has(key) &&
+      !next.includes(key as SnowballNetChartKey)
+    ) {
       next.push(key as SnowballNetChartKey);
     }
   }
   for (const key of SNOWBALL_NET_CHART_KEYS) {
-    if (!next.includes(key)) {
+    if (key !== 'ohlc' && !next.includes(key)) {
       next.push(key);
     }
   }
@@ -270,16 +305,6 @@ interface CandleBucketRange {
   until: number;
 }
 
-interface ChartTimeRange {
-  from: number;
-  to: number;
-}
-
-interface LoadedChartWindow extends ChartTimeRange {
-  granularity: string;
-  step: number;
-}
-
 interface LineChartTimeDomain {
   min: Date;
   max: Date;
@@ -299,8 +324,38 @@ function toNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isoFromSeconds(value: number): string {
-  return new Date(value * 1000).toISOString();
+function millisFromIso(value?: string | null): number | null {
+  if (!value) return null;
+  const millis = new Date(value).getTime();
+  return Number.isFinite(millis) ? millis : null;
+}
+
+function formatDateTimeLocal(value?: string | null): string {
+  const millis = millisFromIso(value);
+  if (millis == null) return '';
+  const date = new Date(millis);
+  const localMillis = date.getTime() - date.getTimezoneOffset() * 60_000;
+  return new Date(localMillis).toISOString().slice(0, 16);
+}
+
+function isoFromDateTimeLocal(value: string): string | null {
+  if (!value) return null;
+  const millis = new Date(value).getTime();
+  return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
+}
+
+function granularityForRangeSeconds(seconds: number): string {
+  if (seconds <= 12 * HOUR) return 'M1';
+  if (seconds <= 28 * DAY) return 'M5';
+  if (seconds <= 93 * DAY) return 'H1';
+  return 'D';
+}
+
+function rangePresetSeconds(preset: SnowballNetRangePreset): number | null {
+  const option = SNOWBALL_NET_RANGE_PRESETS.find(
+    (candidate) => candidate.value === preset
+  );
+  return option && 'seconds' in option ? option.seconds : null;
 }
 
 function chartTimeDomain(
@@ -428,47 +483,6 @@ function snowballNetChartTitle(
     default:
       return key;
   }
-}
-
-function normalizeChartRange(
-  range: { from: unknown; to: unknown } | null | undefined
-): ChartTimeRange | null {
-  if (!range) return null;
-  const from = Number(range.from);
-  const to = Number(range.to);
-  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
-    return null;
-  }
-  return { from, to };
-}
-
-function rangesClose(
-  left: ChartTimeRange | null,
-  right: ChartTimeRange | null,
-  toleranceSeconds: number
-): boolean {
-  if (!left || !right) return false;
-  return (
-    Math.abs(left.from - right.from) <= toleranceSeconds &&
-    Math.abs(left.to - right.to) <= toleranceSeconds
-  );
-}
-
-function shouldFetchForVisibleRange(
-  visible: ChartTimeRange,
-  loaded: LoadedChartWindow | null,
-  granularity: string
-): boolean {
-  if (!loaded || loaded.granularity !== granularity) return true;
-  const span = visible.to - visible.from;
-  const edgeBuffer = Math.max(
-    loaded.step * MIN_EDGE_PREFETCH_BARS,
-    span * EDGE_PREFETCH_RATIO
-  );
-  return (
-    visible.from < loaded.from + edgeBuffer ||
-    visible.to > loaded.to - edgeBuffer
-  );
 }
 
 function markerColor(marker: SnowballNetMarker): string {
@@ -977,6 +991,8 @@ export function SnowballNetStrategyTab({
   taskType,
   executionRunId,
   instrument,
+  taskStartTime,
+  taskEndTime,
   enableRealTimeUpdates = false,
   timezone = 'UTC',
 }: SnowballNetStrategyTabProps) {
@@ -1009,18 +1025,16 @@ export function SnowballNetStrategyTab({
   const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const noDataRegionsRef = useRef<NoDataRegionsOverlay | null>(null);
   const programmaticRangeRef = useRef(false);
-  const visibleRangeRef = useRef<ChartTimeRange | null>(null);
-  const loadedWindowRef = useRef<LoadedChartWindow | null>(null);
-  const lastRequestedRangeRef = useRef<ChartTimeRange | null>(null);
-  const rangeFetchTimerRef = useRef<number | null>(null);
-  const granularityRef = useRef(DEFAULT_GRANULARITY);
   const ohlcChartHeightRef = useRef(DEFAULT_OHLC_CHART_HEIGHT);
   const chartDragKeyRef = useRef<SnowballNetChartKey | null>(null);
   const lastChartDragTargetRef = useRef<SnowballNetChartKey | null>(null);
   const { applyOverlays: applyOhlcOverlays, clear: clearOhlcOverlays } =
     useOhlcChartOverlays(containerRef);
-  const [granularity, setGranularity] = useState<string>(DEFAULT_GRANULARITY);
-  const [follow, setFollow] = useState(true);
+  const [rangePreset, setRangePreset] =
+    useState<SnowballNetRangePreset>('full');
+  const [customSince, setCustomSince] = useState('');
+  const [customUntil, setCustomUntil] = useState('');
+  const [rangeNowMs, setRangeNowMs] = useState(() => Date.now());
   const [mergeMarkers, setMergeMarkers] = useState(true);
   const [refreshSeconds, setRefreshSeconds] = useState<number>(15);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1048,10 +1062,6 @@ export function SnowballNetStrategyTab({
       DEFAULT_OHLC_CHART_HEIGHT
     )
   );
-  const [viewRange, setViewRange] = useState<{
-    from: number;
-    to: number;
-  } | null>(null);
   const [dragChartKey, setDragChartKey] = useState<SnowballNetChartKey | null>(
     null
   );
@@ -1090,7 +1100,13 @@ export function SnowballNetStrategyTab({
 
   const moveChart = useCallback(
     (sourceKey: SnowballNetChartKey, targetKey: SnowballNetChartKey) => {
-      if (sourceKey === targetKey) return;
+      if (
+        sourceKey === targetKey ||
+        sourceKey === 'ohlc' ||
+        targetKey === 'ohlc'
+      ) {
+        return;
+      }
       const fromIndex = chartOrder.indexOf(sourceKey);
       const toIndex = chartOrder.indexOf(targetKey);
       if (fromIndex < 0 || toIndex < 0) return;
@@ -1221,25 +1237,94 @@ export function SnowballNetStrategyTab({
     [updateOhlcChartHeight]
   );
 
+  const taskRange = useMemo(() => {
+    const startMs = millisFromIso(taskStartTime);
+    const endMs = millisFromIso(taskEndTime) ?? rangeNowMs;
+    if (startMs == null || endMs <= startMs) return null;
+    return { startMs, endMs };
+  }, [rangeNowMs, taskEndTime, taskStartTime]);
+
+  const selectedRange = useMemo(() => {
+    if (rangePreset === 'custom') {
+      const since = isoFromDateTimeLocal(customSince);
+      const until = isoFromDateTimeLocal(customUntil);
+      const sinceMs = millisFromIso(since);
+      const untilMs = millisFromIso(until);
+      if (sinceMs != null && untilMs != null && untilMs > sinceMs) {
+        return { sinceMs, untilMs };
+      }
+      return taskRange
+        ? { sinceMs: taskRange.startMs, untilMs: taskRange.endMs }
+        : null;
+    }
+
+    if (!taskRange) return null;
+    if (rangePreset === 'full') {
+      return { sinceMs: taskRange.startMs, untilMs: taskRange.endMs };
+    }
+
+    const seconds = rangePresetSeconds(rangePreset);
+    if (seconds == null) {
+      return { sinceMs: taskRange.startMs, untilMs: taskRange.endMs };
+    }
+    const windowMs = seconds * 1000;
+    return {
+      sinceMs: Math.max(taskRange.startMs, taskRange.endMs - windowMs),
+      untilMs: taskRange.endMs,
+    };
+  }, [customSince, customUntil, rangePreset, taskRange]);
+
+  const selectedGranularity = useMemo(() => {
+    if (!selectedRange) return DEFAULT_GRANULARITY;
+    const seconds = Math.max(
+      MINUTE,
+      Math.floor((selectedRange.untilMs - selectedRange.sinceMs) / 1000)
+    );
+    return granularityForRangeSeconds(seconds);
+  }, [selectedRange]);
+
+  const handleRangePresetChange = useCallback(
+    (value: SnowballNetRangePreset) => {
+      setRangePreset(value);
+      if (value === 'custom' && !customSince && !customUntil && taskRange) {
+        setCustomSince(
+          formatDateTimeLocal(new Date(taskRange.startMs).toISOString())
+        );
+        setCustomUntil(
+          formatDateTimeLocal(new Date(taskRange.endMs).toISOString())
+        );
+      }
+    },
+    [customSince, customUntil, taskRange]
+  );
+
+  useEffect(() => {
+    if (taskEndTime || !enableRealTimeUpdates || refreshSeconds <= 0) return;
+    const id = window.setInterval(
+      () => setRangeNowMs(Date.now()),
+      refreshSeconds * 1000
+    );
+    return () => window.clearInterval(id);
+  }, [enableRealTimeUpdates, refreshSeconds, taskEndTime]);
+
   const queryParams = useMemo(() => {
-    if (follow || !viewRange) {
+    if (!selectedRange) {
       return {
-        granularity,
+        granularity: DEFAULT_GRANULARITY,
         before_bars: DEFAULT_SIDE_BARS,
         after_bars: DEFAULT_SIDE_BARS,
-        follow: 'true',
+        follow: 'false',
         merge_markers: mergeMarkers ? 'true' : 'false',
       };
     }
-    const pad = Math.max(60, Math.floor((viewRange.to - viewRange.from) * 0.5));
     return {
-      granularity,
-      since: isoFromSeconds(Math.max(0, viewRange.from - pad)),
-      until: isoFromSeconds(viewRange.to + pad),
+      granularity: selectedGranularity,
+      since: new Date(selectedRange.sinceMs).toISOString(),
+      until: new Date(selectedRange.untilMs).toISOString(),
       follow: 'false',
       merge_markers: mergeMarkers ? 'true' : 'false',
     };
-  }, [follow, granularity, mergeMarkers, viewRange]);
+  }, [mergeMarkers, selectedGranularity, selectedRange]);
 
   const chartQuery = useSnowballNetChart({
     taskId,
@@ -1256,65 +1341,23 @@ export function SnowballNetStrategyTab({
   const data = chartQuery.data ?? null;
   const chartOrderItems = useMemo(
     () =>
-      chartOrder.map((key) => ({
-        key,
-        label: snowballNetChartTitle(key, t, {
-          instrument: data?.instrument ?? instrument,
-          pnlCurrency: data ? pnlCurrencyCode(data) : null,
-          priceCurrency: quoteCurrencyFromInstrument(
-            data?.instrument ?? instrument
-          ),
-        }),
-        color: SNOWBALL_NET_CHART_COLORS[key],
-      })),
+      chartOrder
+        .filter((key) => key !== 'ohlc')
+        .map((key) => ({
+          key,
+          label: snowballNetChartTitle(key, t, {
+            instrument: data?.instrument ?? instrument,
+            pnlCurrency: data ? pnlCurrencyCode(data) : null,
+            priceCurrency: quoteCurrencyFromInstrument(
+              data?.instrument ?? instrument
+            ),
+          }),
+          color: SNOWBALL_NET_CHART_COLORS[key],
+        })),
     [chartOrder, data, instrument, t]
   );
 
-  useEffect(() => {
-    granularityRef.current = granularity;
-    lastRequestedRangeRef.current = null;
-  }, [granularity]);
-
-  const scheduleVisibleRangeLoad = useCallback((range: ChartTimeRange) => {
-    visibleRangeRef.current = range;
-    setFollow(false);
-
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-    }
-    rangeFetchTimerRef.current = window.setTimeout(() => {
-      rangeFetchTimerRef.current = null;
-      const currentRange = visibleRangeRef.current;
-      if (!currentRange) return;
-
-      const loaded = loadedWindowRef.current;
-      const currentGranularity = granularityRef.current;
-      if (
-        !shouldFetchForVisibleRange(currentRange, loaded, currentGranularity)
-      ) {
-        return;
-      }
-
-      const toleranceSeconds = loaded?.step ?? 1;
-      if (
-        rangesClose(
-          currentRange,
-          lastRequestedRangeRef.current,
-          toleranceSeconds
-        )
-      ) {
-        return;
-      }
-      lastRequestedRangeRef.current = currentRange;
-      setViewRange(currentRange);
-    }, SCROLL_FETCH_DEBOUNCE_MS);
-  }, []);
-
   const destroyChart = useCallback(() => {
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
-    }
     observerRef.current?.disconnect();
     observerRef.current = null;
     clearOhlcOverlays();
@@ -1340,9 +1383,6 @@ export function SnowballNetStrategyTab({
       chartRef.current?.removeSeries(marginLineRef.current);
       marginLineRef.current = null;
     }
-    visibleRangeRef.current = null;
-    loadedWindowRef.current = null;
-    lastRequestedRangeRef.current = null;
     chartRef.current?.remove();
     chartRef.current = null;
     candleSeriesRef.current = null;
@@ -1449,10 +1489,6 @@ export function SnowballNetStrategyTab({
     }
     if (!host) return;
 
-    if (follow) {
-      programmaticRangeRef.current = true;
-    }
-
     if (!chartRef.current) {
       const { upColor, downColor } = getCandleColors();
       const chart = createChart(host, {
@@ -1466,7 +1502,8 @@ export function SnowballNetStrategyTab({
           vertLines: { visible: false },
           horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
         },
-        handleScroll: { vertTouchDrag: false },
+        handleScroll: false,
+        handleScale: false,
         timeScale: {
           borderColor: isDark ? '#2a2e39' : '#cbd5e1',
           timeVisible: true,
@@ -1510,14 +1547,6 @@ export function SnowballNetStrategyTab({
       sequenceLineRef.current = sequenceLine;
       markersRef.current = createSeriesMarkers(candles, []);
 
-      chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-        if (!range || programmaticRangeRef.current) return;
-        const normalizedRange = normalizeChartRange(range);
-        if (normalizedRange) {
-          scheduleVisibleRangeLoad(normalizedRange);
-        }
-      });
-
       const observer = new ResizeObserver(() => {
         const width = Math.floor(host.clientWidth);
         if (width > 0) chart.applyOptions({ width });
@@ -1529,22 +1558,6 @@ export function SnowballNetStrategyTab({
     chartRef.current.applyOptions({ height: ohlcChartHeightRef.current });
 
     const windowRange = candleBucketRange(data);
-    if (windowRange) {
-      loadedWindowRef.current = {
-        granularity: data.window.granularity,
-        step: windowRange.step,
-        from: windowRange.since,
-        to: windowRange.until,
-      };
-    }
-
-    const rangeToRestore = !follow
-      ? normalizeChartRange(chartRef.current?.timeScale().getVisibleRange())
-      : null;
-    if (rangeToRestore) {
-      programmaticRangeRef.current = true;
-      visibleRangeRef.current = rangeToRestore;
-    }
 
     candleSeriesRef.current?.setData(buildContinuousCandleData(data));
     applyOhlcOverlays(
@@ -1641,21 +1654,11 @@ export function SnowballNetStrategyTab({
       sequenceLineRef.current?.clear();
     }
 
-    if (rangeToRestore && chartRef.current) {
+    if (windowRange && chartRef.current) {
+      programmaticRangeRef.current = true;
       chartRef.current.timeScale().setVisibleRange({
-        from: rangeToRestore.from as Time,
-        to: rangeToRestore.to as Time,
-      });
-      releaseProgrammaticRangeFlag(programmaticRangeRef);
-      return;
-    }
-
-    if (follow && chartRef.current) {
-      const center = Math.floor(new Date(data.window.center).getTime() / 1000);
-      const span = data.window.granularity_seconds * DEFAULT_SIDE_BARS;
-      chartRef.current.timeScale().setVisibleRange({
-        from: (center - span) as Time,
-        to: (center + span) as Time,
+        from: windowRange.since as Time,
+        to: windowRange.until as Time,
       });
       releaseProgrammaticRangeFlag(programmaticRangeRef);
     }
@@ -1664,29 +1667,16 @@ export function SnowballNetStrategyTab({
     chartSettings,
     data,
     destroyChart,
-    follow,
     isDark,
     noDataRegionStyle,
-    scheduleVisibleRangeLoad,
     t,
     timezone,
     updateMarginAxisLabel,
     updatePriceAxisLabels,
   ]);
 
-  const handleFollow = useCallback(() => {
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
-    }
-    visibleRangeRef.current = null;
-    lastRequestedRangeRef.current = null;
-    setFollow(true);
-    setViewRange(null);
-    void chartQuery.refetch();
-  }, [chartQuery]);
-
   const handleRefresh = useCallback(() => {
+    setRangeNowMs(Date.now());
     void chartQuery.refetch();
   }, [chartQuery]);
 
@@ -1704,104 +1694,155 @@ export function SnowballNetStrategyTab({
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, minWidth: 0 }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={1}
-        alignItems={{ xs: 'stretch', md: 'center' }}
-        sx={{ mb: 1.5 }}
-      >
-        <ToggleButtonGroup
-          value={granularity}
-          exclusive
-          onChange={(_, value) => value && setGranularity(value)}
-          size="small"
+      <Stack spacing={1} sx={{ mb: 1.5, minWidth: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
+            flexWrap: 'wrap',
+            minWidth: 0,
+          }}
         >
-          {GRANULARITIES.map((option) => (
-            <ToggleButton
-              key={option}
-              value={option}
-              sx={{ px: 1.2, py: 0.25 }}
+          <FormControl
+            size="small"
+            sx={{ flex: { xs: '1 1 100%', sm: '0 1 240px' }, minWidth: 0 }}
+          >
+            <InputLabel id="snowball-net-range-label">
+              {t('strategy:snowballNet.chart.controls.range')}
+            </InputLabel>
+            <Select
+              labelId="snowball-net-range-label"
+              value={rangePreset}
+              label={t('strategy:snowballNet.chart.controls.range')}
+              onChange={(event) =>
+                handleRangePresetChange(
+                  event.target.value as SnowballNetRangePreset
+                )
+              }
             >
-              {option}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        <Tooltip
-          title={
-            follow
-              ? t('strategy:snowballNet.chart.tooltips.followingCurrentTick')
-              : t('strategy:snowballNet.chart.tooltips.followCurrentTick')
-          }
-        >
-          <IconButton
-            onClick={handleFollow}
+              {SNOWBALL_NET_RANGE_PRESETS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {t(
+                    `strategy:snowballNet.chart.controls.ranges.${option.labelKey}`
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Chip
             size="small"
-            color={follow ? 'primary' : 'default'}
-            aria-label={t(
-              'strategy:snowballNet.chart.tooltips.followCurrentTick'
-            )}
+            label={t('strategy:snowballNet.chart.controls.granularity', {
+              granularity: data?.window.granularity ?? selectedGranularity,
+            })}
+            sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
+          />
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+              justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+              flex: { xs: '1 1 auto', sm: '0 0 auto' },
+            }}
           >
-            <CenterFocusStrongIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip
-          title={
-            mergeMarkers
-              ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
-              : t('strategy:snowballNet.chart.tooltips.rawMarkers')
-          }
-        >
-          <IconButton
-            onClick={() => setMergeMarkers((value) => !value)}
+            <Tooltip
+              title={
+                mergeMarkers
+                  ? t('strategy:snowballNet.chart.tooltips.mergedMarkers')
+                  : t('strategy:snowballNet.chart.tooltips.rawMarkers')
+              }
+            >
+              <IconButton
+                onClick={() => setMergeMarkers((value) => !value)}
+                size="small"
+                color={mergeMarkers ? 'primary' : 'default'}
+                aria-label={t(
+                  'strategy:snowballNet.chart.tooltips.mergeMarkers'
+                )}
+              >
+                <MergeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('common:metrics.refreshAllCharts')}>
+              <span>
+                <IconButton
+                  onClick={handleRefresh}
+                  size="small"
+                  disabled={chartQuery.isFetching}
+                  aria-label={t('common:metrics.refreshAllCharts')}
+                >
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
+              <IconButton
+                onClick={() => setSettingsOpen(true)}
+                size="small"
+                aria-label={t('strategy:snowballNet.chart.settings.title')}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <FormControl
             size="small"
-            color={mergeMarkers ? 'primary' : 'default'}
-            aria-label={t('strategy:snowballNet.chart.tooltips.mergeMarkers')}
+            sx={{ flex: { xs: '1 1 100%', sm: '0 1 140px' }, minWidth: 0 }}
           >
-            <MergeIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={t('common:metrics.refreshAllCharts')}>
-          <span>
-            <IconButton
-              onClick={handleRefresh}
+            <InputLabel id="snowball-net-refresh-label">
+              {t('strategy:snowballNet.chart.controls.refreshInterval')}
+            </InputLabel>
+            <Select
+              labelId="snowball-net-refresh-label"
+              value={String(refreshSeconds)}
+              label={t('strategy:snowballNet.chart.controls.refreshInterval')}
+              onChange={(event) =>
+                setRefreshSeconds(Number(event.target.value))
+              }
+            >
+              {REFRESH_OPTIONS.map((seconds) => (
+                <MenuItem key={seconds} value={String(seconds)}>
+                  {seconds === 0
+                    ? t('strategy:snowballNet.chart.controls.off')
+                    : t('strategy:snowballNet.chart.controls.seconds', {
+                        seconds,
+                      })}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+        {rangePreset === 'custom' ? (
+          <Box
+            sx={{
+              display: { xs: 'grid', sm: 'flex' },
+              gridTemplateColumns: { xs: '1fr', sm: 'unset' },
+              gap: 1,
+              flexWrap: 'wrap',
+              minWidth: 0,
+            }}
+          >
+            <TextField
+              label={t('strategy:snowballNet.chart.controls.customSince')}
+              type="datetime-local"
               size="small"
-              disabled={chartQuery.isFetching}
-              aria-label={t('common:metrics.refreshAllCharts')}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
-          <IconButton
-            onClick={() => setSettingsOpen(true)}
-            size="small"
-            aria-label={t('strategy:snowballNet.chart.settings.title')}
-          >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel id="snowball-net-refresh-label">
-            {t('strategy:snowballNet.chart.controls.refreshInterval')}
-          </InputLabel>
-          <Select
-            labelId="snowball-net-refresh-label"
-            value={String(refreshSeconds)}
-            label={t('strategy:snowballNet.chart.controls.refreshInterval')}
-            onChange={(event) => setRefreshSeconds(Number(event.target.value))}
-          >
-            {REFRESH_OPTIONS.map((seconds) => (
-              <MenuItem key={seconds} value={String(seconds)}>
-                {seconds === 0
-                  ? t('strategy:snowballNet.chart.controls.off')
-                  : t('strategy:snowballNet.chart.controls.seconds', {
-                      seconds,
-                    })}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+              value={customSince}
+              onChange={(event) => setCustomSince(event.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ minWidth: 0, width: { xs: '100%', sm: 220 } }}
+            />
+            <TextField
+              label={t('strategy:snowballNet.chart.controls.customUntil')}
+              type="datetime-local"
+              size="small"
+              value={customUntil}
+              onChange={(event) => setCustomUntil(event.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ minWidth: 0, width: { xs: '100%', sm: 220 } }}
+            />
+          </Box>
+        ) : null}
         <CurrentChips data={data} instrument={instrument} />
       </Stack>
 
@@ -2118,25 +2159,29 @@ function SnowballNetCharts({
         return (
           <Box
             key={key}
-            draggable
-            onDragStart={(event) => onChartDragStart(event, key)}
-            onDragOver={(event) => onChartDragOver(event, key)}
-            onDrop={(event) => onChartDrop(event, key)}
-            onDragEnd={onChartDragEnd}
+            draggable={!isOhlc}
+            onDragStart={
+              isOhlc ? undefined : (event) => onChartDragStart(event, key)
+            }
+            onDragOver={
+              isOhlc ? undefined : (event) => onChartDragOver(event, key)
+            }
+            onDrop={isOhlc ? undefined : (event) => onChartDrop(event, key)}
+            onDragEnd={isOhlc ? undefined : onChartDragEnd}
             sx={{
               gridColumn: isOhlc ? '1 / -1' : undefined,
-              opacity: dragChartKey === key ? 0.4 : 1,
-              cursor: 'grab',
+              opacity: !isOhlc && dragChartKey === key ? 0.4 : 1,
+              cursor: isOhlc ? 'default' : 'grab',
               minWidth: 0,
               transition:
                 'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
               transform:
-                dragOverChartKey === key && dragChartKey !== key
+                !isOhlc && dragOverChartKey === key && dragChartKey !== key
                   ? 'translateY(-2px)'
                   : 'none',
               outline: '2px solid',
               outlineColor:
-                dragOverChartKey === key && dragChartKey !== key
+                !isOhlc && dragOverChartKey === key && dragChartKey !== key
                   ? 'primary.main'
                   : 'transparent',
               outlineOffset: 3,
@@ -2178,9 +2223,6 @@ function OhlcChartCard({
             mb: 0.75,
           }}
         >
-          <DragIndicatorIcon
-            sx={{ fontSize: 16, color: 'text.disabled', cursor: 'grab' }}
-          />
           <TimelineIcon fontSize="small" color="action" />
           <Typography variant="subtitle2">
             {instrument ? instrument.replace('_', '/') : 'SnowballNet'}
@@ -2240,6 +2282,78 @@ function OhlcChartCard({
         />
       ) : null}
     </>
+  );
+}
+
+function FillLineChart({
+  fallbackHeight,
+  ...chartProps
+}: ComponentProps<typeof LineChart> & { fallbackHeight: number }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    const updateSize = () => {
+      const rect = host.getBoundingClientRect();
+      const nextWidth = Math.max(
+        MIN_CHART_MEASURE_PX,
+        Math.floor(host.clientWidth || rect.width)
+      );
+      const measuredHeight = Math.floor(host.clientHeight || rect.height);
+      const nextHeight = Math.max(
+        MIN_CHART_MEASURE_PX,
+        measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight
+      );
+      setSize((current) =>
+        current.width === nextWidth && current.height === nextHeight
+          ? current
+          : { width: nextWidth, height: nextHeight }
+      );
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [fallbackHeight]);
+
+  return (
+    <Box
+      ref={hostRef}
+      sx={{
+        width: '100%',
+        height: '100%',
+        flex: '1 1 auto',
+        alignSelf: 'stretch',
+        minWidth: 0,
+        minHeight: 0,
+        '& > *': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+        '& > [class*="MuiChartsWrapper-root"]': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+        '& svg.MuiChartsSurface-root': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+      }}
+    >
+      {size.width > 0 && size.height > 0 ? (
+        <LineChart {...chartProps} width={size.width} height={size.height} />
+      ) : null}
+    </Box>
   );
 }
 
@@ -2319,9 +2433,39 @@ function LineChartCard({
       ): item is { line: SnowballNetLineSeries; point: SnowballNetLinePoint } =>
         item.point !== null
     );
+  const formatAxisValue = (value: number) =>
+    percent
+      ? `${formatAppNumber(value, { maximumFractionDigits: 1 })}%`
+      : formatNumberWithUnit(value, valueUnit, {
+          maximumFractionDigits: valueUnit ? 2 : 1,
+        });
+  const yAxisValues = isEmpty
+    ? [0, 1]
+    : visible.flatMap((line) => line.points.map((point) => point.value));
+  const maxYAxisLabelLength = yAxisValues.reduce(
+    (max, value) => Math.max(max, formatAxisValue(value).length),
+    0
+  );
+  const yAxisWidth = Math.max(
+    MIN_Y_AXIS_WIDTH,
+    Math.ceil(maxYAxisLabelLength * Y_AXIS_CHAR_WIDTH_PX) + Y_AXIS_OVERHEAD_PX
+  );
 
   return (
-    <Paper variant="outlined" sx={{ p: 1, minWidth: 0, minHeight: 220 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: { xs: 0.25, sm: 1 },
+        minWidth: 0,
+        minHeight: 220,
+        height: 240,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        mx: 'auto',
+      }}
+    >
       <Stack
         direction="row"
         spacing={0.75}
@@ -2347,8 +2491,34 @@ function LineChartCard({
           />
         ))}
       </Stack>
-      <Box sx={{ position: 'relative' }}>
-        <LineChart
+      <Box
+        sx={{
+          position: 'relative',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'stretch',
+          '& .MuiCharts-root': {
+            width: '100%',
+            height: '100%',
+          },
+          '& [class*="MuiChartsWrapper-root"]': {
+            width: '100% !important',
+            height: '100% !important',
+          },
+          '& .MuiChartsSurface-root': {
+            width: '100% !important',
+            height: '100% !important',
+          },
+          '& svg': {
+            display: 'block',
+          },
+        }}
+      >
+        <FillLineChart
+          fallbackHeight={LINE_CHART_FALLBACK_HEIGHT}
           xAxis={[
             {
               data: x,
@@ -2364,20 +2534,20 @@ function LineChartCard({
           yAxis={[
             {
               position: 'right',
+              width: yAxisWidth,
               min: isEmpty ? 0 : undefined,
               max: isEmpty ? 1 : undefined,
               tickLabelStyle: { fontSize: 10 },
-              valueFormatter: (value: number) =>
-                percent
-                  ? `${formatAppNumber(value, { maximumFractionDigits: 1 })}%`
-                  : formatNumberWithUnit(value, valueUnit, {
-                      maximumFractionDigits: valueUnit ? 2 : 1,
-                    }),
+              valueFormatter: (value: number) => formatAxisValue(value),
             },
           ]}
           series={series}
-          height={170}
-          margin={{ left: 8, right: valueUnit ? 76 : 52, top: 4, bottom: 34 }}
+          margin={{
+            left: LINE_CHART_LEFT_MARGIN,
+            right: LINE_CHART_RIGHT_MARGIN,
+            top: LINE_CHART_TOP_MARGIN,
+            bottom: LINE_CHART_BOTTOM_MARGIN,
+          }}
           grid={{ vertical: true, horizontal: true }}
           hideLegend={visible.length <= 1}
         />

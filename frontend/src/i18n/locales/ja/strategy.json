@@ -126,15 +126,37 @@
         "mergeMarkers": "マーカー集約を切り替え"
       },
       "controls": {
+        "range": "表示範囲",
+        "granularity": "粒度: {{granularity}}",
+        "customSince": "開始",
+        "customUntil": "終了",
         "refreshInterval": "更新間隔",
         "off": "オフ",
-        "seconds": "{{seconds}}秒"
+        "seconds": "{{seconds}}秒",
+        "ranges": {
+          "full": "全範囲",
+          "last5Minutes": "直近5分",
+          "last15Minutes": "直近15分",
+          "last1Hour": "直近1時間",
+          "last4Hours": "直近4時間",
+          "last12Hours": "直近12時間",
+          "last1Day": "直近1日",
+          "last3Days": "直近3日",
+          "last1Week": "直近1週間",
+          "last2Weeks": "直近2週間",
+          "last4Weeks": "直近4週間",
+          "last1Month": "直近1ヶ月",
+          "last3Months": "直近3ヶ月",
+          "last6Months": "直近半年",
+          "last1Year": "直近1年",
+          "custom": "任意範囲"
+        }
       },
       "settings": {
         "title": "チャート設定",
         "chartPanels": "表示するチャート",
         "chartOrder": "チャートの順序",
-        "chartOrderDescription": "チャートをドラッグするか矢印ボタンで表示順序を変更できます。",
+        "chartOrderDescription": "ラインチャートをドラッグするか矢印ボタンで表示順序を変更できます。",
         "resetChartOrder": "順序をリセット",
         "ohlc": "OHLC",
         "ohlcItems": "OHLCの表示項目",

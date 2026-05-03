@@ -126,15 +126,37 @@
         "mergeMarkers": "Toggle marker merging"
       },
       "controls": {
+        "range": "Range",
+        "granularity": "Granularity: {{granularity}}",
+        "customSince": "From",
+        "customUntil": "To",
         "refreshInterval": "Refresh",
         "off": "Off",
-        "seconds": "{{seconds}}s"
+        "seconds": "{{seconds}}s",
+        "ranges": {
+          "full": "Full range",
+          "last5Minutes": "Last 5 minutes",
+          "last15Minutes": "Last 15 minutes",
+          "last1Hour": "Last 1 hour",
+          "last4Hours": "Last 4 hours",
+          "last12Hours": "Last 12 hours",
+          "last1Day": "Last 1 day",
+          "last3Days": "Last 3 days",
+          "last1Week": "Last 1 week",
+          "last2Weeks": "Last 2 weeks",
+          "last4Weeks": "Last 4 weeks",
+          "last1Month": "Last 1 month",
+          "last3Months": "Last 3 months",
+          "last6Months": "Last 6 months",
+          "last1Year": "Last 1 year",
+          "custom": "Custom"
+        }
       },
       "settings": {
         "title": "Chart settings",
         "chartPanels": "Visible charts",
         "chartOrder": "Chart order",
-        "chartOrderDescription": "Drag charts or use the arrow buttons to change their display order.",
+        "chartOrderDescription": "Drag line charts or use the arrow buttons to change their display order.",
         "resetChartOrder": "Reset order",
         "ohlc": "OHLC",
         "ohlcItems": "OHLC items",
