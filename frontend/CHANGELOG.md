@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.61.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.60.1...frontend-v1.61.0) (2026-05-03)
+
+
+### Features
+
+* snowball net strategy ([#634](https://github.com/yuyash/auto-forex-web-service/issues/634)) ([a8ad8a0](https://github.com/yuyash/auto-forex-web-service/commit/a8ad8a07029c8716ace199b6d202f2f5dfffd388))
+
 ## [1.60.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.60.0...frontend-v1.60.1) (2026-05-02)
 
 
