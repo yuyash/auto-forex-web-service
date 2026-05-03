@@ -35,6 +35,7 @@ export interface TaskTrade {
   is_rebuild?: boolean;
   stop_loss_price?: string | null;
   pnl?: string | null;
+  entry_price?: string | null;
   replayed_at?: string | null;
   updated_at?: string | null;
 }

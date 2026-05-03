@@ -391,7 +391,7 @@ class TaskActivityQueryService:
                 )
             trade["pnl"] = None
             if trade["execution_method"] not in {"open_position", "rebuild_position"}:
-                entry_price = trade.pop("entry_price", None)
+                entry_price = trade.get("entry_price")
                 if entry_price is not None and trade["price"] is not None:
                     entry = Decimal(str(entry_price))
                     exit_price = Decimal(str(trade["price"]))

@@ -118,6 +118,16 @@ class TradeSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    entry_price = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        required=False,
+        allow_null=True,
+        help_text=(
+            "Position entry price (or average price for netting strategies). "
+            "Present only on close trades."
+        ),
+    )
 
     def get_stop_loss_price(self, obj: object) -> str | None:
         """Return stop_loss_price from the related position, if any."""
