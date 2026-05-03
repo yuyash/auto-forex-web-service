@@ -129,22 +129,38 @@ def layer_initial_close_price(
     pip_size: Decimal,
     m_pips: Decimal,
 ) -> tuple[Decimal, str]:
-    """Compute close price for a layer-initial entry from the previous layer."""
-    highest = prev_layer.highest_present_slot()
-    if highest is not None:
-        if highest.entry is not None:
-            close_price = highest.entry.close_price
-            return close_price, f"{close_price:.5f}"
-        if highest.pending_rebuild is not None:
-            close_price = highest.pending_rebuild.close_price
-            return close_price, f"{close_price:.5f}"
+    """Compute close price for a layer-initial entry.
 
+    The layer initial normally uses the same fixed TP distance as L1/R0.
+    The previous layer's last present TP is only a boundary: crossing it
+    would invert the grid TP order, so clamp to that previous TP.
+    """
     if direction == Direction.LONG:
         close_price = new_price + m_pips * pip_size
+        formula = f"{new_price} + {m_pips} * {pip_size}"
     else:
         close_price = new_price - m_pips * pip_size
-    op = "+" if direction == Direction.LONG else "-"
-    return close_price, f"{new_price} {op} {m_pips} * {pip_size}"
+        formula = f"{new_price} - {m_pips} * {pip_size}"
+
+    highest = prev_layer.highest_present_slot()
+    if highest is None:
+        return close_price, formula
+
+    previous_close_price: Decimal | None = None
+    if highest.entry is not None:
+        previous_close_price = highest.entry.close_price
+    elif highest.pending_rebuild is not None:
+        previous_close_price = highest.pending_rebuild.close_price
+
+    if previous_close_price is None:
+        return close_price, formula
+
+    if direction == Direction.LONG and close_price > previous_close_price:
+        return previous_close_price, f"min({formula}, {previous_close_price:.5f})"
+    if direction == Direction.SHORT and close_price < previous_close_price:
+        return previous_close_price, f"max({formula}, {previous_close_price:.5f})"
+
+    return close_price, formula
 
 
 def sync_weighted_average_counter_take_profits(layer: Layer) -> Decimal | None:
