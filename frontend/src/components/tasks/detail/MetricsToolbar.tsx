@@ -64,11 +64,7 @@ export function MetricsToolbar({
           alignItems: { xs: 'stretch', sm: 'center' },
           gap: 1,
           flexWrap: 'wrap',
-          p: { xs: 0.75, sm: 0 },
-          border: { xs: '1px solid', sm: 'none' },
-          borderColor: 'divider',
-          borderRadius: { xs: 1, sm: 0 },
-          bgcolor: { xs: 'background.paper', sm: 'transparent' },
+          p: 0,
         }}
       >
         <ToggleButtonGroup

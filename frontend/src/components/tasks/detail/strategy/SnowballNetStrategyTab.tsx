@@ -4,9 +4,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
 import {
   Alert,
@@ -25,6 +27,10 @@ import {
   FormGroup,
   IconButton,
   InputLabel,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -34,7 +40,10 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import ArrowDownIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpIcon from '@mui/icons-material/ArrowUpward';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import MergeIcon from '@mui/icons-material/Merge';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -89,6 +98,7 @@ import {
   formatAppPercent,
 } from '../../../../utils/numberFormat';
 import {
+  removeStoredValue,
   readStoredValue,
   writeStoredValue,
 } from '../../../../utils/persistentState';
@@ -119,11 +129,35 @@ const CURRENT_PRICE_LINE_ID = 'current_price';
 const REALIZED_PNL_LINE_ID = 'realized_pnl';
 const UNREALIZED_PNL_LINE_ID = 'unrealized_pnl';
 const SNOWBALL_NET_CHART_SETTINGS_KEY = 'snowball_net_strategy_chart_settings';
+const SNOWBALL_NET_CHART_ORDER_KEY = 'snowball_net_strategy_chart_order';
 const OHLC_CHART_HEIGHT_KEY = 'snowball_net_strategy_ohlc_chart_height';
 const DEFAULT_OHLC_CHART_HEIGHT = 460;
 const MIN_OHLC_CHART_HEIGHT = 240;
 const MAX_OHLC_CHART_HEIGHT = 1200;
 const OHLC_CHART_RESIZE_STEP = 20;
+const SNOWBALL_NET_CHART_KEYS = [
+  'ohlc',
+  'netUnits',
+  'pips',
+  'margin',
+  'pnl',
+  'averagePrice',
+  'takeProfit',
+  'nextAdd',
+] as const;
+
+type SnowballNetChartKey = (typeof SNOWBALL_NET_CHART_KEYS)[number];
+
+const SNOWBALL_NET_CHART_COLORS: Record<SnowballNetChartKey, string> = {
+  ohlc: '#26a69a',
+  netUnits: '#0288d1',
+  pips: '#7c3aed',
+  margin: '#ea580c',
+  pnl: '#2e7d32',
+  averagePrice: '#2563eb',
+  takeProfit: '#16a34a',
+  nextAdd: '#dc2626',
+};
 
 const OHLC_OVERLAY_DEFAULTS: OhlcOverlaySettings = {
   ...DEFAULT_OHLC_OVERLAY_SETTINGS,
@@ -168,12 +202,31 @@ const ohlcChartHeightSchema = z
   .number()
   .min(MIN_OHLC_CHART_HEIGHT)
   .max(MAX_OHLC_CHART_HEIGHT);
+const snowballNetChartOrderSchema = z.array(z.enum(SNOWBALL_NET_CHART_KEYS));
 
 function clampOhlcChartHeight(height: number): number {
   return Math.min(
     MAX_OHLC_CHART_HEIGHT,
     Math.max(MIN_OHLC_CHART_HEIGHT, Math.round(height))
   );
+}
+
+function normalizeSnowballNetChartOrder(
+  keys: readonly string[] | null | undefined
+): SnowballNetChartKey[] {
+  const validKeys = new Set<string>(SNOWBALL_NET_CHART_KEYS);
+  const next: SnowballNetChartKey[] = [];
+  for (const key of keys ?? []) {
+    if (validKeys.has(key) && !next.includes(key as SnowballNetChartKey)) {
+      next.push(key as SnowballNetChartKey);
+    }
+  }
+  for (const key of SNOWBALL_NET_CHART_KEYS) {
+    if (!next.includes(key)) {
+      next.push(key);
+    }
+  }
+  return next;
 }
 
 const DEFAULT_CHART_SETTINGS: SnowballNetChartSettings = {
@@ -330,6 +383,51 @@ function formatNullablePnl(value: number | null, unit?: string | null): string {
         maximumFractionDigits: 2,
         signed: true,
       });
+}
+
+function snowballNetChartTitle(
+  key: SnowballNetChartKey,
+  t: TFunction,
+  options: {
+    instrument?: string | null;
+    pnlCurrency?: string | null;
+    priceCurrency?: string | null;
+  } = {}
+): string {
+  switch (key) {
+    case 'ohlc':
+      return options.instrument
+        ? options.instrument.replace('_', '/')
+        : t('strategy:snowballNet.chart.settings.ohlc');
+    case 'netUnits':
+      return t('strategy:snowballNet.chart.netUnits');
+    case 'pips':
+      return t('strategy:snowballNet.chart.pipsFromAverage');
+    case 'margin':
+      return t('strategy:snowballNet.chart.marginRatio');
+    case 'pnl':
+      return appendUnitLabel(
+        t('strategy:snowballNet.chart.pnl'),
+        options.pnlCurrency
+      );
+    case 'averagePrice':
+      return appendUnitLabel(
+        t('strategy:snowballNet.chart.averagePrice'),
+        options.priceCurrency
+      );
+    case 'takeProfit':
+      return appendUnitLabel(
+        t('strategy:snowballNet.chart.takeProfit'),
+        options.priceCurrency
+      );
+    case 'nextAdd':
+      return appendUnitLabel(
+        t('strategy:snowballNet.chart.nextAdd'),
+        options.priceCurrency
+      );
+    default:
+      return key;
+  }
 }
 
 function normalizeChartRange(
@@ -917,6 +1015,8 @@ export function SnowballNetStrategyTab({
   const rangeFetchTimerRef = useRef<number | null>(null);
   const granularityRef = useRef(DEFAULT_GRANULARITY);
   const ohlcChartHeightRef = useRef(DEFAULT_OHLC_CHART_HEIGHT);
+  const chartDragKeyRef = useRef<SnowballNetChartKey | null>(null);
+  const lastChartDragTargetRef = useRef<SnowballNetChartKey | null>(null);
   const { applyOverlays: applyOhlcOverlays, clear: clearOhlcOverlays } =
     useOhlcChartOverlays(containerRef);
   const [granularity, setGranularity] = useState<string>(DEFAULT_GRANULARITY);
@@ -932,6 +1032,15 @@ export function SnowballNetStrategyTab({
         DEFAULT_CHART_SETTINGS
       )
   );
+  const [chartOrder, setChartOrder] = useState<SnowballNetChartKey[]>(() =>
+    normalizeSnowballNetChartOrder(
+      readStoredValue(
+        SNOWBALL_NET_CHART_ORDER_KEY,
+        snowballNetChartOrderSchema,
+        [...SNOWBALL_NET_CHART_KEYS]
+      )
+    )
+  );
   const [ohlcChartHeight, setOhlcChartHeight] = useState(() =>
     readStoredValue(
       OHLC_CHART_HEIGHT_KEY,
@@ -943,6 +1052,11 @@ export function SnowballNetStrategyTab({
     from: number;
     to: number;
   } | null>(null);
+  const [dragChartKey, setDragChartKey] = useState<SnowballNetChartKey | null>(
+    null
+  );
+  const [dragOverChartKey, setDragOverChartKey] =
+    useState<SnowballNetChartKey | null>(null);
 
   useEffect(() => {
     ohlcChartHeightRef.current = ohlcChartHeight;
@@ -961,6 +1075,85 @@ export function SnowballNetStrategyTab({
     },
     []
   );
+
+  const updateChartOrder = useCallback((keys: readonly string[]) => {
+    const next = normalizeSnowballNetChartOrder(keys);
+    setChartOrder(next);
+    writeStoredValue(SNOWBALL_NET_CHART_ORDER_KEY, next);
+  }, []);
+
+  const resetChartOrder = useCallback(() => {
+    const next = [...SNOWBALL_NET_CHART_KEYS];
+    setChartOrder(next);
+    removeStoredValue(SNOWBALL_NET_CHART_ORDER_KEY);
+  }, []);
+
+  const moveChart = useCallback(
+    (sourceKey: SnowballNetChartKey, targetKey: SnowballNetChartKey) => {
+      if (sourceKey === targetKey) return;
+      const fromIndex = chartOrder.indexOf(sourceKey);
+      const toIndex = chartOrder.indexOf(targetKey);
+      if (fromIndex < 0 || toIndex < 0) return;
+      const next = [...chartOrder];
+      next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, sourceKey);
+      updateChartOrder(next);
+    },
+    [chartOrder, updateChartOrder]
+  );
+
+  const handleChartDragStart = useCallback(
+    (event: ReactDragEvent, key: SnowballNetChartKey) => {
+      chartDragKeyRef.current = key;
+      lastChartDragTargetRef.current = null;
+      setDragChartKey(key);
+      setDragOverChartKey(null);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', key);
+    },
+    []
+  );
+
+  const handleChartDragOver = useCallback(
+    (event: ReactDragEvent, targetKey: SnowballNetChartKey) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDragOverChartKey(targetKey);
+
+      const sourceKey = chartDragKeyRef.current;
+      if (
+        sourceKey &&
+        sourceKey !== targetKey &&
+        lastChartDragTargetRef.current !== targetKey
+      ) {
+        moveChart(sourceKey, targetKey);
+        lastChartDragTargetRef.current = targetKey;
+      }
+    },
+    [moveChart]
+  );
+
+  const handleChartDrop = useCallback(
+    (event: ReactDragEvent, targetKey: SnowballNetChartKey) => {
+      event.preventDefault();
+      const sourceKey = chartDragKeyRef.current;
+      if (sourceKey && sourceKey !== targetKey) {
+        moveChart(sourceKey, targetKey);
+      }
+      chartDragKeyRef.current = null;
+      lastChartDragTargetRef.current = null;
+      setDragChartKey(null);
+      setDragOverChartKey(null);
+    },
+    [moveChart]
+  );
+
+  const handleChartDragEnd = useCallback(() => {
+    chartDragKeyRef.current = null;
+    lastChartDragTargetRef.current = null;
+    setDragChartKey(null);
+    setDragOverChartKey(null);
+  }, []);
 
   const updateOhlcChartHeight = useCallback(
     (height: number, persist = true) => {
@@ -1061,6 +1254,21 @@ export function SnowballNetStrategyTab({
   });
 
   const data = chartQuery.data ?? null;
+  const chartOrderItems = useMemo(
+    () =>
+      chartOrder.map((key) => ({
+        key,
+        label: snowballNetChartTitle(key, t, {
+          instrument: data?.instrument ?? instrument,
+          pnlCurrency: data ? pnlCurrencyCode(data) : null,
+          priceCurrency: quoteCurrencyFromInstrument(
+            data?.instrument ?? instrument
+          ),
+        }),
+        color: SNOWBALL_NET_CHART_COLORS[key],
+      })),
+    [chartOrder, data, instrument, t]
+  );
 
   useEffect(() => {
     granularityRef.current = granularity;
@@ -1552,14 +1760,17 @@ export function SnowballNetStrategyTab({
             <MergeIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <Tooltip title={t('common:actions.refresh')}>
-          <IconButton
-            onClick={handleRefresh}
-            size="small"
-            aria-label={t('common:actions.refresh')}
-          >
-            <RefreshIcon fontSize="small" />
-          </IconButton>
+        <Tooltip title={t('common:metrics.refreshAllCharts')}>
+          <span>
+            <IconButton
+              onClick={handleRefresh}
+              size="small"
+              disabled={chartQuery.isFetching}
+              aria-label={t('common:metrics.refreshAllCharts')}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip title={t('strategy:snowballNet.chart.settings.title')}>
           <IconButton
@@ -1597,85 +1808,30 @@ export function SnowballNetStrategyTab({
       <SnowballNetChartSettingsDialog
         open={settingsOpen}
         settings={chartSettings}
+        chartOrderItems={chartOrderItems}
         onClose={() => setSettingsOpen(false)}
         onChange={updateChartSettings}
+        onOrderChange={updateChartOrder}
+        onOrderReset={resetChartOrder}
       />
 
-      {chartSettings.charts.ohlc ? (
-        <Paper variant="outlined" sx={{ p: 1, minWidth: 0 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.75,
-              mb: 0.75,
-            }}
-          >
-            <TimelineIcon fontSize="small" color="action" />
-            <Typography variant="subtitle2">
-              {instrument ? instrument.replace('_', '/') : 'SnowballNet'}
-            </Typography>
-          </Box>
-          {data ? (
-            <Box
-              ref={containerRef}
-              sx={{
-                width: '100%',
-                height: ohlcChartHeight,
-                minHeight: MIN_OHLC_CHART_HEIGHT,
-              }}
-            />
-          ) : (
-            <Alert severity="info">{t('metrics.noData')}</Alert>
-          )}
-        </Paper>
-      ) : null}
-
-      {chartSettings.charts.ohlc && data ? (
-        <Box
-          role="separator"
-          aria-label={t('strategy:snowballNet.chart.resizeOhlcChart')}
-          aria-orientation="horizontal"
-          aria-valuemin={MIN_OHLC_CHART_HEIGHT}
-          aria-valuemax={MAX_OHLC_CHART_HEIGHT}
-          aria-valuenow={ohlcChartHeight}
-          tabIndex={0}
-          onPointerDown={handleOhlcResizePointerDown}
-          onKeyDown={handleOhlcResizeKeyDown}
-          sx={{
-            height: 18,
-            my: 0.75,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'row-resize',
-            outline: 'none',
-            touchAction: 'none',
-            '&::before': {
-              content: '""',
-              width: 88,
-              height: 4,
-              borderRadius: 999,
-              bgcolor: 'divider',
-              transition: (muiTheme) =>
-                muiTheme.transitions.create('background-color', {
-                  duration: muiTheme.transitions.duration.shortest,
-                }),
-            },
-            '&:hover::before, &:focus-visible::before': {
-              bgcolor: 'primary.main',
-            },
-          }}
-        />
-      ) : null}
-
-      {data ? (
-        <SnowballNetLineCharts
-          data={data}
-          settings={chartSettings}
-          timezone={timezone}
-        />
-      ) : null}
+      <SnowballNetCharts
+        data={data}
+        settings={chartSettings}
+        chartOrder={chartOrder}
+        timezone={timezone}
+        instrument={instrument}
+        containerRef={containerRef}
+        ohlcChartHeight={ohlcChartHeight}
+        dragChartKey={dragChartKey}
+        dragOverChartKey={dragOverChartKey}
+        onChartDragStart={handleChartDragStart}
+        onChartDragOver={handleChartDragOver}
+        onChartDrop={handleChartDrop}
+        onChartDragEnd={handleChartDragEnd}
+        onOhlcResizePointerDown={handleOhlcResizePointerDown}
+        onOhlcResizeKeyDown={handleOhlcResizeKeyDown}
+      />
     </Box>
   );
 }
@@ -1782,97 +1938,153 @@ function CurrentChips({
   );
 }
 
-function SnowballNetLineCharts({
+function SnowballNetCharts({
   data,
   settings,
+  chartOrder,
   timezone,
+  instrument,
+  containerRef,
+  ohlcChartHeight,
+  dragChartKey,
+  dragOverChartKey,
+  onChartDragStart,
+  onChartDragOver,
+  onChartDrop,
+  onChartDragEnd,
+  onOhlcResizePointerDown,
+  onOhlcResizeKeyDown,
 }: {
-  data: SnowballNetChartResponse;
+  data: SnowballNetChartResponse | null;
   settings: SnowballNetChartSettings;
+  chartOrder: SnowballNetChartKey[];
   timezone: string;
+  instrument?: string;
+  containerRef: MutableRefObject<HTMLDivElement | null>;
+  ohlcChartHeight: number;
+  dragChartKey: SnowballNetChartKey | null;
+  dragOverChartKey: SnowballNetChartKey | null;
+  onChartDragStart: (event: ReactDragEvent, key: SnowballNetChartKey) => void;
+  onChartDragOver: (event: ReactDragEvent, key: SnowballNetChartKey) => void;
+  onChartDrop: (event: ReactDragEvent, key: SnowballNetChartKey) => void;
+  onChartDragEnd: () => void;
+  onOhlcResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onOhlcResizeKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
 }) {
-  const { t } = useTranslation('strategy');
-  const timeDomain = chartTimeDomain(data);
-  const pnlCurrency = pnlCurrencyCode(data);
-  const priceCurrency = quoteCurrencyFromInstrument(data.instrument);
-  const cards = [
-    settings.charts.netUnits ? (
-      <LineChartCard
-        key="net-units"
-        title={t('snowballNet.chart.netUnits')}
-        lines={netUnitsChartLines(data.oscillator_lines)}
-        timezone={timezone}
-        timeDomain={timeDomain}
-        showWhenEmpty
-      />
-    ) : null,
-    settings.charts.pips ? (
-      <LineChartCard
-        key="pips"
-        title={t('snowballNet.chart.pipsFromAverage')}
-        lines={pipsChartLines(data.oscillator_lines)}
-        timezone={timezone}
-        timeDomain={timeDomain}
-        showWhenEmpty
-      />
-    ) : null,
-    settings.charts.margin ? (
-      <LineChartCard
-        key="margin"
-        title={t('snowballNet.chart.marginRatio')}
-        lines={marginChartLines(data.oscillator_lines)}
-        timezone={timezone}
-        timeDomain={timeDomain}
-        percent
-      />
-    ) : null,
-    settings.charts.pnl ? (
-      <LineChartCard
-        key="pnl"
-        title={appendUnitLabel(t('snowballNet.chart.pnl'), pnlCurrency)}
-        lines={pnlChartLines(data.oscillator_lines)}
-        timezone={timezone}
-        timeDomain={timeDomain}
-        valueUnit={pnlCurrency}
-        seriesLabelUnit={pnlCurrency}
-      />
-    ) : null,
-    settings.charts.averagePrice ? (
-      <LineChartCard
-        key="average"
-        title={appendUnitLabel(
-          t('snowballNet.chart.averagePrice'),
-          priceCurrency
-        )}
-        lines={priceChartLines(data.price_lines, 'averagePrice')}
-        timezone={timezone}
-        timeDomain={timeDomain}
-      />
-    ) : null,
-    settings.charts.takeProfit ? (
-      <LineChartCard
-        key="take-profit"
-        title={appendUnitLabel(
-          t('snowballNet.chart.takeProfit'),
-          priceCurrency
-        )}
-        lines={priceChartLines(data.price_lines, 'takeProfit')}
-        timezone={timezone}
-        timeDomain={timeDomain}
-      />
-    ) : null,
-    settings.charts.nextAdd ? (
-      <LineChartCard
-        key="next-add"
-        title={appendUnitLabel(t('snowballNet.chart.nextAdd'), priceCurrency)}
-        lines={priceChartLines(data.price_lines, 'nextAdd')}
-        timezone={timezone}
-        timeDomain={timeDomain}
-      />
-    ) : null,
-  ].filter(Boolean);
+  const { t } = useTranslation(['common', 'strategy']);
+  const timeDomain = data ? chartTimeDomain(data) : undefined;
+  const pnlCurrency = data ? pnlCurrencyCode(data) : null;
+  const priceCurrency = quoteCurrencyFromInstrument(
+    data?.instrument ?? instrument
+  );
+  const visibleKeys = chartOrder.filter((key) => settings.charts[key]);
 
-  if (cards.length === 0) return null;
+  if (visibleKeys.length === 0) return null;
+
+  const renderLineChart = (key: SnowballNetChartKey) => {
+    if (!data) return null;
+    const headerPrefix = (
+      <DragIndicatorIcon
+        sx={{
+          fontSize: 16,
+          color: 'text.disabled',
+          cursor: 'grab',
+          mr: 0.25,
+        }}
+      />
+    );
+    switch (key) {
+      case 'netUnits':
+        return (
+          <LineChartCard
+            title={t('strategy:snowballNet.chart.netUnits')}
+            lines={netUnitsChartLines(data.oscillator_lines)}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            showWhenEmpty
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'pips':
+        return (
+          <LineChartCard
+            title={t('strategy:snowballNet.chart.pipsFromAverage')}
+            lines={pipsChartLines(data.oscillator_lines)}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            showWhenEmpty
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'margin':
+        return (
+          <LineChartCard
+            title={t('strategy:snowballNet.chart.marginRatio')}
+            lines={marginChartLines(data.oscillator_lines)}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            percent
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'pnl':
+        return (
+          <LineChartCard
+            title={appendUnitLabel(
+              t('strategy:snowballNet.chart.pnl'),
+              pnlCurrency
+            )}
+            lines={pnlChartLines(data.oscillator_lines)}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            valueUnit={pnlCurrency}
+            seriesLabelUnit={pnlCurrency}
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'averagePrice':
+        return (
+          <LineChartCard
+            title={appendUnitLabel(
+              t('strategy:snowballNet.chart.averagePrice'),
+              priceCurrency
+            )}
+            lines={priceChartLines(data.price_lines, 'averagePrice')}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'takeProfit':
+        return (
+          <LineChartCard
+            title={appendUnitLabel(
+              t('strategy:snowballNet.chart.takeProfit'),
+              priceCurrency
+            )}
+            lines={priceChartLines(data.price_lines, 'takeProfit')}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            headerPrefix={headerPrefix}
+          />
+        );
+      case 'nextAdd':
+        return (
+          <LineChartCard
+            title={appendUnitLabel(
+              t('strategy:snowballNet.chart.nextAdd'),
+              priceCurrency
+            )}
+            lines={priceChartLines(data.price_lines, 'nextAdd')}
+            timezone={timezone}
+            timeDomain={timeDomain}
+            headerPrefix={headerPrefix}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <Box
@@ -1887,8 +2099,147 @@ function SnowballNetLineCharts({
         mt: 1.5,
       }}
     >
-      {cards}
+      {visibleKeys.map((key) => {
+        const isOhlc = key === 'ohlc';
+        const content = isOhlc ? (
+          <OhlcChartCard
+            data={data}
+            instrument={instrument}
+            containerRef={containerRef}
+            height={ohlcChartHeight}
+            onResizePointerDown={onOhlcResizePointerDown}
+            onResizeKeyDown={onOhlcResizeKeyDown}
+          />
+        ) : (
+          renderLineChart(key)
+        );
+        if (!content) return null;
+
+        return (
+          <Box
+            key={key}
+            draggable
+            onDragStart={(event) => onChartDragStart(event, key)}
+            onDragOver={(event) => onChartDragOver(event, key)}
+            onDrop={(event) => onChartDrop(event, key)}
+            onDragEnd={onChartDragEnd}
+            sx={{
+              gridColumn: isOhlc ? '1 / -1' : undefined,
+              opacity: dragChartKey === key ? 0.4 : 1,
+              cursor: 'grab',
+              minWidth: 0,
+              transition:
+                'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+              transform:
+                dragOverChartKey === key && dragChartKey !== key
+                  ? 'translateY(-2px)'
+                  : 'none',
+              outline: '2px solid',
+              outlineColor:
+                dragOverChartKey === key && dragChartKey !== key
+                  ? 'primary.main'
+                  : 'transparent',
+              outlineOffset: 3,
+              borderRadius: 1,
+            }}
+          >
+            {content}
+          </Box>
+        );
+      })}
     </Box>
+  );
+}
+
+function OhlcChartCard({
+  data,
+  instrument,
+  containerRef,
+  height,
+  onResizePointerDown,
+  onResizeKeyDown,
+}: {
+  data: SnowballNetChartResponse | null;
+  instrument?: string;
+  containerRef: MutableRefObject<HTMLDivElement | null>;
+  height: number;
+  onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onResizeKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+}) {
+  const { t } = useTranslation(['common', 'strategy']);
+  return (
+    <>
+      <Paper variant="outlined" sx={{ p: 1, minWidth: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            mb: 0.75,
+          }}
+        >
+          <DragIndicatorIcon
+            sx={{ fontSize: 16, color: 'text.disabled', cursor: 'grab' }}
+          />
+          <TimelineIcon fontSize="small" color="action" />
+          <Typography variant="subtitle2">
+            {instrument ? instrument.replace('_', '/') : 'SnowballNet'}
+          </Typography>
+        </Box>
+        {data ? (
+          <Box
+            ref={containerRef}
+            sx={{
+              width: '100%',
+              height,
+              minHeight: MIN_OHLC_CHART_HEIGHT,
+            }}
+          />
+        ) : (
+          <Alert severity="info">{t('common:metrics.noData')}</Alert>
+        )}
+      </Paper>
+      {data ? (
+        <Box
+          role="separator"
+          aria-label={t('strategy:snowballNet.chart.resizeOhlcChart')}
+          aria-orientation="horizontal"
+          aria-valuemin={MIN_OHLC_CHART_HEIGHT}
+          aria-valuemax={MAX_OHLC_CHART_HEIGHT}
+          aria-valuenow={height}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onResizePointerDown(event);
+          }}
+          onKeyDown={onResizeKeyDown}
+          sx={{
+            height: 18,
+            my: 0.75,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'row-resize',
+            outline: 'none',
+            touchAction: 'none',
+            '&::before': {
+              content: '""',
+              width: 88,
+              height: 4,
+              borderRadius: 999,
+              bgcolor: 'divider',
+              transition: (muiTheme) =>
+                muiTheme.transitions.create('background-color', {
+                  duration: muiTheme.transitions.duration.shortest,
+                }),
+            },
+            '&:hover::before, &:focus-visible::before': {
+              bgcolor: 'primary.main',
+            },
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -1901,6 +2252,7 @@ function LineChartCard({
   percent = false,
   valueUnit,
   seriesLabelUnit,
+  headerPrefix,
 }: {
   title: string;
   lines: SnowballNetLineSeries[];
@@ -1910,6 +2262,7 @@ function LineChartCard({
   percent?: boolean;
   valueUnit?: string | null;
   seriesLabelUnit?: string | null;
+  headerPrefix?: ReactNode;
 }) {
   const { t } = useTranslation('strategy');
   const visible = lines.filter((line) => line.points.length >= 2);
@@ -1977,6 +2330,7 @@ function LineChartCard({
         alignItems="center"
         sx={{ mb: 0.5 }}
       >
+        {headerPrefix}
         <Typography variant="subtitle2">{title}</Typography>
         {thresholdChips.map(({ line, point }) => (
           <Chip
@@ -2051,15 +2405,21 @@ function LineChartCard({
 function SnowballNetChartSettingsDialog({
   open,
   settings,
+  chartOrderItems,
   onClose,
   onChange,
+  onOrderChange,
+  onOrderReset,
 }: {
   open: boolean;
   settings: SnowballNetChartSettings;
+  chartOrderItems: SnowballNetChartOrderItem[];
   onClose: () => void;
   onChange: (
     updater: (current: SnowballNetChartSettings) => SnowballNetChartSettings
   ) => void;
+  onOrderChange: (keys: SnowballNetChartKey[]) => void;
+  onOrderReset: () => void;
 }) {
   const { t } = useTranslation(['strategy', 'dashboard']);
   const toggleChart = (key: keyof SnowballNetChartSettings['charts']) => {
@@ -2132,6 +2492,27 @@ function SnowballNetChartSettingsDialog({
             onChange={() => toggleChart('nextAdd')}
           />
         </FormGroup>
+
+        <Divider sx={{ my: 1.5 }} />
+
+        <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+          {t('strategy:snowballNet.chart.settings.chartOrder')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {t('strategy:snowballNet.chart.settings.chartOrderDescription')}
+        </Typography>
+        <SnowballNetChartOrderList
+          items={chartOrderItems}
+          onChange={onOrderChange}
+        />
+        <Button
+          size="small"
+          color="inherit"
+          onClick={onOrderReset}
+          sx={{ mt: 0.75 }}
+        >
+          {t('strategy:snowballNet.chart.settings.resetChartOrder')}
+        </Button>
 
         <Divider sx={{ my: 1.5 }} />
 
@@ -2226,6 +2607,122 @@ function SnowballNetChartSettingsDialog({
         </Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+interface SnowballNetChartOrderItem {
+  key: SnowballNetChartKey;
+  label: string;
+  color?: string;
+}
+
+function SnowballNetChartOrderList({
+  items,
+  onChange,
+}: {
+  items: SnowballNetChartOrderItem[];
+  onChange: (keys: SnowballNetChartKey[]) => void;
+}) {
+  const { t } = useTranslation('common');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const moveItem = useCallback(
+    (from: number, to: number) => {
+      if (from < 0 || to < 0 || from === to || to >= items.length) {
+        return;
+      }
+      const next = [...items];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      onChange(next.map((item) => item.key));
+    },
+    [items, onChange]
+  );
+
+  const handleDragStart = useCallback(
+    (event: ReactDragEvent, index: number) => {
+      setDragIndex(index);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', items[index]?.key ?? '');
+    },
+    [items]
+  );
+
+  const handleDragOver = useCallback(
+    (event: ReactDragEvent, index: number) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (dragIndex !== null && dragIndex !== index) {
+        moveItem(dragIndex, index);
+        setDragIndex(index);
+      }
+    },
+    [dragIndex, moveItem]
+  );
+
+  const handleDragEnd = useCallback(() => setDragIndex(null), []);
+
+  return (
+    <List dense disablePadding>
+      {items.map((item, index) => (
+        <ListItem
+          key={item.key}
+          draggable
+          onDragStart={(event) => handleDragStart(event, index)}
+          onDragOver={(event) => handleDragOver(event, index)}
+          onDragEnd={handleDragEnd}
+          sx={{
+            cursor: 'grab',
+            bgcolor: dragIndex === index ? 'action.hover' : 'transparent',
+            borderRadius: 1,
+            mb: 0.5,
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+          secondaryAction={
+            <Box sx={{ display: 'flex' }}>
+              <IconButton
+                edge="end"
+                size="small"
+                onClick={() => moveItem(index, index - 1)}
+                disabled={index === 0}
+                aria-label={t('metrics.moveChartUp')}
+              >
+                <ArrowUpIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                edge="end"
+                size="small"
+                onClick={() => moveItem(index, index + 1)}
+                disabled={index === items.length - 1}
+                aria-label={t('metrics.moveChartDown')}
+              >
+                <ArrowDownIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          }
+        >
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <DragIndicatorIcon
+              fontSize="small"
+              sx={{ color: 'text.secondary' }}
+            />
+          </ListItemIcon>
+          <ListItemIcon sx={{ minWidth: 28 }}>
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                bgcolor: item.color ?? 'text.disabled',
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            />
+          </ListItemIcon>
+          <ListItemText primary={item.label} />
+        </ListItem>
+      ))}
+    </List>
   );
 }
 

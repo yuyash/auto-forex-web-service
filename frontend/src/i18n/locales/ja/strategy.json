@@ -81,7 +81,7 @@
     "next_add_distance_pips": "次回増し玉まで",
     "add_count": "増し玉回数",
     "exposure_pct": "エクスポージャー",
-    "margin_ratio_pct": "証拠金率",
+    "margin_ratio_pct": "証拠金精算割合",
     "pending_action": "未処理アクション"
   },
   "snapshotValues": {
@@ -108,7 +108,7 @@
       "netUnits": "ネットポジション数",
       "pipsFromAverage": "平均注文価格からのPips差",
       "lossCutThreshold": "ロスカットしきい値",
-      "marginRatio": "証拠金率",
+      "marginRatio": "証拠金精算割合",
       "pnl": "損益",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
@@ -133,11 +133,14 @@
       "settings": {
         "title": "チャート設定",
         "chartPanels": "表示するチャート",
+        "chartOrder": "チャートの順序",
+        "chartOrderDescription": "チャートをドラッグするか矢印ボタンで表示順序を変更できます。",
+        "resetChartOrder": "順序をリセット",
         "ohlc": "OHLC",
         "ohlcItems": "OHLCの表示項目",
         "tradeMarkers": "注文マーカー",
         "currentTick": "現在Tickライン",
-        "marginOverlay": "証拠金率をOHLCに重ねる"
+        "marginOverlay": "証拠金精算割合をOHLCに重ねる"
       },
       "markers": {
         "add": "増し玉",
@@ -150,7 +153,7 @@
         "average": "平均",
         "price": "価格",
         "pips": "Pips",
-        "margin": "証拠金",
+        "margin": "証拠金精算割合",
         "realizedPnl": "実現損益",
         "unrealizedPnl": "未実現損益",
         "reduceThreshold": "縮小",

@@ -699,6 +699,7 @@
   "metrics": {
     "title": "Metrics",
     "noData": "No metrics data available for this execution.",
+    "refreshAllCharts": "Refresh all charts",
     "configureCharts": "Chart settings",
     "chartOrderTitle": "Chart order",
     "chartOrderDescription": "Drag charts or use the arrow buttons to change their display order.",

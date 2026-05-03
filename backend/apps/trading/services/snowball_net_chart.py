@@ -81,7 +81,12 @@ OSCILLATOR_LINE_SPECS = (
         "#7c3aed",
         "snowballNet.chart.pipsFromAverage",
     ),
-    ("margin_ratio_pct", "Margin %", "#ea580c", "snowballNet.chart.marginRatio"),
+    (
+        "margin_ratio_pct",
+        "Margin closeout ratio",
+        "#ea580c",
+        "snowballNet.chart.marginRatio",
+    ),
 )
 
 PNL_LINE_SPECS = (
