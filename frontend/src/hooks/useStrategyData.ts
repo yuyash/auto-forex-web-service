@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { TaskType } from '../types/common';
 import type {
   StrategyHistoryResponse,
   StrategyMetricsResponse,
   StrategySnapshotResponse,
+  SnowballNetChartResponse,
 } from '../types/strategyVisualization';
 import { fetchTaskResourceObject } from '../services/api/taskResources';
 
@@ -17,6 +18,12 @@ export interface StrategyDataParams {
   ordering?: string;
   category?: string;
   metric_keys?: string;
+  center?: string;
+  before_bars?: number;
+  after_bars?: number;
+  follow?: string;
+  merge_markers?: string;
+  account_id?: string | number;
 }
 
 function cleanParams(params?: StrategyDataParams) {
@@ -130,6 +137,44 @@ export function useStrategyMetrics({
         'strategy/metrics',
         queryParams
       ),
+    staleTime: 0,
+    refetchInterval,
+  });
+}
+
+export function useSnowballNetChart({
+  taskId,
+  taskType,
+  executionRunId,
+  params,
+  enabled = true,
+  refetchInterval = false,
+}: {
+  taskId: string | number;
+  taskType: TaskType;
+  executionRunId?: string;
+  params?: StrategyDataParams;
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}) {
+  const queryParams = cleanParams({ ...params, execution_id: executionRunId });
+  return useQuery({
+    queryKey: [
+      'strategy-data',
+      taskType,
+      String(taskId),
+      'snowball-net-chart',
+      queryParams,
+    ],
+    enabled: enabled && Boolean(taskId),
+    queryFn: () =>
+      fetchTaskResourceObject<SnowballNetChartResponse>(
+        taskType,
+        taskId,
+        'strategy/net-chart',
+        queryParams
+      ),
+    placeholderData: keepPreviousData,
     staleTime: 0,
     refetchInterval,
   });

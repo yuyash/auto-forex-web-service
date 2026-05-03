@@ -12,6 +12,7 @@
   },
   "types": {
     "snowball": "Snowball Strategy",
+    "snowball_net": "SnowballNet Strategy",
     "trendFollowing": "Trend Following",
     "maCrossover": "MA Crossover",
     "breakout": "Breakout",
@@ -25,7 +26,8 @@
     "newsSpike": "News/Spike"
   },
   "descriptions": {
-    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side."
+    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side.",
+    "snowball_net": "Net-position Snowball variant for FIFO/netting OANDA accounts. Adds and partial closes are based on the average entry price."
   },
   "parameters": {
     "lotSize": "Lot Size",
@@ -67,7 +69,20 @@
     "account_balance": "Account Balance",
     "account_nav": "Account NAV",
     "lock_entered_at": "Lock Entered At",
-    "cooldown_until": "Cooldown Until"
+    "cooldown_until": "Cooldown Until",
+    "status": "Status",
+    "direction": "Direction",
+    "net_units": "Net Units",
+    "average_price": "Average Order Price",
+    "current_price": "Current Price",
+    "pips_from_average": "Pips From Average Order Price",
+    "target_price": "Exit Price",
+    "next_add_price": "Next Add Price",
+    "next_add_distance_pips": "Next Add Distance",
+    "add_count": "Add Count",
+    "exposure_pct": "Exposure",
+    "margin_ratio_pct": "Margin",
+    "pending_action": "Pending Action"
   },
   "snapshotValues": {
     "protection_level": {
@@ -76,6 +91,71 @@
       "locked": "Locked",
       "emergency": "Emergency",
       "unknown": "Unknown"
+    },
+    "direction": {
+      "long": "Long",
+      "short": "Short",
+      "auto": "Auto"
+    }
+  },
+  "snowballNet": {
+    "chart": {
+      "averagePrice": "Average order price",
+      "takeProfit": "Exit price",
+      "nextAdd": "Next add price",
+      "nextAddDisabled": "Next add off",
+      "currentPrice": "Current price",
+      "netUnits": "Net position size",
+      "pipsFromAverage": "Pips from average order price",
+      "lossCutThreshold": "Loss cut threshold",
+      "marginRatio": "Margin %",
+      "pnl": "PnL",
+      "realizedPnl": "Realized PnL",
+      "unrealizedPnl": "Unrealized PnL",
+      "marginReduceThreshold": "Margin reduce threshold",
+      "marginReduceTarget": "Margin reduce target",
+      "emergencyThreshold": "Emergency stop threshold",
+      "noData": "No Data",
+      "marketClosed": "Market closed",
+      "resizeOhlcChart": "Resize OHLC chart",
+      "tooltips": {
+        "followingCurrentTick": "Following current tick",
+        "followCurrentTick": "Follow current tick",
+        "mergedMarkers": "Merged markers",
+        "rawMarkers": "Raw markers",
+        "mergeMarkers": "Toggle marker merging"
+      },
+      "controls": {
+        "refreshInterval": "Refresh",
+        "off": "Off",
+        "seconds": "{{seconds}}s"
+      },
+      "settings": {
+        "title": "Chart settings",
+        "chartPanels": "Visible charts",
+        "ohlc": "OHLC",
+        "ohlcItems": "OHLC items",
+        "tradeMarkers": "Trade markers",
+        "currentTick": "Current tick line",
+        "marginOverlay": "Overlay margin on OHLC"
+      },
+      "markers": {
+        "add": "Add",
+        "close": "Close",
+        "count": "{{action}} x{{count}}"
+      },
+      "current": {
+        "direction": "Direction",
+        "net": "Net",
+        "average": "Avg",
+        "price": "Price",
+        "pips": "Pips",
+        "margin": "Margin",
+        "realizedPnl": "Realized PnL",
+        "unrealizedPnl": "Unrealized PnL",
+        "reduceThreshold": "Reduce",
+        "emergencyThreshold": "Emergency"
+      }
     }
   },
   "messages": {

@@ -1,0 +1,378 @@
+"""Unit tests for SnowballNet strategy behavior."""
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from types import SimpleNamespace
+
+from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult, Tick
+from apps.trading.enums import EventType
+from apps.trading.strategies.registry import registry
+from apps.trading.strategies.snowball_net.config import SnowballNetConfig
+from apps.trading.strategies.snowball_net.strategy import SnowballNetStrategy
+
+
+def _tick(bid: str, ask: str) -> Tick:
+    bid_dec = Decimal(bid)
+    ask_dec = Decimal(ask)
+    return Tick(
+        instrument="USD_JPY",
+        timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+        bid=bid_dec,
+        ask=ask_dec,
+        mid=(bid_dec + ask_dec) / Decimal("2"),
+    )
+
+
+def _state(strategy_state=None):
+    return SimpleNamespace(strategy_state=strategy_state or {})
+
+
+def test_snowball_net_registers_with_net_visualization_capability():
+    assert registry.is_registered("snowball_net")
+    capabilities = registry.capabilities(identifier="snowball_net")
+    assert capabilities["runtime"]["hedging"] is False
+    assert capabilities["runtime"]["netting"] is True
+    assert capabilities["visualization"]["kind"] == "snowball_net"
+
+
+def test_initial_entry_uses_net_position_merge_flags():
+    strategy = SnowballNetStrategy("USD_JPY", Decimal("0.01"), SnowballNetConfig.from_dict({}))
+    state = _state()
+
+    result = strategy.on_tick(tick=_tick("149.99", "150.01"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.OPEN_POSITION
+    assert event.strategy_type == "snowball_net"
+    assert event.merge_with_existing is True
+    assert event.strategy_event_type == "snowball_net_initial"
+    assert result.state.strategy_state["pending_action"]["kind"] == "open"
+
+
+def test_loss_cut_defaults_to_disabled_with_100_pip_threshold():
+    config = SnowballNetConfig.from_dict({})
+
+    assert config.loss_cut_enabled is False
+    assert config.loss_cut_threshold_pips == Decimal("100")
+
+
+def test_auto_direction_waits_for_warmup_then_opens_with_ema_trend():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "trade_direction": "auto",
+                "auto_direction_fast_period": 2,
+                "auto_direction_slow_period": 3,
+                "auto_direction_min_samples": 3,
+            }
+        ),
+    )
+    state = _state()
+
+    first = strategy.on_tick(tick=_tick("149.99", "150.01"), state=state)
+    assert first.events == []
+    assert first.state.strategy_state["direction"] == "auto"
+    assert first.state.strategy_state["last_action"]["action"] == "auto_direction_warmup"
+
+    second = strategy.on_tick(tick=_tick("150.09", "150.11"), state=first.state)
+    assert second.events == []
+
+    third = strategy.on_tick(tick=_tick("150.19", "150.21"), state=second.state)
+    assert len(third.events) == 1
+    event = third.events[0]
+    assert event.event_type == EventType.OPEN_POSITION
+    assert event.direction == "long"
+    assert third.state.strategy_state["direction"] == "long"
+    assert third.state.strategy_state["auto_direction_last_decision"]["direction"] == "long"
+
+
+def test_auto_direction_reselects_when_flat_again():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "trade_direction": "auto",
+                "auto_direction_fast_period": 2,
+                "auto_direction_slow_period": 3,
+                "auto_direction_min_samples": 3,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": False,
+            "direction": "auto",
+            "direction_mode": "auto",
+            "net_units": 0,
+            "auto_direction_samples": 3,
+            "auto_direction_fast_ema": "149.90",
+            "auto_direction_slow_ema": "150.00",
+            "auto_direction_signal": "short",
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.79", "149.81"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.OPEN_POSITION
+    assert event.direction == "short"
+    assert result.state.strategy_state["direction"] == "short"
+
+
+def test_open_execution_updates_average_net_state():
+    strategy = SnowballNetStrategy("USD_JPY", Decimal("0.01"), SnowballNetConfig.from_dict({}))
+    state = _state()
+    result = strategy.on_tick(tick=_tick("149.99", "150.01"), state=state)
+    entry_id = result.state.strategy_state["pending_action"]["entry_id"]
+
+    strategy.apply_event_execution_result(
+        state=result.state,
+        execution_result=EventExecutionResult(
+            execution_price=Decimal("150.02"),
+            executed_units=1000,
+            entry_binding=EntryExecutionBinding(
+                entry_id=entry_id,
+                position_id="position-1",
+                fill_price=Decimal("150.02"),
+            ),
+        ),
+    )
+
+    assert result.state.strategy_state["net_units"] == 1000
+    assert result.state.strategy_state["average_price"] == "150.02"
+    assert result.state.strategy_state["position_id"] == "position-1"
+    assert result.state.strategy_state["pending_action"] == {}
+
+
+def test_adverse_move_emits_add_against_average_price():
+    strategy = SnowballNetStrategy("USD_JPY", Decimal("0.01"), SnowballNetConfig.from_dict({}))
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 1000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 0,
+            "next_entry_id": 2,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.68", "149.70"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.OPEN_POSITION
+    assert event.strategy_event_type == "snowball_net_add"
+    assert event.merge_with_existing is True
+    assert event.actual_interval_pips == Decimal("30")
+
+
+def test_profit_move_emits_force_instrument_partial_close():
+    strategy = SnowballNetStrategy("USD_JPY", Decimal("0.01"), SnowballNetConfig.from_dict({}))
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 2000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 1,
+            "next_entry_id": 3,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("150.25", "150.27"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.CLOSE_POSITION
+    assert event.strategy_event_type == "snowball_net_take_profit"
+    assert event.force_instrument_close is True
+    assert event.units == 1000
+    assert event.close_reason == "net_take_profit"
+
+
+def test_margin_reduce_defaults_to_disabled():
+    config = SnowballNetConfig.from_dict({})
+
+    assert config.margin_reduce_enabled is False
+    assert config.margin_reduce_threshold_pct == Decimal("70")
+    assert config.margin_reduce_target_pct == Decimal("50")
+
+
+def test_margin_reduce_closes_units_to_approach_target_when_enabled():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "margin_reduce_enabled": True,
+                "margin_reduce_threshold_pct": 70,
+                "margin_reduce_target_pct": 50,
+                "max_add_count": 5,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 4000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 3,
+            "next_entry_id": 5,
+            "metrics": {"margin_ratio": "0.80"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("150.00", "150.02"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.CLOSE_POSITION
+    assert event.strategy_event_type == "snowball_net_margin_reduce"
+    assert event.close_reason == "margin_protection"
+    assert event.units == 1500
+    assert result.state.strategy_state["pending_action"]["reason"] == "margin_reduce"
+
+
+def test_emergency_stop_uses_configured_margin_threshold():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "emergency_enabled": True,
+                "emergency_threshold_pct": 95,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 2000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 1,
+            "metrics": {"margin_ratio": "0.96"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("150.00", "150.02"), state=state)
+
+    assert result.events == []
+    assert result.should_stop is True
+    assert result.stop_reason == "SnowballNet emergency margin threshold reached: 96.00%"
+
+
+def test_loss_cut_emits_full_close_when_enabled():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "loss_cut_enabled": True,
+                "loss_cut_threshold_pips": 10,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 3000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 2,
+            "next_entry_id": 4,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.89", "149.91"), state=state)
+
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.event_type == EventType.CLOSE_POSITION
+    assert event.strategy_event_type == "snowball_net_loss_cut"
+    assert event.close_reason == "net_loss_cut"
+    assert event.units == 3000
+    assert result.state.strategy_state["pending_action"]["reason"] == "loss_cut"
+
+
+def test_loss_cut_close_execution_resets_net_state_for_restart():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "loss_cut_enabled": True,
+                "loss_cut_threshold_pips": 10,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 3000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 2,
+            "next_entry_id": 4,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+    result = strategy.on_tick(tick=_tick("149.89", "149.91"), state=state)
+
+    strategy.apply_event_execution_result(
+        state=result.state,
+        execution_result=EventExecutionResult(
+            execution_price=Decimal("149.89"),
+            executed_units=3000,
+        ),
+    )
+
+    assert result.state.strategy_state["initialised"] is False
+    assert result.state.strategy_state["net_units"] == 0
+    assert result.state.strategy_state["average_price"] is None
+    assert result.state.strategy_state["add_count"] == 0
+
+
+def test_metrics_include_dotted_next_add_when_add_limit_reached():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict({"max_add_count": 1}),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 2000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 1,
+            "next_entry_id": 3,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.68", "149.70"), state=state)
+    metrics = result.state.strategy_state["metrics"]
+
+    assert result.events == []
+    assert metrics["snowball_net_can_add"] is False
+    assert metrics["snowball_net_next_add_price"] is None
+    assert metrics["snowball_net_theoretical_next_add_price"] == "149.700"

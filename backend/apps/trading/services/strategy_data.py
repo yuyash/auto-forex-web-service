@@ -97,6 +97,21 @@ class StrategyDataService:
             "results": points,
         }
 
+    def net_chart(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
+        query = _query_from_request(request, default_execution_id=task.execution_id)
+        context = _load_context(task=task, task_type_label=task_type_label, query=query)
+        from apps.trading.services.snowball_net_chart import build_snowball_net_chart
+
+        return build_snowball_net_chart(
+            request=request,
+            task=task,
+            task_type_label=task_type_label,
+            execution_id=query.execution_id,
+            strategy_type=context["strategy_type"],
+            strategy_state=context["strategy_state"],
+            last_tick_timestamp=context["last_tick_timestamp"],
+        )
+
 
 def _query_from_request(request: Request, *, default_execution_id: Any) -> StrategyDataQuery:
     params = request.query_params

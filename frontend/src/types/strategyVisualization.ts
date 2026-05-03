@@ -197,3 +197,61 @@ export interface StrategyOhlcLayers {
     until?: string | null;
   };
 }
+
+export interface SnowballNetCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
+export interface SnowballNetLinePoint {
+  time: number;
+  value: number;
+}
+
+export interface SnowballNetLineSeries {
+  id: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  line_style?: StrategyOhlcLineStyle;
+  points: SnowballNetLinePoint[];
+}
+
+export interface SnowballNetMarker {
+  id: string;
+  time: number;
+  timestamp?: string | null;
+  action: 'open' | 'close' | string;
+  direction?: string | null;
+  units: number;
+  price?: number | null;
+  count: number;
+  label?: string | null;
+  description?: string | null;
+  trade_ids?: string[];
+  position_id?: string | null;
+}
+
+export interface SnowballNetChartResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  window: {
+    granularity: string;
+    granularity_seconds: number;
+    center: string;
+    since: string;
+    until: string;
+    follow: boolean;
+    merge_markers: boolean;
+  };
+  current: Record<string, unknown>;
+  candles: SnowballNetCandle[];
+  price_lines: SnowballNetLineSeries[];
+  oscillator_lines: SnowballNetLineSeries[];
+  markers: SnowballNetMarker[];
+}

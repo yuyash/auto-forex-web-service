@@ -12,6 +12,7 @@
   },
   "types": {
     "snowball": "スノーボール戦略",
+    "snowball_net": "スノーボールNet戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
     "breakout": "ブレイクアウト",
@@ -25,7 +26,8 @@
     "newsSpike": "ニュース/スパイク"
   },
   "descriptions": {
-    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。"
+    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。",
+    "snowball_net": "FIFO/ネット方式のOANDA口座向けのスノーボール派生戦略。平均注文価格を基準に増し玉と部分決済を行います。"
   },
   "parameters": {
     "lotSize": "ロットサイズ",
@@ -67,7 +69,20 @@
     "account_balance": "口座残高",
     "account_nav": "口座NAV",
     "lock_entered_at": "ロック開始日時",
-    "cooldown_until": "クールダウン終了日時"
+    "cooldown_until": "クールダウン終了日時",
+    "status": "状態",
+    "direction": "方向",
+    "net_units": "ネットユニット数",
+    "average_price": "平均注文価格",
+    "current_price": "現在価格",
+    "pips_from_average": "平均注文価格からのPips差",
+    "target_price": "決済価格",
+    "next_add_price": "次回増し玉価格",
+    "next_add_distance_pips": "次回増し玉まで",
+    "add_count": "増し玉回数",
+    "exposure_pct": "エクスポージャー",
+    "margin_ratio_pct": "証拠金率",
+    "pending_action": "未処理アクション"
   },
   "snapshotValues": {
     "protection_level": {
@@ -76,6 +91,71 @@
       "locked": "ロック",
       "emergency": "緊急",
       "unknown": "不明"
+    },
+    "direction": {
+      "long": "買い",
+      "short": "売り",
+      "auto": "自動"
+    }
+  },
+  "snowballNet": {
+    "chart": {
+      "averagePrice": "平均注文価格",
+      "takeProfit": "決済価格",
+      "nextAdd": "次回増し玉価格",
+      "nextAddDisabled": "次回増し玉不可",
+      "currentPrice": "現在価格",
+      "netUnits": "ネットポジション数",
+      "pipsFromAverage": "平均注文価格からのPips差",
+      "lossCutThreshold": "ロスカットしきい値",
+      "marginRatio": "証拠金率",
+      "pnl": "損益",
+      "realizedPnl": "実現損益",
+      "unrealizedPnl": "未実現損益",
+      "marginReduceThreshold": "縮小開始率",
+      "marginReduceTarget": "縮小目標率",
+      "emergencyThreshold": "緊急停止しきい値",
+      "noData": "データなし",
+      "marketClosed": "マーケット休場",
+      "resizeOhlcChart": "OHLCチャートの高さを変更",
+      "tooltips": {
+        "followingCurrentTick": "現在のティックに追従中",
+        "followCurrentTick": "現在のティックに追従",
+        "mergedMarkers": "マーカーを集約表示",
+        "rawMarkers": "マーカーを個別表示",
+        "mergeMarkers": "マーカー集約を切り替え"
+      },
+      "controls": {
+        "refreshInterval": "更新間隔",
+        "off": "オフ",
+        "seconds": "{{seconds}}秒"
+      },
+      "settings": {
+        "title": "チャート設定",
+        "chartPanels": "表示するチャート",
+        "ohlc": "OHLC",
+        "ohlcItems": "OHLCの表示項目",
+        "tradeMarkers": "注文マーカー",
+        "currentTick": "現在Tickライン",
+        "marginOverlay": "証拠金率をOHLCに重ねる"
+      },
+      "markers": {
+        "add": "増し玉",
+        "close": "決済",
+        "count": "{{action}} x{{count}}"
+      },
+      "current": {
+        "direction": "方向",
+        "net": "ネット",
+        "average": "平均",
+        "price": "価格",
+        "pips": "Pips",
+        "margin": "証拠金",
+        "realizedPnl": "実現損益",
+        "unrealizedPnl": "未実現損益",
+        "reduceThreshold": "縮小",
+        "emergencyThreshold": "緊急停止"
+      }
     }
   },
   "messages": {

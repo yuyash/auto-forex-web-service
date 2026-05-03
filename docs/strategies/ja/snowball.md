@@ -40,6 +40,8 @@
 - ヘッジ可能な口座では LONG と SHORT のサイクルを独立に初期化する。
 - ヘッジ無効時は LONG のみで初期化し、SHORT サイクルは作成しない。
 - FIFO 制約のある口座は想定していない。
+- 両建て不可かつ FIFO 制約を受ける OANDA US 口座では、この戦略ではなく
+  `docs/strategies/ja/snowball-net.md` の SnowballNet を使う。
 
 ### 2.2 価格基準
 

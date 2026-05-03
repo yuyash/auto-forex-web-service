@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.46.1",
+        "version": "1.46.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -4089,6 +4089,114 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/strategy/net-chart/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_net_chart_retrieve",
+                "description": "Retrieve SnowballNet OHLC, average-price lines, metrics, and markers.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "after_bars",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "before_bars",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "center",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "follow",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "merge_markers",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskSnowballNetChartResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/strategy/snapshot/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_snapshot_retrieve",
@@ -6072,6 +6180,114 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskStrategyMetricsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy/net-chart/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_net_chart_retrieve",
+                "description": "Retrieve SnowballNet OHLC, average-price lines, metrics, and markers.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "after_bars",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "before_bars",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "center",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "follow",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "merge_markers",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskSnowballNetChartResponse"
                                 }
                             }
                         },
@@ -10746,6 +10962,51 @@
                     "next",
                     "previous",
                     "results"
+                ]
+            },
+            "TaskSnowballNetChartResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "window": {},
+                    "current": {},
+                    "candles": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "price_lines": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "oscillator_lines": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "markers": {
+                        "type": "array",
+                        "items": {}
+                    }
+                },
+                "required": [
+                    "candles",
+                    "current",
+                    "execution_id",
+                    "instrument",
+                    "markers",
+                    "oscillator_lines",
+                    "price_lines",
+                    "strategy_type",
+                    "window"
                 ]
             },
             "TaskStrategyCyclesResponse": {

@@ -159,6 +159,7 @@ class OrderService:
         units: int | None = None,
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
+        force_instrument_close: bool = False,
     ) -> tuple[Position, Decimal, Order | None]:
         """
         Close an existing position (full or partial).
@@ -205,7 +206,7 @@ class OrderService:
             close_units_decimal = Decimal(str(close_units_int))
 
             # Use trade ID-based close when available (required for hedging accounts)
-            if position.oanda_trade_id and not self.dry_run:
+            if position.oanda_trade_id and not self.dry_run and not force_instrument_close:
                 from apps.market.services.oanda import OpenTrade, OrderDirection
 
                 oanda_direction = (

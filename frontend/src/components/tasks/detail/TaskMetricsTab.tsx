@@ -60,6 +60,7 @@ interface TaskMetricsTabProps {
   /** Current tick price for the sequence position line */
   currentTickPrice?: number | null;
   timezone?: string;
+  strategyType?: string;
 }
 
 /** Metrics to chart and their display order */
@@ -80,6 +81,23 @@ const CHART_METRICS: {
   { key: 'win_rate', color: '#00796b', format: 'pct' },
   { key: 'winning_trades', color: '#2e7d32', format: 'int' },
   { key: 'losing_trades', color: '#c62828', format: 'int' },
+  { key: 'ticks_processed', color: '#546e7a', format: 'int' },
+];
+
+const SNOWBALL_NET_CHART_METRICS: typeof CHART_METRICS = [
+  { key: 'current_balance', color: '#1976d2', format: 'currency' },
+  { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
+  { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
+  { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
+  { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
+  { key: 'snowball_net_net_units', color: '#0288d1', format: 'int' },
+  { key: 'snowball_net_average_price', color: '#2563eb' },
+  { key: 'snowball_net_current_price', color: '#0f766e' },
+  { key: 'snowball_net_pips_from_average', color: '#7c3aed' },
+  { key: 'snowball_net_next_add_distance_pips', color: '#dc2626' },
+  { key: 'snowball_net_add_count', color: '#455a64', format: 'int' },
+  { key: 'snowball_net_exposure_pct', color: '#ea580c', format: 'pct' },
+  { key: 'total_trades', color: '#5d4037', format: 'int' },
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
 ];
 
@@ -320,6 +338,7 @@ export function TaskMetricsTab({
   currentTickTimestamp,
   currentTickPrice,
   timezone = 'UTC',
+  strategyType,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
   const { settings } = useAppSettings();
@@ -327,6 +346,10 @@ export function TaskMetricsTab({
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
   const hasOhlc = !!(instrument && startTime);
+  const chartMetricDefinitions =
+    strategyType === 'snowball_net'
+      ? SNOWBALL_NET_CHART_METRICS
+      : CHART_METRICS;
 
   const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
@@ -344,8 +367,8 @@ export function TaskMetricsTab({
         }
       }
     }
-    return CHART_METRICS.filter((m) => keysWithData.has(m.key));
-  }, [data]);
+    return chartMetricDefinitions.filter((m) => keysWithData.has(m.key));
+  }, [chartMetricDefinitions, data]);
 
   // Build the list of all chart keys (OHLC first, then metrics) for ordering
   const allChartKeys = useMemo(() => {
@@ -361,9 +384,9 @@ export function TaskMetricsTab({
   // Map metric key → metric config for quick lookup
   const metricsMap = useMemo(() => {
     const map = new Map<string, (typeof CHART_METRICS)[number]>();
-    for (const m of CHART_METRICS) map.set(m.key, m);
+    for (const m of chartMetricDefinitions) map.set(m.key, m);
     return map;
-  }, []);
+  }, [chartMetricDefinitions]);
 
   // Compute effective interval from data range (for formatting)
   const effectiveInterval = useMemo(() => {
