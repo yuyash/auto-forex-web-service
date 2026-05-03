@@ -107,7 +107,7 @@
     "description": "説明",
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
-    "marginRatio": "証拠金清算割合",
+    "marginRatio": "証拠金精算割合",
     "currentAtr": "ATR",
     "status": "ステータス",
     "taskInformation": "タスク情報",
@@ -590,7 +590,7 @@
       }
     },
     "summary": {
-      "margin_ratio": "証拠金清算割合",
+      "margin_ratio": "証拠金精算割合",
       "open_positions": "オープンポジション数",
       "closed_positions": "クローズポジション数"
     },
@@ -699,6 +699,7 @@
   "metrics": {
     "title": "メトリクス",
     "noData": "この実行のメトリクスデータはありません。",
+    "refreshAllCharts": "すべてのチャートを更新",
     "configureCharts": "チャート設定",
     "chartOrderTitle": "チャートの順序",
     "chartOrderDescription": "ドラッグまたは矢印ボタンでチャートの表示順序を変更できます。",
@@ -714,7 +715,7 @@
     "unrealized_pnl": "未実現損益",
     "unrealized_pnl_quote": "未実現損益",
     "total_return": "トータルリターン",
-    "margin_ratio": "証拠金清算割合",
+    "margin_ratio": "証拠金精算割合",
     "open_positions": "オープンポジション数",
     "closed_positions": "クローズポジション数",
     "total_trades": "総取引数",

@@ -19,11 +19,7 @@ export function TableFilterBar({ children, sx }: TableFilterBarProps) {
           gap: 1,
           flexWrap: 'wrap',
           alignItems: { xs: 'stretch', sm: 'center' },
-          p: { xs: 0.75, sm: 0 },
-          border: { xs: '1px solid', sm: 'none' },
-          borderColor: 'divider',
-          borderRadius: { xs: 1, sm: 0 },
-          bgcolor: { xs: 'background.paper', sm: 'transparent' },
+          p: 0,
         },
         ...extraSx,
       ]}

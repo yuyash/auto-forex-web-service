@@ -124,42 +124,38 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
   const isTrading = taskType === 'trading';
 
-  const canStart = actionPolicy?.can_start ?? status === TaskStatusEnum.CREATED;
+  const statusAllowsStart = status === TaskStatusEnum.CREATED;
+  const statusAllowsStop = [
+    TaskStatusEnum.STARTING,
+    TaskStatusEnum.RUNNING,
+    TaskStatusEnum.IDLE,
+    TaskStatusEnum.DRAINING,
+    ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
+  ].includes(status);
+  const statusAllowsPause = !isTrading && status === TaskStatusEnum.RUNNING;
+  const statusAllowsResume = isTrading
+    ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
+    : status === TaskStatusEnum.PAUSED;
+  const statusAllowsRestart = [
+    TaskStatusEnum.STOPPED,
+    TaskStatusEnum.COMPLETED,
+    TaskStatusEnum.FAILED,
+  ].includes(status);
+  const statusAllowsDelete = [
+    TaskStatusEnum.CREATED,
+    TaskStatusEnum.STOPPED,
+    TaskStatusEnum.COMPLETED,
+    TaskStatusEnum.FAILED,
+  ].includes(status);
 
-  const canStop =
-    actionPolicy?.can_stop ??
-    [
-      TaskStatusEnum.STARTING,
-      TaskStatusEnum.RUNNING,
-      TaskStatusEnum.IDLE,
-      TaskStatusEnum.DRAINING,
-      ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
-    ].includes(status);
-  const canPause =
-    actionPolicy?.can_pause ??
-    (!isTrading && status === TaskStatusEnum.RUNNING);
-  const canResume =
-    actionPolicy?.can_resume ??
-    (isTrading
-      ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
-      : status === TaskStatusEnum.PAUSED);
+  const canStart = (actionPolicy?.can_start ?? true) && statusAllowsStart;
+  const canStop = (actionPolicy?.can_stop ?? true) && statusAllowsStop;
+  const canPause = (actionPolicy?.can_pause ?? true) && statusAllowsPause;
+  const canResume = (actionPolicy?.can_resume ?? true) && statusAllowsResume;
   const pauseEnabled = canPause;
   const resumeEnabled = canResume;
-  const canRestart =
-    actionPolicy?.can_restart ??
-    [
-      TaskStatusEnum.STOPPED,
-      TaskStatusEnum.COMPLETED,
-      TaskStatusEnum.FAILED,
-    ].includes(status);
-  const canDelete =
-    actionPolicy?.can_delete ??
-    [
-      TaskStatusEnum.CREATED,
-      TaskStatusEnum.STOPPED,
-      TaskStatusEnum.COMPLETED,
-      TaskStatusEnum.FAILED,
-    ].includes(status);
+  const canRestart = (actionPolicy?.can_restart ?? true) && statusAllowsRestart;
+  const canDelete = (actionPolicy?.can_delete ?? true) && statusAllowsDelete;
 
   const handleAction = useCallback(
     async (

@@ -704,36 +704,38 @@ export const BacktestTaskDetail: React.FC = () => {
             cancelAction();
             try {
               if (type === 'start') {
-                const updatedTask = await startTask.mutate(actionTaskId);
-                applyOptimisticStatus(updatedTask.status, [
-                  TaskStatus.STARTING,
+                applyOptimisticStatus(TaskStatus.STARTING, [
                   TaskStatus.RUNNING,
-                  TaskStatus.FAILED,
+                  TaskStatus.IDLE,
+                  TaskStatus.DRAINING,
                 ]);
+                await startTask.mutate(actionTaskId);
               } else if (type === 'pause') {
-                const updatedTask = await pauseTask.mutate(actionTaskId);
-                applyOptimisticStatus(updatedTask.status, [
+                applyOptimisticStatus(TaskStatus.PAUSED, [
                   TaskStatus.PAUSED,
                   TaskStatus.RUNNING,
                   TaskStatus.FAILED,
                 ]);
+                await pauseTask.mutate(actionTaskId);
               } else if (type === 'resume') {
-                const updatedTask = await resumeTask.mutate(actionTaskId);
-                applyOptimisticStatus(updatedTask.status, [
+                applyOptimisticStatus(TaskStatus.STARTING, [
                   TaskStatus.RUNNING,
-                  TaskStatus.PAUSED,
-                  TaskStatus.FAILED,
+                  TaskStatus.IDLE,
+                  TaskStatus.DRAINING,
                 ]);
+                await resumeTask.mutate(actionTaskId);
               } else if (type === 'restart') {
-                const updatedTask = await restartTask.mutate(actionTaskId);
-                applyOptimisticStatus(updatedTask.status, [
-                  TaskStatus.STARTING,
+                applyOptimisticStatus(TaskStatus.STARTING, [
                   TaskStatus.RUNNING,
-                  TaskStatus.FAILED,
+                  TaskStatus.IDLE,
+                  TaskStatus.DRAINING,
                 ]);
+                await restartTask.mutate(actionTaskId);
               }
               await refreshTask();
+              clearOptimisticStatus();
             } catch (error) {
+              clearOptimisticStatus();
               showError(formatTaskActionError(error, 'Failed to update task'));
             }
           }}

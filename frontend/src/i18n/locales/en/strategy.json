@@ -81,7 +81,7 @@
     "next_add_distance_pips": "Next Add Distance",
     "add_count": "Add Count",
     "exposure_pct": "Exposure",
-    "margin_ratio_pct": "Margin",
+    "margin_ratio_pct": "Margin closeout ratio",
     "pending_action": "Pending Action"
   },
   "snapshotValues": {
@@ -108,7 +108,7 @@
       "netUnits": "Net position size",
       "pipsFromAverage": "Pips from average order price",
       "lossCutThreshold": "Loss cut threshold",
-      "marginRatio": "Margin %",
+      "marginRatio": "Margin closeout ratio",
       "pnl": "PnL",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
@@ -133,11 +133,14 @@
       "settings": {
         "title": "Chart settings",
         "chartPanels": "Visible charts",
+        "chartOrder": "Chart order",
+        "chartOrderDescription": "Drag charts or use the arrow buttons to change their display order.",
+        "resetChartOrder": "Reset order",
         "ohlc": "OHLC",
         "ohlcItems": "OHLC items",
         "tradeMarkers": "Trade markers",
         "currentTick": "Current tick line",
-        "marginOverlay": "Overlay margin on OHLC"
+        "marginOverlay": "Overlay margin closeout ratio on OHLC"
       },
       "markers": {
         "add": "Add",
@@ -150,7 +153,7 @@
         "average": "Avg",
         "price": "Price",
         "pips": "Pips",
-        "margin": "Margin",
+        "margin": "Margin closeout",
         "realizedPnl": "Realized PnL",
         "unrealizedPnl": "Unrealized PnL",
         "reduceThreshold": "Reduce",

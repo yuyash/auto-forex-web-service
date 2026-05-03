@@ -73,6 +73,10 @@ export default function TradingTaskCard({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { settings: appSettings } = useAppSettings();
+  const activePollingIntervalMs = Math.min(
+    appSettings.healthCheckIntervalSeconds * 1000,
+    2_000
+  );
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
@@ -105,7 +109,7 @@ export default function TradingTaskCard({
   const { data: polledTask } = useTradingTask(task.id, {
     enabled: pollingEnabled,
     enablePolling: pollingEnabled,
-    pollingInterval: appSettings.healthCheckIntervalSeconds * 1000,
+    pollingInterval: activePollingIntervalMs,
   });
 
   // Use polled status if available, otherwise use task status
@@ -127,7 +131,7 @@ export default function TradingTaskCard({
     undefined,
     {
       polling: shouldShowLiveSummary,
-      interval: appSettings.healthCheckIntervalSeconds * 1000,
+      interval: activePollingIntervalMs,
     }
   );
 
@@ -211,9 +215,10 @@ export default function TradingTaskCard({
 
   const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await startTask.mutate(String(taskId));
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('trading:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -234,9 +239,10 @@ export default function TradingTaskCard({
 
   const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STOPPING);
     try {
       await stopTask.mutate({ id: String(taskId) });
-      setOptimisticStatus(TaskStatus.STOPPED);
+      setOptimisticStatus(null);
       showSuccess(t('trading:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -254,9 +260,10 @@ export default function TradingTaskCard({
 
   const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await resumeTask.mutate(String(taskId));
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('trading:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -280,9 +287,10 @@ export default function TradingTaskCard({
 
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await restartTask.mutate(String(taskId));
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('trading:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {

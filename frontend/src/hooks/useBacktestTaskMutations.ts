@@ -5,10 +5,14 @@ import type {
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../types';
+import { TaskStatus } from '../types/common';
 import {
+  beginTaskStatusTransition,
+  clearTaskStatusTransitionByKind,
   invalidateTaskDerivedCaches,
   patchTaskDerivedCaches,
   patchTaskStatusCache,
+  refreshTaskStatusCaches,
   upsertTaskCaches,
 } from './taskMutationCache';
 import {
@@ -71,6 +75,27 @@ export function useUpdateBacktestTask(options?: {
 
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close' | 'drain';
 
+function optimisticStopStatus(mode?: StopMode): TaskStatus {
+  return mode === 'drain' ? TaskStatus.DRAINING : TaskStatus.STOPPING;
+}
+
+function stopSettleStatuses(mode?: StopMode): TaskStatus[] {
+  return mode === 'drain'
+    ? [
+        TaskStatus.DRAINING,
+        TaskStatus.STOPPING,
+        TaskStatus.STOPPED,
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+      ]
+    : [
+        TaskStatus.STOPPING,
+        TaskStatus.STOPPED,
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+      ];
+}
+
 export function useStopBacktestTask(options?: {
   onSuccess?: (data: BackendTaskStopResponse) => void;
   onError?: (error: Error) => void;
@@ -87,6 +112,14 @@ export function useStopBacktestTask(options?: {
         variables.drainDurationMinutes
       ),
     {
+      onMutate: (variables) => {
+        beginTaskStatusTransition(
+          'backtest',
+          variables.id,
+          optimisticStopStatus(variables.mode),
+          stopSettleStatuses(variables.mode)
+        );
+      },
       onSuccess: async (data, variables) => {
         // The optimistic status depends on the stop mode: DRAIN keeps
         // the task running in DRAINING state; everything else
@@ -99,7 +132,11 @@ export function useStopBacktestTask(options?: {
         await invalidateTaskDerivedCaches('backtest', variables.id);
         options?.onSuccess?.(data);
       },
-      onError: (error) => options?.onError?.(error),
+      onError: (error, variables) => {
+        clearTaskStatusTransitionByKind('backtest', variables.id);
+        void refreshTaskStatusCaches('backtest', variables.id);
+        options?.onError?.(error);
+      },
     }
   );
 }

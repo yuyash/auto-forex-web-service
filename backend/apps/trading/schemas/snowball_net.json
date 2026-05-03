@@ -275,9 +275,9 @@
     "margin_reduce_enabled": {
       "type": "boolean",
       "title": "Margin Reduce Enabled",
-      "title_ja": "証拠金率による縮小",
+      "title_ja": "証拠金精算割合による縮小",
       "description": "Close part of the net position when margin ratio becomes too high. The strategy estimates the close size needed to approach the target percentage, with Margin Reduce Close Ratio used as a fallback.",
-      "description_ja": "証拠金率が高すぎるときにネット建玉を一部決済します。目標率に近づく決済数量を推定し、推定できない場合は縮小決済比率を使います。",
+      "description_ja": "証拠金精算割合が高すぎるときにネット建玉を一部決済します。目標率に近づく決済数量を推定し、推定できない場合は縮小決済比率を使います。",
       "default": false,
       "group": "Margin Protection",
       "group_ja": "証拠金保護"

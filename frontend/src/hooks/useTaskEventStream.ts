@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiConfig } from '../api/apiConfig';
 import { queryKeys } from '../config/reactQuery';
-import { TaskType } from '../types/common';
+import type { PaginatedResponse } from '../types';
+import { TaskType, type TaskStatus } from '../types/common';
 import { logger } from '../utils/logger';
+import { applyTaskStatusTransition } from './taskStatusTransitions';
 
 interface TaskSnapshot {
   id?: string;
@@ -16,6 +18,17 @@ interface TaskSnapshot {
   error_message?: string | null;
   updated_at?: string | null;
 }
+
+type StreamTask = {
+  id: string;
+  status: TaskStatus;
+  progress?: number | null;
+  execution_id?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error_message?: string | null;
+  updated_at?: string | null;
+};
 
 const STREAM_RETRY_DELAY_MS = 5000;
 const UUID_PATTERN =
@@ -46,36 +59,55 @@ function parseSseEvent(raw: string): { event: string; data: string } | null {
   };
 }
 
-function applySnapshot<TTask>(
+function applySnapshot<TTask extends StreamTask>(
+  taskType: TaskType,
   current: TTask | undefined,
   snapshot: TaskSnapshot
-) {
+): TTask | undefined {
   if (!current || typeof current !== 'object') {
     return current;
   }
-  return {
+  const merged = {
     ...current,
-    status: snapshot.status ?? (current as { status?: string }).status,
-    progress: snapshot.progress ?? (current as { progress?: number }).progress,
-    execution_id:
-      snapshot.execution_id ??
-      (current as { execution_id?: string | null }).execution_id,
-    started_at:
-      snapshot.started_at ??
-      (current as { started_at?: string | null }).started_at,
-    completed_at:
-      snapshot.completed_at ??
-      (current as { completed_at?: string | null }).completed_at,
-    error_message:
-      snapshot.error_message ??
-      (current as { error_message?: string | null }).error_message,
-    updated_at:
-      snapshot.updated_at ??
-      (current as { updated_at?: string | null }).updated_at,
+    status: (snapshot.status as TaskStatus | undefined) ?? current.status,
+    progress: snapshot.progress ?? current.progress,
+    execution_id: snapshot.execution_id ?? current.execution_id,
+    started_at: snapshot.started_at ?? current.started_at,
+    completed_at: snapshot.completed_at ?? current.completed_at,
+    error_message: snapshot.error_message ?? current.error_message,
+    updated_at: snapshot.updated_at ?? current.updated_at,
   } satisfies TTask;
+  return applyTaskStatusTransition(taskType, merged);
 }
 
-export function useTaskEventStream<TTask>({
+function applySnapshotToList<TTask extends StreamTask>(
+  taskType: TaskType,
+  current: PaginatedResponse<TTask> | undefined,
+  snapshot: TaskSnapshot
+): PaginatedResponse<TTask> | undefined {
+  if (!current || !snapshot.id) {
+    return current;
+  }
+  let changed = false;
+  const results = current.results.map((task) => {
+    if (task.id !== snapshot.id) {
+      return task;
+    }
+    changed = true;
+    return applyTaskStatusTransition(taskType, {
+      ...task,
+      status: (snapshot.status as TaskStatus | undefined) ?? task.status,
+      execution_id: snapshot.execution_id ?? task.execution_id,
+      started_at: snapshot.started_at ?? task.started_at,
+      completed_at: snapshot.completed_at ?? task.completed_at,
+      error_message: snapshot.error_message ?? task.error_message,
+      updated_at: snapshot.updated_at ?? task.updated_at,
+    });
+  });
+  return changed ? { ...current, results } : current;
+}
+
+export function useTaskEventStream<TTask extends StreamTask>({
   taskType,
   taskId,
   enabled,
@@ -139,7 +171,11 @@ export function useTaskEventStream<TTask>({
             const snapshot = JSON.parse(parsed.data) as TaskSnapshot;
             queryClient.setQueryData<TTask>(
               taskDetailKey(taskType, taskId),
-              (current) => applySnapshot(current, snapshot)
+              (current) => applySnapshot(taskType, current, snapshot)
+            );
+            queryClient.setQueriesData<PaginatedResponse<TTask> | undefined>(
+              { queryKey: taskListKey(taskType) },
+              (current) => applySnapshotToList(taskType, current, snapshot)
             );
             void queryClient.invalidateQueries({
               queryKey: taskListKey(taskType),

@@ -113,10 +113,14 @@ export default function BacktestTasksPage() {
   const hasActiveTasks = !!data?.results.some((task) =>
     shouldPollTaskStatus(task.status)
   );
+  const activePollingIntervalMs = Math.min(
+    appSettings.taskPollingIntervalSeconds * 1000,
+    2_000
+  );
   const pollingPolicy = usePollingPolicy({
     enabled: true,
     baseIntervalMs: hasActiveTasks
-      ? appSettings.taskPollingIntervalSeconds * 1000
+      ? activePollingIntervalMs
       : appSettings.taskPollingIntervalSeconds * 1000 * 6,
   });
 

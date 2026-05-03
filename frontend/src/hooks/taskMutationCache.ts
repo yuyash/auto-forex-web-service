@@ -1,7 +1,6 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
-import type { TaskStatus } from '../types/common';
-import { TaskType } from '../types/common';
+import { TaskStatus, TaskType } from '../types/common';
 import {
   clearTaskExecutions,
   patchTaskLogComponents,
@@ -21,6 +20,11 @@ import {
   readOrderingFilter,
   type EntityFilterSpec,
 } from './listFilterUtils';
+import {
+  applyTaskStatusTransition,
+  clearTaskStatusTransition,
+  markTaskStatusTransition,
+} from './taskStatusTransitions';
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
@@ -49,6 +53,17 @@ function getTaskDerivedKeys(taskKind: TaskKind, taskId: string) {
     strategyEvents: queryKeys.taskResources.strategyEvents(taskType, taskId),
     logComponents: queryKeys.taskResources.logComponents(taskType, taskId),
   };
+}
+
+function taskTypeForKind(taskKind: TaskKind): TaskType {
+  return taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
+}
+
+function applyTaskTransition<T extends TaskEntity>(
+  taskKind: TaskKind,
+  task: T
+): T {
+  return applyTaskStatusTransition(taskTypeForKind(taskKind), task);
 }
 
 const TASK_SORT_SPECS: Record<string, TaskSortAccessor> = {
@@ -140,9 +155,10 @@ export function upsertTaskCaches<T extends TaskEntity>(
   task: T
 ): void {
   const keys = getTaskKeys(taskKind);
-  queryClient.setQueryData(keys.detail(task.id), task);
+  const effectiveTask = applyTaskTransition(taskKind, task);
+  queryClient.setQueryData(keys.detail(effectiveTask.id), effectiveTask);
   patchListQueries<PaginatedResponse<T>>(keys.lists, (cached, params) =>
-    upsertFilteredPaginatedEntity(cached, task, params, {
+    upsertFilteredPaginatedEntity(cached, effectiveTask, params, {
       matches: (entity, queryParams) =>
         matchesTaskListFilter(taskKind, entity, queryParams),
       sort: (items, queryParams) =>
@@ -153,6 +169,76 @@ export function upsertTaskCaches<T extends TaskEntity>(
   // this cache write (e.g. navigating back to the list) always show the
   // latest data including correct status and timestamps.
   void queryClient.invalidateQueries({ queryKey: keys.lists });
+}
+
+export function patchTaskStatusInMemory(
+  taskKind: TaskKind,
+  taskId: string,
+  status: TaskStatus
+): void {
+  const keys = getTaskKeys(taskKind);
+  queryClient.setQueryData<TaskEntity | undefined>(
+    keys.detail(taskId),
+    (cached) => (cached ? { ...cached, status } : cached)
+  );
+  patchListQueries<PaginatedResponse<TaskEntity>>(
+    keys.lists,
+    (cached, params) => {
+      if (!cached) {
+        return cached;
+      }
+      const current = cached.results.find((entry) => entry.id === taskId);
+      if (!current) {
+        return cached;
+      }
+      return upsertFilteredPaginatedEntity(
+        cached,
+        { ...current, status } as TaskEntity,
+        params,
+        {
+          matches: (entity, queryParams) =>
+            matchesTaskListFilter(taskKind, entity, queryParams),
+          sort: (items, queryParams) =>
+            sortTaskResults(items, readOrderingFilter(queryParams)),
+        }
+      );
+    }
+  );
+  patchTaskSummaryStatus(taskId, taskTypeForKind(taskKind), status);
+}
+
+export function beginTaskStatusTransition(
+  taskKind: TaskKind,
+  taskId: string,
+  status: TaskStatus,
+  settleOn: TaskStatus[]
+): void {
+  markTaskStatusTransition(taskTypeForKind(taskKind), taskId, status, settleOn);
+  patchTaskStatusInMemory(taskKind, taskId, status);
+}
+
+export function clearTaskStatusTransitionByKind(
+  taskKind: TaskKind,
+  taskId: string
+): void {
+  clearTaskStatusTransition(taskTypeForKind(taskKind), taskId);
+}
+
+export async function refreshTaskStatusCaches(
+  taskKind: TaskKind,
+  taskId: string
+): Promise<void> {
+  const keys = getTaskKeys(taskKind);
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: keys.detail(taskId),
+      refetchType: 'active',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: keys.lists,
+      refetchType: 'active',
+    }),
+  ]);
 }
 
 export async function removeTaskCaches(
@@ -181,49 +267,8 @@ export async function patchTaskStatusCache(
   taskId: string,
   status: string
 ): Promise<void> {
-  const keys = getTaskKeys(taskKind);
-  queryClient.setQueryData<TaskEntity | undefined>(
-    keys.detail(taskId),
-    (cached) => (cached ? { ...cached, status: status as TaskStatus } : cached)
-  );
-  patchListQueries<PaginatedResponse<TaskEntity>>(
-    keys.lists,
-    (cached, params) => {
-      if (!cached) {
-        return cached;
-      }
-      const current = cached.results.find((entry) => entry.id === taskId);
-      if (!current) {
-        return cached;
-      }
-      return upsertFilteredPaginatedEntity(
-        cached,
-        { ...current, status } as TaskEntity,
-        params,
-        {
-          matches: (entity, queryParams) =>
-            matchesTaskListFilter(taskKind, entity, queryParams),
-          sort: (items, queryParams) =>
-            sortTaskResults(items, readOrderingFilter(queryParams)),
-        }
-      );
-    }
-  );
-  patchTaskSummaryStatus(
-    taskId,
-    taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING,
-    status
-  );
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: keys.detail(taskId),
-      refetchType: 'active',
-    }),
-    queryClient.invalidateQueries({
-      queryKey: keys.lists,
-      refetchType: 'active',
-    }),
-  ]);
+  patchTaskStatusInMemory(taskKind, taskId, status as TaskStatus);
+  await refreshTaskStatusCaches(taskKind, taskId);
 }
 
 export async function invalidateTaskDerivedCaches(
@@ -255,33 +300,40 @@ export function patchTaskDerivedCaches(
   taskKind: TaskKind,
   task: TaskEntity
 ): void {
-  const taskType =
-    taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
-  patchTaskSummaryStatus(task.id, taskType, String(task.status));
-  patchTaskLogComponents(task.id, taskType, []);
+  const effectiveTask = applyTaskTransition(taskKind, task);
+  const taskType = taskTypeForKind(taskKind);
+  const clearsExecutionState =
+    task.status === TaskStatus.CREATED ||
+    effectiveTask.status === TaskStatus.CREATED;
+  patchTaskSummaryStatus(
+    effectiveTask.id,
+    taskType,
+    String(effectiveTask.status)
+  );
+  patchTaskLogComponents(effectiveTask.id, taskType, []);
 
-  const latestExecution = task.latest_execution;
+  const latestExecution = effectiveTask.latest_execution;
   if (!latestExecution?.id) {
-    patchTaskStrategyEventsLifecycle(task.id, taskType, {
+    patchTaskStrategyEventsLifecycle(effectiveTask.id, taskType, {
       executionId: null,
-      clearVisualization: task.status === 'created',
+      clearVisualization: clearsExecutionState,
     });
-    if (task.status === 'created') {
-      clearTaskExecutions(task.id, taskType);
+    if (clearsExecutionState) {
+      clearTaskExecutions(effectiveTask.id, taskType);
     }
     return;
   }
 
-  patchTaskStrategyEventsLifecycle(task.id, taskType, {
+  patchTaskStrategyEventsLifecycle(effectiveTask.id, taskType, {
     executionId: latestExecution.id,
     clearVisualization:
-      task.status === 'created' || latestExecution.status === 'starting',
+      clearsExecutionState || latestExecution.status === 'starting',
   });
 
-  prependTaskExecution(task.id, taskType, {
+  prependTaskExecution(effectiveTask.id, taskType, {
     id: latestExecution.id,
     task_type: taskType,
-    task_id: task.id,
+    task_id: effectiveTask.id,
     execution_number: latestExecution.execution_number,
     status: latestExecution.status,
     progress: latestExecution.progress,

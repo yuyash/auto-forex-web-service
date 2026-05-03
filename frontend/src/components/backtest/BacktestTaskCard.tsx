@@ -73,6 +73,10 @@ export default function BacktestTaskCard({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { settings: appSettings } = useAppSettings();
+  const activePollingIntervalMs = Math.min(
+    appSettings.healthCheckIntervalSeconds * 1000,
+    2_000
+  );
   const { user } = useAuth();
   const timezone = user?.timezone || 'UTC';
   const language = i18n?.resolvedLanguage;
@@ -105,7 +109,7 @@ export default function BacktestTaskCard({
   const { data: polledTask } = useBacktestTask(task.id, {
     enabled: pollingEnabled,
     enablePolling: pollingEnabled,
-    pollingInterval: appSettings.healthCheckIntervalSeconds * 1000,
+    pollingInterval: activePollingIntervalMs,
   });
 
   // Use polled status if available, otherwise use task status
@@ -151,9 +155,10 @@ export default function BacktestTaskCard({
 
   const handleStart = async (taskId: string) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await startTask.mutate(taskId);
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('backtest:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -179,17 +184,16 @@ export default function BacktestTaskCard({
   ) => {
     setStopDialogOpen(false);
     setIsLoading(true);
+    setOptimisticStatus(
+      mode === 'drain' ? TaskStatus.DRAINING : TaskStatus.STOPPING
+    );
     try {
       await stopTask.mutate({
         id: taskId,
         mode,
         ...(drainDurationMinutes !== undefined ? { drainDurationMinutes } : {}),
       });
-      if (mode === 'drain') {
-        setOptimisticStatus(TaskStatus.DRAINING);
-      } else {
-        setOptimisticStatus(TaskStatus.STOPPED);
-      }
+      setOptimisticStatus(null);
       showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -214,9 +218,10 @@ export default function BacktestTaskCard({
 
   const handleResume = async (taskId: string) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await resumeTask.mutate(taskId);
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('backtest:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -240,9 +245,10 @@ export default function BacktestTaskCard({
 
   const handlePause = async (taskId: string) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.PAUSED);
     try {
       await pauseTask.mutate(taskId);
-      setOptimisticStatus(TaskStatus.PAUSED);
+      setOptimisticStatus(null);
       showSuccess(t('backtest:toast.pausedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -263,9 +269,10 @@ export default function BacktestTaskCard({
 
   const handleRestart = async (taskId: string) => {
     setIsLoading(true);
+    setOptimisticStatus(TaskStatus.STARTING);
     try {
       await restartTask.mutate(taskId);
-      setOptimisticStatus(TaskStatus.RUNNING);
+      setOptimisticStatus(null);
       showSuccess(t('backtest:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -324,7 +331,7 @@ export default function BacktestTaskCard({
   // Get progress from summary endpoint
   const summaryData = useTaskSummary(task.id, TaskType.BACKTEST, undefined, {
     polling: pollingEnabled,
-    interval: appSettings.healthCheckIntervalSeconds * 1000,
+    interval: activePollingIntervalMs,
   });
   const progress = summaryData.summary.task.progress;
 
