@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.64.1...frontend-v1.65.0) (2026-05-04)
+
+
+### Features
+
+* **snowball-net:** sync chart range controls ([#657](https://github.com/yuyash/auto-forex-web-service/issues/657)) ([2b336a8](https://github.com/yuyash/auto-forex-web-service/commit/2b336a830a4077828aceadebe3bccc933ef4dd63))
+
 ## [1.64.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.64.0...frontend-v1.64.1) (2026-05-04)
 
 
