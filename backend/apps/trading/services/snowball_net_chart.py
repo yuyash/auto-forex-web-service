@@ -153,6 +153,7 @@ def build_snowball_net_chart(
     """Build the chart payload consumed by the SnowballNet strategy tab."""
     current_timestamp = _resolve_current_timestamp(strategy_state, last_tick_timestamp)
     window = _window_from_request(request, last_tick_timestamp=current_timestamp)
+    strategy_data_until = _strategy_data_until(window)
     instrument = str(getattr(task, "instrument", "") or "")
     pnl_currency = _resolve_pnl_currency(task=task, instrument=instrument)
     quote_currency = _quote_currency(instrument)
@@ -191,7 +192,7 @@ def build_snowball_net_chart(
             task_type_label=task_type_label,
             execution_id=execution_id,
             since=window.since,
-            until=window.until,
+            until=strategy_data_until,
             granularity_seconds=window.granularity_seconds,
         ),
         "oscillator_lines": _load_oscillator_lines(
@@ -199,7 +200,7 @@ def build_snowball_net_chart(
             task_type_label=task_type_label,
             execution_id=execution_id,
             since=window.since,
-            until=window.until,
+            until=strategy_data_until,
             granularity_seconds=window.granularity_seconds,
         ),
         "markers": _load_markers(
@@ -207,7 +208,7 @@ def build_snowball_net_chart(
             task_type_label=task_type_label,
             execution_id=execution_id,
             since=window.since,
-            until=window.until,
+            until=strategy_data_until,
             granularity_seconds=window.granularity_seconds,
             merge=window.merge_markers,
         ),
@@ -259,6 +260,14 @@ def _window_from_request(
         follow=follow,
         merge_markers=merge_markers,
     )
+
+
+def _strategy_data_until(window: NetChartWindow) -> datetime:
+    if not window.follow:
+        return window.until
+    if window.center <= window.since:
+        return window.since
+    return min(window.center, window.until)
 
 
 def _normalise_chart_granularity(value: Any) -> str:

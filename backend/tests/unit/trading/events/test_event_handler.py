@@ -252,6 +252,41 @@ class TestHandleClosePosition:
         assert result[0] == Decimal("10.00")
         assert svc.close_position.call_count == 2
 
+    def test_partial_close_records_order_fill_price(self):
+        svc = _make_order_service()
+        position = _make_position(units=1000)
+        updated_position = _make_position(units=500, is_open=True)
+        updated_position.exit_price = None
+        close_order = SimpleNamespace(
+            id=uuid4(),
+            fill_price=Decimal("1.10500"),
+            broker_order_id=None,
+            oanda_trade_id=None,
+        )
+        svc.close_position.return_value = (
+            updated_position,
+            Decimal("2.50"),
+            close_order,
+        )
+
+        handler = EventHandler(order_service=svc, instrument="EUR_USD")
+        handler._find_close_position_target = MagicMock(return_value=position)
+        handler._prune_closed_position = MagicMock()
+        handler._record_trade = MagicMock()
+
+        event = ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
+            layer_number=1,
+            direction="long",
+            units=500,
+        )
+
+        result = handler.handle_close_position(event)
+
+        assert result == (Decimal("2.50"), Decimal("2.50000"))
+        assert handler._last_close_execution_price == Decimal("1.10500")
+        assert handler._record_trade.call_args.kwargs["price"] == Decimal("1.10500")
+
 
 class TestResolveCycleIdFromDb:
     """Tests for DB-backed cycle resolution fallback."""

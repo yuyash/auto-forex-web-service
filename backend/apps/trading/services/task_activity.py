@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import models
 from django.db.models import (
@@ -41,6 +41,9 @@ from apps.trading.views.query_params import (
 
 PROTECTION_CLOSE_METHODS = frozenset(
     {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
+)
+ORDER_TRADE_METHODS = frozenset(
+    {"open_position", "rebuild_position", "initial_entry", "retracement", "market_entry"}
 )
 
 LOG_ORDERING = OrderingConfig(
@@ -308,6 +311,10 @@ class TaskActivityQueryService:
             queryset = queryset.annotate(
                 _id_str=Cast("id", output_field=models.CharField())
             ).filter(_id_str__istartswith=query.trade_id)
+        if query.trade_kind == "order":
+            queryset = queryset.filter(execution_method__in=ORDER_TRADE_METHODS)
+        elif query.trade_kind == "close":
+            queryset = queryset.exclude(execution_method__in=ORDER_TRADE_METHODS)
 
         queryset = apply_queryset_ordering(queryset, query.ordering, TRADE_ORDERING)
 
@@ -315,28 +322,72 @@ class TaskActivityQueryService:
         page = query.execution.pagination.page
         page_size = query.execution.pagination.page_size
         start = (page - 1) * page_size
-        rows = queryset.values(
-            "id",
-            "direction",
-            "units",
-            "instrument",
-            "price",
-            "execution_method",
-            "layer_index",
-            "retracement_count",
-            "description",
-            "timestamp",
-            "position_id",
-            "order_id",
-            "oanda_trade_id",
-            "cycle_id",
-            "replayed_at",
-            "updated_at",
-            "is_rebuild",
-            stop_loss_price=models.F("position__stop_loss_price"),
-            entry_price=models.F("position__entry_price"),
-        )[start : start + page_size]
-        return self._normalize_trade_rows(rows), total_count, page, page_size
+        rows = list(
+            queryset.values(
+                "id",
+                "direction",
+                "units",
+                "instrument",
+                "price",
+                "execution_method",
+                "layer_index",
+                "retracement_count",
+                "description",
+                "timestamp",
+                "position_id",
+                "order_id",
+                "oanda_trade_id",
+                "cycle_id",
+                "replayed_at",
+                "updated_at",
+                "is_rebuild",
+                stop_loss_price=models.F("position__stop_loss_price"),
+                entry_price=models.F("position__entry_price"),
+            )[start : start + page_size]
+        )
+        close_snapshots = self._close_snapshots_by_order_id(
+            rows=rows,
+            task=task,
+            task_type_label=task_type_label,
+            execution_id=query.execution.execution_id,
+        )
+        return self._normalize_trade_rows(rows, close_snapshots), total_count, page, page_size
+
+    @staticmethod
+    def _close_snapshots_by_order_id(
+        *,
+        rows: list[dict],
+        task,
+        task_type_label: str,
+        execution_id,
+    ) -> dict[str, dict]:
+        order_ids = {
+            str(row["order_id"])
+            for row in rows
+            if row.get("order_id") and row.get("execution_method") not in ORDER_TRADE_METHODS
+        }
+        if not order_ids:
+            return {}
+
+        logs = TaskLog.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=execution_id,
+            component="position.lifecycle",
+            details__context__lifecycle_event__in=("CLOSED", "PARTIAL_CLOSE"),
+            details__context__order_id__in=order_ids,
+        ).values("details")
+
+        snapshots: dict[str, dict] = {}
+        for log in logs:
+            details = log.get("details")
+            context = details.get("context") if isinstance(details, dict) else None
+            if not isinstance(context, dict):
+                continue
+            order_id = context.get("order_id")
+            if order_id:
+                snapshots[str(order_id)] = context
+        return snapshots
 
     @staticmethod
     def positions_queryset(*, request: Request, task, task_type_label: str):
@@ -378,7 +429,10 @@ class TaskActivityQueryService:
         return queryset, query
 
     @staticmethod
-    def _normalize_trade_rows(rows) -> list[dict]:
+    def _normalize_trade_rows(
+        rows,
+        close_snapshots_by_order_id: dict[str, dict] | None = None,
+    ) -> list[dict]:
         normalized: list[dict] = []
         for trade in rows:
             raw_direction = trade["direction"]
@@ -390,7 +444,20 @@ class TaskActivityQueryService:
                     "buy" if side == "long" else "sell" if side == "short" else side
                 )
             trade["pnl"] = None
-            if trade["execution_method"] not in {"open_position", "rebuild_position"}:
+            if trade["execution_method"] not in ORDER_TRADE_METHODS:
+                snapshot = (
+                    close_snapshots_by_order_id.get(str(trade["order_id"]))
+                    if close_snapshots_by_order_id and trade.get("order_id")
+                    else None
+                )
+                if snapshot:
+                    snapshot_entry = _decimal_or_none(snapshot.get("entry_price"))
+                    snapshot_exit = _decimal_or_none(snapshot.get("exit_price"))
+                    if snapshot_entry is not None:
+                        trade["entry_price"] = snapshot_entry
+                    if snapshot_exit is not None:
+                        trade["price"] = snapshot_exit
+
                 entry_price = trade.get("entry_price")
                 if entry_price is not None and trade["price"] is not None:
                     entry = Decimal(str(entry_price))
@@ -406,6 +473,15 @@ class TaskActivityQueryService:
                 trade.pop("entry_price", None)
             normalized.append(trade)
         return normalized
+
+
+def _decimal_or_none(value) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def _with_position_sort_annotations(queryset):

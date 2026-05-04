@@ -212,6 +212,7 @@ def compute_task_summary(
     recovery_warnings: list[str] = []
     recovery_blockers: list[str] = []
     reconciled_at: str | None = None
+    metrics_dict: dict[str, object] = {}
 
     from apps.trading.models.state import ExecutionState
 
@@ -232,8 +233,13 @@ def compute_task_summary(
 
         # Extract margin_ratio and current_atr from strategy_state.metrics
         ss = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-        metrics_dict = ss.get("metrics") if isinstance(ss.get("metrics"), dict) else {}
-        if isinstance(metrics_dict, dict):
+        raw_metrics = ss.get("metrics")
+        metrics_dict = (
+            {str(key): value for key, value in raw_metrics.items()}
+            if isinstance(raw_metrics, dict)
+            else {}
+        )
+        if metrics_dict:
             raw_mr = metrics_dict.get("margin_ratio")
             if raw_mr is not None:
                 try:
@@ -284,6 +290,24 @@ def compute_task_summary(
         execution_id=execution_id,
         task=task_obj,
     )
+
+    if _uses_runtime_pnl_metrics(task_obj):
+        # SnowballNet keeps one netted position and uses partial closes to
+        # realize profit.  Those partial closes change current_balance and
+        # runtime PnL counters, but they do not create separate closed
+        # Position rows, so the DB closed-position aggregation above can
+        # understate realized PnL.
+        runtime_realized_quote = _metric_decimal(metrics_dict, "realized_pnl_quote")
+        runtime_realized_account = _metric_decimal(metrics_dict, "realized_pnl")
+        if runtime_realized_quote is not None and (
+            runtime_realized_quote != Decimal("0")
+            or (runtime_realized_account is not None and runtime_realized_account != Decimal("0"))
+        ):
+            realized_pnl = runtime_realized_quote
+
+        runtime_unrealized_quote = _metric_decimal(metrics_dict, "unrealized_pnl_quote")
+        if runtime_unrealized_quote is not None:
+            unrealized_pnl = runtime_unrealized_quote
 
     # Currency conversion for display
     if task_obj:
@@ -369,7 +393,7 @@ def compute_cached_task_summary(
         task_id=task_id,
         execution_id=str(execution_id) if execution_id is not None else None,
     )
-    if persisted_snapshot is not None:
+    if persisted_snapshot is not None and not _uses_runtime_pnl_metrics(task_obj):
         return persisted_snapshot
 
     state = _get_state(task_type, task_id, execution_id)
@@ -428,6 +452,21 @@ def _get_state(task_type: str, task_id: str, execution_id=None):
     if execution_id is not None:
         state_filter["execution_id"] = execution_id
     return ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()
+
+
+def _uses_runtime_pnl_metrics(task_obj) -> bool:
+    strategy_type = getattr(getattr(task_obj, "config", None), "strategy_type", None)
+    return strategy_type == "snowball_net"
+
+
+def _metric_decimal(metrics: dict[str, object], key: str) -> Decimal | None:
+    value = metrics.get(key)
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def _build_task_summary_cache_key(

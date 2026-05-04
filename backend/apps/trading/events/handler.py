@@ -977,8 +977,15 @@ class EventHandler:
             realized_delta_total += realized_delta
             total_closed_units += int(closed_units)
 
-            # Compute quote-currency PnL from the closed position
-            exit_px = closed_position.exit_price or override_price or Decimal("0")
+            # Compute quote-currency PnL from the actual close fill.  Partial
+            # closes leave Position.exit_price empty because the net position
+            # remains open, so the order fill is the authoritative exit price.
+            close_fill_price = self._close_fill_price(
+                close_order=close_order,
+                closed_position=closed_position,
+                override_price=override_price,
+            )
+            exit_px = close_fill_price
             latest_execution_price = exit_px
             entry_px = Decimal(str(position.entry_price))
             quote_delta = exit_px - entry_px
@@ -990,7 +997,7 @@ class EventHandler:
                 direction=Direction(position.direction),
                 units=closed_units,
                 instrument=position.instrument,
-                price=Decimal(str(closed_position.exit_price or position.entry_price)),
+                price=close_fill_price,
                 execution_method=(
                     event.close_reason
                     if event.close_reason in self._PROTECTION_CLOSE_REASONS
@@ -1026,7 +1033,7 @@ class EventHandler:
                     "POSITION_CLOSED: %s %s (full close) exit @ %s, pnl=%s (layer=%s)",
                     closed_position.direction,
                     closed_position.instrument,
-                    closed_position.exit_price,
+                    close_fill_price,
                     realized_delta,
                     event.layer_number,
                     extra={
@@ -1037,7 +1044,7 @@ class EventHandler:
                         "instrument": closed_position.instrument,
                         "units_closed": closed_units,
                         "entry_price": str(closed_position.entry_price),
-                        "exit_price": str(closed_position.exit_price),
+                        "exit_price": str(close_fill_price),
                         "entry_time": str(closed_position.entry_time),
                         "exit_time": str(closed_position.exit_time),
                         "realized_pnl": str(realized_delta),
@@ -1074,7 +1081,7 @@ class EventHandler:
                         "units_closed": units_to_close,
                         "units_remaining": abs(closed_position.units),
                         "entry_price": str(closed_position.entry_price),
-                        "exit_price": str(closed_position.exit_price or override_price),
+                        "exit_price": str(close_fill_price),
                         "realized_pnl": str(realized_delta),
                         "layer_index": event.layer_number,
                         "retracement_count": event.retracement_count,
@@ -1096,6 +1103,22 @@ class EventHandler:
         self._last_close_execution_price = latest_execution_price
         self._last_close_executed_units = total_closed_units
         return realized_delta_total, realized_delta_quote_total
+
+    @staticmethod
+    def _close_fill_price(
+        *,
+        close_order: Order | None,
+        closed_position: Position,
+        override_price: Decimal | None,
+    ) -> Decimal:
+        order_fill_price = getattr(close_order, "fill_price", None)
+        if isinstance(order_fill_price, Decimal):
+            return order_fill_price
+        if closed_position.exit_price is not None:
+            return Decimal(str(closed_position.exit_price))
+        if override_price is not None:
+            return override_price
+        return Decimal("0")
 
     @staticmethod
     def _new_affected_refs() -> dict[str, set[str]]:

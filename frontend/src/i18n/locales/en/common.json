@@ -471,6 +471,10 @@
       "invalidCycleId": "Enter a valid cycle ID UUID",
       "tradeIdFilter": "Filter by Trade ID",
       "invalidTradeId": "Enter a valid trade ID or prefix (hex characters)",
+      "tradeKindFilter": "Kind",
+      "tradeKindAll": "All",
+      "tradeKindOrder": "Orders only",
+      "tradeKindClose": "Closes only",
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild"

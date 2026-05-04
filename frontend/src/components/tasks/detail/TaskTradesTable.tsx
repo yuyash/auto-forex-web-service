@@ -18,6 +18,11 @@ import {
   InputAdornment,
   TextField,
   Tooltip,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  type SelectChangeEvent,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -27,7 +32,11 @@ import {
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
-import { useTaskTrades, type TaskTrade } from '../../../hooks/useTaskTrades';
+import {
+  useTaskTrades,
+  type TaskTrade,
+  type TaskTradeKindFilter,
+} from '../../../hooks/useTaskTrades';
 import type { TaskType } from '../../../types/common';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
@@ -98,6 +107,14 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   // --- Date range filter ---
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [tradeKind, setTradeKind] = useState<TaskTradeKindFilter>('all');
+
+  const handleTradeKindChange = (
+    event: SelectChangeEvent<TaskTradeKindFilter>
+  ) => {
+    setTradeKind(event.target.value as TaskTradeKindFilter);
+    setPage(0);
+  };
 
   const { trades, totalCount, isLoading, error, refresh } = useTaskTrades({
     taskId,
@@ -107,6 +124,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     pageSize: rowsPerPage,
     cycleId: effectiveCycleId || undefined,
     tradeId: effectiveTradeId || undefined,
+    tradeKind,
     ordering: toOrdering(sortField, sortOrder),
     timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
     timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
@@ -556,6 +574,25 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         </Box>
       </Box>
       <TableFilterBar>
+        <FormControl
+          size="small"
+          sx={{ flex: { xs: '1 1 100%', sm: '0 1 180px' }, minWidth: 0 }}
+        >
+          <InputLabel>{t('tables.trades.tradeKindFilter')}</InputLabel>
+          <Select<TaskTradeKindFilter>
+            value={tradeKind}
+            label={t('tables.trades.tradeKindFilter')}
+            onChange={handleTradeKindChange}
+          >
+            <MenuItem value="all">{t('tables.trades.tradeKindAll')}</MenuItem>
+            <MenuItem value="order">
+              {t('tables.trades.tradeKindOrder')}
+            </MenuItem>
+            <MenuItem value="close">
+              {t('tables.trades.tradeKindClose')}
+            </MenuItem>
+          </Select>
+        </FormControl>
         <TextField
           size="small"
           placeholder={t('tables.trades.cycleIdFilter')}

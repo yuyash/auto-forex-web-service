@@ -275,6 +275,13 @@ TRADE_ID_SPEC = QueryFieldSpec(
     allow_blank=True,
     help_text="Optional trade ID prefix filter.",
 )
+TRADE_KIND_SPEC = QueryFieldSpec(
+    name="trade_kind",
+    kind="choice",
+    default="all",
+    choices=("all", "order", "close"),
+    help_text="Filter trades by lifecycle kind: all, order, or close.",
+)
 ORDER_ID_SPEC = QueryFieldSpec(
     name="order_id",
     kind="string",
@@ -585,6 +592,7 @@ QUERY_GROUP_SPECS = {
             TRADE_TIMESTAMP_FROM_SPEC,
             TRADE_TIMESTAMP_TO_SPEC,
             TRADE_ID_SPEC,
+            TRADE_KIND_SPEC,
         ),
         description="OpenAPI serializer for trades query parameters.",
     ),
@@ -1046,6 +1054,7 @@ class TradesQueryParams:
     ordering: str
     timestamp_range: DateRangeQuery
     trade_id: str
+    trade_kind: str
 
     @classmethod
     def from_request(
@@ -1074,6 +1083,7 @@ class TradesQueryParams:
                 group_name="timestamp",
             ),
             trade_id=cast(str, parsed["trade_id"]).strip(),
+            trade_kind=cast(str, parsed["trade_kind"]) or "all",
         )
 
 

@@ -12,10 +12,12 @@ from rest_framework.test import APIRequestFactory
 
 from apps.trading.models.metrics import Metrics
 from apps.trading.services.snowball_net_chart import (
+    NetChartWindow,
     _current_state,
     _load_oscillator_lines,
     _load_price_lines,
     _margin_threshold_lines,
+    _strategy_data_until,
     _window_from_request,
 )
 
@@ -57,6 +59,34 @@ def test_window_from_request_rejects_m1_range_over_two_weeks():
             _chart_request("?granularity=M1&since=2026-01-01T00:00:00Z&until=2026-01-16T00:00:00Z"),
             last_tick_timestamp=None,
         )
+
+
+def test_strategy_data_until_stops_follow_lines_at_sequence_center():
+    since = datetime(2026, 1, 1, 11, 0, tzinfo=UTC)
+    center = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    until = datetime(2026, 1, 1, 13, 0, tzinfo=UTC)
+
+    follow_window = NetChartWindow(
+        granularity="M1",
+        granularity_seconds=60,
+        center=center,
+        since=since,
+        until=until,
+        follow=True,
+        merge_markers=True,
+    )
+    fixed_window = NetChartWindow(
+        granularity="M1",
+        granularity_seconds=60,
+        center=center,
+        since=since,
+        until=until,
+        follow=False,
+        merge_markers=True,
+    )
+
+    assert _strategy_data_until(follow_window) == center
+    assert _strategy_data_until(fixed_window) == until
 
 
 @pytest.mark.django_db
