@@ -91,6 +91,7 @@ class SnowballNetStrategy(Strategy):
             "events": {
                 "close_reason_labels": {
                     "net_take_profit": "Net take profit",
+                    "net_compression": "Net compression",
                     "net_loss_cut": "Net loss cut",
                     "margin_protection": "Margin protection",
                     "manual_close": "Manual close",
@@ -99,6 +100,7 @@ class SnowballNetStrategy(Strategy):
                     "snowball_net_initial": "SnowballNet initial entry",
                     "snowball_net_add": "SnowballNet add",
                     "snowball_net_take_profit": "SnowballNet take profit",
+                    "snowball_net_compression": "SnowballNet compression",
                     "snowball_net_margin_reduce": "SnowballNet margin reduce",
                     "snowball_net_loss_cut": "SnowballNet loss cut",
                 },
@@ -127,11 +129,13 @@ class SnowballNetStrategy(Strategy):
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         sn = SnowballNetState.from_strategy_state(state.strategy_state)
         self._sync_direction_mode(sn)
+        previous_mid = sn.last_mid
+        self._update_auto_direction_signal(sn, tick)
+        self._update_risk_indicators(sn, tick, previous_mid=previous_mid)
         sn.last_bid = tick.bid
         sn.last_ask = tick.ask
         sn.last_mid = tick.mid
         sn.last_tick_timestamp = tick.timestamp.isoformat()
-        self._update_auto_direction_signal(sn, tick)
 
         self._update_metrics(sn, tick)
 
@@ -170,6 +174,12 @@ class SnowballNetStrategy(Strategy):
 
         if self._margin_reduce_triggered(sn):
             events = [self._build_close_event(sn, tick, reason="margin_reduce")]
+            self._update_metrics(sn, tick)
+            state.strategy_state = sn.to_dict()
+            return StrategyResult(state=state, events=events)
+
+        if self._compression_close_triggered(sn, tick):
+            events = [self._build_close_event(sn, tick, reason="compression")]
             self._update_metrics(sn, tick)
             state.strategy_state = sn.to_dict()
             return StrategyResult(state=state, events=events)
@@ -230,6 +240,7 @@ class SnowballNetStrategy(Strategy):
         if self.config.trade_direction != "auto":
             return
 
+        previous_slow = sn.auto_direction_slow_ema
         fast = self._ema_next(
             current=sn.auto_direction_fast_ema,
             price=tick.mid,
@@ -242,6 +253,9 @@ class SnowballNetStrategy(Strategy):
         )
         sn.auto_direction_fast_ema = fast
         sn.auto_direction_slow_ema = slow
+        sn.auto_direction_slope_pips = (
+            (slow - previous_slow) / self.pip_size if previous_slow is not None else None
+        )
         sn.auto_direction_samples += 1
 
         diff_pips = (fast - slow) / self.pip_size
@@ -252,6 +266,33 @@ class SnowballNetStrategy(Strategy):
             sn.auto_direction_signal = "short"
         else:
             sn.auto_direction_signal = None
+
+    def _update_risk_indicators(
+        self,
+        sn: SnowballNetState,
+        tick: Tick,
+        *,
+        previous_mid: Decimal | None,
+    ) -> None:
+        previous_trend = sn.risk_trend_ema
+        trend = self._ema_next(
+            current=sn.risk_trend_ema,
+            price=tick.mid,
+            period=self.config.add_trend_ema_period,
+        )
+        sn.risk_trend_ema = trend
+        sn.risk_trend_slope_pips = (
+            (trend - previous_trend) / self.pip_size if previous_trend is not None else None
+        )
+
+        if previous_mid is None:
+            return
+        move_pips = abs(tick.mid - previous_mid) / self.pip_size
+        sn.volatility_ema_pips = self._ema_next(
+            current=sn.volatility_ema_pips,
+            price=move_pips,
+            period=self.config.volatility_ema_period,
+        )
 
     @staticmethod
     def _ema_next(*, current: Decimal | None, price: Decimal, period: int) -> Decimal:
@@ -291,6 +332,22 @@ class SnowballNetStrategy(Strategy):
             return None
 
         direction = Direction(str(sn.auto_direction_signal))
+        block_reason = self._auto_direction_block_reason(sn, tick)
+        if block_reason is not None:
+            sn.last_action = {
+                "kind": "wait",
+                "action": "auto_direction_filtered",
+                "reason": block_reason,
+                "timestamp": tick.timestamp.isoformat(),
+                "signal": direction.value,
+                "spread_pips": str(self._spread_pips(tick)),
+                "volatility_pips": str(self._volatility_pips(sn)),
+                "slow_ema_slope_pips": str(sn.auto_direction_slope_pips)
+                if sn.auto_direction_slope_pips is not None
+                else None,
+            }
+            return None
+
         diff_pips = Decimal("0")
         if sn.auto_direction_fast_ema is not None and sn.auto_direction_slow_ema is not None:
             diff_pips = (sn.auto_direction_fast_ema - sn.auto_direction_slow_ema) / self.pip_size
@@ -308,6 +365,9 @@ class SnowballNetStrategy(Strategy):
             else None,
             "difference_pips": str(diff_pips),
             "threshold_pips": str(self.config.auto_direction_threshold_pips),
+            "slow_ema_slope_pips": str(sn.auto_direction_slope_pips)
+            if sn.auto_direction_slope_pips is not None
+            else None,
         }
         return direction
 
@@ -319,6 +379,22 @@ class SnowballNetStrategy(Strategy):
         if sn.auto_direction_signal in {Direction.LONG.value, Direction.SHORT.value}:
             return Direction(str(sn.auto_direction_signal))
         return Direction.LONG
+
+    def _auto_direction_block_reason(self, sn: SnowballNetState, tick: Tick) -> str | None:
+        if not self.config.auto_direction_filter_enabled:
+            return None
+        if self._spread_pips(tick) > self.config.auto_direction_max_spread_pips:
+            return "spread"
+        if self._volatility_exceeded(
+            sn,
+            max_pips=self.config.auto_direction_max_volatility_pips,
+            max_multiplier=self.config.auto_direction_max_volatility_multiplier,
+        ):
+            return "volatility"
+        slope = abs(sn.auto_direction_slope_pips or Decimal("0"))
+        if slope > self.config.auto_direction_max_slope_pips:
+            return "trend_slope"
+        return None
 
     def _entry_price(self, sn: SnowballNetState, tick: Tick) -> Decimal:
         return tick.ask if self._direction(sn) == Direction.LONG else tick.bid
@@ -335,7 +411,7 @@ class SnowballNetStrategy(Strategy):
     def _next_add_price(
         self, sn: SnowballNetState, average_price: Decimal, add_step: int
     ) -> Decimal:
-        offset = self.config.add_interval_pips(add_step) * self.pip_size
+        offset = self._add_interval_pips(sn, add_step) * self.pip_size
         if self._direction(sn) == Direction.LONG:
             return average_price - offset
         return average_price + offset
@@ -359,13 +435,20 @@ class SnowballNetStrategy(Strategy):
     def _take_profit_hit(self, sn: SnowballNetState, tick: Tick) -> bool:
         return sn.net_units > 0 and self._favorable_pips(sn, tick) >= self.config.take_profit_pips
 
+    def _compression_close_triggered(self, sn: SnowballNetState, tick: Tick) -> bool:
+        if not self.config.compression_close_enabled or sn.net_units <= self.config.initial_units:
+            return False
+        return self._favorable_pips(sn, tick) >= self._compression_trigger_pips(sn)
+
     def _should_add(self, sn: SnowballNetState, tick: Tick) -> bool:
         if sn.add_count >= self.config.max_add_count:
             return False
         if sn.net_units >= self.config.effective_max_net_units:
             return False
+        if self._add_block_reason(sn, tick) is not None:
+            return False
         next_step = sn.add_count + 1
-        return self._adverse_pips(sn, tick) >= self.config.add_interval_pips(next_step)
+        return self._adverse_pips(sn, tick) >= self._add_interval_pips(sn, next_step)
 
     def _margin_pct(self, sn: SnowballNetState) -> Decimal:
         raw = sn.metrics.get("margin_ratio")
@@ -396,7 +479,132 @@ class SnowballNetStrategy(Strategy):
     def _loss_cut_triggered(self, sn: SnowballNetState, tick: Tick) -> bool:
         if not self.config.loss_cut_enabled or sn.net_units <= 0:
             return False
-        return self._favorable_pips(sn, tick) <= -self.config.loss_cut_threshold_pips
+        pips_triggered = self._favorable_pips(sn, tick) <= -self.config.loss_cut_threshold_pips
+        if self.config.loss_cut_mode == "staged_margin":
+            return (
+                pips_triggered or self._margin_pct(sn) >= self.config.loss_cut_stage_threshold_pct
+            )
+        return pips_triggered
+
+    def _add_interval_pips(self, sn: SnowballNetState, step: int) -> Decimal:
+        base = self.config.add_interval_pips(step)
+        if not self.config.adaptive_interval_enabled:
+            return base
+        volatility = self._volatility_pips(sn)
+        if volatility <= 0:
+            return base
+        reference = self._adaptive_reference_pips(sn)
+        if reference <= 0:
+            return base
+        multiplier = volatility / reference
+        multiplier = max(self.config.adaptive_interval_min_multiplier, multiplier)
+        multiplier = min(self.config.adaptive_interval_max_multiplier, multiplier)
+        return self.config.round_pips(base * multiplier)
+
+    def _adaptive_reference_pips(self, sn: SnowballNetState) -> Decimal:
+        baseline = self._decimal_metric(sn, "baseline_atr")
+        if baseline is not None and baseline > 0:
+            return baseline
+        return self.config.adaptive_interval_reference_pips
+
+    def _compression_trigger_pips(self, sn: SnowballNetState) -> Decimal:
+        ratio = self._exposure_ratio(sn)
+        span = self.config.take_profit_pips - self.config.compression_min_profit_pips
+        trigger = self.config.take_profit_pips - span * (
+            ratio**self.config.compression_exposure_gamma
+        )
+        if trigger < self.config.compression_min_profit_pips:
+            trigger = self.config.compression_min_profit_pips
+        return self.config.round_pips(trigger)
+
+    def _compression_close_ratio(self, sn: SnowballNetState) -> Decimal:
+        ratio = self._exposure_ratio(sn)
+        span = self.config.compression_max_close_ratio - self.config.compression_min_close_ratio
+        close_ratio = self.config.compression_min_close_ratio + span * (
+            ratio**self.config.compression_exposure_gamma
+        )
+        return min(self.config.compression_max_close_ratio, close_ratio)
+
+    def _exposure_ratio(self, sn: SnowballNetState) -> Decimal:
+        denominator = self.config.effective_max_net_units - self.config.initial_units
+        if denominator <= 0:
+            return Decimal("0")
+        raw = Decimal(max(0, sn.net_units - self.config.initial_units)) / Decimal(denominator)
+        return max(Decimal("0"), min(Decimal("1"), raw))
+
+    def _add_block_reason(self, sn: SnowballNetState, tick: Tick) -> str | None:
+        if (
+            self.config.spread_guard_enabled
+            and self._spread_pips(tick) > self.config.max_spread_pips
+        ):
+            return "spread"
+        if self.config.volatility_guard_enabled and self._volatility_exceeded(
+            sn,
+            max_pips=self.config.volatility_guard_max_atr_pips,
+            max_multiplier=self.config.volatility_guard_max_atr_multiplier,
+        ):
+            return "volatility"
+        if self.config.add_margin_guard_enabled and (
+            self._margin_pct(sn) >= self.config.add_margin_guard_max_pct
+        ):
+            return "margin"
+        if self.config.add_trend_guard_enabled:
+            trend_reason = self._trend_block_reason(sn, tick)
+            if trend_reason is not None:
+                return trend_reason
+        return None
+
+    def _trend_block_reason(self, sn: SnowballNetState, tick: Tick) -> str | None:
+        deviation = self._trend_deviation_pips(sn, tick)
+        direction = self._direction(sn)
+        if direction == Direction.LONG:
+            if deviation <= -self.config.add_trend_max_opposite_deviation_pips:
+                return "trend_deviation"
+            slope = sn.risk_trend_slope_pips or Decimal("0")
+            if (
+                self.config.add_trend_max_opposite_slope_pips > 0
+                and slope <= -self.config.add_trend_max_opposite_slope_pips
+            ):
+                return "trend_slope"
+        else:
+            if deviation >= self.config.add_trend_max_opposite_deviation_pips:
+                return "trend_deviation"
+            slope = sn.risk_trend_slope_pips or Decimal("0")
+            if (
+                self.config.add_trend_max_opposite_slope_pips > 0
+                and slope >= self.config.add_trend_max_opposite_slope_pips
+            ):
+                return "trend_slope"
+        return None
+
+    def _trend_deviation_pips(self, sn: SnowballNetState, tick: Tick) -> Decimal:
+        if sn.risk_trend_ema is None:
+            return Decimal("0")
+        return (tick.mid - sn.risk_trend_ema) / self.pip_size
+
+    def _spread_pips(self, tick: Tick) -> Decimal:
+        return max(Decimal("0"), (tick.ask - tick.bid) / self.pip_size)
+
+    def _volatility_pips(self, sn: SnowballNetState) -> Decimal:
+        current_atr = self._decimal_metric(sn, "current_atr")
+        if current_atr is not None and current_atr > 0:
+            return current_atr
+        return sn.volatility_ema_pips or Decimal("0")
+
+    def _volatility_exceeded(
+        self,
+        sn: SnowballNetState,
+        *,
+        max_pips: Decimal,
+        max_multiplier: Decimal,
+    ) -> bool:
+        volatility = self._volatility_pips(sn)
+        if volatility <= 0:
+            return False
+        if volatility > max_pips:
+            return True
+        baseline = self._decimal_metric(sn, "baseline_atr")
+        return baseline is not None and baseline > 0 and volatility > baseline * max_multiplier
 
     # ------------------------------------------------------------------
     # Event builders
@@ -419,7 +627,7 @@ class SnowballNetStrategy(Strategy):
         provisional_average = self._weighted_average(previous_average, previous_units, price, units)
         target_price = self._target_price(sn, provisional_average)
         event_type = "snowball_net_initial" if role == "initial" else "snowball_net_add"
-        interval = self.config.add_interval_pips(add_step) if add_step else None
+        interval = self._add_interval_pips(sn, add_step) if add_step else None
         description = self._open_description(
             role=role,
             units=units,
@@ -492,10 +700,12 @@ class SnowballNetStrategy(Strategy):
         strategy_event_type = {
             "loss_cut": "snowball_net_loss_cut",
             "margin_reduce": "snowball_net_margin_reduce",
+            "compression": "snowball_net_compression",
         }.get(reason, "snowball_net_take_profit")
         close_reason = {
             "loss_cut": "net_loss_cut",
             "margin_reduce": "margin_protection",
+            "compression": "net_compression",
         }.get(reason, "net_take_profit")
         description = self._close_description(
             reason=reason,
@@ -544,23 +754,47 @@ class SnowballNetStrategy(Strategy):
         event.basket = "net"
         event.close_reason = close_reason
         event.actual_tp_pips = favorable_pips
-        event.expected_tp_pips = self.config.take_profit_pips
+        event.expected_tp_pips = (
+            self._compression_trigger_pips(sn)
+            if reason == "compression"
+            else self.config.take_profit_pips
+        )
         event.actual_exit_price = exit_price
         event.margin_ratio = self._margin_pct(sn) / Decimal("100")
         return event
 
     def _open_units(self, sn: SnowballNetState, *, role: str) -> int:
-        configured = self.config.initial_units if role == "initial" else self.config.add_units
         available = self.config.effective_max_net_units - max(0, sn.net_units)
+        if role == "initial":
+            configured = self.config.initial_units
+        elif self.config.add_unit_allocation_mode == "remaining_linear":
+            remaining_steps = max(1, self.config.max_add_count - sn.add_count)
+            configured = int(
+                (Decimal(max(0, available)) / Decimal(remaining_steps)).to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
+            )
+            configured = max(1, configured)
+        else:
+            configured = self.config.add_units
         return max(0, min(configured, available))
 
     def _close_units(self, sn: SnowballNetState, *, reason: str) -> int:
-        if reason == "loss_cut":
+        if reason == "loss_cut" and self.config.loss_cut_mode == "full":
             return sn.net_units
         if sn.net_units <= self.config.min_close_units:
             return sn.net_units
-        if reason == "margin_reduce":
+        if reason == "loss_cut":
+            calculated = self._close_units_to_margin_target(
+                sn,
+                target_pct=self.config.loss_cut_stage_target_pct,
+                fallback_ratio=self.config.loss_cut_stage_ratio,
+            )
+        elif reason == "margin_reduce":
             calculated = self._margin_reduce_close_units(sn)
+        elif reason == "compression":
+            raw_units = Decimal(sn.net_units) * self._compression_close_ratio(sn)
+            calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
         else:
             raw_units = Decimal(sn.net_units) * self.config.partial_close_ratio
             calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
@@ -570,17 +804,30 @@ class SnowballNetStrategy(Strategy):
         return min(sn.net_units, units)
 
     def _margin_reduce_close_units(self, sn: SnowballNetState) -> int:
+        return self._close_units_to_margin_target(
+            sn,
+            target_pct=self.config.margin_reduce_target_pct,
+            fallback_ratio=self.config.margin_reduce_ratio,
+        )
+
+    def _close_units_to_margin_target(
+        self,
+        sn: SnowballNetState,
+        *,
+        target_pct: Decimal,
+        fallback_ratio: Decimal,
+    ) -> int:
         current_margin_pct = self._margin_pct(sn)
-        if current_margin_pct > 0 and self.config.margin_reduce_target_pct > 0:
+        if current_margin_pct > 0 and target_pct > 0:
             target_units = (
-                Decimal(sn.net_units) * self.config.margin_reduce_target_pct / current_margin_pct
+                Decimal(sn.net_units) * target_pct / current_margin_pct
             ).to_integral_value(rounding=ROUND_FLOOR)
             remaining_units = max(self.config.initial_units, int(target_units))
             close_units = max(0, sn.net_units - remaining_units)
             if close_units > 0:
                 return close_units
 
-        raw_units = Decimal(sn.net_units) * self.config.margin_reduce_ratio
+        raw_units = Decimal(sn.net_units) * fallback_ratio
         return int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
 
     # ------------------------------------------------------------------
@@ -611,8 +858,14 @@ class SnowballNetStrategy(Strategy):
         sn.initialised = sn.net_units > 0
         if str(pending.get("role") or "") == "add":
             sn.add_count += 1
+            sn.max_consecutive_add_count = max(
+                sn.max_consecutive_add_count,
+                sn.add_count,
+            )
         else:
             sn.add_count = 0
+            sn.current_trend_realized_pnl = Decimal("0")
+        sn.max_net_units_seen = max(sn.max_net_units_seen, sn.net_units)
         if execution_result.entry_binding is not None:
             sn.position_id = execution_result.entry_binding.position_id
         sn.last_action = {
@@ -634,17 +887,27 @@ class SnowballNetStrategy(Strategy):
         previous_units = self._int_from_pending(pending, "previous_units")
         closed_units = execution_result.executed_units or requested_units
         remaining_units = max(0, previous_units - closed_units)
+        sn.current_trend_realized_pnl += execution_result.realized_pnl_delta
+        if sn.current_trend_realized_pnl < 0:
+            sn.max_trend_loss = max(
+                sn.max_trend_loss,
+                abs(sn.current_trend_realized_pnl),
+            )
         sn.net_units = remaining_units
         if remaining_units <= 0:
             sn.initialised = False
             sn.average_price = None
             sn.position_id = None
             sn.add_count = 0
+            sn.current_trend_realized_pnl = Decimal("0")
             if self.config.trade_direction == "auto":
                 sn.direction = "auto"
         else:
             sn.average_price = self._decimal_from_pending(pending, "previous_average_price")
-            sn.add_count = self._recalculate_add_count(remaining_units)
+            if self.config.add_unit_allocation_mode == "fixed":
+                sn.add_count = self._recalculate_add_count(remaining_units)
+            else:
+                sn.add_count = self._int_from_pending(pending, "previous_add_count")
             if pending.get("position_id"):
                 sn.position_id = str(pending["position_id"])
         sn.last_action = {
@@ -665,6 +928,22 @@ class SnowballNetStrategy(Strategy):
         add_units = max(1, self.config.add_units)
         return min(self.config.max_add_count, (extra_units + add_units - 1) // add_units)
 
+    def _update_extreme_metrics(
+        self,
+        sn: SnowballNetState,
+        *,
+        favorable_pips: Decimal,
+        margin_pct: Decimal,
+    ) -> None:
+        sn.max_net_units_seen = max(sn.max_net_units_seen, sn.net_units)
+        sn.max_margin_ratio_pct = max(sn.max_margin_ratio_pct, margin_pct)
+
+        unrealized = self._decimal_metric(sn, "unrealized_pnl")
+        if unrealized is None and sn.net_units > 0:
+            unrealized = favorable_pips * self.pip_size * Decimal(sn.net_units)
+        if unrealized is not None and unrealized < 0:
+            sn.max_unrealized_loss = max(sn.max_unrealized_loss, abs(unrealized))
+
     # ------------------------------------------------------------------
     # Metrics and formatting
     # ------------------------------------------------------------------
@@ -675,19 +954,21 @@ class SnowballNetStrategy(Strategy):
         favorable = self._favorable_pips(sn, tick)
         adverse = self._adverse_pips(sn, tick)
         next_step = sn.add_count + 1
-        can_add = (
+        structurally_can_add = (
             sn.net_units > 0
             and sn.add_count < self.config.max_add_count
             and sn.net_units < self.config.effective_max_net_units
         )
-        next_interval = self.config.add_interval_pips(next_step) if can_add else None
+        add_block_reason = self._add_block_reason(sn, tick) if structurally_can_add else None
+        can_add = structurally_can_add and add_block_reason is None
+        next_interval = self._add_interval_pips(sn, next_step) if structurally_can_add else None
         target_price = self._target_price(sn, average) if average is not None else None
         theoretical_next_add_price = (
             self._next_add_price(sn, average, next_step)
             if average is not None and sn.net_units > 0
             else None
         )
-        next_add_price = theoretical_next_add_price if next_interval is not None else None
+        next_add_price = theoretical_next_add_price if can_add else None
         next_add_distance = (
             max(Decimal("0"), next_interval - adverse) if next_interval is not None else None
         )
@@ -697,6 +978,13 @@ class SnowballNetStrategy(Strategy):
             else Decimal("0")
         )
         margin_pct = self._margin_pct(sn)
+        self._update_extreme_metrics(sn, favorable_pips=favorable, margin_pct=margin_pct)
+        volatility = self._volatility_pips(sn)
+        spread = self._spread_pips(tick)
+        trend_deviation = self._trend_deviation_pips(sn, tick)
+        compression_trigger = (
+            self._compression_trigger_pips(sn) if self.config.compression_close_enabled else None
+        )
 
         metrics = dict(sn.metrics)
         metrics.update(
@@ -714,6 +1002,11 @@ class SnowballNetStrategy(Strategy):
                 "snowball_net_auto_direction_slow_ema": (
                     str(sn.auto_direction_slow_ema)
                     if sn.auto_direction_slow_ema is not None
+                    else None
+                ),
+                "snowball_net_auto_direction_slope_pips": (
+                    str(sn.auto_direction_slope_pips)
+                    if sn.auto_direction_slope_pips is not None
                     else None
                 ),
                 "snowball_net_average_price": str(average) if average is not None else None,
@@ -734,12 +1027,28 @@ class SnowballNetStrategy(Strategy):
                     else None
                 ),
                 "snowball_net_can_add": can_add,
+                "snowball_net_add_block_reason": add_block_reason,
+                "snowball_net_effective_add_interval_pips": (
+                    str(next_interval) if next_interval is not None else None
+                ),
                 "snowball_net_next_add_distance_pips": str(next_add_distance)
                 if next_add_distance is not None
                 else None,
                 "snowball_net_add_count": str(sn.add_count),
                 "snowball_net_exposure_pct": str(exposure_pct),
                 "snowball_net_margin_ratio_pct": str(margin_pct),
+                "snowball_net_spread_pips": str(spread),
+                "snowball_net_volatility_pips": str(volatility),
+                "snowball_net_trend_ema": (
+                    str(sn.risk_trend_ema) if sn.risk_trend_ema is not None else None
+                ),
+                "snowball_net_trend_deviation_pips": str(trend_deviation),
+                "snowball_net_trend_slope_pips": (
+                    str(sn.risk_trend_slope_pips) if sn.risk_trend_slope_pips is not None else None
+                ),
+                "snowball_net_compression_trigger_pips": (
+                    str(compression_trigger) if compression_trigger is not None else None
+                ),
                 "snowball_net_margin_reduce_enabled": self.config.margin_reduce_enabled,
                 "snowball_net_margin_reduce_threshold_pct": (
                     str(self.config.margin_reduce_threshold_pct)
@@ -758,6 +1067,11 @@ class SnowballNetStrategy(Strategy):
                     else None
                 ),
                 "snowball_net_pending_action": str(sn.pending_action.get("kind") or ""),
+                "snowball_net_max_unrealized_loss": str(sn.max_unrealized_loss),
+                "snowball_net_max_net_units": str(sn.max_net_units_seen),
+                "snowball_net_max_margin_ratio_pct": str(sn.max_margin_ratio_pct),
+                "snowball_net_max_consecutive_add_count": str(sn.max_consecutive_add_count),
+                "snowball_net_max_trend_loss": str(sn.max_trend_loss),
             }
         )
         sn.metrics = metrics
@@ -798,6 +1112,7 @@ class SnowballNetStrategy(Strategy):
         label = {
             "loss_cut": "loss cut",
             "margin_reduce": "margin reduce",
+            "compression": "compression",
         }.get(reason, "take profit")
         return (
             f"SnowballNet {label} | units={units}, avg={average:.5f}, "
@@ -823,6 +1138,16 @@ class SnowballNetStrategy(Strategy):
     @staticmethod
     def _decimal_from_pending(pending: dict[str, Any], key: str) -> Decimal | None:
         value = pending.get(key)
+        if value in (None, ""):
+            return None
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _decimal_metric(sn: SnowballNetState, key: str) -> Decimal | None:
+        value = sn.metrics.get(key)
         if value in (None, ""):
             return None
         try:

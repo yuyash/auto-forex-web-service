@@ -34,12 +34,22 @@ class SnowballNetState:
     auto_direction_samples: int = 0
     auto_direction_fast_ema: Decimal | None = None
     auto_direction_slow_ema: Decimal | None = None
+    auto_direction_slope_pips: Decimal | None = None
     auto_direction_signal: str | None = None
     auto_direction_last_decision: dict[str, Any] = field(default_factory=dict)
+    risk_trend_ema: Decimal | None = None
+    risk_trend_slope_pips: Decimal | None = None
+    volatility_ema_pips: Decimal | None = None
     net_units: int = 0
     average_price: Decimal | None = None
     position_id: str | None = None
     add_count: int = 0
+    max_net_units_seen: int = 0
+    max_consecutive_add_count: int = 0
+    max_margin_ratio_pct: Decimal = Decimal("0")
+    max_unrealized_loss: Decimal = Decimal("0")
+    current_trend_realized_pnl: Decimal = Decimal("0")
+    max_trend_loss: Decimal = Decimal("0")
     next_entry_id: int = 1
     last_bid: Decimal | None = None
     last_ask: Decimal | None = None
@@ -61,14 +71,27 @@ class SnowballNetState:
             auto_direction_samples=max(0, _int_or_default(raw.get("auto_direction_samples"), 0)),
             auto_direction_fast_ema=_decimal_or_none(raw.get("auto_direction_fast_ema")),
             auto_direction_slow_ema=_decimal_or_none(raw.get("auto_direction_slow_ema")),
+            auto_direction_slope_pips=_decimal_or_none(raw.get("auto_direction_slope_pips")),
             auto_direction_signal=(
                 str(raw["auto_direction_signal"]) if raw.get("auto_direction_signal") else None
             ),
             auto_direction_last_decision=dict(raw.get("auto_direction_last_decision") or {}),
+            risk_trend_ema=_decimal_or_none(raw.get("risk_trend_ema")),
+            risk_trend_slope_pips=_decimal_or_none(raw.get("risk_trend_slope_pips")),
+            volatility_ema_pips=_decimal_or_none(raw.get("volatility_ema_pips")),
             net_units=_int_or_default(raw.get("net_units"), 0),
             average_price=_decimal_or_none(raw.get("average_price")),
             position_id=str(raw["position_id"]) if raw.get("position_id") else None,
             add_count=max(0, _int_or_default(raw.get("add_count"), 0)),
+            max_net_units_seen=max(0, _int_or_default(raw.get("max_net_units_seen"), 0)),
+            max_consecutive_add_count=max(
+                0, _int_or_default(raw.get("max_consecutive_add_count"), 0)
+            ),
+            max_margin_ratio_pct=_decimal_or_none(raw.get("max_margin_ratio_pct")) or Decimal("0"),
+            max_unrealized_loss=_decimal_or_none(raw.get("max_unrealized_loss")) or Decimal("0"),
+            current_trend_realized_pnl=_decimal_or_none(raw.get("current_trend_realized_pnl"))
+            or Decimal("0"),
+            max_trend_loss=_decimal_or_none(raw.get("max_trend_loss")) or Decimal("0"),
             next_entry_id=max(1, _int_or_default(raw.get("next_entry_id"), 1)),
             last_bid=_decimal_or_none(raw.get("last_bid")),
             last_ask=_decimal_or_none(raw.get("last_ask")),
@@ -98,12 +121,32 @@ class SnowballNetState:
                 if self.auto_direction_slow_ema is not None
                 else None
             ),
+            "auto_direction_slope_pips": (
+                str(self.auto_direction_slope_pips)
+                if self.auto_direction_slope_pips is not None
+                else None
+            ),
             "auto_direction_signal": self.auto_direction_signal,
             "auto_direction_last_decision": dict(self.auto_direction_last_decision),
+            "risk_trend_ema": (
+                str(self.risk_trend_ema) if self.risk_trend_ema is not None else None
+            ),
+            "risk_trend_slope_pips": (
+                str(self.risk_trend_slope_pips) if self.risk_trend_slope_pips is not None else None
+            ),
+            "volatility_ema_pips": (
+                str(self.volatility_ema_pips) if self.volatility_ema_pips is not None else None
+            ),
             "net_units": self.net_units,
             "average_price": str(self.average_price) if self.average_price is not None else None,
             "position_id": self.position_id,
             "add_count": self.add_count,
+            "max_net_units_seen": self.max_net_units_seen,
+            "max_consecutive_add_count": self.max_consecutive_add_count,
+            "max_margin_ratio_pct": str(self.max_margin_ratio_pct),
+            "max_unrealized_loss": str(self.max_unrealized_loss),
+            "current_trend_realized_pnl": str(self.current_trend_realized_pnl),
+            "max_trend_loss": str(self.max_trend_loss),
             "next_entry_id": self.next_entry_id,
             "last_bid": str(self.last_bid) if self.last_bid is not None else None,
             "last_ask": str(self.last_ask) if self.last_ask is not None else None,

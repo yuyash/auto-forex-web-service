@@ -82,6 +82,11 @@
     "add_count": "Add Count",
     "exposure_pct": "Exposure",
     "margin_ratio_pct": "Margin closeout ratio",
+    "max_unrealized_loss": "Max Unrealized Loss",
+    "max_net_units_seen": "Max Net Units",
+    "max_margin_ratio_pct": "Max Margin Closeout Ratio",
+    "max_consecutive_add_count": "Max Consecutive Adds",
+    "max_trend_loss": "Max Loss per Trend",
     "pending_action": "Pending Action"
   },
   "snapshotValues": {

@@ -64,6 +64,61 @@
       "group": "Auto Direction",
       "group_ja": "自動方向判定"
     },
+    "auto_direction_filter_enabled": {
+      "type": "boolean",
+      "title": "Auto Direction Safety Filters",
+      "title_ja": "自動方向セーフティフィルタ",
+      "description": "When enabled, Auto mode waits instead of opening if spread, volatility, or long EMA slope indicates an abnormal market.",
+      "description_ja": "有効時、自動方向モードはスプレッド、ボラティリティ、長期EMA傾きが異常な場合に開始を見送ります。",
+      "default": false,
+      "dependsOn": { "field": "trade_direction", "values": ["auto"] },
+      "group": "Auto Direction Filters",
+      "group_ja": "自動方向フィルタ"
+    },
+    "auto_direction_max_spread_pips": {
+      "type": "number",
+      "title": "Auto Max Spread (pips)",
+      "title_ja": "自動開始 最大スプレッド（pips）",
+      "default": 3,
+      "minimum": 0.1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Auto Direction Filters",
+      "group_ja": "自動方向フィルタ"
+    },
+    "auto_direction_max_volatility_pips": {
+      "type": "number",
+      "title": "Auto Max Volatility (ATR pips)",
+      "title_ja": "自動開始 最大ボラティリティ（ATR pips）",
+      "default": 25,
+      "minimum": 0.1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Auto Direction Filters",
+      "group_ja": "自動方向フィルタ"
+    },
+    "auto_direction_max_volatility_multiplier": {
+      "type": "number",
+      "title": "Auto Max Volatility Multiplier",
+      "title_ja": "自動開始 最大ボラティリティ倍率",
+      "description": "Auto mode waits when current ATR exceeds baseline ATR by this multiplier.",
+      "description_ja": "現在ATRが基準ATRのこの倍率を超える場合、自動開始を見送ります。",
+      "default": 3,
+      "minimum": 0.1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Auto Direction Filters",
+      "group_ja": "自動方向フィルタ"
+    },
+    "auto_direction_max_slope_pips": {
+      "type": "number",
+      "title": "Auto Max Long EMA Slope (pips/tick)",
+      "title_ja": "自動開始 最大長期EMA傾き（pips/tick）",
+      "description": "Auto mode waits when the slow EMA slope magnitude is above this value.",
+      "description_ja": "長期EMAの傾き絶対値がこの値を超える場合、自動開始を見送ります。",
+      "default": 5,
+      "minimum": 0.01,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Auto Direction Filters",
+      "group_ja": "自動方向フィルタ"
+    },
     "base_units": {
       "type": "integer",
       "title": "Base Units",
@@ -119,6 +174,19 @@
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
+    "add_unit_allocation_mode": {
+      "type": "string",
+      "title": "Add Unit Allocation",
+      "title_ja": "増し玉数量配分",
+      "description": "Fixed keeps the legacy add_lot_size behavior. Remaining Linear divides remaining capacity up to Max Net Units across remaining add steps.",
+      "description_ja": "固定は従来の増し玉ロット設定を使います。残余線形は最大ネットユニットまでの残り余力を残り増し玉段数へ均等配分します。",
+      "enum": ["fixed", "remaining_linear"],
+      "enum_labels": { "fixed": "Fixed", "remaining_linear": "Remaining Linear" },
+      "enum_labels_ja": { "fixed": "固定", "remaining_linear": "残余線形" },
+      "default": "fixed",
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
     "loss_cut_enabled": {
       "type": "boolean",
       "title": "Loss Cut Enabled",
@@ -126,6 +194,20 @@
       "description": "Close the full net position when pips from average falls below the configured loss-cut threshold.",
       "description_ja": "平均建値からのPips差が設定したロスカットしきい値を下回ったら、ネット建玉を全決済します。",
       "default": false,
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
+    "loss_cut_mode": {
+      "type": "string",
+      "title": "Loss Cut Mode",
+      "title_ja": "ロスカット方式",
+      "description": "Full closes the whole net position. Staged Margin closes only enough units to reduce margin pressure, falling back to the staged close ratio.",
+      "description_ja": "全決済はネット建玉を全て閉じます。証拠金段階決済は証拠金圧力を下げる数量だけを閉じ、算出できない場合は段階決済比率を使います。",
+      "enum": ["full", "staged_margin"],
+      "enum_labels": { "full": "Full Close", "staged_margin": "Staged Margin" },
+      "enum_labels_ja": { "full": "全決済", "staged_margin": "証拠金段階決済" },
+      "default": "full",
+      "dependsOn": { "field": "loss_cut_enabled", "values": [true] },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -138,6 +220,39 @@
       "default": 100,
       "minimum": 0.1,
       "dependsOn": { "field": "loss_cut_enabled", "values": [true] },
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
+    "loss_cut_stage_threshold_pct": {
+      "type": "number",
+      "title": "Staged Loss Cut Threshold (%)",
+      "title_ja": "段階LC開始率（%）",
+      "default": 80,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "loss_cut_mode", "values": ["staged_margin"] },
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
+    "loss_cut_stage_target_pct": {
+      "type": "number",
+      "title": "Staged Loss Cut Target (%)",
+      "title_ja": "段階LC目標率（%）",
+      "default": 60,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "loss_cut_mode", "values": ["staged_margin"] },
+      "group": "Risk Limits",
+      "group_ja": "リスク上限"
+    },
+    "loss_cut_stage_ratio": {
+      "type": "number",
+      "title": "Staged Loss Cut Fallback Ratio",
+      "title_ja": "段階LC代替決済比率",
+      "default": 0.25,
+      "minimum": 0.01,
+      "maximum": 1,
+      "dependsOn": { "field": "loss_cut_mode", "values": ["staged_margin"] },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -174,6 +289,60 @@
       "minimum": 1,
       "group": "Net Take-Profit",
       "group_ja": "ネット利確"
+    },
+    "compression_close_enabled": {
+      "type": "boolean",
+      "title": "Compression Close Enabled",
+      "title_ja": "圧縮決済有効",
+      "description": "When enabled, larger net exposure can be reduced at smaller favorable pips instead of waiting for the normal take-profit.",
+      "description_ja": "有効時、ネット数量が大きいほど通常利確幅を待たず、小さい含み益で建玉を圧縮します。",
+      "default": false,
+      "group": "Net Compression",
+      "group_ja": "ネット圧縮"
+    },
+    "compression_min_profit_pips": {
+      "type": "number",
+      "title": "Compression Minimum Profit (pips)",
+      "title_ja": "圧縮最小利益幅（pips）",
+      "default": 5,
+      "minimum": 0.1,
+      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
+      "group": "Net Compression",
+      "group_ja": "ネット圧縮"
+    },
+    "compression_min_close_ratio": {
+      "type": "number",
+      "title": "Compression Min Close Ratio",
+      "title_ja": "圧縮最小決済比率",
+      "default": 0.15,
+      "minimum": 0.01,
+      "maximum": 1,
+      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
+      "group": "Net Compression",
+      "group_ja": "ネット圧縮"
+    },
+    "compression_max_close_ratio": {
+      "type": "number",
+      "title": "Compression Max Close Ratio",
+      "title_ja": "圧縮最大決済比率",
+      "default": 0.5,
+      "minimum": 0.01,
+      "maximum": 1,
+      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
+      "group": "Net Compression",
+      "group_ja": "ネット圧縮"
+    },
+    "compression_exposure_gamma": {
+      "type": "number",
+      "title": "Compression Exposure Gamma",
+      "title_ja": "圧縮エクスポージャーガンマ",
+      "description": "Curve factor for how quickly compression becomes earlier/larger as net exposure rises.",
+      "description_ja": "ネットエクスポージャー上昇に応じて圧縮決済を早め、大きくするカーブ係数。",
+      "default": 1,
+      "minimum": 0.01,
+      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
+      "group": "Net Compression",
+      "group_ja": "ネット圧縮"
     },
     "interval_mode": {
       "type": "string",
@@ -271,6 +440,186 @@
       "minimum": 0.01,
       "group": "Average Add Interval",
       "group_ja": "平均価格ベース増し玉間隔"
+    },
+    "atr_period": {
+      "type": "integer",
+      "title": "ATR Period",
+      "title_ja": "ATR期間",
+      "description": "Runtime metrics period used for volatility-aware add intervals and guards.",
+      "description_ja": "ボラティリティ連動の増し玉間隔とガードに使う実行時ATR期間。",
+      "default": 14,
+      "minimum": 1,
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "atr_baseline_period": {
+      "type": "integer",
+      "title": "ATR Baseline Period",
+      "title_ja": "ATR基準期間",
+      "description": "Baseline ATR period for volatility multiplier checks.",
+      "description_ja": "ボラティリティ倍率判定に使う基準ATR期間。",
+      "default": 96,
+      "minimum": 1,
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "adaptive_interval_enabled": {
+      "type": "boolean",
+      "title": "Adaptive Add Interval",
+      "title_ja": "ボラティリティ連動増し玉間隔",
+      "description": "Scale add intervals with current volatility. Low volatility narrows intervals; high volatility widens them.",
+      "description_ja": "現在のボラティリティで増し玉間隔を拡縮します。低ボラでは狭く、荒い相場では広くします。",
+      "default": false,
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "adaptive_interval_reference_pips": {
+      "type": "number",
+      "title": "Adaptive Reference Volatility (pips)",
+      "title_ja": "適応間隔 基準ボラティリティ（pips）",
+      "default": 10,
+      "minimum": 0.1,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "adaptive_interval_min_multiplier": {
+      "type": "number",
+      "title": "Adaptive Min Multiplier",
+      "title_ja": "適応間隔 最小倍率",
+      "default": 0.5,
+      "minimum": 0.01,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "adaptive_interval_max_multiplier": {
+      "type": "number",
+      "title": "Adaptive Max Multiplier",
+      "title_ja": "適応間隔 最大倍率",
+      "default": 2.5,
+      "minimum": 0.01,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "volatility_guard_enabled": {
+      "type": "boolean",
+      "title": "Block Adds on Extreme Volatility",
+      "title_ja": "異常ボラティリティ時の増し玉停止",
+      "default": false,
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "volatility_guard_max_atr_pips": {
+      "type": "number",
+      "title": "Max ATR for Adds (pips)",
+      "title_ja": "増し玉最大ATR（pips）",
+      "default": 25,
+      "minimum": 0.1,
+      "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "volatility_guard_max_atr_multiplier": {
+      "type": "number",
+      "title": "Max ATR Multiplier for Adds",
+      "title_ja": "増し玉最大ATR倍率",
+      "default": 3,
+      "minimum": 0.1,
+      "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "volatility_ema_period": {
+      "type": "integer",
+      "title": "Tick Volatility EMA Period",
+      "title_ja": "TickボラティリティEMA期間",
+      "description": "Fallback volatility period used before ATR metrics are available.",
+      "description_ja": "ATRメトリクスが未確定の間に使う代替ボラティリティ期間。",
+      "default": 60,
+      "minimum": 1,
+      "group": "Volatility Controls",
+      "group_ja": "ボラティリティ制御"
+    },
+    "spread_guard_enabled": {
+      "type": "boolean",
+      "title": "Block Adds on Wide Spread",
+      "title_ja": "スプレッド拡大時の増し玉停止",
+      "default": false,
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "max_spread_pips": {
+      "type": "number",
+      "title": "Max Spread for Adds (pips)",
+      "title_ja": "増し玉最大スプレッド（pips）",
+      "default": 3,
+      "minimum": 0.1,
+      "dependsOn": { "field": "spread_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_trend_guard_enabled": {
+      "type": "boolean",
+      "title": "Block Adds on Opposite Long Trend",
+      "title_ja": "逆向き長期トレンド時の増し玉停止",
+      "description": "Stops averaging down when current price or EMA slope is fatally against the net direction.",
+      "description_ja": "現在価格またはEMA傾きがネット方向に致命的に逆行している場合、増し玉を停止します。",
+      "default": false,
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_trend_ema_period": {
+      "type": "integer",
+      "title": "Add Trend EMA Period",
+      "title_ja": "増し玉判定 長期EMA期間",
+      "default": 200,
+      "minimum": 1,
+      "dependsOn": { "field": "add_trend_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_trend_max_opposite_deviation_pips": {
+      "type": "number",
+      "title": "Max Opposite EMA Deviation (pips)",
+      "title_ja": "最大逆行EMA乖離（pips）",
+      "default": 50,
+      "minimum": 0.1,
+      "dependsOn": { "field": "add_trend_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_trend_max_opposite_slope_pips": {
+      "type": "number",
+      "title": "Max Opposite EMA Slope (pips/tick)",
+      "title_ja": "最大逆行EMA傾き（pips/tick）",
+      "description": "0 disables the slope portion of the trend guard.",
+      "description_ja": "0の場合、トレンドガードの傾き判定は無効です。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "add_trend_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_margin_guard_enabled": {
+      "type": "boolean",
+      "title": "Block Adds on Margin Pressure",
+      "title_ja": "証拠金圧力時の増し玉停止",
+      "default": false,
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
+    },
+    "add_margin_guard_max_pct": {
+      "type": "number",
+      "title": "Max Margin Ratio for Adds (%)",
+      "title_ja": "増し玉最大証拠金精算割合（%）",
+      "default": 65,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "add_margin_guard_enabled", "values": [true] },
+      "group": "Add Safety Gates",
+      "group_ja": "増し玉安全ゲート"
     },
     "margin_reduce_enabled": {
       "type": "boolean",

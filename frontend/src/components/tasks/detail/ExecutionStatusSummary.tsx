@@ -689,6 +689,7 @@ function isPercentKey(id: string): boolean {
   return (
     id.endsWith('_rate') ||
     id.endsWith('_ratio') ||
+    id.endsWith('_pct') ||
     id.endsWith('_return') ||
     id.includes('drawdown')
   );
