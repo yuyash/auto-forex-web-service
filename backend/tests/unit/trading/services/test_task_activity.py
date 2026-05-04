@@ -129,6 +129,62 @@ def test_trades_use_lifecycle_snapshot_for_partial_close_pnl():
 
 
 @pytest.mark.django_db
+def test_trades_filters_trade_kind_at_queryset_level():
+    task = BacktestTaskFactory()
+    position = Position.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        instrument="USD_JPY",
+        direction=Direction.LONG,
+        units=1000,
+        entry_price=Decimal("150.000"),
+        entry_time=datetime(2026, 1, 1, tzinfo=UTC),
+        is_open=False,
+    )
+    Trade.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        direction=Direction.LONG,
+        units=1000,
+        instrument="USD_JPY",
+        price=Decimal("150.000"),
+        execution_method="open_position",
+        position=position,
+    )
+    Trade.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        timestamp=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
+        direction=Direction.LONG,
+        units=1000,
+        instrument="USD_JPY",
+        price=Decimal("150.100"),
+        execution_method="close_position",
+        position=position,
+    )
+
+    order_rows, order_total, _page, _page_size = TaskActivityQueryService().trades(
+        request=_request("/tasks/1/trades/?trade_kind=order"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+    close_rows, close_total, _page, _page_size = TaskActivityQueryService().trades(
+        request=_request("/tasks/1/trades/?trade_kind=close"),
+        task=task,
+        task_type_label=TaskType.BACKTEST,
+    )
+
+    assert order_total == 1
+    assert order_rows[0]["execution_method"] == "open_position"
+    assert close_total == 1
+    assert close_rows[0]["execution_method"] == "close_position"
+
+
+@pytest.mark.django_db
 def test_positions_queryset_applies_status_and_direction_filters():
     task = BacktestTaskFactory()
     Position.objects.create(

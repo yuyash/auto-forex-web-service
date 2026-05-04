@@ -42,6 +42,9 @@ from apps.trading.views.query_params import (
 PROTECTION_CLOSE_METHODS = frozenset(
     {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
 )
+ORDER_TRADE_METHODS = frozenset(
+    {"open_position", "rebuild_position", "initial_entry", "retracement", "market_entry"}
+)
 
 LOG_ORDERING = OrderingConfig(
     fields={
@@ -308,6 +311,10 @@ class TaskActivityQueryService:
             queryset = queryset.annotate(
                 _id_str=Cast("id", output_field=models.CharField())
             ).filter(_id_str__istartswith=query.trade_id)
+        if query.trade_kind == "order":
+            queryset = queryset.filter(execution_method__in=ORDER_TRADE_METHODS)
+        elif query.trade_kind == "close":
+            queryset = queryset.exclude(execution_method__in=ORDER_TRADE_METHODS)
 
         queryset = apply_queryset_ordering(queryset, query.ordering, TRADE_ORDERING)
 
@@ -357,8 +364,7 @@ class TaskActivityQueryService:
         order_ids = {
             str(row["order_id"])
             for row in rows
-            if row.get("order_id")
-            and row.get("execution_method") not in {"open_position", "rebuild_position"}
+            if row.get("order_id") and row.get("execution_method") not in ORDER_TRADE_METHODS
         }
         if not order_ids:
             return {}
@@ -438,7 +444,7 @@ class TaskActivityQueryService:
                     "buy" if side == "long" else "sell" if side == "short" else side
                 )
             trade["pnl"] = None
-            if trade["execution_method"] not in {"open_position", "rebuild_position"}:
+            if trade["execution_method"] not in ORDER_TRADE_METHODS:
                 snapshot = (
                     close_snapshots_by_order_id.get(str(trade["order_id"]))
                     if close_snapshots_by_order_id and trade.get("order_id")

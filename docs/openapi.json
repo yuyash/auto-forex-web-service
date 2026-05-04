@@ -4397,6 +4397,20 @@
                             "type": "string"
                         },
                         "description": "Optional trade ID prefix filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "trade_kind",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "order",
+                                "close"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter trades by lifecycle kind: all, order, or close.\n\n* `all` - all\n* `order` - order\n* `close` - close"
                     }
                 ],
                 "tags": [
@@ -6496,6 +6510,20 @@
                             "type": "string"
                         },
                         "description": "Optional trade ID prefix filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "trade_kind",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "order",
+                                "close"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter trades by lifecycle kind: all, order, or close.\n\n* `all` - all\n* `order` - order\n* `close` - close"
                     }
                 ],
                 "tags": [

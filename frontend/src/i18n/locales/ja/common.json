@@ -471,6 +471,10 @@
       "invalidCycleId": "有効なサイクルID UUID を入力してください",
       "tradeIdFilter": "取引IDでフィルタ",
       "invalidTradeId": "有効な取引IDまたはプレフィックス（16進数）を入力してください",
+      "tradeKindFilter": "種類",
+      "tradeKindAll": "すべて",
+      "tradeKindOrder": "注文のみ",
+      "tradeKindClose": "決済のみ",
       "stopLossPrice": "ロスカット価格",
       "isRebuild": "再建玉",
       "rebuild": "再建玉"

@@ -40,6 +40,8 @@ export interface TaskTrade {
   updated_at?: string | null;
 }
 
+export type TaskTradeKindFilter = 'all' | 'order' | 'close';
+
 interface UseTaskTradesOptions {
   taskId: string | number;
   taskType: TaskType;
@@ -53,6 +55,8 @@ interface UseTaskTradesOptions {
   cycleId?: string;
   /** Filter trades by trade ID prefix (e.g. first 8 chars of UUID). */
   tradeId?: string;
+  /** Filter trades by lifecycle kind. */
+  tradeKind?: TaskTradeKindFilter;
   ordering?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
@@ -120,6 +124,7 @@ export const useTaskTrades = ({
   pageSize = 100,
   cycleId,
   tradeId,
+  tradeKind = 'all',
   ordering = '-timestamp',
   since,
   timestampFrom,
@@ -127,7 +132,7 @@ export const useTaskTrades = ({
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${tradeId ?? ''}-${ordering}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${enabled ? 'on' : 'off'}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${tradeId ?? ''}-${tradeKind}-${ordering}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${enabled ? 'on' : 'off'}`;
   const {
     items: trades,
     totalCount,
@@ -158,6 +163,7 @@ export const useTaskTrades = ({
       if (direction === 'short') params.direction = 'sell';
       if (cycleId) params.cycle_id = cycleId;
       if (tradeId) params.trade_id = tradeId;
+      if (tradeKind !== 'all') params.trade_kind = tradeKind;
       if (timestampFrom) params.timestamp_from = timestampFrom;
       if (timestampTo) params.timestamp_to = timestampTo;
       params.ordering = ordering;
