@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.49.0...backend-v1.49.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* snowball net follow chart lines ([#655](https://github.com/yuyash/auto-forex-web-service/issues/655)) ([2f061d3](https://github.com/yuyash/auto-forex-web-service/commit/2f061d375c408acc37c68d52fd4877a89eaa2b48))
+
 ## [1.49.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.2...backend-v1.49.0) (2026-05-04)
 
 
