@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.49.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.2...backend-v1.49.0) (2026-05-04)
+
+
+### Features
+
+* **snowball-net:** add adaptive risk controls ([#653](https://github.com/yuyash/auto-forex-web-service/issues/653)) ([eb84d50](https://github.com/yuyash/auto-forex-web-service/commit/eb84d502e4c1b3eb3f3aea2a14f02e63b83635a9))
+
+
+### Bug Fixes
+
+* snowball chart follow window ([#651](https://github.com/yuyash/auto-forex-web-service/issues/651)) ([16c3e31](https://github.com/yuyash/auto-forex-web-service/commit/16c3e3161c93d18355066893fc8c2bd272acc997))
+
 ## [1.48.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.48.1...backend-v1.48.2) (2026-05-03)
 
 
