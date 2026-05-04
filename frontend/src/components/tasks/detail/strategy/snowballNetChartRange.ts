@@ -6,6 +6,7 @@ const DAY = 24 * HOUR;
 export const DEFAULT_SNOWBALL_NET_GRANULARITY = 'M1';
 export const DEFAULT_SNOWBALL_NET_SIDE_BARS = 24 * 60;
 const MAX_CHART_RANGE_BARS = 14 * 24 * 60;
+const TARGET_AUTO_CHART_RANGE_BARS = 5000;
 
 export const SNOWBALL_NET_GRANULARITY_OPTIONS = [
   'Auto',
@@ -78,7 +79,8 @@ export function granularityForRangeSeconds(
   seconds: number
 ): SnowballNetFixedGranularity {
   for (const granularity of FIXED_GRANULARITY_OPTIONS) {
-    if (isSnowballNetGranularityAllowedForRange(granularity, seconds)) {
+    const granularitySeconds = CHART_GRANULARITY_SECONDS[granularity];
+    if (seconds / granularitySeconds <= TARGET_AUTO_CHART_RANGE_BARS) {
       return granularity;
     }
   }

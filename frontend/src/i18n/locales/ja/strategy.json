@@ -137,6 +137,7 @@
         "autoGranularity": "Auto ({{granularity}})",
         "customSince": "開始",
         "customUntil": "終了",
+        "applyRange": "適用",
         "refreshInterval": "更新間隔",
         "off": "オフ",
         "seconds": "{{seconds}}秒",

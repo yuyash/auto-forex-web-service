@@ -130,11 +130,10 @@ interface SnowballNetStrategyTabProps {
 
 const REFRESH_OPTIONS = [5, 15, 30, 60, 0] as const;
 const DEFAULT_GRANULARITY = DEFAULT_SNOWBALL_NET_GRANULARITY;
+const DEFAULT_GRANULARITY_SELECTION: SnowballNetGranularitySelection = 'Auto';
 const DEFAULT_SIDE_BARS = DEFAULT_SNOWBALL_NET_SIDE_BARS;
 const MIN_NO_DATA_BUCKETS = 2;
 const SCROLL_FETCH_DEBOUNCE_MS = 450;
-const EDGE_PREFETCH_RATIO = 0.2;
-const MIN_EDGE_PREFETCH_BARS = 12;
 const MARGIN_LINE_ID = 'margin_ratio_pct';
 const LOSS_CUT_THRESHOLD_LINE_ID = 'loss_cut_threshold_pips';
 const MARGIN_REDUCE_THRESHOLD_LINE_ID = 'margin_reduce_threshold_pct';
@@ -330,8 +329,12 @@ interface ChartTimeRange {
   to: number;
 }
 
+interface AppliedDateRange {
+  sinceMs: number;
+  untilMs: number;
+}
+
 interface LoadedChartWindow extends ChartTimeRange {
-  granularity: string;
   step: number;
 }
 
@@ -376,6 +379,20 @@ function isoFromDateTimeLocal(value: string): string | null {
   if (!value) return null;
   const millis = new Date(value).getTime();
   return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
+}
+
+function customRangeFromControls(
+  customSince: string,
+  customUntil: string
+): AppliedDateRange | null {
+  const since = isoFromDateTimeLocal(customSince);
+  const until = isoFromDateTimeLocal(customUntil);
+  const sinceMs = millisFromIso(since);
+  const untilMs = millisFromIso(until);
+  if (sinceMs != null && untilMs != null && untilMs > sinceMs) {
+    return { sinceMs, untilMs };
+  }
+  return null;
 }
 
 function rangePresetSeconds(preset: SnowballNetRangePreset): number | null {
@@ -533,23 +550,6 @@ function rangesClose(
   return (
     Math.abs(left.from - right.from) <= toleranceSeconds &&
     Math.abs(left.to - right.to) <= toleranceSeconds
-  );
-}
-
-function shouldFetchForVisibleRange(
-  visible: ChartTimeRange,
-  loaded: LoadedChartWindow | null,
-  granularity: string
-): boolean {
-  if (!loaded || loaded.granularity !== granularity) return true;
-  const span = visible.to - visible.from;
-  const edgeBuffer = Math.max(
-    loaded.step * MIN_EDGE_PREFETCH_BARS,
-    span * EDGE_PREFETCH_RATIO
-  );
-  return (
-    visible.from < loaded.from + edgeBuffer ||
-    visible.to > loaded.to - edgeBuffer
   );
 }
 
@@ -1097,7 +1097,6 @@ export function SnowballNetStrategyTab({
   const loadedWindowRef = useRef<LoadedChartWindow | null>(null);
   const lastRequestedRangeRef = useRef<ChartTimeRange | null>(null);
   const rangeFetchTimerRef = useRef<number | null>(null);
-  const granularityRef = useRef(DEFAULT_GRANULARITY);
   const forceWindowRangeRef = useRef(true);
   const ohlcChartHeightRef = useRef(DEFAULT_OHLC_CHART_HEIGHT);
   const chartDragKeyRef = useRef<SnowballNetChartKey | null>(null);
@@ -1109,9 +1108,11 @@ export function SnowballNetStrategyTab({
   const [queryRangePreset, setQueryRangePreset] =
     useState<SnowballNetRangePreset>('follow');
   const [granularitySelection, setGranularitySelection] =
-    useState<SnowballNetGranularitySelection>(DEFAULT_GRANULARITY);
+    useState<SnowballNetGranularitySelection>(DEFAULT_GRANULARITY_SELECTION);
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
+  const [appliedCustomRange, setAppliedCustomRange] =
+    useState<AppliedDateRange | null>(null);
   const [rangeNowMs, setRangeNowMs] = useState(() => Date.now());
   const [follow, setFollow] = useState(true);
   const [mergeMarkers, setMergeMarkers] = useState(true);
@@ -1324,18 +1325,19 @@ export function SnowballNetStrategyTab({
     return { startMs, endMs };
   }, [rangeNowMs, taskEndTime, taskStartTime]);
 
+  const customDraftRange = useMemo(
+    () => customRangeFromControls(customSince, customUntil),
+    [customSince, customUntil]
+  );
+
   const selectedRange = useMemo(() => {
     if (queryRangePreset === 'follow') {
       return null;
     }
 
     if (queryRangePreset === 'custom') {
-      const since = isoFromDateTimeLocal(customSince);
-      const until = isoFromDateTimeLocal(customUntil);
-      const sinceMs = millisFromIso(since);
-      const untilMs = millisFromIso(until);
-      if (sinceMs != null && untilMs != null && untilMs > sinceMs) {
-        return { sinceMs, untilMs };
+      if (appliedCustomRange) {
+        return appliedCustomRange;
       }
       return taskRange
         ? { sinceMs: taskRange.startMs, untilMs: taskRange.endMs }
@@ -1356,7 +1358,7 @@ export function SnowballNetStrategyTab({
       sinceMs: Math.max(taskRange.startMs, taskRange.endMs - windowMs),
       untilMs: taskRange.endMs,
     };
-  }, [customSince, customUntil, queryRangePreset, taskRange]);
+  }, [appliedCustomRange, queryRangePreset, taskRange]);
 
   const requestedRangeSeconds = useMemo(() => {
     if (follow) return null;
@@ -1393,6 +1395,10 @@ export function SnowballNetStrategyTab({
 
   const handleRangePresetChange = useCallback(
     (value: SnowballNetRangePreset) => {
+      if (rangeFetchTimerRef.current !== null) {
+        window.clearTimeout(rangeFetchTimerRef.current);
+        rangeFetchTimerRef.current = null;
+      }
       forceWindowRangeRef.current = true;
       visibleRangeRef.current = null;
       lastRequestedRangeRef.current = null;
@@ -1403,50 +1409,81 @@ export function SnowballNetStrategyTab({
         setViewRange(null);
         return;
       }
+      if (!taskEndTime) {
+        setRangeNowMs(Date.now());
+      }
       setFollow(false);
       setViewRange(null);
+      if (value !== 'custom') {
+        setAppliedCustomRange(null);
+      }
       if (value === 'custom' && !customSince && !customUntil && taskRange) {
+        setAppliedCustomRange({
+          sinceMs: taskRange.startMs,
+          untilMs: taskRange.endMs,
+        });
         setCustomSince(
           formatDateTimeLocal(new Date(taskRange.startMs).toISOString())
         );
         setCustomUntil(
           formatDateTimeLocal(new Date(taskRange.endMs).toISOString())
         );
+      } else if (value === 'custom' && customDraftRange) {
+        setAppliedCustomRange(customDraftRange);
       }
     },
-    [customSince, customUntil, taskRange]
+    [customDraftRange, customSince, customUntil, taskEndTime, taskRange]
   );
 
   const handleCustomSinceChange = useCallback((value: string) => {
-    forceWindowRangeRef.current = true;
-    visibleRangeRef.current = null;
-    lastRequestedRangeRef.current = null;
+    if (rangeFetchTimerRef.current !== null) {
+      window.clearTimeout(rangeFetchTimerRef.current);
+      rangeFetchTimerRef.current = null;
+    }
     setRangePreset('custom');
-    setQueryRangePreset('custom');
-    setFollow(false);
-    setViewRange(null);
     setCustomSince(value);
   }, []);
 
   const handleCustomUntilChange = useCallback((value: string) => {
-    forceWindowRangeRef.current = true;
-    visibleRangeRef.current = null;
-    lastRequestedRangeRef.current = null;
+    if (rangeFetchTimerRef.current !== null) {
+      window.clearTimeout(rangeFetchTimerRef.current);
+      rangeFetchTimerRef.current = null;
+    }
     setRangePreset('custom');
-    setQueryRangePreset('custom');
-    setFollow(false);
-    setViewRange(null);
     setCustomUntil(value);
   }, []);
 
+  const handleApplyCustomRange = useCallback(() => {
+    if (!customDraftRange) return;
+    if (rangeFetchTimerRef.current !== null) {
+      window.clearTimeout(rangeFetchTimerRef.current);
+      rangeFetchTimerRef.current = null;
+    }
+    forceWindowRangeRef.current = true;
+    visibleRangeRef.current = null;
+    lastRequestedRangeRef.current = null;
+    setFollow(false);
+    setRangePreset('custom');
+    setQueryRangePreset('custom');
+    setAppliedCustomRange(customDraftRange);
+    setViewRange(null);
+  }, [customDraftRange]);
+
   useEffect(() => {
-    if (taskEndTime || !enableRealTimeUpdates || refreshSeconds <= 0) return;
+    if (
+      !follow ||
+      taskEndTime ||
+      !enableRealTimeUpdates ||
+      refreshSeconds <= 0
+    ) {
+      return;
+    }
     const id = window.setInterval(
       () => setRangeNowMs(Date.now()),
       refreshSeconds * 1000
     );
     return () => window.clearInterval(id);
-  }, [enableRealTimeUpdates, refreshSeconds, taskEndTime]);
+  }, [enableRealTimeUpdates, follow, refreshSeconds, taskEndTime]);
 
   const queryParams = useMemo(() => {
     if (follow) {
@@ -1499,7 +1536,7 @@ export function SnowballNetStrategyTab({
     params: queryParams,
     enabled: Boolean(taskId),
     refetchInterval:
-      enableRealTimeUpdates && refreshSeconds > 0
+      follow && enableRealTimeUpdates && refreshSeconds > 0
         ? refreshSeconds * 1000
         : false,
   });
@@ -1524,14 +1561,11 @@ export function SnowballNetStrategyTab({
   );
 
   useEffect(() => {
-    granularityRef.current = selectedGranularity;
     lastRequestedRangeRef.current = null;
   }, [selectedGranularity]);
 
   const scheduleVisibleRangeLoad = useCallback((range: ChartTimeRange) => {
     visibleRangeRef.current = range;
-    setFollow(false);
-    setRangePreset('custom');
 
     if (rangeFetchTimerRef.current !== null) {
       window.clearTimeout(rangeFetchTimerRef.current);
@@ -1542,13 +1576,6 @@ export function SnowballNetStrategyTab({
       if (!currentRange) return;
 
       const loaded = loadedWindowRef.current;
-      const currentGranularity = granularityRef.current;
-      if (
-        !shouldFetchForVisibleRange(currentRange, loaded, currentGranularity)
-      ) {
-        return;
-      }
-
       const toleranceSeconds = loaded?.step ?? 1;
       if (
         rangesClose(
@@ -1563,6 +1590,13 @@ export function SnowballNetStrategyTab({
       lastRequestedRangeRef.current = currentRange;
       setCustomSince(formatDateTimeLocal(isoFromSeconds(currentRange.from)));
       setCustomUntil(formatDateTimeLocal(isoFromSeconds(currentRange.to)));
+      setAppliedCustomRange({
+        sinceMs: currentRange.from * 1000,
+        untilMs: currentRange.to * 1000,
+      });
+      setRangePreset('custom');
+      setQueryRangePreset('custom');
+      setFollow(false);
       setViewRange(currentRange);
     }, SCROLL_FETCH_DEBOUNCE_MS);
   }, []);
@@ -1788,7 +1822,6 @@ export function SnowballNetStrategyTab({
     const windowRange = candleBucketRange(data);
     if (windowRange) {
       loadedWindowRef.current = {
-        granularity: data.window.granularity,
         step: windowRange.step,
         from: windowRange.since,
         to: windowRange.until,
@@ -1962,6 +1995,7 @@ export function SnowballNetStrategyTab({
     lastRequestedRangeRef.current = null;
     setRangePreset('follow');
     setQueryRangePreset('follow');
+    setAppliedCustomRange(null);
     setFollow(true);
     setViewRange(null);
     void chartQuery.refetch();
@@ -2204,6 +2238,19 @@ export function SnowballNetStrategyTab({
                   flex: { xs: '1 1 100%', sm: '0 0 auto' },
                 }}
               />
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleApplyCustomRange}
+                disabled={!customDraftRange}
+                sx={{
+                  minHeight: 40,
+                  flex: { xs: '1 1 100%', sm: '0 0 auto' },
+                  px: 2,
+                }}
+              >
+                {t('strategy:snowballNet.chart.controls.applyRange')}
+              </Button>
             </>
           ) : null}
           {/* Desktop only: icon buttons at the end of the selector row */}
