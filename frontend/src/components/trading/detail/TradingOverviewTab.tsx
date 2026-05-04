@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Box, Divider, Grid, Link } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { ExecutionStatusSummary } from '../../tasks/detail/ExecutionStatusSummary';
+import { HistoricalStrategyConfigDialog } from '../../tasks/detail/HistoricalStrategyConfigDialog';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildTradingTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -11,6 +12,7 @@ import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
+import type { TaskExecution } from '../../../types/execution';
 import type { StrategySnapshotResponse } from '../../../types/strategyVisualization';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -31,13 +33,7 @@ interface TradingOverviewTabProps {
   onRefreshExecutionStatus?: () => void | Promise<unknown>;
   executionStatusRefreshing?: boolean;
   isViewingHistorical?: boolean;
-  historicalStrategyConfig?: {
-    id: string;
-    name: string;
-    strategy_type: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    parameters: Record<string, any>;
-  } | null;
+  historicalStrategyConfig?: TaskExecution['strategy_config'];
   executionId?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   historicalTaskConfig?: Record<string, any> | null;
@@ -69,6 +65,7 @@ export function TradingOverviewTab({
   });
   const { separators } = useNumberFormatter();
   const isSuperuser = Boolean(user?.is_superuser);
+  const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
 
   // When viewing a historical execution, prefer snapshot values
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
@@ -91,17 +88,39 @@ export function TradingOverviewTab({
             ...definition,
             render: () => {
               const label =
-                (isViewingHistorical && historicalStrategyConfig?.name) ||
+                (isViewingHistorical &&
+                  (historicalStrategyConfig?.current?.name ??
+                    historicalStrategyConfig?.name)) ||
                 task.config_name;
-              const targetId =
-                (isViewingHistorical && historicalStrategyConfig?.id) ||
-                task.config_id;
 
-              if (targetId) {
+              if (isViewingHistorical) {
+                if (!historicalStrategyConfig) {
+                  return label;
+                }
+
+                return (
+                  <Link
+                    component="button"
+                    type="button"
+                    variant="body1"
+                    aria-haspopup="dialog"
+                    onClick={() => setHistoricalConfigOpen(true)}
+                    sx={{
+                      display: 'inline-block',
+                      maxWidth: '100%',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {label}
+                  </Link>
+                );
+              }
+
+              if (task.config_id) {
                 return (
                   <Link
                     component={RouterLink}
-                    to={`/configurations/${targetId}`}
+                    to={`/configurations/${task.config_id}`}
                     variant="body1"
                     sx={{ display: 'inline-block', maxWidth: '100%' }}
                   >
@@ -131,7 +150,8 @@ export function TradingOverviewTab({
               getStrategyDisplayName(
                 strategies,
                 (isViewingHistorical &&
-                  historicalStrategyConfig?.strategy_type) ||
+                  (historicalStrategyConfig?.current?.strategy_type ??
+                    historicalStrategyConfig?.strategy_type)) ||
                   task.strategy_type
               ),
           };
@@ -140,9 +160,7 @@ export function TradingOverviewTab({
         return definition;
       }),
     [
-      historicalStrategyConfig?.id,
-      historicalStrategyConfig?.name,
-      historicalStrategyConfig?.strategy_type,
+      historicalStrategyConfig,
       isSuperuser,
       isViewingHistorical,
       onOpenConfiguration,
@@ -223,6 +241,12 @@ export function TradingOverviewTab({
           />
         </Grid>
       </Grid>
+      <HistoricalStrategyConfigDialog
+        open={historicalConfigOpen}
+        onClose={() => setHistoricalConfigOpen(false)}
+        config={historicalStrategyConfig}
+        strategies={strategies}
+      />
     </Box>
   );
 }
