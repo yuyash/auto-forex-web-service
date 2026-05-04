@@ -27,6 +27,44 @@ interface StrategyParameterDialogProps {
   };
 }
 
+function formatParameterValue(
+  value: unknown,
+  prop: ConfigProperty | undefined,
+  language: string
+): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  if (typeof value === 'string') {
+    const localizedLabels = prop?.[
+      `enum_labels_${language}` as keyof ConfigProperty
+    ] as Record<string, string> | undefined;
+    const enumLabel = localizedLabels?.[value] ?? prop?.enum_labels?.[value];
+    return enumLabel ?? value;
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatParameterValue(item, undefined, language))
+      .join(', ');
+  }
+
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  return String(value);
+}
+
 export function StrategyParameterDialog({
   open,
   onClose,
@@ -123,13 +161,17 @@ export function StrategyParameterDialog({
                 <Typography
                   variant="body2"
                   fontWeight={500}
-                  sx={{ fontFamily: 'monospace', textAlign: 'right' }}
+                  sx={{
+                    fontFamily: 'monospace',
+                    textAlign: 'right',
+                    wordBreak: 'break-word',
+                  }}
                 >
-                  {typeof value === 'boolean'
-                    ? value
-                      ? 'true'
-                      : 'false'
-                    : String(value ?? '-')}
+                  {formatParameterValue(
+                    value,
+                    snapshotSchemaProperties?.[key],
+                    i18n.language
+                  )}
                 </Typography>
               </Box>
             ))}
