@@ -1804,6 +1804,18 @@ export function SnowballNetStrategyTab({
       visibleRangeRef.current = rangeToRestore;
     }
 
+    const currentTimestamp = String(
+      data.current.timestamp ?? data.window.center ?? ''
+    );
+    const currentPrice = toNumber(
+      data.current.current_price ?? data.current.mid
+    );
+    if (currentTimestamp && chartSettings.ohlc.currentTick) {
+      sequenceLineRef.current?.setPosition(currentTimestamp, currentPrice);
+    } else {
+      sequenceLineRef.current?.clear();
+    }
+
     candleSeriesRef.current?.setData(buildContinuousCandleData(data));
     applyOhlcOverlays(
       chartRef.current,
@@ -1885,18 +1897,6 @@ export function SnowballNetStrategyTab({
       updateMarginAxisLabel(null);
       chartRef.current.removeSeries(marginLineRef.current);
       marginLineRef.current = null;
-    }
-
-    const currentTimestamp = String(
-      data.current.timestamp ?? data.window.center ?? ''
-    );
-    const currentPrice = toNumber(
-      data.current.current_price ?? data.current.mid
-    );
-    if (currentTimestamp && chartSettings.ohlc.currentTick) {
-      sequenceLineRef.current?.setPosition(currentTimestamp, currentPrice);
-    } else {
-      sequenceLineRef.current?.clear();
     }
 
     if (rangeToRestore && chartRef.current) {
