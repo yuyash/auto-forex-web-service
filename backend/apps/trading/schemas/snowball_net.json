@@ -13,8 +13,8 @@
       "enum_labels": { "long": "Long", "short": "Short", "auto": "Auto" },
       "enum_labels_ja": { "long": "買い", "short": "売り", "auto": "自動" },
       "default": "long",
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_fast_period": {
       "type": "integer",
@@ -25,8 +25,8 @@
       "default": 12,
       "minimum": 1,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_slow_period": {
       "type": "integer",
@@ -37,8 +37,8 @@
       "default": 48,
       "minimum": 2,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_min_samples": {
       "type": "integer",
@@ -49,8 +49,8 @@
       "default": 48,
       "minimum": 1,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_threshold_pips": {
       "type": "number",
@@ -61,8 +61,8 @@
       "default": 0,
       "minimum": 0,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_filter_enabled": {
       "type": "boolean",
@@ -72,8 +72,8 @@
       "description_ja": "有効時、自動方向モードはスプレッド、ボラティリティ、長期EMA傾きが異常な場合に開始を見送ります。",
       "default": false,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_spread_pips": {
       "type": "number",
@@ -82,8 +82,8 @@
       "default": 3,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_volatility_pips": {
       "type": "number",
@@ -92,8 +92,8 @@
       "default": 25,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_volatility_multiplier": {
       "type": "number",
@@ -104,8 +104,8 @@
       "default": 3,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_slope_pips": {
       "type": "number",
@@ -116,8 +116,8 @@
       "default": 5,
       "minimum": 0.01,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "base_units": {
       "type": "integer",
