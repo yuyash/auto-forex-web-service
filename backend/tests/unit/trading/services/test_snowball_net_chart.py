@@ -139,6 +139,45 @@ def test_load_oscillator_lines_returns_net_units_series():
     assert unrealized_pnl_line["points"] == [{"time": int(timestamp.timestamp()), "value": -320.25}]
 
 
+@pytest.mark.django_db
+def test_load_oscillator_lines_keeps_latest_metric_in_granularity_bucket():
+    task_id = uuid4()
+    execution_id = uuid4()
+    first = datetime(2026, 1, 1, 12, 1, tzinfo=UTC)
+    latest = datetime(2026, 1, 1, 12, 4, tzinfo=UTC)
+    next_bucket = datetime(2026, 1, 1, 12, 6, tzinfo=UTC)
+    for timestamp, units in [(first, "1000"), (latest, "2000"), (next_bucket, "3000")]:
+        Metrics.objects.create(
+            task_type="backtest",
+            task_id=task_id,
+            execution_id=execution_id,
+            timestamp=timestamp,
+            metrics={"snowball_net_net_units": units},
+        )
+
+    task = SimpleNamespace(
+        pk=task_id,
+        instrument="USD_JPY",
+        account_currency="USD",
+        config=SimpleNamespace(config_dict={}),
+    )
+
+    lines = _load_oscillator_lines(
+        task=task,
+        task_type_label="backtest",
+        execution_id=execution_id,
+        since=first - timedelta(minutes=1),
+        until=next_bucket + timedelta(minutes=1),
+        granularity_seconds=5 * 60,
+    )
+
+    net_units_line = next(line for line in lines if line["id"] == "net_units")
+    assert net_units_line["points"] == [
+        {"time": int(datetime(2026, 1, 1, 12, 0, tzinfo=UTC).timestamp()), "value": 2000.0},
+        {"time": int(datetime(2026, 1, 1, 12, 5, tzinfo=UTC).timestamp()), "value": 3000.0},
+    ]
+
+
 def test_current_state_uses_quote_pnl_values_and_currency():
     task = SimpleNamespace(account_currency="USD")
     state = {

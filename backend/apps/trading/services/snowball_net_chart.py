@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -10,7 +11,9 @@ from typing import Any, cast
 
 import v20
 from django.conf import settings
+from django.db import connection
 from django.db.models import Q
+from django.db.models.expressions import RawSQL
 from django.utils import timezone
 from v20.errors import V20Timeout
 from rest_framework.exceptions import APIException, ValidationError
@@ -562,16 +565,13 @@ def _load_metric_buckets(
     until: datetime,
     granularity_seconds: int,
 ) -> dict[int, dict[str, Decimal]]:
-    rows = (
-        Metrics.objects.filter(
-            task_type=task_type_label,
-            task_id=task.pk,
-            execution_id=execution_id,
-            timestamp__gte=since,
-            timestamp__lte=until,
-        )
-        .order_by("timestamp")
-        .values_list("timestamp", "metrics")
+    rows = _load_metric_rows_for_buckets(
+        task=task,
+        task_type_label=task_type_label,
+        execution_id=execution_id,
+        since=since,
+        until=until,
+        granularity_seconds=granularity_seconds,
     )
     buckets: dict[int, dict[str, Decimal]] = {}
     for timestamp, metrics in rows:
@@ -595,6 +595,54 @@ def _load_metric_buckets(
         until=until,
     )
     return buckets
+
+
+def _load_metric_rows_for_buckets(
+    *,
+    task: Any,
+    task_type_label: str,
+    execution_id: Any,
+    since: datetime,
+    until: datetime,
+    granularity_seconds: int,
+) -> Iterable[tuple[datetime, Any]]:
+    qs = Metrics.objects.filter(
+        task_type=task_type_label,
+        task_id=task.pk,
+        execution_id=execution_id,
+        timestamp__gte=since,
+        timestamp__lte=until,
+    )
+    if granularity_seconds <= 60:
+        return qs.order_by("timestamp").values_list("timestamp", "metrics")
+    if connection.vendor == "postgresql":
+        return _load_latest_metric_rows_per_bucket_postgres(qs, granularity_seconds)
+    return _load_latest_metric_rows_per_bucket_in_memory(qs, granularity_seconds)
+
+
+def _load_latest_metric_rows_per_bucket_postgres(
+    qs: Any, granularity_seconds: int
+) -> Iterable[tuple[datetime, Any]]:
+    bucket_expr = RawSQL(
+        "(FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) * %s)::bigint",
+        (granularity_seconds, granularity_seconds),
+    )
+    return (
+        qs.annotate(bucket=bucket_expr)
+        .order_by("bucket", "-timestamp")
+        .distinct("bucket")
+        .values_list("timestamp", "metrics")
+    )
+
+
+def _load_latest_metric_rows_per_bucket_in_memory(
+    qs: Any, granularity_seconds: int
+) -> list[tuple[datetime, Any]]:
+    bucketed: dict[int, tuple[datetime, Any]] = {}
+    rows = qs.order_by("timestamp").values_list("timestamp", "metrics")
+    for timestamp, metrics in rows:
+        bucketed[_bucket(timestamp, granularity_seconds)] = (timestamp, metrics)
+    return [bucketed[bucket] for bucket in sorted(bucketed)]
 
 
 def _extract_net_metrics(

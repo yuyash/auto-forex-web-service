@@ -17,11 +17,11 @@ describe('visibleTabsForStrategy', () => {
     expect(ids).toContain('metrics');
   });
 
-  it('hides positions and metrics for SnowballNet', () => {
+  it('hides positions but keeps metrics for SnowballNet', () => {
     const ids = visibleTabsForStrategy(tabs, 'snowball_net').map(
       (tab) => tab.id
     );
     expect(ids).not.toContain('positions');
-    expect(ids).not.toContain('metrics');
+    expect(ids).toContain('metrics');
   });
 });
