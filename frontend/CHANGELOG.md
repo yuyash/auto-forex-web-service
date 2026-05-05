@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.0...frontend-v1.65.1) (2026-05-05)
+
+
+### Performance
+
+* **strategy:** improve SnowballNet chart loading ([#659](https://github.com/yuyash/auto-forex-web-service/issues/659)) ([57a0b26](https://github.com/yuyash/auto-forex-web-service/commit/57a0b26ecb95ae8dee46c131c98c3d75ddf02494))
+
 ## [1.65.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.64.1...frontend-v1.65.0) (2026-05-04)
 
 
