@@ -57,6 +57,47 @@ def _safe_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def _direction_value(value: Any) -> str:
+    raw = getattr(value, "value", value)
+    return str(raw or "").strip().lower()
+
+
+def _aggregate_trade_exposure(items: list[Any]) -> dict[str, Any]:
+    directions = {_direction_value(getattr(item, "direction", "")) for item in items}
+    directions.discard("")
+    units = sum(int(abs(getattr(item, "units", 0) or 0)) for item in items)
+    average = _weighted_average(items, units=units, price_attr="entry_price", units_attr="units")
+    return {"directions": directions, "units": units, "average_price": average}
+
+
+def _aggregate_position_exposure(items: list[Any]) -> dict[str, Any]:
+    directions = {_direction_value(getattr(item, "direction", "")) for item in items}
+    directions.discard("")
+    units = sum(int(abs(getattr(item, "units", 0) or 0)) for item in items)
+    average = _weighted_average(items, units=units, price_attr="entry_price", units_attr="units")
+    return {"directions": directions, "units": units, "average_price": average}
+
+
+def _weighted_average(
+    items: list[Any],
+    *,
+    units: int,
+    price_attr: str,
+    units_attr: str,
+) -> Decimal | None:
+    if units <= 0:
+        return None
+    weighted_total = sum(
+        (
+            _safe_decimal(getattr(item, price_attr, None))
+            * Decimal(abs(int(getattr(item, units_attr, 0) or 0)))
+            for item in items
+        ),
+        Decimal("0"),
+    )
+    return weighted_total / Decimal(units)
+
+
 class TradingResumeReconciler:
     """Reconcile broker and local state for live trading resume."""
 
@@ -118,6 +159,13 @@ class TradingResumeReconciler:
         )
         report.broker_open_positions = len(broker_trades)
 
+        if self._strategy_type() == "snowball_net":
+            self._detect_snowball_net_runtime_drift(
+                report=report,
+                broker_trades=broker_trades,
+            )
+            return report
+
         local_open_positions = list(
             Position.objects.filter(
                 task_type=TaskType.TRADING,
@@ -177,6 +225,84 @@ class TradingResumeReconciler:
             )
 
         return report
+
+    def _strategy_type(self) -> str:
+        return str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
+
+    def _detect_snowball_net_runtime_drift(
+        self,
+        *,
+        report: ReconciliationReport,
+        broker_trades: list[Any],
+    ) -> None:
+        """Detect SnowballNet drift by logical net exposure, not trade IDs."""
+        local_open_positions = list(
+            Position.objects.filter(
+                task_type=TaskType.TRADING,
+                task_id=self.task.pk,
+                execution_id=self.execution_id,
+                instrument=self.task.instrument,
+                is_open=True,
+            ).order_by("entry_time", "created_at")
+        )
+
+        broker = _aggregate_trade_exposure(broker_trades)
+        local = _aggregate_position_exposure(local_open_positions)
+        broker_units = int(broker["units"])
+        local_units = int(local["units"])
+
+        if broker_units > 0 and len(broker["directions"]) != 1:
+            report.blockers.append(
+                "OANDA SnowballNet exposure does not have a single valid direction while the "
+                "trading task is running."
+            )
+            return
+        if local_units > 0 and len(local["directions"]) != 1:
+            report.blockers.append(
+                "Local SnowballNet exposure does not have a single valid direction while the "
+                "trading task is running."
+            )
+            return
+
+        if broker_units != local_units:
+            report.blockers.append(
+                "SnowballNet net units changed while the trading task is running "
+                f"(local={local_units}, broker={broker_units})."
+            )
+            return
+
+        if broker_units <= 0:
+            return
+
+        broker_direction = next(iter(broker["directions"]))
+        local_direction = next(iter(local["directions"])) if local["directions"] else ""
+        if broker_direction != local_direction:
+            report.blockers.append(
+                "SnowballNet net direction changed while the trading task is running "
+                f"(local={local_direction or 'none'}, broker={broker_direction})."
+            )
+            return
+
+        strategy_state = (
+            self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        )
+        state_units = int(_safe_decimal(strategy_state.get("net_units")))
+        if state_units != broker_units:
+            report.blockers.append(
+                "SnowballNet strategy state units diverged from OANDA while the trading task "
+                f"is running (state={state_units}, broker={broker_units})."
+            )
+            return
+
+        state_average = _safe_decimal(strategy_state.get("average_price"))
+        broker_average = broker["average_price"]
+        pip_size = _safe_decimal(getattr(self.task, "pip_size", None), "0.0001")
+        tolerance = pip_size / Decimal("10") if pip_size > 0 else Decimal("0.00001")
+        if broker_average is not None and abs(state_average - broker_average) > tolerance:
+            report.blockers.append(
+                "SnowballNet strategy average price diverged from OANDA while the trading task "
+                f"is running (state={state_average}, broker={broker_average})."
+            )
 
     def _sync_account_snapshot(self, report: ReconciliationReport) -> None:
         details = self._oanda_call(
@@ -277,6 +403,14 @@ class TradingResumeReconciler:
                 local_position.unrealized_pnl = broker_trade.unrealized_pnl
                 updated_fields.append("unrealized_pnl")
 
+            if self._strategy_type() == "snowball_net":
+                if local_position.layer_index != 1:
+                    local_position.layer_index = 1
+                    updated_fields.append("layer_index")
+                if local_position.retracement_count is None:
+                    local_position.retracement_count = 0
+                    updated_fields.append("retracement_count")
+
             if updated_fields:
                 updated_fields.append("updated_at")
                 local_position.save(update_fields=updated_fields)
@@ -308,6 +442,8 @@ class TradingResumeReconciler:
                 is_open=True,
                 oanda_trade_id=broker_trade.trade_id,
                 unrealized_pnl=broker_trade.unrealized_pnl,
+                layer_index=1 if self._strategy_type() == "snowball_net" else None,
+                retracement_count=0 if self._strategy_type() == "snowball_net" else None,
             )
             report.created_local_positions += 1
             report.warnings.append(
@@ -327,7 +463,7 @@ class TradingResumeReconciler:
         return refreshed_open_positions
 
     def _validate_safety(self, *, report: ReconciliationReport, resumed: bool) -> None:
-        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
+        strategy_type = self._strategy_type()
         strategy_state = (
             self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
         )

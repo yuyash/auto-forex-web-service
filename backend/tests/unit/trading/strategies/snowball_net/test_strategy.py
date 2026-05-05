@@ -5,7 +5,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult, Tick
-from apps.trading.enums import EventType
+from apps.trading.enums import Direction, EventType
 from apps.trading.strategies.registry import registry
 from apps.trading.strategies.snowball_net.config import SnowballNetConfig
 from apps.trading.strategies.snowball_net.strategy import SnowballNetStrategy
@@ -27,12 +27,122 @@ def _state(strategy_state=None):
     return SimpleNamespace(strategy_state=strategy_state or {})
 
 
+def _report():
+    return SimpleNamespace(blockers=[], warnings=[])
+
+
+def _position(
+    *,
+    id: str,
+    direction: Direction = Direction.LONG,
+    units: int = 1000,
+    entry_price: str = "150.00",
+):
+    timestamp = datetime(2026, 1, 1, tzinfo=UTC)
+    return SimpleNamespace(
+        id=id,
+        direction=direction,
+        units=units,
+        entry_price=Decimal(entry_price),
+        entry_time=timestamp,
+        created_at=timestamp,
+    )
+
+
 def test_snowball_net_registers_with_net_visualization_capability():
     assert registry.is_registered("snowball_net")
     capabilities = registry.capabilities(identifier="snowball_net")
     assert capabilities["runtime"]["hedging"] is False
     assert capabilities["runtime"]["netting"] is True
     assert capabilities["visualization"]["kind"] == "snowball_net"
+    assert capabilities["resume"]["stateful_broker_reconciliation"] is True
+
+
+def test_reconcile_broker_positions_rebuilds_net_state_from_existing_positions():
+    state = _state({})
+    report = _report()
+    strategy_config = SimpleNamespace(
+        config_dict=SnowballNetConfig.from_dict({}).to_dict(),
+    )
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(id="position-1", units=1000, entry_price="150.00"),
+            _position(id="position-2", units=2000, entry_price="150.03"),
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert report.blockers == []
+    assert state.strategy_state["initialised"] is True
+    assert state.strategy_state["direction"] == "long"
+    assert state.strategy_state["net_units"] == 3000
+    assert Decimal(state.strategy_state["average_price"]) == Decimal("150.02")
+    assert state.strategy_state["position_id"] == "position-1"
+    assert state.strategy_state["add_count"] == 2
+
+
+def test_reconcile_broker_positions_blocks_fixed_direction_mismatch():
+    state = _state({})
+    report = _report()
+    strategy_config = SimpleNamespace(
+        config_dict=SnowballNetConfig.from_dict({"trade_direction": "long"}).to_dict(),
+    )
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(
+                id="position-1",
+                direction=Direction.SHORT,
+                units=-1000,
+                entry_price="150.00",
+            )
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert report.blockers
+    assert "does not match configured direction" in report.blockers[0]
+
+
+def test_reconcile_broker_positions_clears_reflected_pending_open():
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 1000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "next_entry_id": 3,
+            "pending_action": {
+                "kind": "open",
+                "entry_id": 2,
+                "units": 1000,
+                "previous_units": 1000,
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            },
+        }
+    )
+    report = _report()
+    strategy_config = SimpleNamespace(config_dict=SnowballNetConfig.from_dict({}).to_dict())
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(id="position-1", units=2000, entry_price="149.99"),
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert state.strategy_state["pending_action"] == {}
+    assert state.strategy_state["last_action"]["kind"] == "reconciled"
+    assert state.strategy_state["last_action"]["action"] == "open"
+    assert report.warnings
 
 
 def test_initial_entry_uses_net_position_merge_flags():

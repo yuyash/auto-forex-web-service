@@ -73,6 +73,10 @@ class SnowballNetStrategy(Strategy):
         return StrategyType.SNOWBALL_NET
 
     @classmethod
+    def supports_stateful_broker_reconciliation(cls) -> bool:
+        return True
+
+    @classmethod
     def capabilities(cls) -> dict[str, Any]:
         return {
             "runtime": {
@@ -106,9 +110,29 @@ class SnowballNetStrategy(Strategy):
                 },
             },
             "resume": {
-                "stateful_broker_reconciliation": False,
+                "stateful_broker_reconciliation": True,
             },
         }
+
+    @classmethod
+    def reconcile_broker_positions(
+        cls,
+        *,
+        state: ExecutionState,
+        open_positions: list[Any],
+        report: Any,
+        strategy_config: Any | None = None,
+    ) -> None:
+        from apps.trading.strategies.snowball_net.reconciliation import (
+            reconcile_broker_positions,
+        )
+
+        reconcile_broker_positions(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+            strategy_config=strategy_config,
+        )
 
     def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
         super().configure_runtime(
@@ -872,6 +896,7 @@ class SnowballNetStrategy(Strategy):
             "kind": "executed",
             "action": "open",
             "role": pending.get("role"),
+            "entry_id": pending.get("entry_id"),
             "units": units,
             "price": str(fill_price),
             "timestamp": pending.get("timestamp"),
@@ -915,6 +940,7 @@ class SnowballNetStrategy(Strategy):
             "action": "close",
             "reason": pending.get("reason"),
             "units": closed_units,
+            "position_id": pending.get("position_id"),
             "price": str(execution_result.execution_price)
             if execution_result.execution_price is not None
             else pending.get("request_price"),

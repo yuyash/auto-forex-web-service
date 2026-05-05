@@ -27,6 +27,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballCycle,
     SnowballStrategyState,
 )
+from apps.trading.strategies.snowball_net.config import SnowballNetConfig
 
 # ── Helper factories ────────────────────────────────────────────────
 
@@ -327,6 +328,28 @@ class TestSyncPositionsWithBroker:
         assert call_kwargs["direction"] == Direction.SHORT
         assert call_kwargs["units"] == -500
 
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_snowball_net_created_position_uses_net_layer(self, mock_pos_model):
+        task = MagicMock()
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.oanda_account = MagicMock()
+        task.execution_id = uuid4()
+        config = MagicMock()
+        config.strategy_type = "snowball_net"
+        config.config_dict = SnowballNetConfig.from_dict({}).to_dict()
+        task.config = config
+        reconciler = _make_reconciler(task=task)
+        reconciler.oanda_service.get_open_trades.return_value = [_make_open_trade(trade_id="T300")]
+        mock_pos_model.objects.filter.return_value.order_by.return_value = []
+
+        report = ReconciliationReport()
+        reconciler._sync_positions_with_broker(report)
+
+        call_kwargs = mock_pos_model.objects.create.call_args[1]
+        assert call_kwargs["layer_index"] == 1
+        assert call_kwargs["retracement_count"] == 0
+
 
 class TestReconcilePersistence:
     @patch("apps.trading.services.reconciliation.ExecutionState")
@@ -397,6 +420,76 @@ class TestDetectRuntimeDrift:
         assert any(
             "units changed from local 1000 to broker 2000" in blocker for blocker in report.blockers
         )
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_snowball_net_runtime_drift_allows_matching_net_exposure(self, mock_pos_model):
+        task = MagicMock()
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.oanda_account = MagicMock()
+        task.execution_id = uuid4()
+        task.pip_size = Decimal("0.0001")
+        config = MagicMock()
+        config.strategy_type = "snowball_net"
+        config.config_dict = SnowballNetConfig.from_dict({}).to_dict()
+        task.config = config
+        state = MagicMock()
+        state.strategy_state = {
+            "net_units": 3000,
+            "average_price": "1.100666666666666666666666667",
+        }
+        reconciler = _make_reconciler(task=task, state=state)
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [
+            _make_open_trade(
+                trade_id="T100",
+                units=Decimal("1000"),
+                entry_price=Decimal("1.10000"),
+            ),
+            _make_open_trade(
+                trade_id="T200",
+                units=Decimal("2000"),
+                entry_price=Decimal("1.10100"),
+            ),
+        ]
+        local_pos = _make_position(
+            oanda_trade_id="T200",
+            units=3000,
+            direction=Direction.LONG,
+            entry_price=Decimal("1.100666666666666666666666667"),
+        )
+        mock_pos_model.objects.filter.return_value.order_by.return_value = [local_pos]
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is False
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_snowball_net_runtime_drift_blocks_net_unit_mismatch(self, mock_pos_model):
+        task = MagicMock()
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.oanda_account = MagicMock()
+        task.execution_id = uuid4()
+        task.pip_size = Decimal("0.0001")
+        config = MagicMock()
+        config.strategy_type = "snowball_net"
+        config.config_dict = SnowballNetConfig.from_dict({}).to_dict()
+        task.config = config
+        state = MagicMock()
+        state.strategy_state = {"net_units": 1000, "average_price": "1.10000"}
+        reconciler = _make_reconciler(task=task, state=state)
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [
+            _make_open_trade(trade_id="T100", units=Decimal("2000")),
+        ]
+        local_pos = _make_position(oanda_trade_id="T100", units=1000)
+        mock_pos_model.objects.filter.return_value.order_by.return_value = [local_pos]
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is True
+        assert "net units changed" in report.blockers[0]
 
 
 # ── Tests for reconcile (full flow) ─────────────────────────────────
