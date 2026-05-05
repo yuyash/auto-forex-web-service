@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult, Tick
 from apps.trading.enums import Direction, EventType
 from apps.trading.strategies.registry import registry
@@ -56,6 +58,49 @@ def test_snowball_net_registers_with_net_visualization_capability():
     assert capabilities["runtime"]["netting"] is True
     assert capabilities["visualization"]["kind"] == "snowball_net"
     assert capabilities["resume"]["stateful_broker_reconciliation"] is True
+
+
+def test_capacity_limit_mode_defaults_to_add_count_capacity():
+    config = SnowballNetConfig.from_dict({})
+
+    assert config.capacity_limit_mode == "add_count"
+    assert config.max_net_units == 0
+    assert config.effective_max_net_units == 8000
+    assert config.add_unit_allocation_mode == "fixed"
+
+
+def test_legacy_max_net_units_implies_explicit_capacity_limit_mode():
+    config = SnowballNetConfig.from_dict({"max_net_units": 5000})
+
+    assert config.capacity_limit_mode == "max_net_units"
+    assert config.max_net_units == 5000
+    assert config.effective_max_net_units == 5000
+
+
+def test_add_count_capacity_ignores_stale_net_unit_limit_settings():
+    config = SnowballNetConfig.from_dict(
+        {
+            "capacity_limit_mode": "add_count",
+            "max_net_units": 5000,
+            "add_unit_allocation_mode": "remaining_linear",
+        }
+    )
+
+    assert config.max_net_units == 0
+    assert config.add_unit_allocation_mode == "fixed"
+    assert config.effective_max_net_units == 8000
+
+
+def test_max_net_unit_capacity_requires_positive_max_net_units():
+    config = SnowballNetConfig.from_dict(
+        {
+            "capacity_limit_mode": "max_net_units",
+            "max_net_units": 0,
+        }
+    )
+
+    with pytest.raises(ValueError, match="max_net_units must be set"):
+        config.validate()
 
 
 def test_reconcile_broker_positions_rebuilds_net_state_from_existing_positions():

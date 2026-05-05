@@ -1,8 +1,32 @@
-import { render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import StrategyConfigForm from '../../../src/components/strategy/StrategyConfigForm';
 import type { ConfigSchema, StrategyConfig } from '../../../src/types/strategy';
+
+function ControlledStrategyConfigForm({
+  schema,
+  initialConfig,
+  onChange,
+}: {
+  schema: ConfigSchema;
+  initialConfig: StrategyConfig;
+  onChange: (config: StrategyConfig) => void;
+}) {
+  const [config, setConfig] = useState<StrategyConfig>(initialConfig);
+
+  return (
+    <StrategyConfigForm
+      configSchema={schema}
+      config={config}
+      onChange={(nextConfig) => {
+        onChange(nextConfig);
+        setConfig(nextConfig);
+      }}
+    />
+  );
+}
 
 describe('StrategyConfigForm presets', () => {
   it('applies schema preset parameters without dropping existing values', async () => {
@@ -55,6 +79,75 @@ describe('StrategyConfigForm presets', () => {
       base_units: 1000,
       max_net_units: 7000,
       grid_spacing_mode: 'atr',
+    });
+  });
+});
+
+describe('StrategyConfigForm dependencies', () => {
+  it('removes hidden dependent values and restores defaults when shown again', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const schema: ConfigSchema = {
+      type: 'object',
+      properties: {
+        capacity_limit_mode: {
+          type: 'string',
+          title: 'Position Capacity Limit',
+          enum: ['add_count', 'max_net_units'],
+          enum_labels: {
+            add_count: 'By Add Steps',
+            max_net_units: 'By Max Net Units',
+          },
+          default: 'add_count',
+        },
+        max_net_units: {
+          type: 'integer',
+          title: 'Max Net Units',
+          default: 8000,
+          dependsOn: {
+            field: 'capacity_limit_mode',
+            values: ['max_net_units'],
+          },
+        },
+        add_unit_allocation_mode: {
+          type: 'string',
+          title: 'Add Unit Allocation',
+          enum: ['fixed', 'remaining_linear'],
+          default: 'fixed',
+          dependsOn: {
+            field: 'capacity_limit_mode',
+            values: ['max_net_units'],
+          },
+        },
+      },
+    };
+
+    render(
+      <ControlledStrategyConfigForm
+        schema={schema}
+        initialConfig={{
+          capacity_limit_mode: 'add_count',
+          max_net_units: 5000,
+          add_unit_allocation_mode: 'remaining_linear',
+        }}
+        onChange={onChange}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Max Net Units')).not.toBeInTheDocument();
+      expect(onChange).toHaveBeenLastCalledWith({
+        capacity_limit_mode: 'add_count',
+      });
+    });
+
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'By Max Net Units' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      capacity_limit_mode: 'max_net_units',
+      max_net_units: 8000,
+      add_unit_allocation_mode: 'fixed',
     });
   });
 });

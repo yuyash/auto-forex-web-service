@@ -16,6 +16,7 @@ INTERVAL_MODES = {
     "manual",
 }
 TRADE_DIRECTIONS = {"long", "short", "auto"}
+CAPACITY_LIMIT_MODES = {"add_count", "max_net_units"}
 ADD_UNIT_ALLOCATION_MODES = {"fixed", "remaining_linear"}
 LOSS_CUT_MODES = {"full", "staged_margin"}
 
@@ -72,6 +73,7 @@ class SnowballNetConfig:
     base_units: int
     initial_lot_size: int
     add_lot_size: int
+    capacity_limit_mode: str
     max_add_count: int
     max_net_units: int
     add_unit_allocation_mode: str
@@ -132,7 +134,7 @@ class SnowballNetConfig:
 
     @property
     def effective_max_net_units(self) -> int:
-        if self.max_net_units > 0:
+        if self.capacity_limit_mode == "max_net_units" and self.max_net_units > 0:
             return self.max_net_units
         return self.initial_units + self.add_units * self.max_add_count
 
@@ -171,6 +173,15 @@ class SnowballNetConfig:
         if isinstance(manual_raw, list):
             manual_intervals = [_parse_decimal(value, "30") for value in manual_raw]
 
+        capacity_limit_mode = _parse_str(raw.get("capacity_limit_mode"), "").lower()
+        raw_max_net_units = _parse_int(raw.get("max_net_units"), 0)
+        if raw.get("capacity_limit_mode") is None or capacity_limit_mode == "":
+            capacity_limit_mode = "max_net_units" if raw_max_net_units > 0 else "add_count"
+        max_net_units = raw_max_net_units if capacity_limit_mode == "max_net_units" else 0
+        add_unit_allocation_mode = _parse_str(raw.get("add_unit_allocation_mode"), "fixed").lower()
+        if capacity_limit_mode == "add_count":
+            add_unit_allocation_mode = "fixed"
+
         return SnowballNetConfig(
             trade_direction=_parse_str(raw.get("trade_direction"), "long").lower(),
             auto_direction_fast_period=_parse_int(raw.get("auto_direction_fast_period"), 12),
@@ -197,11 +208,10 @@ class SnowballNetConfig:
             base_units=_parse_int(raw.get("base_units"), 1000),
             initial_lot_size=_parse_int(raw.get("initial_lot_size"), 1),
             add_lot_size=_parse_int(raw.get("add_lot_size"), 1),
+            capacity_limit_mode=capacity_limit_mode,
             max_add_count=_parse_int(raw.get("max_add_count"), 7),
-            max_net_units=_parse_int(raw.get("max_net_units"), 0),
-            add_unit_allocation_mode=_parse_str(
-                raw.get("add_unit_allocation_mode"), "fixed"
-            ).lower(),
+            max_net_units=max_net_units,
+            add_unit_allocation_mode=add_unit_allocation_mode,
             take_profit_pips=_parse_decimal(raw.get("take_profit_pips"), "25"),
             partial_close_ratio=_parse_decimal(raw.get("partial_close_ratio"), "0.5"),
             min_close_units=_parse_int(raw.get("min_close_units"), 1000),
@@ -293,6 +303,7 @@ class SnowballNetConfig:
             "base_units": self.base_units,
             "initial_lot_size": self.initial_lot_size,
             "add_lot_size": self.add_lot_size,
+            "capacity_limit_mode": self.capacity_limit_mode,
             "max_add_count": self.max_add_count,
             "max_net_units": self.max_net_units,
             "add_unit_allocation_mode": self.add_unit_allocation_mode,
@@ -365,12 +376,19 @@ class SnowballNetConfig:
             raise ValueError("initial_lot_size must be greater than 0")
         if self.add_lot_size <= 0:
             raise ValueError("add_lot_size must be greater than 0")
+        if self.capacity_limit_mode not in CAPACITY_LIMIT_MODES:
+            raise ValueError(f"capacity_limit_mode must be one of {sorted(CAPACITY_LIMIT_MODES)}")
         if self.max_add_count < 0:
             raise ValueError("max_add_count must be greater than or equal to 0")
         if self.max_net_units < 0:
             raise ValueError("max_net_units must be greater than or equal to 0")
-        if self.effective_max_net_units < self.initial_units:
-            raise ValueError("max_net_units must be 0 or at least the initial units")
+        if self.capacity_limit_mode == "max_net_units":
+            if self.max_net_units <= 0:
+                raise ValueError(
+                    "max_net_units must be set when capacity_limit_mode is max_net_units"
+                )
+            if self.max_net_units < self.initial_units:
+                raise ValueError("max_net_units must be at least the initial units")
         if self.add_unit_allocation_mode not in ADD_UNIT_ALLOCATION_MODES:
             raise ValueError(
                 f"add_unit_allocation_mode must be one of {sorted(ADD_UNIT_ALLOCATION_MODES)}"

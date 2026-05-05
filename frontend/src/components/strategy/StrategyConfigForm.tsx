@@ -44,6 +44,14 @@ interface ValidationErrors {
   [key: string]: string;
 }
 
+const cloneDefaultValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return [...value];
+  if (value && typeof value === 'object') {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return value;
+};
+
 const StrategyConfigForm = ({
   configSchema,
   config,
@@ -341,6 +349,41 @@ const StrategyConfigForm = ({
     ) {
       updatedConfig[fieldSchema.exclusiveWith] = false;
     }
+
+    Object.entries(configSchema.properties || {}).forEach(
+      ([dependentFieldName, dependentSchema]) => {
+        if (
+          !dependentSchema.dependsOn ||
+          dependentSchema.deferDefaultUntilConfigured
+        ) {
+          return;
+        }
+
+        const wasVisible = isParameterVisible(
+          dependentFieldName,
+          config,
+          configSchema.properties
+        );
+        const isVisible = isParameterVisible(
+          dependentFieldName,
+          updatedConfig,
+          configSchema.properties
+        );
+        if (
+          !wasVisible &&
+          isVisible &&
+          !Object.prototype.hasOwnProperty.call(
+            updatedConfig,
+            dependentFieldName
+          ) &&
+          Object.prototype.hasOwnProperty.call(dependentSchema, 'default')
+        ) {
+          updatedConfig[dependentFieldName] = cloneDefaultValue(
+            dependentSchema.default
+          );
+        }
+      }
+    );
 
     onChange(updatedConfig);
   };
