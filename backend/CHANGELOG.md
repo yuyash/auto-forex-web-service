@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.49.2...backend-v1.49.3) (2026-05-05)
+
+
+### Bug Fixes
+
+* snowball net config exclusivity ([#662](https://github.com/yuyash/auto-forex-web-service/issues/662)) ([06e5ef8](https://github.com/yuyash/auto-forex-web-service/commit/06e5ef8d25eb36b2f22d17b7ea5e3d629d6d167f))
+
 ## [1.49.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.49.1...backend-v1.49.2) (2026-05-05)
 
 
