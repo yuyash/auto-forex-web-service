@@ -88,12 +88,8 @@ const CHART_METRICS: {
 const SNOWBALL_NET_CHART_METRICS: typeof CHART_METRICS = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
   { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
-  { key: 'total_pnl_quote', color: '#15803d' },
   { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
   { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
-  { key: 'realized_pnl_quote', color: '#047857' },
-  { key: 'unrealized_pnl_quote', color: '#b45309' },
-  { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
   { key: 'snowball_net_net_units', color: '#0288d1', format: 'int' },
   { key: 'snowball_net_average_price', color: '#2563eb' },
   { key: 'snowball_net_current_price', color: '#0f766e' },

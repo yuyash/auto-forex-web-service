@@ -39,6 +39,13 @@ describe('TaskMetricsTab', () => {
       (t, index) => ({
         t,
         metrics: {
+          total_pnl: 100 + index,
+          total_pnl_quote: 100 + index,
+          realized_pnl: 80 + index,
+          realized_pnl_quote: 80 + index,
+          unrealized_pnl: 20 + index,
+          unrealized_pnl_quote: 20 + index,
+          margin_ratio: 0.34 + index * 0.01,
           snowball_net_target_price: 156.2 + index * 0.01,
           snowball_net_next_add_price: 155.9 - index * 0.01,
           snowball_net_margin_ratio_pct: 34 + index,
@@ -68,6 +75,15 @@ describe('TaskMetricsTab', () => {
     expect(screen.getByText('Exit Price')).toBeInTheDocument();
     expect(screen.getByText('Next Add Price')).toBeInTheDocument();
     expect(screen.getByText('Margin Closeout Ratio')).toBeInTheDocument();
+    expect(screen.getByText('Total PnL')).toBeInTheDocument();
+    expect(screen.getByText('Realized PnL')).toBeInTheDocument();
+    expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
+    expect(screen.queryByText('Total PnL (Quote)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Realized PnL (Quote)')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Unrealized PnL (Quote)')
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText('Margin Closeout Ratio')).toHaveLength(1);
     expect(screen.queryByText('Win Rate')).not.toBeInTheDocument();
     expect(screen.queryByText('Winning Trades')).not.toBeInTheDocument();
     expect(screen.queryByText('Losing Trades')).not.toBeInTheDocument();
