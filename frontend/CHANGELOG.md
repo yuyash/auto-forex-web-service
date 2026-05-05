@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.4...frontend-v1.65.5) (2026-05-05)
+
+
+### Bug Fixes
+
+* **trading:** record Trade on sell_on_stop and add loss-cut chart markers ([#671](https://github.com/yuyash/auto-forex-web-service/issues/671)) ([89c27e4](https://github.com/yuyash/auto-forex-web-service/commit/89c27e404db9f4394deba38e7715860a2b8f9756))
+
 ## [1.65.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.3...frontend-v1.65.4) (2026-05-05)
 
 
