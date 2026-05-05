@@ -134,6 +134,34 @@ class StrategyDataService:
             last_tick_timestamp=context["last_tick_timestamp"],
         )
 
+    def loss_cut_events(
+        self, *, request: Request, task: Any, task_type_label: str
+    ) -> dict[str, Any]:
+        """Return every loss-cut trade for an execution as overlay markers.
+
+        Used by chart overlays to draw vertical reference lines at the
+        exact tick timestamp where each loss-cut fired, along with the
+        number of units liquidated.
+        """
+        from apps.trading.services.loss_cut_events import load_loss_cut_events
+
+        query = _query_from_request(request, default_execution_id=task.execution_id)
+        context = _load_context(task=task, task_type_label=task_type_label, query=query)
+        events = load_loss_cut_events(
+            task=task,
+            task_type_label=task_type_label,
+            execution_id=query.execution_id,
+            since=query.since,
+            until=query.until,
+        )
+        return {
+            "execution_id": string_or_none(query.execution_id),
+            "strategy_type": context["strategy_type"],
+            "instrument": getattr(task, "instrument", None),
+            "count": len(events),
+            "results": events,
+        }
+
 
 def _query_from_request(request: Request, *, default_execution_id: Any) -> StrategyDataQuery:
     params = request.query_params

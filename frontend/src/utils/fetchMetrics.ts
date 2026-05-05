@@ -202,3 +202,90 @@ export async function fetchPaginatedMetrics(opts: {
     results,
   };
 }
+
+/**
+ * A single forced-liquidation (loss-cut) trade used to overlay vertical
+ * reference lines on metric and strategy charts.
+ */
+export interface LossCutEvent {
+  /** Trade id. */
+  id: string;
+  /** ISO 8601 timestamp of the loss-cut. */
+  timestamp: string;
+  /** Unix time (seconds). */
+  time: number;
+  /** Absolute units closed by this loss-cut. */
+  units: number;
+  /** Position direction before the close (long/short). */
+  direction: string | null;
+  /** Fill price of the close, if known. */
+  price: number | null;
+  /** Raw strategy description for tooltips. */
+  description: string;
+  /** Position id closed by this loss-cut, if linked. */
+  position_id: string | null;
+}
+
+export interface LossCutEventsResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument: string | null;
+  count: number;
+  results: LossCutEvent[];
+}
+
+/**
+ * Fetch every loss-cut event for an execution.
+ *
+ * The backend returns ordered-by-timestamp-asc markers keyed off the
+ * ``close_position`` trade log.  We keep this separate from the
+ * paginated metrics stream so charts can overlay vertical reference
+ * lines without paying the per-tick metric cost.
+ */
+export async function fetchLossCutEvents(opts: {
+  taskId: string;
+  taskType: TaskType;
+  executionRunId?: string;
+  since?: string;
+  until?: string;
+}): Promise<LossCutEventsResponse> {
+  const params: Record<string, string> = {};
+  if (opts.executionRunId != null)
+    params.execution_id = String(opts.executionRunId);
+  if (opts.since) params.since = opts.since;
+  if (opts.until) params.until = opts.until;
+
+  const body = await api.get<Partial<LossCutEventsResponse>>(
+    `${buildTaskPrefix(opts.taskType)}/${opts.taskId}/strategy/loss-cut-events/`,
+    params
+  );
+
+  const results: LossCutEvent[] = Array.isArray(body.results)
+    ? body.results.map((event) => ({
+        id: String(event?.id ?? ''),
+        timestamp: String(event?.timestamp ?? ''),
+        time: Number(event?.time ?? 0),
+        units: Number(event?.units ?? 0),
+        direction:
+          typeof event?.direction === 'string' ? event.direction : null,
+        price:
+          event?.price != null && Number.isFinite(Number(event.price))
+            ? Number(event.price)
+            : null,
+        description:
+          typeof event?.description === 'string' ? event.description : '',
+        position_id:
+          typeof event?.position_id === 'string' ? event.position_id : null,
+      }))
+    : [];
+
+  return {
+    execution_id:
+      typeof body.execution_id === 'string' ? body.execution_id : null,
+    strategy_type:
+      typeof body.strategy_type === 'string' ? body.strategy_type : '',
+    instrument: typeof body.instrument === 'string' ? body.instrument : null,
+    count: Number(body.count ?? results.length),
+    results,
+  };
+}

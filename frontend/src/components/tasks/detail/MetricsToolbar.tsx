@@ -40,6 +40,13 @@ export interface MetricsToolbarProps {
   onRefresh: () => void | Promise<void>;
   onConfigureCharts?: () => void;
   isLoading?: boolean;
+  /**
+   * If provided, renders a loss-cut overlay toggle in the toolbar.
+   * Leaving either prop undefined hides the control entirely.
+   */
+  showLossCutMarkers?: boolean;
+  onToggleLossCutMarkers?: (next: boolean) => void;
+  lossCutMarkerCount?: number;
 }
 
 export function MetricsToolbar({
@@ -52,6 +59,9 @@ export function MetricsToolbar({
   onRefresh,
   onConfigureCharts,
   isLoading,
+  showLossCutMarkers,
+  onToggleLossCutMarkers,
+  lossCutMarkerCount,
 }: MetricsToolbarProps) {
   const { t } = useTranslation('common');
   const [showRange, setShowRange] = useState(!!since || !!until);
@@ -134,6 +144,37 @@ export function MetricsToolbar({
               </IconButton>
             </span>
           </Tooltip>
+
+          {onToggleLossCutMarkers != null ? (
+            <Tooltip
+              title={t('metrics.toggleLossCutMarkers', 'Show loss-cut markers')}
+            >
+              <ToggleButton
+                size="small"
+                value="loss-cut"
+                selected={Boolean(showLossCutMarkers)}
+                onChange={() => onToggleLossCutMarkers(!showLossCutMarkers)}
+                sx={{
+                  px: 1,
+                  py: 0.25,
+                  fontSize: '0.7rem',
+                  lineHeight: 1.1,
+                  whiteSpace: 'nowrap',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+                aria-label={t(
+                  'metrics.toggleLossCutMarkers',
+                  'Show loss-cut markers'
+                )}
+              >
+                {t('metrics.lossCut', 'Loss-cut')}
+                {lossCutMarkerCount != null && lossCutMarkerCount > 0
+                  ? ` (${lossCutMarkerCount})`
+                  : ''}
+              </ToggleButton>
+            </Tooltip>
+          ) : null}
 
           {onConfigureCharts ? (
             <Tooltip title={t('metrics.configureCharts', 'Chart settings')}>

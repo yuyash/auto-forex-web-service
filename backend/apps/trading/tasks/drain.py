@@ -10,8 +10,9 @@ from typing import Any, Protocol, cast
 
 from django.utils import timezone as dj_timezone
 
-from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.enums import Direction, TaskStatus, TaskType
 from apps.trading.models import Position, TradingTask
+from apps.trading.models.trades import Trade
 from apps.trading.order import OrderServiceError
 from apps.trading.services.drain import DrainCandidate, DrainPolicy
 
@@ -184,7 +185,7 @@ class TaskDrainCoordinator:
             )
 
         try:
-            closed_position, realized_delta, _order = executor.order_service.close_position(
+            closed_position, realized_delta, order = executor.order_service.close_position(
                 position=position,
                 override_price=(
                     Decimal(str(override_price)) if override_price is not None else None
@@ -200,6 +201,20 @@ class TaskDrainCoordinator:
             )
             return
 
+        # Persist a close_position Trade row so unit accounting and UI
+        # history remain consistent.  Normal strategy-driven closes go
+        # through TradeHandler._record_trade; sell_on_stop bypasses the
+        # strategy/event loop entirely, so we create the Trade directly
+        # here using the same shape as the handler.
+        self._record_sell_on_stop_trade(
+            position=position,
+            closed_position=closed_position,
+            closed_units=closed_units,
+            order=order,
+            override_price=override_price,
+            tick_timestamp=tick_timestamp,
+        )
+
         loop.state.current_balance = Decimal(str(loop.state.current_balance)) + realized_delta
         exit_px = closed_position.exit_price or (
             Decimal(str(override_price)) if override_price is not None else Decimal("0")
@@ -211,6 +226,72 @@ class TaskDrainCoordinator:
             realized_delta,
             realized_pnl_quote=quote_delta * Decimal(str(closed_units)),
         )
+
+    def _record_sell_on_stop_trade(
+        self,
+        *,
+        position: Any,
+        closed_position: Any,
+        closed_units: int,
+        order: Any,
+        override_price: Any,
+        tick_timestamp: datetime | None,
+    ) -> None:
+        """Persist a ``close_position`` Trade row for a sell-on-stop close.
+
+        Mirrors the shape produced by
+        :meth:`apps.trading.events.handler.TradeHandler._record_trade` so
+        the full close is visible in the history tab, keeps the per-position
+        unit-conservation invariant (open units == close units), and feeds
+        downstream markers (loss-cut overlay, history export, etc.).
+        """
+        executor = self.executor
+        direction_value = str(getattr(position, "direction", "") or "").lower()
+        try:
+            direction_enum: Direction | None = Direction(direction_value)
+        except ValueError:
+            direction_enum = None
+
+        exit_price = (
+            closed_position.exit_price
+            if closed_position.exit_price is not None
+            else (Decimal(str(override_price)) if override_price is not None else Decimal("0"))
+        )
+        timestamp = tick_timestamp or closed_position.exit_time or dj_timezone.now()
+
+        description = (
+            f"Sell-on-stop close | units={closed_units}, exit={exit_price}, reason=stop_requested"
+        )
+
+        try:
+            Trade.objects.create(
+                task_type=executor.task_type.value,
+                task_id=executor.task.pk,
+                execution_id=getattr(executor.task, "execution_id", None),
+                timestamp=timestamp,
+                direction=direction_enum.value if direction_enum else None,
+                units=closed_units,
+                instrument=position.instrument,
+                price=exit_price,
+                execution_method="close_position",
+                layer_index=getattr(position, "layer_index", None),
+                retracement_count=getattr(position, "retracement_count", None),
+                oanda_trade_id=getattr(position, "oanda_trade_id", None),
+                position=position,
+                order=order,
+                description=description,
+                cycle_id=None,
+                sequence_number=0,
+                margin_ratio=None,
+                is_rebuild=False,
+            )
+        except Exception:  # pragma: no cover - trade logging must never block shutdown
+            executor.logger.warning(
+                "Failed to persist sell_on_stop close trade - task_id=%s, position_id=%s",
+                executor.task.pk,
+                getattr(position, "pk", None),
+                exc_info=True,
+            )
 
 
 def record_final_stop_metrics(executor: Any, loop: Any) -> None:

@@ -11,12 +11,14 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type ReactNode,
 } from 'react';
 import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
+import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { useTranslation } from 'react-i18next';
-import type { MetricPoint } from '../../../utils/fetchMetrics';
+import type { LossCutEvent, MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
 import { ChartPanel } from './ChartPanel';
@@ -62,6 +64,12 @@ interface TaskMetricsTabProps {
   currentTickPrice?: number | null;
   timezone?: string;
   strategyType?: string;
+  /** Loss-cut events to overlay as vertical reference lines on charts. */
+  lossCutEvents?: LossCutEvent[];
+  /** Whether to show loss-cut markers on charts. */
+  showLossCutMarkers?: boolean;
+  /** Callback to toggle loss-cut marker visibility. */
+  onToggleLossCutMarkers?: (next: boolean) => void;
 }
 
 type MetricFormat = 'pct' | 'int' | 'currency';
@@ -150,6 +158,16 @@ const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
+
+/** Chart keys that should display loss-cut vertical reference lines when enabled. */
+const LOSS_CUT_OVERLAY_KEYS = new Set([
+  'current_balance',
+  'realized_pnl',
+  'total_pnl',
+  'snowball_net_net_units',
+  'margin_ratio',
+  'snowball_net_margin_ratio_pct',
+]);
 
 function chartSeries(chart: MetricChartDefinition): ChartMetric[] {
   return chart.series ?? [chart];
@@ -300,8 +318,12 @@ const LINE_CHART_BOTTOM_MARGIN = 22;
 
 function FillLineChart({
   fallbackHeight,
+  children,
   ...chartProps
-}: ComponentProps<typeof LineChart> & { fallbackHeight: number }) {
+}: ComponentProps<typeof LineChart> & {
+  fallbackHeight: number;
+  children?: ReactNode;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -385,7 +407,9 @@ function FillLineChart({
         {...chartProps}
         {...(effectiveWidth != null ? { width: effectiveWidth } : {})}
         height={effectiveHeight}
-      />
+      >
+        {children}
+      </LineChart>
     </Box>
   );
 }
@@ -410,6 +434,9 @@ export function TaskMetricsTab({
   currentTickPrice,
   timezone = 'UTC',
   strategyType,
+  lossCutEvents,
+  showLossCutMarkers,
+  onToggleLossCutMarkers,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
   const { settings } = useAppSettings();
@@ -709,6 +736,9 @@ export function TaskMetricsTab({
         onRefresh={handleRefresh}
         onConfigureCharts={() => setOrderDialogOpen(true)}
         isLoading={isLoading}
+        showLossCutMarkers={showLossCutMarkers}
+        onToggleLossCutMarkers={onToggleLossCutMarkers}
+        lossCutMarkerCount={lossCutEvents?.length}
       />
       {consistencyWarnings.length > 0 ? (
         <Alert severity="warning" sx={{ mb: { xs: 0.75, sm: 1.5 } }}>
@@ -885,7 +915,29 @@ export function TaskMetricsTab({
                       style: { fontSize: 10 },
                     },
                   }}
-                />
+                >
+                  {showLossCutMarkers &&
+                    LOSS_CUT_OVERLAY_KEYS.has(chart.key) &&
+                    lossCutEvents?.map((event) => (
+                      <ChartsReferenceLine
+                        key={event.id}
+                        x={new Date(event.time * 1000)}
+                        lineStyle={{
+                          stroke: '#dc2626',
+                          strokeWidth: 1.5,
+                          strokeDasharray: '4 2',
+                          opacity: 0.7,
+                        }}
+                        label={`LC ${event.units.toLocaleString()}`}
+                        labelAlign="start"
+                        labelStyle={{
+                          fontSize: 9,
+                          fill: '#dc2626',
+                          fontWeight: 500,
+                        }}
+                      />
+                    ))}
+                </FillLineChart>
               </ChartPanel>
             </Grid>
           );
