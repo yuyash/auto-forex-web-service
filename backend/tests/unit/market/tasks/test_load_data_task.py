@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import pytest
 from freezegun import freeze_time
+import pytest
 
-from apps.market.models import MarketEvent
 from apps.market.tasks.load_data import load_daily_tick_data
 
 
@@ -26,21 +26,23 @@ def _clear_load_data_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
-@pytest.mark.django_db
 @freeze_time("2026-05-03 17:00:00", tz_offset=0)
 def test_load_daily_tick_data_loads_only_yesterday(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The daily task should pass a single date to load_data, not a two-day range."""
     _clear_load_data_env(monkeypatch)
     monkeypatch.setenv("LOAD_DATA_DATABASE", "ticks_db")
     monkeypatch.setenv("LOAD_DATA_TABLE", "ticks_table")
     monkeypatch.setenv("LOAD_DATA_INSTRUMENT", "C:USD-JPY")
+    caplog.set_level(logging.INFO, logger="apps.market.tasks.load_data")
 
     calls: list[dict[str, Any]] = []
 
     def fake_call_command(*_args: Any, **kwargs: Any) -> None:
         calls.append(kwargs)
+        kwargs["stdout"].write("Starting Athena query for ticks_db.ticks_table\n")
         kwargs["stdout"].write("Inserted 123 tick rows for 2026-05-02..2026-05-02\n")
         kwargs["stdout"].write("Inserted 123 tick rows\n")
 
@@ -57,31 +59,22 @@ def test_load_daily_tick_data_loads_only_yesterday(
     assert len(calls) == 1
     assert calls[0]["start"] == "2026-05-02"
     assert calls[0]["end"] == "2026-05-02"
-
-    events = list(MarketEvent.objects.order_by("created_at", "id"))
-    assert [event.event_type for event in events] == [
-        "tick_data_load_started",
-        "tick_data_load_completed",
-    ]
-    completed = events[-1]
-    assert completed.category == "tick_data_load"
-    assert completed.instrument == "C:USD-JPY"
-    assert completed.details["date"] == "2026-05-02"
-    assert completed.details["rows_inserted"] == 123
-    assert completed.details["command_output"].endswith("Inserted 123 tick rows")
+    assert "load_data: Starting Athena query for ticks_db.ticks_table" in caplog.messages
+    assert "load_data: Inserted 123 tick rows for 2026-05-02..2026-05-02" in caplog.messages
+    assert "load_data: Inserted 123 tick rows" in caplog.messages
 
 
-@pytest.mark.django_db
-def test_load_daily_tick_data_persists_skip_event(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_daily_tick_data_logs_skip(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     _clear_load_data_env(monkeypatch)
+    caplog.set_level(logging.WARNING, logger="apps.market.tasks.load_data")
 
     result = load_daily_tick_data.run()
 
     assert result == {"status": "skipped", "reason": "not configured"}
-    event = MarketEvent.objects.get(event_type="tick_data_load_skipped")
-    assert event.category == "tick_data_load"
-    assert event.severity == "warning"
-    assert event.details["missing_fields"] == [
-        "LOAD_DATA_DATABASE",
-        "LOAD_DATA_TABLE",
-    ]
+    assert (
+        "load_daily_tick_data skipped: missing Athena configuration "
+        "fields=LOAD_DATA_DATABASE,LOAD_DATA_TABLE"
+    ) in caplog.messages
