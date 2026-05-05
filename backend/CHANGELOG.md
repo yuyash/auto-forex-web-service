@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.50.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.49.4...backend-v1.50.0) (2026-05-05)
+
+
+### Features
+
+* **strategy:** add independent SnowballNet controls ([#670](https://github.com/yuyash/auto-forex-web-service/issues/670)) ([7485e57](https://github.com/yuyash/auto-forex-web-service/commit/7485e57ba9dc770eb6131056f7f98571cd9f712b))
+
+
+### Bug Fixes
+
+* **market:** log load data command output ([#668](https://github.com/yuyash/auto-forex-web-service/issues/668)) ([9617605](https://github.com/yuyash/auto-forex-web-service/commit/9617605cc79f3938b84188e1fc417e110ce5dd5b))
+
 ## [1.49.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.49.3...backend-v1.49.4) (2026-05-05)
 
 
