@@ -70,7 +70,10 @@ import { taskDetailLayout } from '../tasks/detail/detailLayout';
 import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabsConfig';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
-import { useStrategySnapshot } from '../../hooks/useStrategyData';
+import {
+  useStrategySnapshot,
+  useLossCutEvents,
+} from '../../hooks/useStrategyData';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
@@ -243,6 +246,14 @@ export const TradingTaskDetail: React.FC = () => {
     fetchSeries: activeTabId === 'metrics',
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
+  });
+
+  const [showLossCutMarkers, setShowLossCutMarkers] = useState(false);
+  const lossCutEventsQuery = useLossCutEvents({
+    taskId,
+    taskType: TaskType.TRADING,
+    executionRunId: effectiveExecutionId,
+    enabled: !!taskId && showLossCutMarkers,
   });
 
   const handleRefreshExecutionStatus = useCallback(async () => {
@@ -471,6 +482,8 @@ export const TradingTaskDetail: React.FC = () => {
                 executionRunId={activeExecutionId}
                 enableRealTimeUpdates={enableRealtime}
                 timezone={timezone}
+                lossCutEvents={lossCutEventsQuery.data?.results}
+                showLossCutMarkers={showLossCutMarkers}
               />
             ) : (
               <TaskStrategyTab
@@ -590,6 +603,9 @@ export const TradingTaskDetail: React.FC = () => {
                 }
                 timezone={timezone}
                 strategyType={detailTask.strategy_type}
+                lossCutEvents={lossCutEventsQuery.data?.results}
+                showLossCutMarkers={showLossCutMarkers}
+                onToggleLossCutMarkers={setShowLossCutMarkers}
               />
             </Suspense>
           </LazyTabPanel>

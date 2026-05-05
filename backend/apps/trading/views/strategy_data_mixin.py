@@ -197,6 +197,49 @@ class TaskStrategyDataMixin:
         tags=["Trading"],
         parameters=[
             OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("since", str, required=False),
+            OpenApiParameter("until", str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyLossCutEventsResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "count": serializers.IntegerField(),
+                    "results": serializers.ListField(child=serializers.JSONField()),
+                },
+            )
+        },
+        description=(
+            "List loss-cut trades for an execution. "
+            "Used by chart overlays to draw vertical reference lines marking "
+            "each forced liquidation with the units closed."
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/loss-cut-events",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_loss_cut_events(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().loss_cut_events(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
             OpenApiParameter("center", str, required=False),
             OpenApiParameter("since", str, required=False),
             OpenApiParameter("until", str, required=False),

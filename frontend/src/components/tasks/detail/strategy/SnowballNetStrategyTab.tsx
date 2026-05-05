@@ -69,6 +69,7 @@ import {
   type WhitespaceData,
 } from 'lightweight-charts';
 import { LineChart } from '@mui/x-charts/LineChart';
+import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { useTheme } from '@mui/material/styles';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -126,6 +127,14 @@ interface SnowballNetStrategyTabProps {
   taskEndTime?: string | null;
   enableRealTimeUpdates?: boolean;
   timezone?: string;
+  /** Loss-cut events to overlay as vertical reference lines on margin/PnL charts. */
+  lossCutEvents?: Array<{
+    id: string;
+    time: number;
+    units: number;
+  }>;
+  /** Whether to show loss-cut markers on charts. */
+  showLossCutMarkers?: boolean;
 }
 
 const REFRESH_OPTIONS = [5, 15, 30, 60, 0] as const;
@@ -1201,6 +1210,8 @@ export function SnowballNetStrategyTab({
   taskEndTime,
   enableRealTimeUpdates = false,
   timezone = 'UTC',
+  lossCutEvents,
+  showLossCutMarkers,
 }: SnowballNetStrategyTabProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -2687,6 +2698,8 @@ export function SnowballNetStrategyTab({
         onChartDragEnd={handleChartDragEnd}
         onOhlcResizePointerDown={handleOhlcResizePointerDown}
         onOhlcResizeKeyDown={handleOhlcResizeKeyDown}
+        lossCutEvents={lossCutEvents}
+        showLossCutMarkers={showLossCutMarkers}
       />
     </Box>
   );
@@ -2810,6 +2823,8 @@ function SnowballNetCharts({
   onChartDragEnd,
   onOhlcResizePointerDown,
   onOhlcResizeKeyDown,
+  lossCutEvents,
+  showLossCutMarkers,
 }: {
   data: SnowballNetChartResponse | null;
   settings: SnowballNetChartSettings;
@@ -2826,6 +2841,8 @@ function SnowballNetCharts({
   onChartDragEnd: () => void;
   onOhlcResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onOhlcResizeKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+  lossCutEvents?: Array<{ id: string; time: number; units: number }>;
+  showLossCutMarkers?: boolean;
 }) {
   const { t } = useTranslation(['common', 'strategy']);
   const timeDomain = data ? chartTimeDomain(data) : undefined;
@@ -2878,6 +2895,8 @@ function SnowballNetCharts({
             timeDomain={timeDomain}
             percent
             headerPrefix={headerPrefix}
+            lossCutEvents={lossCutEvents}
+            showLossCutMarkers={showLossCutMarkers}
           />
         );
       case 'pnl':
@@ -2893,6 +2912,8 @@ function SnowballNetCharts({
             valueUnit={pnlCurrency}
             seriesLabelUnit={pnlCurrency}
             headerPrefix={headerPrefix}
+            lossCutEvents={lossCutEvents}
+            showLossCutMarkers={showLossCutMarkers}
           />
         );
       case 'averagePrice':
@@ -3101,8 +3122,12 @@ function OhlcChartCard({
 
 function FillLineChart({
   fallbackHeight,
+  children,
   ...chartProps
-}: ComponentProps<typeof LineChart> & { fallbackHeight: number }) {
+}: ComponentProps<typeof LineChart> & {
+  fallbackHeight: number;
+  children?: ReactNode;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -3176,7 +3201,9 @@ function FillLineChart({
         height={
           size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight
         }
-      />
+      >
+        {children}
+      </LineChart>
     </Box>
   );
 }
@@ -3241,6 +3268,8 @@ function LineChartCard({
   valueUnit,
   seriesLabelUnit,
   headerPrefix,
+  lossCutEvents,
+  showLossCutMarkers,
 }: {
   title: string;
   lines: SnowballNetLineSeries[];
@@ -3251,6 +3280,8 @@ function LineChartCard({
   valueUnit?: string | null;
   seriesLabelUnit?: string | null;
   headerPrefix?: ReactNode;
+  lossCutEvents?: Array<{ id: string; time: number; units: number }>;
+  showLossCutMarkers?: boolean;
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -3502,7 +3533,28 @@ function LineChartCard({
               labelStyle: { fontSize: isMobile ? 11 : 12 },
             } as Record<string, unknown>,
           }}
-        />
+        >
+          {showLossCutMarkers &&
+            lossCutEvents?.map((event) => (
+              <ChartsReferenceLine
+                key={event.id}
+                x={new Date(event.time * 1000)}
+                lineStyle={{
+                  stroke: '#dc2626',
+                  strokeWidth: 1.5,
+                  strokeDasharray: '4 2',
+                  opacity: 0.7,
+                }}
+                label={`LC ${event.units.toLocaleString()}`}
+                labelAlign="start"
+                labelStyle={{
+                  fontSize: 9,
+                  fill: '#dc2626',
+                  fontWeight: 500,
+                }}
+              />
+            ))}
+        </FillLineChart>
         {isEmpty ? (
           <Box
             sx={{

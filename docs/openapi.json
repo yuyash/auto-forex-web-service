@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.49.4",
+        "version": "1.50.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -3995,6 +3995,65 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/strategy/loss-cut-events/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_loss_cut_events_retrieve",
+                "description": "List loss-cut trades for an execution. Used by chart overlays to draw vertical reference lines marking each forced liquidation with the units closed.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyLossCutEventsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/strategy/metrics/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_metrics_retrieve",
@@ -6152,6 +6211,65 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskStrategyHistoryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy/loss-cut-events/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_loss_cut_events_retrieve",
+                "description": "List loss-cut trades for an execution. Used by chart overlays to draw vertical reference lines marking each forced liquidation with the units closed.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyLossCutEventsResponse"
                                 }
                             }
                         },
@@ -11235,6 +11353,36 @@
                     "instrument",
                     "result",
                     "resume_cursor_timestamp",
+                    "strategy_type"
+                ]
+            },
+            "TaskStrategyLossCutEventsResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "count": {
+                        "type": "integer"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {}
+                    }
+                },
+                "required": [
+                    "count",
+                    "execution_id",
+                    "instrument",
+                    "results",
                     "strategy_type"
                 ]
             },

@@ -179,3 +179,57 @@ export function useSnowballNetChart({
     refetchInterval,
   });
 }
+
+export function useLossCutEvents({
+  taskId,
+  taskType,
+  executionRunId,
+  enabled = true,
+  refetchInterval = false,
+  since,
+  until,
+}: {
+  taskId: string | number;
+  taskType: TaskType;
+  executionRunId?: string;
+  enabled?: boolean;
+  refetchInterval?: number | false;
+  since?: string;
+  until?: string;
+}) {
+  const queryParams = cleanParams({
+    execution_id: executionRunId,
+    since,
+    until,
+  });
+  return useQuery({
+    queryKey: [
+      'strategy-data',
+      taskType,
+      String(taskId),
+      'loss-cut-events',
+      queryParams,
+    ],
+    enabled: enabled && Boolean(taskId),
+    queryFn: () =>
+      fetchTaskResourceObject<{
+        execution_id: string | null;
+        strategy_type: string;
+        instrument: string | null;
+        count: number;
+        results: Array<{
+          id: string;
+          timestamp: string;
+          time: number;
+          units: number;
+          direction: string | null;
+          price: number | null;
+          description: string;
+          position_id: string | null;
+        }>;
+      }>(taskType, taskId, 'strategy/loss-cut-events', queryParams),
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchInterval,
+  });
+}

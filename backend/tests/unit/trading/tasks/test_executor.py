@@ -1427,8 +1427,11 @@ class TestHandleEmptyBatch:
 class TestSellOnStop:
     """Tests for sell-on-stop finalisation behavior."""
 
+    @patch("apps.trading.tasks.drain.Trade")
     @patch("apps.trading.tasks.executor.EventHandler")
-    def test_backtest_sell_on_stop_uses_last_tick_prices_and_updates_balance(self, mock_handler):
+    def test_backtest_sell_on_stop_uses_last_tick_prices_and_updates_balance(
+        self, mock_handler, mock_trade
+    ):
         from apps.trading.models import BacktestTask
         from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
 
@@ -1447,15 +1450,29 @@ class TestSellOnStop:
             direction="long",
             units=1000,
             entry_price=Decimal("135.000"),
+            instrument="USD_JPY",
+            oanda_trade_id=None,
+            layer_index=None,
+            retracement_count=None,
         )
         short_position = SimpleNamespace(
             id=uuid4(),
             direction="short",
             units=2000,
             entry_price=Decimal("138.000"),
+            instrument="USD_JPY",
+            oanda_trade_id=None,
+            layer_index=None,
+            retracement_count=None,
         )
-        closed_long = SimpleNamespace(exit_price=Decimal("136.899"))
-        closed_short = SimpleNamespace(exit_price=Decimal("136.906"))
+        closed_long = SimpleNamespace(
+            exit_price=Decimal("136.899"),
+            exit_time=datetime(2022, 8, 23, 13, 48, tzinfo=UTC),
+        )
+        closed_short = SimpleNamespace(
+            exit_price=Decimal("136.906"),
+            exit_time=datetime(2022, 8, 23, 13, 48, tzinfo=UTC),
+        )
 
         order_service = MagicMock()
         order_service.get_open_positions.side_effect = [[long_position, short_position], []]
@@ -1506,6 +1523,23 @@ class TestSellOnStop:
             realized_pnl_quote=Decimal("2188.000"),
         )
         executor._record_final_stop_metrics.assert_called_once_with(loop)
+
+        # Each sell-on-stop close must persist a close_position Trade row
+        # so the history stays consistent with what normal strategy closes
+        # produce (see drain._record_sell_on_stop_trade).
+        assert mock_trade.objects.create.call_count == 2
+        long_call_kwargs = mock_trade.objects.create.call_args_list[0].kwargs
+        short_call_kwargs = mock_trade.objects.create.call_args_list[1].kwargs
+        assert long_call_kwargs["execution_method"] == "close_position"
+        assert long_call_kwargs["direction"] == "long"
+        assert long_call_kwargs["units"] == 1000
+        assert long_call_kwargs["price"] == Decimal("136.899")
+        assert long_call_kwargs["position"] is long_position
+        assert "Sell-on-stop close" in long_call_kwargs["description"]
+        assert short_call_kwargs["execution_method"] == "close_position"
+        assert short_call_kwargs["direction"] == "short"
+        assert short_call_kwargs["units"] == 2000
+        assert short_call_kwargs["price"] == Decimal("136.906")
 
 
 class TestSuspiciousTickGapDetection:
