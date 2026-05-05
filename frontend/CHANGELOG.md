@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.1...frontend-v1.65.2) (2026-05-05)
+
+
+### Bug Fixes
+
+* snowball net config exclusivity ([#662](https://github.com/yuyash/auto-forex-web-service/issues/662)) ([06e5ef8](https://github.com/yuyash/auto-forex-web-service/commit/06e5ef8d25eb36b2f22d17b7ea5e3d629d6d167f))
+
 ## [1.65.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.0...frontend-v1.65.1) (2026-05-05)
 
 
