@@ -1,6 +1,6 @@
 # Deployment
 
-## Local Host
+## Local Deployment
 
 Use the development Compose file when you want to run the full stack on your own machine without the production image-pull and HTTPS setup.
 
@@ -65,7 +65,7 @@ docker compose down -v
 
 Use `docker compose down -v` only when you intentionally want to delete the local PostgreSQL and Redis data.
 
-## Production
+## Production Deployment
 
 The `Build and Deploy` GitHub Actions workflow builds Docker images, copies `docker-compose.prod.yaml` and `nginx/` to the host, and runs `docker compose pull && docker compose up -d`.
 

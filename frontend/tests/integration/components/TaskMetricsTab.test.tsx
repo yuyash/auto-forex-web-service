@@ -33,4 +33,43 @@ describe('TaskMetricsTab', () => {
 
     expect(screen.getByTestId('line-chart')).toBeInTheDocument();
   });
+
+  it('renders SnowballNet strategy chart metrics without win/loss charts', () => {
+    const data: MetricPoint[] = [1_700_000_000, 1_700_000_060].map(
+      (t, index) => ({
+        t,
+        metrics: {
+          snowball_net_target_price: 156.2 + index * 0.01,
+          snowball_net_next_add_price: 155.9 - index * 0.01,
+          snowball_net_margin_ratio_pct: 34 + index,
+          win_rate: 50,
+          winning_trades: 1,
+          losing_trades: 1,
+        },
+      })
+    );
+
+    render(
+      <TaskMetricsTab
+        data={data}
+        isLoading={false}
+        error={null}
+        interval={1}
+        since=""
+        until=""
+        onIntervalChange={vi.fn()}
+        onSinceChange={vi.fn()}
+        onUntilChange={vi.fn()}
+        onRefresh={vi.fn()}
+        strategyType="snowball_net"
+      />
+    );
+
+    expect(screen.getByText('Exit Price')).toBeInTheDocument();
+    expect(screen.getByText('Next Add Price')).toBeInTheDocument();
+    expect(screen.getByText('Margin Closeout Ratio')).toBeInTheDocument();
+    expect(screen.queryByText('Win Rate')).not.toBeInTheDocument();
+    expect(screen.queryByText('Winning Trades')).not.toBeInTheDocument();
+    expect(screen.queryByText('Losing Trades')).not.toBeInTheDocument();
+  });
 });
