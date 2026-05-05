@@ -10,10 +10,12 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from apps.market.models import MarketCandle
 from apps.trading.models.metrics import Metrics
 from apps.trading.services.snowball_net_chart import (
     NetChartWindow,
     _current_state,
+    _load_candles,
     _load_oscillator_lines,
     _load_price_lines,
     _margin_threshold_lines,
@@ -233,6 +235,42 @@ def test_load_price_lines_labels_disabled_next_add_separately():
 
     disabled_line = next(line for line in lines if line["id"] == "next_add_price_disabled")
     assert disabled_line["label_key"] == "snowballNet.chart.nextAddDisabled"
+
+
+@pytest.mark.django_db
+def test_load_candles_prefers_stored_candles_for_backtests_without_account():
+    timestamp = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    MarketCandle.objects.create(
+        instrument="USD_JPY",
+        granularity="M1",
+        timestamp=timestamp,
+        open=Decimal("156.100"),
+        high=Decimal("156.200"),
+        low=Decimal("156.000"),
+        close=Decimal("156.150"),
+        volume=12,
+    )
+
+    candles = _load_candles(
+        request=_chart_request(),
+        task=SimpleNamespace(pk=uuid4(), user_id=None),
+        task_type_label="backtest",
+        instrument="USD_JPY",
+        since=timestamp - timedelta(minutes=1),
+        until=timestamp + timedelta(minutes=1),
+        granularity="M1",
+    )
+
+    assert candles == [
+        {
+            "time": int(timestamp.timestamp()),
+            "open": 156.1,
+            "high": 156.2,
+            "low": 156.0,
+            "close": 156.15,
+            "volume": 12,
+        }
+    ]
 
 
 def test_margin_threshold_lines_include_emergency_and_reduce_when_enabled():

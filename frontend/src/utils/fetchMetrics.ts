@@ -23,6 +23,9 @@ export interface MetricsPage {
 }
 
 export interface LatestMetricsResponse {
+  execution_id?: string | null;
+  strategy_type?: string;
+  instrument?: string | null;
   data_source: string;
   resume_cursor_timestamp: string | null;
   consistency_warnings: Array<Record<string, unknown>>;
@@ -113,20 +116,22 @@ export async function fetchLatestMetrics(opts: {
   taskType: TaskType;
   executionRunId?: string;
 }): Promise<LatestMetricsResponse> {
-  const body = await api.get<Partial<MetricsPage>>(
-    `${buildTaskPrefix(opts.taskType)}/${opts.taskId}/strategy/metrics/`,
+  const body = await api.get<Partial<LatestMetricsResponse>>(
+    `${buildTaskPrefix(opts.taskType)}/${opts.taskId}/strategy/metrics/latest/`,
     {
       ...(opts.executionRunId != null
         ? { execution_id: String(opts.executionRunId) }
         : {}),
-      page: 1,
-      page_size: 1,
-      ordering: '-timestamp',
     }
   );
-  const first = (body.results ?? [])[0];
+  const result = body.result;
 
   return {
+    execution_id:
+      typeof body.execution_id === 'string' ? body.execution_id : null,
+    strategy_type:
+      typeof body.strategy_type === 'string' ? body.strategy_type : undefined,
+    instrument: typeof body.instrument === 'string' ? body.instrument : null,
     data_source:
       typeof body.data_source === 'string' ? body.data_source : 'unknown',
     resume_cursor_timestamp:
@@ -136,7 +141,7 @@ export async function fetchLatestMetrics(opts: {
     consistency_warnings: Array.isArray(body.consistency_warnings)
       ? (body.consistency_warnings as Array<Record<string, unknown>>)
       : [],
-    result: first ? normalizeMetricPoint(first) : null,
+    result: result ? normalizeMetricPoint(result) : null,
   };
 }
 

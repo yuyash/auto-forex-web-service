@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.49.0",
+        "version": "1.49.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -4089,6 +4089,58 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/strategy/metrics/latest/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_metrics_latest_retrieve",
+                "description": "Retrieve the latest strategy metric snapshot without full pagination counts.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyLatestMetricResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/strategy/net-chart/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_net_chart_retrieve",
@@ -6194,6 +6246,58 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskStrategyMetricsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy/metrics/latest/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_metrics_latest_retrieve",
+                "description": "Retrieve the latest strategy metric snapshot without full pagination counts.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyLatestMetricResponse"
                                 }
                             }
                         },
@@ -11093,6 +11197,44 @@
                     "next",
                     "previous",
                     "results",
+                    "strategy_type"
+                ]
+            },
+            "TaskStrategyLatestMetricResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "data_source": {
+                        "type": "string"
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "result": {
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data_source",
+                    "execution_id",
+                    "instrument",
+                    "result",
+                    "resume_cursor_timestamp",
                     "strategy_type"
                 ]
             },
