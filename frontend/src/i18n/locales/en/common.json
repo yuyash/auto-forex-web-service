@@ -743,6 +743,7 @@
     "losing_trades": "Losing Trades",
     "snowball_net_net_units": "Net Units",
     "snowball_net_average_price": "Average Entry Price",
+    "snowball_net_price_levels": "Price Levels",
     "snowball_net_current_price": "Current Net Price",
     "snowball_net_target_price": "Exit Price",
     "snowball_net_next_add_price": "Next Add Price",

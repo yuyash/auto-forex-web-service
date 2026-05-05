@@ -64,12 +64,21 @@ interface TaskMetricsTabProps {
   strategyType?: string;
 }
 
-/** Metrics to chart and their display order */
-const CHART_METRICS: {
+type MetricFormat = 'pct' | 'int' | 'currency';
+
+type ChartMetric = {
   key: string;
   color: string;
-  format?: 'pct' | 'int' | 'currency';
-}[] = [
+  format?: MetricFormat;
+};
+
+type MetricChartDefinition = ChartMetric & {
+  series?: ChartMetric[];
+  valueKey?: string;
+};
+
+/** Metrics to chart and their display order */
+const CHART_METRICS: MetricChartDefinition[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
   { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
   { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
@@ -85,48 +94,66 @@ const CHART_METRICS: {
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
 ];
 
-const SNOWBALL_NET_CHART_METRICS: typeof CHART_METRICS = [
+const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
   { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
-  { key: 'total_pnl_quote', color: '#15803d' },
   { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
   { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
-  { key: 'realized_pnl_quote', color: '#047857' },
-  { key: 'unrealized_pnl_quote', color: '#b45309' },
-  { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
   { key: 'snowball_net_net_units', color: '#0288d1', format: 'int' },
   { key: 'snowball_net_average_price', color: '#2563eb' },
-  { key: 'snowball_net_current_price', color: '#0f766e' },
-  { key: 'snowball_net_target_price', color: '#16a34a' },
-  { key: 'snowball_net_next_add_price', color: '#dc2626' },
-  { key: 'snowball_net_theoretical_next_add_price', color: '#b91c1c' },
-  { key: 'snowball_net_pips_from_average', color: '#7c3aed' },
-  { key: 'snowball_net_margin_ratio_pct', color: '#ea580c', format: 'pct' },
-  { key: 'snowball_net_next_add_distance_pips', color: '#dc2626' },
+  {
+    key: 'snowball_net_price_levels',
+    color: '#0f766e',
+    valueKey: 'snowball_net_current_price',
+    series: [
+      { key: 'snowball_net_next_add_price', color: '#dc2626' },
+      { key: 'snowball_net_current_price', color: '#0f766e' },
+      { key: 'snowball_net_target_price', color: '#16a34a' },
+    ],
+  },
+  {
+    key: 'snowball_net_pips_from_average',
+    color: '#7c3aed',
+    series: [
+      { key: 'snowball_net_pips_from_average', color: '#7c3aed' },
+      { key: 'snowball_net_loss_cut_threshold_pips', color: '#991b1b' },
+    ],
+  },
+  {
+    key: 'snowball_net_margin_ratio_pct',
+    color: '#ea580c',
+    format: 'pct',
+    series: [
+      { key: 'snowball_net_margin_ratio_pct', color: '#ea580c', format: 'pct' },
+      {
+        key: 'snowball_net_margin_reduce_threshold_pct',
+        color: '#f97316',
+        format: 'pct',
+      },
+      {
+        key: 'snowball_net_margin_reduce_target_pct',
+        color: '#14b8a6',
+        format: 'pct',
+      },
+      {
+        key: 'snowball_net_emergency_threshold_pct',
+        color: '#b91c1c',
+        format: 'pct',
+      },
+    ],
+  },
   { key: 'snowball_net_add_count', color: '#455a64', format: 'int' },
   { key: 'snowball_net_exposure_pct', color: '#ea580c', format: 'pct' },
-  { key: 'snowball_net_loss_cut_threshold_pips', color: '#991b1b' },
-  {
-    key: 'snowball_net_margin_reduce_threshold_pct',
-    color: '#f97316',
-    format: 'pct',
-  },
-  {
-    key: 'snowball_net_margin_reduce_target_pct',
-    color: '#14b8a6',
-    format: 'pct',
-  },
-  {
-    key: 'snowball_net_emergency_threshold_pct',
-    color: '#b91c1c',
-    format: 'pct',
-  },
   { key: 'total_trades', color: '#5d4037', format: 'int' },
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
 ];
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
+
+function chartSeries(chart: MetricChartDefinition): ChartMetric[] {
+  return chart.series ?? [chart];
+}
 
 /**
  * Compute a short date/time label appropriate for the data's time span
@@ -226,7 +253,7 @@ const MIN_Y_AXIS_WIDTH = 34;
  * Avoid fixed two-decimal labels; they consume too much horizontal space in
  * small chart cards and do not add useful precision for trend reading.
  */
-function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
+function formatYLabel(v: number, format?: MetricFormat): string {
   if (format === 'pct') return formatAppPercent(v, 1);
   if (format === 'currency')
     return formatAppNumber(v, { maximumFractionDigits: 0 });
@@ -400,8 +427,8 @@ export function TaskMetricsTab({
     await onRefresh();
   }, [onRefresh]);
 
-  // Determine which metrics actually have data
-  const availableMetrics = useMemo(() => {
+  // Determine which charts actually have primary metric data.
+  const availableCharts = useMemo(() => {
     if (data.length === 0) return [];
     const keysWithData = new Set<string>();
     for (const point of data) {
@@ -411,24 +438,26 @@ export function TaskMetricsTab({
         }
       }
     }
-    return chartMetricDefinitions.filter((m) => keysWithData.has(m.key));
+    return chartMetricDefinitions.filter((chart) =>
+      chartSeries(chart).some((series) => keysWithData.has(series.key))
+    );
   }, [chartMetricDefinitions, data]);
 
   // Build the list of all chart keys (OHLC first, then metrics) for ordering
   const allChartKeys = useMemo(() => {
     const keys: string[] = [];
     if (hasOhlc) keys.push(OHLC_KEY);
-    for (const m of availableMetrics) keys.push(m.key);
+    for (const chart of availableCharts) keys.push(chart.key);
     return keys;
-  }, [availableMetrics, hasOhlc]);
+  }, [availableCharts, hasOhlc]);
 
   const { orderedKeys, moveItem, setOrder, resetOrder } =
     useMetricsOrder(allChartKeys);
 
-  // Map metric key → metric config for quick lookup
-  const metricsMap = useMemo(() => {
-    const map = new Map<string, (typeof CHART_METRICS)[number]>();
-    for (const m of chartMetricDefinitions) map.set(m.key, m);
+  // Map chart key → chart config for quick lookup
+  const chartDefinitionMap = useMemo(() => {
+    const map = new Map<string, MetricChartDefinition>();
+    for (const chart of chartMetricDefinitions) map.set(chart.key, chart);
     return map;
   }, [chartMetricDefinitions]);
 
@@ -448,59 +477,96 @@ export function TaskMetricsTab({
     return 1;
   }, [interval, data]);
 
-  // Build chart data per metric
+  // Build chart data per chart. A SnowballNet chart can contain related
+  // metrics, e.g. current price overlaid on target or next-add price.
   const chartDataMap = useMemo(() => {
-    const map: Record<string, { x: Date[]; y: number[] }> = {};
-    for (const m of availableMetrics) {
+    const map: Record<
+      string,
+      {
+        x: Date[];
+        series: { metric: ChartMetric; y: Array<number | null> }[];
+        yValues: number[];
+        lastValue: number;
+      }
+    > = {};
+    for (const chart of availableCharts) {
+      const seriesMetrics = chartSeries(chart);
       const x: Date[] = [];
-      const y: number[] = [];
-      const scale = RATIO_KEYS.has(m.key) ? 100 : 1;
+      const yBySeries = seriesMetrics.map(() => [] as Array<number | null>);
+      const hasValueBySeries = seriesMetrics.map(() => false);
+      const yValues: number[] = [];
+      const valueKey = chart.valueKey ?? chart.key;
+      let lastValue: number | null = null;
+      let fallbackLastValue: number | null = null;
       for (const point of data) {
-        const val = point.metrics[m.key];
-        if (val != null && val !== '') {
+        const values = seriesMetrics.map((metric) => {
+          const val = point.metrics[metric.key];
+          if (val == null || val === '') return null;
           const num = Number(val);
-          if (!isNaN(num)) {
-            x.push(new Date(point.t * 1000));
-            y.push(num * scale);
-          }
+          if (isNaN(num)) return null;
+          const scale = RATIO_KEYS.has(metric.key) ? 100 : 1;
+          return num * scale;
+        });
+        if (values.some((value) => value != null)) {
+          x.push(new Date(point.t * 1000));
+          values.forEach((value, index) => {
+            yBySeries[index].push(value);
+            if (value != null) {
+              hasValueBySeries[index] = true;
+              yValues.push(value);
+              fallbackLastValue = value;
+              if (seriesMetrics[index].key === valueKey) {
+                lastValue = value;
+              }
+            }
+          });
         }
       }
-      if (x.length > 0) {
-        map[m.key] = { x, y };
+      const series = seriesMetrics
+        .map((metric, index) => ({ metric, y: yBySeries[index] }))
+        .filter((_, index) => hasValueBySeries[index]);
+      const finalLastValue = lastValue ?? fallbackLastValue;
+      if (x.length > 0 && series.length > 0 && finalLastValue != null) {
+        map[chart.key] = {
+          x,
+          series,
+          yValues,
+          lastValue: finalLastValue,
+        };
       }
     }
     return map;
-  }, [data, availableMetrics]);
+  }, [data, availableCharts]);
 
-  // Compute per-metric Y-axis width so each chart uses only the space
+  // Compute per-chart Y-axis width so each chart uses only the space
   // its own labels need, avoiding wasted horizontal space.
   // A 20% padding is added to account for MUI's "nice" tick rounding that
   // may produce values slightly outside the data range.
   const yAxisWidthMap = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const m of availableMetrics) {
-      const cd = chartDataMap[m.key];
-      if (!cd || cd.y.length === 0) continue;
+    for (const chart of availableCharts) {
+      const cd = chartDataMap[chart.key];
+      if (!cd || cd.yValues.length === 0) continue;
       let maxChars = 0;
-      let yMin = cd.y[0];
-      let yMax = cd.y[0];
-      for (let i = 1; i < cd.y.length; i += 1) {
-        const value = cd.y[i];
+      let yMin = cd.yValues[0];
+      let yMax = cd.yValues[0];
+      for (let i = 1; i < cd.yValues.length; i += 1) {
+        const value = cd.yValues[i];
         if (value < yMin) yMin = value;
         if (value > yMax) yMax = value;
       }
       for (const v of [yMin, yMax, yMin * 1.2, yMax * 1.2]) {
-        const label = formatYLabel(v, m.format);
+        const label = formatYLabel(v, chart.format);
         if (label.length > maxChars) maxChars = label.length;
       }
       const labelPx = maxChars * CHAR_WIDTH_PX;
-      map[m.key] = Math.max(
+      map[chart.key] = Math.max(
         MIN_Y_AXIS_WIDTH,
         Math.ceil(labelPx) + Y_AXIS_OVERHEAD
       );
     }
     return map;
-  }, [availableMetrics, chartDataMap]);
+  }, [availableCharts, chartDataMap]);
 
   // --- Drag-and-drop reorder state ---
   const dragKeyRef = useRef<string | null>(null);
@@ -569,18 +635,18 @@ export function TaskMetricsTab({
         });
         continue;
       }
-      const metric = metricsMap.get(key);
-      if (!metric) continue;
+      const chart = chartDefinitionMap.get(key);
+      if (!chart) continue;
       items.push({
         key,
-        label: t(`metrics.${metric.key}`, {
-          defaultValue: metric.key.replace(/_/g, ' '),
+        label: t(`metrics.${chart.key}`, {
+          defaultValue: chart.key.replace(/_/g, ' '),
         }),
-        color: metric.color,
+        color: chart.color,
       });
     }
     return items;
-  }, [instrument, metricsMap, orderedKeys, t]);
+  }, [chartDefinitionMap, instrument, orderedKeys, t]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -608,7 +674,7 @@ export function TaskMetricsTab({
 
   const currencySuffix = currency ? ` ${currency}` : '';
 
-  const formatValue = (val: number, format?: string) => {
+  const formatValue = (val: number, format?: MetricFormat) => {
     if (format === 'pct') return formatAppPercent(val, 1);
     if (format === 'int')
       return formatAppNumber(Math.round(val), { maximumFractionDigits: 0 });
@@ -703,37 +769,37 @@ export function TaskMetricsTab({
           }
 
           // Metric line chart
-          const m = metricsMap.get(key);
-          if (!m) return null;
-          const cd = chartDataMap[m.key];
+          const chart = chartDefinitionMap.get(key);
+          if (!chart) return null;
+          const cd = chartDataMap[chart.key];
           if (!cd || cd.x.length < 2) return null;
-          const lastVal = cd.y[cd.y.length - 1];
+          const lastVal = cd.lastValue;
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
-          const yTickCount = computeYTickCount(cd.y);
+          const yTickCount = computeYTickCount(cd.yValues);
           const xTickCount = computeXTickCount(cd.x.length);
-          const metricYAxisWidth = yAxisWidthMap[m.key] ?? MIN_Y_AXIS_WIDTH;
+          const metricYAxisWidth = yAxisWidthMap[chart.key] ?? MIN_Y_AXIS_WIDTH;
           return (
             <Grid
-              key={m.key}
+              key={chart.key}
               size={{ xs: 12, lg: 6 }}
               draggable
-              onDragStart={(e) => handleDragStart(e, m.key)}
-              onDragOver={(e) => handleDragOver(e, m.key)}
-              onDrop={(e) => handleDrop(e, m.key)}
+              onDragStart={(e) => handleDragStart(e, chart.key)}
+              onDragOver={(e) => handleDragOver(e, chart.key)}
+              onDrop={(e) => handleDrop(e, chart.key)}
               onDragEnd={handleDragEnd}
               sx={{
-                opacity: dragKey === m.key ? 0.4 : 1,
+                opacity: dragKey === chart.key ? 0.4 : 1,
                 cursor: 'grab',
                 minWidth: 0,
                 transition:
                   'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
                 transform:
-                  dragOverKey === m.key && dragKey !== m.key
+                  dragOverKey === chart.key && dragKey !== chart.key
                     ? 'translateY(-2px)'
                     : 'none',
                 outline: '2px solid',
                 outlineColor:
-                  dragOverKey === m.key && dragKey !== m.key
+                  dragOverKey === chart.key && dragKey !== chart.key
                     ? 'primary.main'
                     : 'transparent',
                 outlineOffset: 3,
@@ -741,10 +807,10 @@ export function TaskMetricsTab({
               }}
             >
               <ChartPanel
-                title={t(`metrics.${m.key}`, {
-                  defaultValue: m.key.replace(/_/g, ' '),
+                title={t(`metrics.${chart.key}`, {
+                  defaultValue: chart.key.replace(/_/g, ' '),
                 })}
-                valueLabel={formatValue(lastVal, m.format)}
+                valueLabel={formatValue(lastVal, chart.format)}
                 height={CHART_CARD_HEIGHT}
                 headerPrefix={
                   <DragIndicatorIcon
@@ -792,18 +858,19 @@ export function TaskMetricsTab({
                       width: metricYAxisWidth,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
-                        v != null ? formatYLabel(v, m.format) : '',
+                        v != null ? formatYLabel(v, chart.format) : '',
                     },
                   ]}
-                  series={[
-                    {
-                      data: cd.y,
-                      color: m.color,
-                      showMark: false,
-                      valueFormatter: (v: number | null) =>
-                        v != null ? formatValue(v, m.format) : '',
-                    },
-                  ]}
+                  series={cd.series.map(({ metric, y }) => ({
+                    data: y,
+                    color: metric.color,
+                    label: t(`metrics.${metric.key}`, {
+                      defaultValue: metric.key.replace(/_/g, ' '),
+                    }),
+                    showMark: false,
+                    valueFormatter: (v: number | null) =>
+                      v != null ? formatValue(v, metric.format) : '',
+                  }))}
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   margin={{
@@ -812,7 +879,7 @@ export function TaskMetricsTab({
                     top: LINE_CHART_TOP_MARGIN,
                     bottom: LINE_CHART_BOTTOM_MARGIN,
                   }}
-                  hideLegend
+                  hideLegend={cd.series.length <= 1}
                   slotProps={{
                     axisTickLabel: {
                       style: { fontSize: 10 },
