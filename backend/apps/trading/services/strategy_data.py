@@ -22,6 +22,7 @@ from apps.trading.services.strategy_data_common import (
 from apps.trading.services.strategy_history import apply_history_filters, load_history_rows
 from apps.trading.services.strategy_metrics import (
     build_ohlc_layers,
+    load_latest_metric_point,
     load_paginated_metric_points,
     metric_consistency_warnings,
 )
@@ -95,6 +96,27 @@ class StrategyDataService:
             ),
             **pagination,
             "results": points,
+        }
+
+    def latest_metric(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
+        query = _query_from_request(request, default_execution_id=task.execution_id)
+        context = _load_context(task=task, task_type_label=task_type_label, query=query)
+        return {
+            "execution_id": string_or_none(query.execution_id),
+            "strategy_type": context["strategy_type"],
+            "instrument": getattr(task, "instrument", None),
+            "data_source": "strategy_metrics",
+            "resume_cursor_timestamp": context["resume_cursor_timestamp"],
+            "consistency_warnings": metric_consistency_warnings(
+                task=task,
+                task_type_label=task_type_label,
+                execution_id=query.execution_id,
+            ),
+            "result": load_latest_metric_point(
+                task=task,
+                task_type_label=task_type_label,
+                query=query,
+            ),
         }
 
     def net_chart(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:

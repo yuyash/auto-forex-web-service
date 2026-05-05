@@ -74,6 +74,44 @@ def load_paginated_metric_points(
     )
 
 
+def load_latest_metric_point(
+    *, task: Any, task_type_label: str, query: StrategyDataQuery
+) -> dict[str, Any] | None:
+    """Load the latest metric snapshot without counting the full execution."""
+
+    aggregate = (
+        ExecutionMetricAggregate.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution_id,
+        )
+        .only("latest_timestamp", "latest_metrics")
+        .first()
+    )
+    if (
+        aggregate
+        and aggregate.latest_timestamp is not None
+        and isinstance(aggregate.latest_metrics, dict)
+        and _timestamp_matches_query(aggregate.latest_timestamp, query)
+    ):
+        return _serialize_row(
+            aggregate.latest_timestamp,
+            aggregate.latest_metrics,
+            query.metric_keys,
+        )
+
+    row = (
+        _base_queryset(task=task, task_type_label=task_type_label, query=query)
+        .order_by("-timestamp")
+        .values_list("timestamp", "metrics")
+        .first()
+    )
+    if row is None:
+        return None
+    timestamp, metrics = row
+    return _serialize_row(timestamp, metrics, query.metric_keys)
+
+
 def load_metric_points(
     *, task: Any, task_type_label: str, query: StrategyDataQuery
 ) -> list[dict[str, Any]]:
@@ -159,6 +197,14 @@ def _base_queryset(
     if query.until is not None:
         qs = qs.filter(timestamp__lte=query.until)
     return qs
+
+
+def _timestamp_matches_query(timestamp: Any, query: StrategyDataQuery) -> bool:
+    if query.since is not None and timestamp < query.since:
+        return False
+    if query.until is not None and timestamp > query.until:
+        return False
+    return True
 
 
 def _load_raw_page(

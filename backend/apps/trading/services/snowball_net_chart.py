@@ -17,6 +17,7 @@ from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.request import Request
 
 from apps.market.models import OandaAccounts
+from apps.market.services.candles import load_market_candles
 from apps.market.views.candles import (
     OandaCandleFetchError,
     _fetch_oanda_candles,
@@ -157,7 +158,14 @@ def build_snowball_net_chart(
     instrument = str(getattr(task, "instrument", "") or "")
     pnl_currency = _resolve_pnl_currency(task=task, instrument=instrument)
     quote_currency = _quote_currency(instrument)
-    account = _resolve_oanda_account(request=request, task=task)
+    metric_buckets = _load_metric_buckets(
+        task=task,
+        task_type_label=task_type_label,
+        execution_id=execution_id,
+        since=window.since,
+        until=strategy_data_until,
+        granularity_seconds=window.granularity_seconds,
+    )
 
     return {
         "execution_id": string_or_none(execution_id),
@@ -181,27 +189,23 @@ def build_snowball_net_chart(
             quote_currency=quote_currency,
         ),
         "candles": _load_candles(
-            account=account,
+            request=request,
+            task=task,
+            task_type_label=task_type_label,
             instrument=instrument,
             since=window.since,
             until=window.until,
             granularity=window.granularity,
         ),
-        "price_lines": _load_price_lines(
+        "price_lines": _price_lines_from_buckets(
             task=task,
-            task_type_label=task_type_label,
-            execution_id=execution_id,
-            since=window.since,
-            until=strategy_data_until,
-            granularity_seconds=window.granularity_seconds,
+            buckets=metric_buckets,
         ),
-        "oscillator_lines": _load_oscillator_lines(
+        "oscillator_lines": _oscillator_lines_from_buckets(
             task=task,
-            task_type_label=task_type_label,
-            execution_id=execution_id,
             since=window.since,
             until=strategy_data_until,
-            granularity_seconds=window.granularity_seconds,
+            buckets=metric_buckets,
         ),
         "markers": _load_markers(
             task=task,
@@ -341,7 +345,9 @@ def _resolve_oanda_account(*, request: Request, task: Any) -> OandaAccounts:
 
 def _load_candles(
     *,
-    account: OandaAccounts,
+    request: Request,
+    task: Any,
+    task_type_label: str,
     instrument: str,
     since: datetime,
     until: datetime,
@@ -349,6 +355,17 @@ def _load_candles(
 ) -> list[dict[str, Any]]:
     if not instrument:
         return []
+    if task_type_label == "backtest":
+        stored_candles = load_market_candles(
+            instrument=instrument,
+            granularity=granularity,
+            since=since,
+            until=until,
+        )
+        if stored_candles:
+            return stored_candles
+
+    account = _resolve_oanda_account(request=request, task=task)
     fetch_until = min(until, timezone.now())
     if since >= fetch_until:
         return []
@@ -446,9 +463,17 @@ def _load_price_lines(
         until=until,
         granularity_seconds=granularity_seconds,
     )
+    return _price_lines_from_buckets(task=task, buckets=bucketed)
+
+
+def _price_lines_from_buckets(
+    *,
+    task: Any,
+    buckets: dict[int, dict[str, Decimal]],
+) -> list[dict[str, Any]]:
     lines = [
         _series_from_buckets(
-            buckets=bucketed,
+            buckets=buckets,
             key=key,
             label=label,
             color=color,
@@ -459,7 +484,7 @@ def _load_price_lines(
     key, label, color, label_key = CURRENT_PRICE_LINE_SPEC
     lines.append(
         _series_from_buckets(
-            buckets=bucketed,
+            buckets=buckets,
             key=key,
             label=label,
             color=color,
@@ -467,7 +492,7 @@ def _load_price_lines(
             line_style="dashed",
         )
     )
-    lines.extend(_next_add_price_lines(task=task, buckets=bucketed))
+    lines.extend(_next_add_price_lines(task=task, buckets=buckets))
     return lines
 
 
@@ -488,9 +513,24 @@ def _load_oscillator_lines(
         until=until,
         granularity_seconds=granularity_seconds,
     )
+    return _oscillator_lines_from_buckets(
+        task=task,
+        since=since,
+        until=until,
+        buckets=bucketed,
+    )
+
+
+def _oscillator_lines_from_buckets(
+    *,
+    task: Any,
+    since: datetime,
+    until: datetime,
+    buckets: dict[int, dict[str, Decimal]],
+) -> list[dict[str, Any]]:
     lines = [
         _series_from_buckets(
-            buckets=bucketed,
+            buckets=buckets,
             key=key,
             label=label,
             color=color,
@@ -500,7 +540,7 @@ def _load_oscillator_lines(
     ]
     lines.extend(
         _series_from_buckets(
-            buckets=bucketed,
+            buckets=buckets,
             key=key,
             label=label,
             color=color,

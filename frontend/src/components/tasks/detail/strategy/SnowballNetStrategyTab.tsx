@@ -134,6 +134,7 @@ const DEFAULT_GRANULARITY_SELECTION: SnowballNetGranularitySelection = 'Auto';
 const DEFAULT_SIDE_BARS = DEFAULT_SNOWBALL_NET_SIDE_BARS;
 const MIN_NO_DATA_BUCKETS = 2;
 const SCROLL_FETCH_DEBOUNCE_MS = 450;
+const PROGRAMMATIC_RANGE_SUPPRESS_MS = 800;
 const MARGIN_LINE_ID = 'margin_ratio_pct';
 const LOSS_CUT_THRESHOLD_LINE_ID = 'loss_cut_threshold_pips';
 const MARGIN_REDUCE_THRESHOLD_LINE_ID = 'margin_reduce_threshold_pct';
@@ -160,6 +161,7 @@ const SNOWBALL_NET_CHART_KEYS = [
   'nextAdd',
 ] as const;
 const LINE_CHART_FALLBACK_HEIGHT = 170;
+const LINE_CHART_CARD_HEIGHT = 240;
 const MIN_CHART_MEASURE_PX = 1;
 const Y_AXIS_CHAR_WIDTH_PX = 6;
 const Y_AXIS_OVERHEAD_PX = 8;
@@ -551,6 +553,142 @@ function rangesClose(
     Math.abs(left.from - right.from) <= toleranceSeconds &&
     Math.abs(left.to - right.to) <= toleranceSeconds
   );
+}
+
+function clampChartViewportRangeToBounds(
+  range: ChartTimeRange | null,
+  bounds: ChartTimeRange | null
+): ChartTimeRange | null {
+  if (!range) return null;
+  if (!bounds) return range;
+  const boundsSpan = bounds.to - bounds.from;
+  if (boundsSpan <= 0) return null;
+  const rangeSpan = range.to - range.from;
+  if (rangeSpan <= 0) return null;
+  if (rangeSpan >= boundsSpan) return bounds;
+
+  let from = range.from;
+  if (from < bounds.from) {
+    from = bounds.from;
+  } else if (from + rangeSpan > bounds.to) {
+    from = bounds.to - rangeSpan;
+  }
+
+  return {
+    from,
+    to: from + rangeSpan,
+  };
+}
+
+function intersectChartRangeWithBounds(
+  range: ChartTimeRange,
+  bounds: ChartTimeRange | null
+): ChartTimeRange | null {
+  if (!bounds) return range;
+  const bounded = {
+    from: Math.max(range.from, bounds.from),
+    to: Math.min(range.to, bounds.to),
+  };
+  return bounded.to > bounded.from ? bounded : null;
+}
+
+function clampDateRangeToBounds(
+  range: AppliedDateRange | null,
+  bounds: AppliedDateRange | null
+): AppliedDateRange | null {
+  if (!range) return null;
+  if (!bounds) return range;
+  const bounded = clampChartViewportRangeToBounds(
+    {
+      from: range.sinceMs / 1000,
+      to: range.untilMs / 1000,
+    },
+    {
+      from: bounds.sinceMs / 1000,
+      to: bounds.untilMs / 1000,
+    }
+  );
+  return bounded
+    ? {
+        sinceMs: Math.floor(bounded.from * 1000),
+        untilMs: Math.ceil(bounded.to * 1000),
+      }
+    : null;
+}
+
+function chartTimeSeconds(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+  }
+  if (value && typeof value === 'object') {
+    const candidate = value as Partial<{
+      year: number;
+      month: number;
+      day: number;
+    }>;
+    if (
+      Number.isFinite(candidate.year) &&
+      Number.isFinite(candidate.month) &&
+      Number.isFinite(candidate.day)
+    ) {
+      return Math.floor(
+        Date.UTC(candidate.year!, candidate.month! - 1, candidate.day!) / 1000
+      );
+    }
+  }
+  return null;
+}
+
+function visibleChartRangeIncludingWhitespace({
+  chart,
+  series,
+  logicalRange,
+  stepSeconds,
+}: {
+  chart: IChartApi;
+  series: ISeriesApi<'Candlestick'>;
+  logicalRange: { from: number; to: number } | null;
+  stepSeconds: number;
+}): ChartTimeRange | null {
+  const visibleTimeRange = normalizeChartRange(
+    chart.timeScale().getVisibleRange()
+  );
+  if (!logicalRange) return visibleTimeRange;
+
+  const seriesData = series.data();
+  if (seriesData.length === 0) return visibleTimeRange;
+
+  const firstTime = chartTimeSeconds(seriesData[0]?.time);
+  const lastTime = chartTimeSeconds(seriesData[seriesData.length - 1]?.time);
+  if (firstTime == null || lastTime == null || lastTime < firstTime) {
+    return visibleTimeRange;
+  }
+
+  const barsInfo = series.barsInLogicalRange(logicalRange);
+  let from = visibleTimeRange?.from ?? firstTime;
+  let to = visibleTimeRange?.to ?? lastTime;
+
+  if (barsInfo) {
+    if (barsInfo.barsBefore < 0) {
+      from = Math.min(
+        from,
+        firstTime - Math.abs(barsInfo.barsBefore) * stepSeconds
+      );
+    }
+    if (barsInfo.barsAfter < 0) {
+      to = Math.max(to, lastTime + Math.abs(barsInfo.barsAfter) * stepSeconds);
+    }
+  }
+
+  const normalized = {
+    from: Math.max(0, Math.floor(from)),
+    to: Math.ceil(to),
+  };
+  return normalized.to > normalized.from ? normalized : null;
 }
 
 function markerColor(marker: SnowballNetMarker): string {
@@ -1093,8 +1231,11 @@ export function SnowballNetStrategyTab({
   const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const noDataRegionsRef = useRef<NoDataRegionsOverlay | null>(null);
   const programmaticRangeRef = useRef(false);
+  const programmaticRangeTargetRef = useRef<ChartTimeRange | null>(null);
+  const programmaticRangeSuppressUntilRef = useRef(0);
   const visibleRangeRef = useRef<ChartTimeRange | null>(null);
   const loadedWindowRef = useRef<LoadedChartWindow | null>(null);
+  const backtestBoundsRef = useRef<ChartTimeRange | null>(null);
   const lastRequestedRangeRef = useRef<ChartTimeRange | null>(null);
   const rangeFetchTimerRef = useRef<number | null>(null);
   const forceWindowRangeRef = useRef(true);
@@ -1109,14 +1250,22 @@ export function SnowballNetStrategyTab({
     useState<SnowballNetRangePreset>('follow');
   const [granularitySelection, setGranularitySelection] =
     useState<SnowballNetGranularitySelection>(DEFAULT_GRANULARITY_SELECTION);
+  const [appliedGranularitySelection, setAppliedGranularitySelection] =
+    useState<SnowballNetGranularitySelection>(DEFAULT_GRANULARITY_SELECTION);
   const [customSince, setCustomSince] = useState('');
   const [customUntil, setCustomUntil] = useState('');
-  const [appliedCustomRange, setAppliedCustomRange] =
-    useState<AppliedDateRange | null>(null);
+  const [appliedRange, setAppliedRange] = useState<AppliedDateRange | null>(
+    null
+  );
   const [rangeNowMs, setRangeNowMs] = useState(() => Date.now());
+  const [rangeReferenceMs, setRangeReferenceMs] = useState(
+    () => millisFromIso(taskEndTime) ?? Date.now()
+  );
   const [follow, setFollow] = useState(true);
   const [mergeMarkers, setMergeMarkers] = useState(true);
   const [refreshSeconds, setRefreshSeconds] = useState<number>(15);
+  const [appliedRefreshSeconds, setAppliedRefreshSeconds] =
+    useState<number>(15);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chartSettings, setChartSettings] = useState<SnowballNetChartSettings>(
     () =>
@@ -1325,6 +1474,34 @@ export function SnowballNetStrategyTab({
     return { startMs, endMs };
   }, [rangeNowMs, taskEndTime, taskStartTime]);
 
+  const backtestDateBounds = useMemo<AppliedDateRange | null>(() => {
+    if (taskType !== 'backtest') return null;
+    const sinceMs = millisFromIso(taskStartTime);
+    const untilMs = millisFromIso(taskEndTime);
+    if (sinceMs == null || untilMs == null || untilMs <= sinceMs) return null;
+    return { sinceMs, untilMs };
+  }, [taskEndTime, taskStartTime, taskType]);
+
+  const backtestBounds = useMemo<ChartTimeRange | null>(() => {
+    if (!backtestDateBounds) return null;
+    return {
+      from: Math.floor(backtestDateBounds.sinceMs / 1000),
+      to: Math.ceil(backtestDateBounds.untilMs / 1000),
+    };
+  }, [backtestDateBounds]);
+
+  useEffect(() => {
+    backtestBoundsRef.current = backtestBounds;
+  }, [backtestBounds]);
+
+  const presetReferenceMs = useMemo(() => {
+    if (!taskRange) return rangeReferenceMs;
+    return Math.min(
+      taskRange.endMs,
+      Math.max(taskRange.startMs, rangeReferenceMs)
+    );
+  }, [rangeReferenceMs, taskRange]);
+
   const customDraftRange = useMemo(
     () => customRangeFromControls(customSince, customUntil),
     [customSince, customUntil]
@@ -1334,31 +1511,48 @@ export function SnowballNetStrategyTab({
     if (queryRangePreset === 'follow') {
       return null;
     }
+    return clampDateRangeToBounds(appliedRange, backtestDateBounds);
+  }, [appliedRange, backtestDateBounds, queryRangePreset]);
 
-    if (queryRangePreset === 'custom') {
-      if (appliedCustomRange) {
-        return appliedCustomRange;
-      }
-      return taskRange
-        ? { sinceMs: taskRange.startMs, untilMs: taskRange.endMs }
-        : null;
+  const draftSelectedRange = useMemo(() => {
+    const clampDraft = (range: AppliedDateRange | null) =>
+      clampDateRangeToBounds(range, backtestDateBounds);
+
+    if (rangePreset === 'follow') {
+      return null;
+    }
+
+    if (rangePreset === 'custom') {
+      return clampDraft(customDraftRange);
     }
 
     if (!taskRange) return null;
-    if (queryRangePreset === 'full') {
-      return { sinceMs: taskRange.startMs, untilMs: taskRange.endMs };
+    if (rangePreset === 'full') {
+      return clampDraft({
+        sinceMs: taskRange.startMs,
+        untilMs: taskRange.endMs,
+      });
     }
 
-    const seconds = rangePresetSeconds(queryRangePreset);
+    const seconds = rangePresetSeconds(rangePreset);
     if (seconds == null) {
-      return { sinceMs: taskRange.startMs, untilMs: taskRange.endMs };
+      return clampDraft({
+        sinceMs: taskRange.startMs,
+        untilMs: taskRange.endMs,
+      });
     }
     const windowMs = seconds * 1000;
-    return {
-      sinceMs: Math.max(taskRange.startMs, taskRange.endMs - windowMs),
-      untilMs: taskRange.endMs,
-    };
-  }, [appliedCustomRange, queryRangePreset, taskRange]);
+    return clampDraft({
+      sinceMs: Math.max(taskRange.startMs, presetReferenceMs - windowMs),
+      untilMs: presetReferenceMs,
+    });
+  }, [
+    backtestDateBounds,
+    customDraftRange,
+    presetReferenceMs,
+    rangePreset,
+    taskRange,
+  ]);
 
   const requestedRangeSeconds = useMemo(() => {
     if (follow) return null;
@@ -1369,6 +1563,17 @@ export function SnowballNetStrategyTab({
       Math.floor((selectedRange.untilMs - selectedRange.sinceMs) / 1000)
     );
   }, [follow, selectedRange, viewRange]);
+
+  const draftRequestedRangeSeconds = useMemo(() => {
+    if (rangePreset === 'follow') return null;
+    if (!draftSelectedRange) return null;
+    return Math.max(
+      MINUTE,
+      Math.floor(
+        (draftSelectedRange.untilMs - draftSelectedRange.sinceMs) / 1000
+      )
+    );
+  }, [draftSelectedRange, rangePreset]);
 
   const autoGranularity = useMemo(() => {
     if (follow) return DEFAULT_GRANULARITY;
@@ -1384,106 +1589,156 @@ export function SnowballNetStrategyTab({
     );
     return granularityForRangeSeconds(seconds);
   }, [follow, selectedRange, viewRange]);
+
+  const draftAutoGranularity = useMemo(() => {
+    if (rangePreset === 'follow') return DEFAULT_GRANULARITY;
+    if (!draftSelectedRange) return DEFAULT_GRANULARITY;
+    const seconds = Math.max(
+      MINUTE,
+      Math.floor(
+        (draftSelectedRange.untilMs - draftSelectedRange.sinceMs) / 1000
+      )
+    );
+    return granularityForRangeSeconds(seconds);
+  }, [draftSelectedRange, rangePreset]);
+
   const selectedGranularityCandidate =
-    granularitySelection === 'Auto' ? autoGranularity : granularitySelection;
+    appliedGranularitySelection === 'Auto'
+      ? autoGranularity
+      : appliedGranularitySelection;
   const selectedGranularity = constrainSnowballNetGranularityForRange(
     selectedGranularityCandidate,
     requestedRangeSeconds
   );
-  const displayedGranularitySelection =
-    granularitySelection === 'Auto' ? 'Auto' : selectedGranularity;
+  const draftDisplayedGranularity =
+    granularitySelection === 'Auto'
+      ? 'Auto'
+      : constrainSnowballNetGranularityForRange(
+          granularitySelection,
+          draftRequestedRangeSeconds
+        );
+  const displayedGranularitySelection = draftDisplayedGranularity;
+
+  const clearPendingRangeLoad = useCallback(() => {
+    if (rangeFetchTimerRef.current !== null) {
+      window.clearTimeout(rangeFetchTimerRef.current);
+      rangeFetchTimerRef.current = null;
+    }
+  }, []);
+
+  const markProgrammaticRangeChange = useCallback((range?: ChartTimeRange) => {
+    programmaticRangeRef.current = true;
+    programmaticRangeTargetRef.current = range ?? null;
+    programmaticRangeSuppressUntilRef.current =
+      Date.now() + PROGRAMMATIC_RANGE_SUPPRESS_MS;
+  }, []);
+
+  const resetAppliedWindowState = useCallback(() => {
+    clearPendingRangeLoad();
+    forceWindowRangeRef.current = true;
+    visibleRangeRef.current = null;
+    lastRequestedRangeRef.current = null;
+  }, [clearPendingRangeLoad]);
 
   const handleRangePresetChange = useCallback(
     (value: SnowballNetRangePreset) => {
-      if (rangeFetchTimerRef.current !== null) {
-        window.clearTimeout(rangeFetchTimerRef.current);
-        rangeFetchTimerRef.current = null;
-      }
-      forceWindowRangeRef.current = true;
-      visibleRangeRef.current = null;
-      lastRequestedRangeRef.current = null;
+      clearPendingRangeLoad();
       setRangePreset(value);
-      setQueryRangePreset(value);
-      if (value === 'follow') {
-        setFollow(true);
-        setViewRange(null);
-        return;
-      }
-      if (!taskEndTime) {
-        setRangeNowMs(Date.now());
-      }
-      setFollow(false);
-      setViewRange(null);
-      if (value !== 'custom') {
-        setAppliedCustomRange(null);
-      }
       if (value === 'custom' && !customSince && !customUntil && taskRange) {
-        setAppliedCustomRange({
-          sinceMs: taskRange.startMs,
-          untilMs: taskRange.endMs,
-        });
         setCustomSince(
           formatDateTimeLocal(new Date(taskRange.startMs).toISOString())
         );
         setCustomUntil(
           formatDateTimeLocal(new Date(taskRange.endMs).toISOString())
         );
-      } else if (value === 'custom' && customDraftRange) {
-        setAppliedCustomRange(customDraftRange);
       }
     },
-    [customDraftRange, customSince, customUntil, taskEndTime, taskRange]
+    [clearPendingRangeLoad, customSince, customUntil, taskRange]
   );
 
-  const handleCustomSinceChange = useCallback((value: string) => {
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
-    }
-    setRangePreset('custom');
-    setCustomSince(value);
-  }, []);
+  const handleCustomSinceChange = useCallback(
+    (value: string) => {
+      clearPendingRangeLoad();
+      setRangePreset('custom');
+      setCustomSince(value);
+    },
+    [clearPendingRangeLoad]
+  );
 
-  const handleCustomUntilChange = useCallback((value: string) => {
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
-    }
-    setRangePreset('custom');
-    setCustomUntil(value);
-  }, []);
+  const handleCustomUntilChange = useCallback(
+    (value: string) => {
+      clearPendingRangeLoad();
+      setRangePreset('custom');
+      setCustomUntil(value);
+    },
+    [clearPendingRangeLoad]
+  );
 
-  const handleApplyCustomRange = useCallback(() => {
-    if (!customDraftRange) return;
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
+  const handleApplyChartControls = useCallback(() => {
+    if (rangePreset !== 'follow' && !draftSelectedRange) return;
+    const boundedDraftRange =
+      rangePreset === 'follow'
+        ? null
+        : clampDateRangeToBounds(draftSelectedRange, backtestDateBounds);
+    if (rangePreset !== 'follow' && !boundedDraftRange) return;
+    resetAppliedWindowState();
+    const nextGranularitySelection =
+      granularitySelection === 'Auto'
+        ? 'Auto'
+        : constrainSnowballNetGranularityForRange(
+            granularitySelection,
+            draftRequestedRangeSeconds
+          );
+    setGranularitySelection(nextGranularitySelection);
+    setAppliedGranularitySelection(nextGranularitySelection);
+    setAppliedRefreshSeconds(refreshSeconds);
+    setQueryRangePreset(rangePreset);
+    if (rangePreset === 'follow') {
+      setFollow(true);
+      setAppliedRange(null);
+      setViewRange(null);
+      return;
     }
-    forceWindowRangeRef.current = true;
-    visibleRangeRef.current = null;
-    lastRequestedRangeRef.current = null;
+    if (!taskEndTime) {
+      setRangeNowMs(Date.now());
+    }
     setFollow(false);
-    setRangePreset('custom');
-    setQueryRangePreset('custom');
-    setAppliedCustomRange(customDraftRange);
+    setAppliedRange(boundedDraftRange);
+    if (boundedDraftRange && rangePreset === 'custom') {
+      setCustomSince(
+        formatDateTimeLocal(new Date(boundedDraftRange.sinceMs).toISOString())
+      );
+      setCustomUntil(
+        formatDateTimeLocal(new Date(boundedDraftRange.untilMs).toISOString())
+      );
+    }
     setViewRange(null);
-  }, [customDraftRange]);
+  }, [
+    backtestDateBounds,
+    draftSelectedRange,
+    draftRequestedRangeSeconds,
+    granularitySelection,
+    rangePreset,
+    refreshSeconds,
+    resetAppliedWindowState,
+    taskEndTime,
+  ]);
 
   useEffect(() => {
     if (
       !follow ||
       taskEndTime ||
       !enableRealTimeUpdates ||
-      refreshSeconds <= 0
+      appliedRefreshSeconds <= 0
     ) {
       return;
     }
     const id = window.setInterval(
       () => setRangeNowMs(Date.now()),
-      refreshSeconds * 1000
+      appliedRefreshSeconds * 1000
     );
     return () => window.clearInterval(id);
-  }, [enableRealTimeUpdates, follow, refreshSeconds, taskEndTime]);
+  }, [appliedRefreshSeconds, enableRealTimeUpdates, follow, taskEndTime]);
 
   const queryParams = useMemo(() => {
     if (follow) {
@@ -1501,10 +1756,26 @@ export function SnowballNetStrategyTab({
         60,
         Math.floor((viewRange.to - viewRange.from) * 0.5)
       );
+      const requestRange = intersectChartRangeWithBounds(
+        {
+          from: Math.max(0, viewRange.from - pad),
+          to: viewRange.to + pad,
+        },
+        backtestBounds
+      );
+      if (!requestRange) {
+        return {
+          granularity: selectedGranularity,
+          before_bars: DEFAULT_SIDE_BARS,
+          after_bars: DEFAULT_SIDE_BARS,
+          follow: 'false',
+          merge_markers: mergeMarkers ? 'true' : 'false',
+        };
+      }
       return {
         granularity: selectedGranularity,
-        since: isoFromSeconds(Math.max(0, viewRange.from - pad)),
-        until: isoFromSeconds(viewRange.to + pad),
+        since: isoFromSeconds(requestRange.from),
+        until: isoFromSeconds(requestRange.to),
         follow: 'false',
         merge_markers: mergeMarkers ? 'true' : 'false',
       };
@@ -1520,14 +1791,38 @@ export function SnowballNetStrategyTab({
       };
     }
 
+    const requestRange = intersectChartRangeWithBounds(
+      {
+        from: selectedRange.sinceMs / 1000,
+        to: selectedRange.untilMs / 1000,
+      },
+      backtestBounds
+    );
+    if (!requestRange) {
+      return {
+        granularity: selectedGranularity,
+        before_bars: DEFAULT_SIDE_BARS,
+        after_bars: DEFAULT_SIDE_BARS,
+        follow: 'false',
+        merge_markers: mergeMarkers ? 'true' : 'false',
+      };
+    }
+
     return {
       granularity: selectedGranularity,
-      since: new Date(selectedRange.sinceMs).toISOString(),
-      until: new Date(selectedRange.untilMs).toISOString(),
+      since: isoFromSeconds(requestRange.from),
+      until: isoFromSeconds(requestRange.to),
       follow: 'false',
       merge_markers: mergeMarkers ? 'true' : 'false',
     };
-  }, [follow, mergeMarkers, selectedGranularity, selectedRange, viewRange]);
+  }, [
+    backtestBounds,
+    follow,
+    mergeMarkers,
+    selectedGranularity,
+    selectedRange,
+    viewRange,
+  ]);
 
   const chartQuery = useSnowballNetChart({
     taskId,
@@ -1536,12 +1831,26 @@ export function SnowballNetStrategyTab({
     params: queryParams,
     enabled: Boolean(taskId),
     refetchInterval:
-      follow && enableRealTimeUpdates && refreshSeconds > 0
-        ? refreshSeconds * 1000
+      follow && enableRealTimeUpdates && appliedRefreshSeconds > 0
+        ? appliedRefreshSeconds * 1000
         : false,
   });
 
   const data = chartQuery.data ?? null;
+  const latestDataTimestamp =
+    typeof data?.current.timestamp === 'string'
+      ? data.current.timestamp
+      : data?.window.center;
+  const latestDataReferenceMs = millisFromIso(latestDataTimestamp);
+
+  useEffect(() => {
+    if (latestDataReferenceMs == null) return undefined;
+    const id = window.setTimeout(() => {
+      setRangeReferenceMs(latestDataReferenceMs);
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [latestDataReferenceMs]);
+
   const chartOrderItems = useMemo(
     () =>
       chartOrder
@@ -1564,42 +1873,69 @@ export function SnowballNetStrategyTab({
     lastRequestedRangeRef.current = null;
   }, [selectedGranularity]);
 
-  const scheduleVisibleRangeLoad = useCallback((range: ChartTimeRange) => {
-    visibleRangeRef.current = range;
+  const scheduleVisibleRangeLoad = useCallback(
+    (range: ChartTimeRange) => {
+      const bounds = backtestBoundsRef.current;
+      const nextRange = clampChartViewportRangeToBounds(range, bounds);
+      if (!nextRange) return;
 
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-    }
-    rangeFetchTimerRef.current = window.setTimeout(() => {
-      rangeFetchTimerRef.current = null;
-      const currentRange = visibleRangeRef.current;
-      if (!currentRange) return;
-
-      const loaded = loadedWindowRef.current;
-      const toleranceSeconds = loaded?.step ?? 1;
-      if (
-        rangesClose(
-          currentRange,
-          lastRequestedRangeRef.current,
-          toleranceSeconds
-        )
-      ) {
-        return;
+      const toleranceSeconds = loadedWindowRef.current?.step ?? 1;
+      if (bounds && !rangesClose(range, nextRange, toleranceSeconds)) {
+        markProgrammaticRangeChange(nextRange);
+        chartRef.current?.timeScale().setVisibleRange({
+          from: nextRange.from as Time,
+          to: nextRange.to as Time,
+        });
+        releaseProgrammaticRangeFlag(programmaticRangeRef);
       }
-      forceWindowRangeRef.current = false;
-      lastRequestedRangeRef.current = currentRange;
-      setCustomSince(formatDateTimeLocal(isoFromSeconds(currentRange.from)));
-      setCustomUntil(formatDateTimeLocal(isoFromSeconds(currentRange.to)));
-      setAppliedCustomRange({
-        sinceMs: currentRange.from * 1000,
-        untilMs: currentRange.to * 1000,
-      });
-      setRangePreset('custom');
-      setQueryRangePreset('custom');
-      setFollow(false);
-      setViewRange(currentRange);
-    }, SCROLL_FETCH_DEBOUNCE_MS);
-  }, []);
+
+      visibleRangeRef.current = nextRange;
+
+      if (rangeFetchTimerRef.current !== null) {
+        window.clearTimeout(rangeFetchTimerRef.current);
+      }
+      rangeFetchTimerRef.current = window.setTimeout(() => {
+        rangeFetchTimerRef.current = null;
+        const currentRange = visibleRangeRef.current;
+        if (!currentRange) return;
+
+        const loaded = loadedWindowRef.current;
+        const toleranceSeconds = loaded?.step ?? 1;
+        if (
+          loaded &&
+          rangesClose(
+            currentRange,
+            { from: loaded.from, to: loaded.to },
+            toleranceSeconds
+          )
+        ) {
+          return;
+        }
+        if (
+          rangesClose(
+            currentRange,
+            lastRequestedRangeRef.current,
+            toleranceSeconds
+          )
+        ) {
+          return;
+        }
+        forceWindowRangeRef.current = false;
+        lastRequestedRangeRef.current = currentRange;
+        setCustomSince(formatDateTimeLocal(isoFromSeconds(currentRange.from)));
+        setCustomUntil(formatDateTimeLocal(isoFromSeconds(currentRange.to)));
+        setAppliedRange({
+          sinceMs: currentRange.from * 1000,
+          untilMs: currentRange.to * 1000,
+        });
+        setRangePreset('custom');
+        setQueryRangePreset('custom');
+        setFollow(false);
+        setViewRange(currentRange);
+      }, SCROLL_FETCH_DEBOUNCE_MS);
+    },
+    [markProgrammaticRangeChange]
+  );
 
   const destroyChart = useCallback(() => {
     if (rangeFetchTimerRef.current !== null) {
@@ -1741,7 +2077,7 @@ export function SnowballNetStrategyTab({
     if (!host) return;
 
     if (follow) {
-      programmaticRangeRef.current = true;
+      markProgrammaticRangeChange();
     }
 
     if (!chartRef.current) {
@@ -1759,9 +2095,14 @@ export function SnowballNetStrategyTab({
         },
         handleScroll: { vertTouchDrag: false },
         timeScale: {
+          visible: true,
+          borderVisible: true,
           borderColor: isDark ? '#2a2e39' : '#cbd5e1',
           timeVisible: true,
           secondsVisible: false,
+          // Native labels are intentionally suppressed because
+          // AdaptiveTimeScale renders the axis; reserve its pane explicitly.
+          minimumHeight: 30,
           tickMarkFormatter: createSuppressedTickMarkFormatter(),
         },
         localization: {
@@ -1801,12 +2142,31 @@ export function SnowballNetStrategyTab({
       sequenceLineRef.current = sequenceLine;
       markersRef.current = createSeriesMarkers(candles, []);
 
-      chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-        if (!range || programmaticRangeRef.current) return;
-        const normalizedRange = normalizeChartRange(range);
-        if (normalizedRange) {
-          scheduleVisibleRangeLoad(normalizedRange);
+      chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+        const normalizedRange = visibleChartRangeIncludingWhitespace({
+          chart,
+          series: candles,
+          logicalRange,
+          stepSeconds:
+            loadedWindowRef.current?.step ?? data.window.granularity_seconds,
+        });
+        if (!normalizedRange) return;
+        const programmaticTarget = programmaticRangeTargetRef.current;
+        const toleranceSeconds = loadedWindowRef.current?.step ?? 1;
+        if (
+          programmaticTarget &&
+          rangesClose(normalizedRange, programmaticTarget, toleranceSeconds)
+        ) {
+          programmaticRangeTargetRef.current = null;
+          return;
         }
+        if (
+          programmaticRangeRef.current ||
+          Date.now() < programmaticRangeSuppressUntilRef.current
+        ) {
+          return;
+        }
+        scheduleVisibleRangeLoad(normalizedRange);
       });
 
       const observer = new ResizeObserver(() => {
@@ -1828,12 +2188,18 @@ export function SnowballNetStrategyTab({
       };
     }
 
-    const rangeToRestore =
-      !follow && !forceWindowRangeRef.current
-        ? normalizeChartRange(chartRef.current?.timeScale().getVisibleRange())
-        : null;
+    const requestedRangeToRestore =
+      !follow && viewRange
+        ? viewRange
+        : !follow && !forceWindowRangeRef.current
+          ? normalizeChartRange(chartRef.current?.timeScale().getVisibleRange())
+          : null;
+    const rangeToRestore = clampChartViewportRangeToBounds(
+      requestedRangeToRestore,
+      backtestBounds
+    );
     if (rangeToRestore) {
-      programmaticRangeRef.current = true;
+      markProgrammaticRangeChange(rangeToRestore);
       visibleRangeRef.current = rangeToRestore;
     }
 
@@ -1933,7 +2299,7 @@ export function SnowballNetStrategyTab({
     }
 
     if (rangeToRestore && chartRef.current) {
-      programmaticRangeRef.current = true;
+      markProgrammaticRangeChange(rangeToRestore);
       chartRef.current.timeScale().setVisibleRange({
         from: rangeToRestore.from as Time,
         to: rangeToRestore.to as Time,
@@ -1945,19 +2311,42 @@ export function SnowballNetStrategyTab({
     if (follow && chartRef.current) {
       const center = Math.floor(new Date(data.window.center).getTime() / 1000);
       const span = data.window.granularity_seconds * DEFAULT_SIDE_BARS;
+      const followRange = clampChartViewportRangeToBounds(
+        {
+          from: center - span,
+          to: center + span,
+        },
+        backtestBounds
+      );
+      if (!followRange) {
+        releaseProgrammaticRangeFlag(programmaticRangeRef);
+        return;
+      }
+      markProgrammaticRangeChange(followRange);
       chartRef.current.timeScale().setVisibleRange({
-        from: (center - span) as Time,
-        to: (center + span) as Time,
+        from: followRange.from as Time,
+        to: followRange.to as Time,
       });
       releaseProgrammaticRangeFlag(programmaticRangeRef);
       return;
     }
 
     if (windowRange && chartRef.current) {
-      programmaticRangeRef.current = true;
+      const loadedRange = clampChartViewportRangeToBounds(
+        {
+          from: windowRange.since,
+          to: windowRange.until,
+        },
+        backtestBounds
+      );
+      if (!loadedRange) {
+        releaseProgrammaticRangeFlag(programmaticRangeRef);
+        return;
+      }
+      markProgrammaticRangeChange(loadedRange);
       chartRef.current.timeScale().setVisibleRange({
-        from: windowRange.since as Time,
-        to: windowRange.until as Time,
+        from: loadedRange.from as Time,
+        to: loadedRange.to as Time,
       });
       forceWindowRangeRef.current = false;
       releaseProgrammaticRangeFlag(programmaticRangeRef);
@@ -1967,17 +2356,20 @@ export function SnowballNetStrategyTab({
     }
   }, [
     applyOhlcOverlays,
+    backtestBounds,
     chartSettings,
     data,
     destroyChart,
     follow,
     isDark,
+    markProgrammaticRangeChange,
     noDataRegionStyle,
     scheduleVisibleRangeLoad,
     t,
     timezone,
     updateMarginAxisLabel,
     updatePriceAxisLabels,
+    viewRange,
   ]);
 
   const handleRefresh = useCallback(() => {
@@ -1986,20 +2378,14 @@ export function SnowballNetStrategyTab({
   }, [chartQuery]);
 
   const handleFollow = useCallback(() => {
-    if (rangeFetchTimerRef.current !== null) {
-      window.clearTimeout(rangeFetchTimerRef.current);
-      rangeFetchTimerRef.current = null;
-    }
-    forceWindowRangeRef.current = true;
-    visibleRangeRef.current = null;
-    lastRequestedRangeRef.current = null;
+    resetAppliedWindowState();
     setRangePreset('follow');
     setQueryRangePreset('follow');
-    setAppliedCustomRange(null);
+    setAppliedRange(null);
     setFollow(true);
     setViewRange(null);
     void chartQuery.refetch();
-  }, [chartQuery]);
+  }, [chartQuery, resetAppliedWindowState]);
 
   if (chartQuery.isLoading && !data) {
     return (
@@ -2147,7 +2533,7 @@ export function SnowballNetStrategyTab({
                 if (
                   !isSnowballNetGranularityAllowedForRange(
                     next,
-                    requestedRangeSeconds
+                    draftRequestedRangeSeconds
                   )
                 ) {
                   return;
@@ -2162,13 +2548,13 @@ export function SnowballNetStrategyTab({
                   disabled={
                     !isSnowballNetGranularityAllowedForRange(
                       option,
-                      requestedRangeSeconds
+                      draftRequestedRangeSeconds
                     )
                   }
                 >
                   {option === 'Auto'
                     ? t('strategy:snowballNet.chart.controls.autoGranularity', {
-                        granularity: autoGranularity,
+                        granularity: draftAutoGranularity,
                       })
                     : option}
                 </MenuItem>
@@ -2238,21 +2624,25 @@ export function SnowballNetStrategyTab({
                   flex: { xs: '1 1 100%', sm: '0 0 auto' },
                 }}
               />
-              <Button
-                variant="contained"
-                size="small"
-                onClick={handleApplyCustomRange}
-                disabled={!customDraftRange}
-                sx={{
-                  minHeight: 40,
-                  flex: { xs: '1 1 100%', sm: '0 0 auto' },
-                  px: 2,
-                }}
-              >
-                {t('strategy:snowballNet.chart.controls.applyRange')}
-              </Button>
             </>
           ) : null}
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleApplyChartControls}
+            disabled={rangePreset !== 'follow' && !draftSelectedRange}
+            sx={{
+              height: 32,
+              minHeight: 0,
+              boxSizing: 'border-box',
+              alignSelf: 'center',
+              flex: { xs: '1 1 100%', sm: '0 0 auto' },
+              py: 0,
+              px: 2,
+            }}
+          >
+            {t('strategy:snowballNet.chart.controls.applyRange')}
+          </Button>
           {/* Desktop only: icon buttons at the end of the selector row */}
           <Box
             sx={{
@@ -2461,7 +2851,7 @@ function SnowballNetCharts({
     switch (key) {
       case 'netUnits':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={t('strategy:snowballNet.chart.netUnits')}
             lines={data ? netUnitsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
@@ -2471,7 +2861,7 @@ function SnowballNetCharts({
         );
       case 'pips':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={t('strategy:snowballNet.chart.pipsFromAverage')}
             lines={data ? pipsChartLines(data.oscillator_lines) : []}
             timezone={timezone}
@@ -2481,7 +2871,7 @@ function SnowballNetCharts({
         );
       case 'margin':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={t('strategy:snowballNet.chart.marginRatio')}
             lines={data ? marginChartLines(data.oscillator_lines) : []}
             timezone={timezone}
@@ -2492,7 +2882,7 @@ function SnowballNetCharts({
         );
       case 'pnl':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={appendUnitLabel(
               t('strategy:snowballNet.chart.pnl'),
               pnlCurrency
@@ -2507,7 +2897,7 @@ function SnowballNetCharts({
         );
       case 'averagePrice':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={appendUnitLabel(
               t('strategy:snowballNet.chart.averagePrice'),
               priceCurrency
@@ -2522,7 +2912,7 @@ function SnowballNetCharts({
         );
       case 'takeProfit':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={appendUnitLabel(
               t('strategy:snowballNet.chart.takeProfit'),
               priceCurrency
@@ -2535,7 +2925,7 @@ function SnowballNetCharts({
         );
       case 'nextAdd':
         return (
-          <LineChartCard
+          <DeferredLineChartCard
             title={appendUnitLabel(
               t('strategy:snowballNet.chart.nextAdd'),
               priceCurrency
@@ -2791,6 +3181,56 @@ function FillLineChart({
   );
 }
 
+function DeferredLineChartCard(props: ComponentProps<typeof LineChartCard>) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [shouldRender, setShouldRender] = useState(
+    () => typeof IntersectionObserver === 'undefined'
+  );
+
+  useEffect(() => {
+    if (shouldRender) return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some(
+            (entry) => entry.isIntersecting || entry.intersectionRatio > 0
+          )
+        ) {
+          setShouldRender(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '320px 0px' }
+    );
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [shouldRender]);
+
+  return (
+    <Box ref={hostRef} sx={{ minHeight: LINE_CHART_CARD_HEIGHT }}>
+      {shouldRender ? (
+        <LineChartCard {...props} />
+      ) : (
+        <Paper
+          variant="outlined"
+          sx={{
+            height: LINE_CHART_CARD_HEIGHT,
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <CircularProgress size={18} />
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
 function LineChartCard({
   title,
   lines,
@@ -2899,7 +3339,7 @@ function LineChartCard({
         p: { xs: 0.25, sm: 1 },
         minWidth: 0,
         minHeight: 220,
-        height: 240,
+        height: LINE_CHART_CARD_HEIGHT,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',

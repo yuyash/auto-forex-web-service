@@ -20,10 +20,10 @@ describe('SnowballNet chart granularity range limits', () => {
   });
 
   it('selects an auto granularity that keeps the chart size practical', () => {
-    expect(granularityForRangeSeconds(2 * DAY_SECONDS)).toBe('M1');
-    expect(granularityForRangeSeconds(15 * DAY_SECONDS)).toBe('M5');
-    expect(granularityForRangeSeconds(30 * DAY_SECONDS)).toBe('M15');
-    expect(granularityForRangeSeconds(365 * DAY_SECONDS)).toBe('H4');
+    expect(granularityForRangeSeconds(2 * DAY_SECONDS)).toBe('M5');
+    expect(granularityForRangeSeconds(15 * DAY_SECONDS)).toBe('M15');
+    expect(granularityForRangeSeconds(30 * DAY_SECONDS)).toBe('M30');
+    expect(granularityForRangeSeconds(365 * DAY_SECONDS)).toBe('D');
     expect(
       constrainSnowballNetGranularityForRange('M1', 15 * DAY_SECONDS)
     ).toBe('M5');

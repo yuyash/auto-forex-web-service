@@ -17,6 +17,7 @@ from apps.trading.enums import Direction, LogLevel, TaskType
 from apps.trading.models import (
     BacktestTask,
     CeleryTaskStatus,
+    ExecutionMetricAggregate,
     ExecutionState,
     Metrics,
     Order,
@@ -118,6 +119,81 @@ class TestMetrics:
         assert response.data["count"] == 1
         assert response.data["data_source"] == "strategy_metrics"
         assert len(response.data["results"]) == 1
+
+    def test_latest_metric_uses_aggregate_snapshot(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        ExecutionMetricAggregate.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            latest_timestamp=now,
+            latest_metrics={"margin_ratio": "0.12", "current_balance": "10050"},
+            sample_count=10,
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/latest/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data_source"] == "strategy_metrics"
+        assert response.data["result"]["t"] == int(now.timestamp())
+        assert response.data["result"]["metrics"] == {
+            "margin_ratio": "0.12",
+            "current_balance": "10050",
+        }
+
+    def test_latest_metric_falls_back_to_latest_metric_row(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        Metrics.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now,
+            metrics={"margin_ratio": "0.10"},
+        )
+        Metrics.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=1),
+            metrics={"margin_ratio": "0.11"},
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/latest/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["result"]["metrics"] == {"margin_ratio": "0.11"}
+
+    def test_latest_metric_ignores_aggregate_outside_requested_range(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        ExecutionMetricAggregate.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            latest_timestamp=now + timedelta(minutes=10),
+            latest_metrics={"margin_ratio": "0.99"},
+            sample_count=10,
+        )
+        Metrics.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=1),
+            metrics={"margin_ratio": "0.10"},
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/latest/",
+            {"until": (now + timedelta(minutes=5)).isoformat()},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["result"]["metrics"] == {"margin_ratio": "0.10"}
 
 
 @pytest.mark.django_db

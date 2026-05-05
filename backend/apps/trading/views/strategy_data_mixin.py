@@ -155,6 +155,48 @@ class TaskStrategyDataMixin:
         tags=["Trading"],
         parameters=[
             OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("metric_keys", str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyLatestMetricResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
+                    "result": serializers.JSONField(allow_null=True),
+                },
+            )
+        },
+        description="Retrieve the latest strategy metric snapshot without full pagination counts.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/metrics/latest",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_metrics_latest(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().latest_metric(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
             OpenApiParameter("center", str, required=False),
             OpenApiParameter("since", str, required=False),
             OpenApiParameter("until", str, required=False),
