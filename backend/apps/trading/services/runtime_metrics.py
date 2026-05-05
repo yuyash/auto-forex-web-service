@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -32,6 +32,8 @@ class RuntimeMetricsTracker:
         margin_rate: Decimal,
         atr_period: int,
         atr_baseline_period: int | None = None,
+        atr_periods: Mapping[str, int] | None = None,
+        atr_baseline_periods: Mapping[str, int | None] | None = None,
         volatility_lock_multiplier: Decimal | None = None,
         initial_balance: Decimal = Decimal("0"),
     ) -> None:
@@ -43,6 +45,16 @@ class RuntimeMetricsTracker:
         self.atr_baseline_period = (
             max(1, atr_baseline_period) if atr_baseline_period is not None else None
         )
+        self.atr_periods = {
+            str(name): max(1, int(period))
+            for name, period in (atr_periods or {}).items()
+            if str(name).strip()
+        }
+        self.atr_baseline_periods = {
+            str(name): max(1, int(period))
+            for name, period in (atr_baseline_periods or {}).items()
+            if str(name).strip() and period is not None
+        }
         self.volatility_lock_multiplier = volatility_lock_multiplier
         self._open_positions: dict[str, Position] = {}
         self._completed_candles: list[_Candle] = []
@@ -176,16 +188,30 @@ class RuntimeMetricsTracker:
             "quote_currency": quote_currency(self.instrument),
         }
 
-        current_atr = self._calculate_atr(self.atr_period)
+        atr_cache: dict[int, Decimal] = {}
+
+        def atr_for(period: int) -> Decimal:
+            safe_period = max(1, period)
+            if safe_period not in atr_cache:
+                atr_cache[safe_period] = self._calculate_atr(safe_period)
+            return atr_cache[safe_period]
+
+        current_atr = atr_for(self.atr_period)
         metrics["current_atr"] = str(current_atr)
 
         if self.atr_baseline_period is not None:
-            baseline_atr = self._calculate_atr(self.atr_baseline_period)
+            baseline_atr = atr_for(self.atr_baseline_period)
             metrics["baseline_atr"] = str(baseline_atr)
             if self.volatility_lock_multiplier is not None and baseline_atr > 0:
                 metrics["volatility_threshold"] = str(
                     baseline_atr * self.volatility_lock_multiplier
                 )
+
+        for name, period in self.atr_periods.items():
+            metrics[f"{name}_current_atr"] = str(atr_for(period))
+
+        for name, period in self.atr_baseline_periods.items():
+            metrics[f"{name}_baseline_atr"] = str(atr_for(period))
 
         return metrics
 
@@ -225,7 +251,13 @@ class RuntimeMetricsTracker:
             low_price=mid,
         )
 
-        max_candles = max(self.atr_period, self.atr_baseline_period or 0) + 2
+        atr_periods = [
+            self.atr_period,
+            self.atr_baseline_period or 0,
+            *self.atr_periods.values(),
+            *self.atr_baseline_periods.values(),
+        ]
+        max_candles = max(atr_periods) + 2
         if len(self._completed_candles) > max_candles:
             self._completed_candles = self._completed_candles[-max_candles:]
 

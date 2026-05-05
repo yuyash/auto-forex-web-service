@@ -39,6 +39,9 @@ class SnowballNetState:
     auto_direction_last_decision: dict[str, Any] = field(default_factory=dict)
     risk_trend_ema: Decimal | None = None
     risk_trend_slope_pips: Decimal | None = None
+    auto_direction_volatility_ema_pips: Decimal | None = None
+    adaptive_interval_volatility_ema_pips: Decimal | None = None
+    volatility_guard_volatility_ema_pips: Decimal | None = None
     volatility_ema_pips: Decimal | None = None
     net_units: int = 0
     average_price: Decimal | None = None
@@ -78,6 +81,18 @@ class SnowballNetState:
             auto_direction_last_decision=dict(raw.get("auto_direction_last_decision") or {}),
             risk_trend_ema=_decimal_or_none(raw.get("risk_trend_ema")),
             risk_trend_slope_pips=_decimal_or_none(raw.get("risk_trend_slope_pips")),
+            auto_direction_volatility_ema_pips=(
+                _decimal_or_none(raw.get("auto_direction_volatility_ema_pips"))
+                or _decimal_or_none(raw.get("volatility_ema_pips"))
+            ),
+            adaptive_interval_volatility_ema_pips=(
+                _decimal_or_none(raw.get("adaptive_interval_volatility_ema_pips"))
+                or _decimal_or_none(raw.get("volatility_ema_pips"))
+            ),
+            volatility_guard_volatility_ema_pips=(
+                _decimal_or_none(raw.get("volatility_guard_volatility_ema_pips"))
+                or _decimal_or_none(raw.get("volatility_ema_pips"))
+            ),
             volatility_ema_pips=_decimal_or_none(raw.get("volatility_ema_pips")),
             net_units=_int_or_default(raw.get("net_units"), 0),
             average_price=_decimal_or_none(raw.get("average_price")),
@@ -133,6 +148,21 @@ class SnowballNetState:
             ),
             "risk_trend_slope_pips": (
                 str(self.risk_trend_slope_pips) if self.risk_trend_slope_pips is not None else None
+            ),
+            "auto_direction_volatility_ema_pips": (
+                str(self.auto_direction_volatility_ema_pips)
+                if self.auto_direction_volatility_ema_pips is not None
+                else None
+            ),
+            "adaptive_interval_volatility_ema_pips": (
+                str(self.adaptive_interval_volatility_ema_pips)
+                if self.adaptive_interval_volatility_ema_pips is not None
+                else None
+            ),
+            "volatility_guard_volatility_ema_pips": (
+                str(self.volatility_guard_volatility_ema_pips)
+                if self.volatility_guard_volatility_ema_pips is not None
+                else None
             ),
             "volatility_ema_pips": (
                 str(self.volatility_ema_pips) if self.volatility_ema_pips is not None else None

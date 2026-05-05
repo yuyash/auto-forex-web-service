@@ -63,6 +63,37 @@ class TestIsForexMarketClosed:
 class TestTaskExecutorInit:
     """Tests for TaskExecutor.__init__."""
 
+    def test_snowball_net_atr_periods_are_feature_specific(self):
+        from apps.trading.tasks.executor import TaskExecutor
+
+        config = {
+            "atr_period": 14,
+            "atr_baseline_period": 96,
+            "adaptive_interval_atr_period": 7,
+            "adaptive_interval_atr_baseline_period": 70,
+            "volatility_guard_atr_period": 11,
+            "volatility_guard_atr_baseline_period": 110,
+            "auto_direction_atr_period": 5,
+            "auto_direction_atr_baseline_period": 50,
+        }
+
+        assert TaskExecutor._snowball_net_atr_periods(
+            strategy_type="snowball_net",
+            config_dict=config,
+        ) == {
+            "snowball_net_adaptive_interval": 7,
+            "snowball_net_volatility_guard": 11,
+            "snowball_net_auto_direction": 5,
+        }
+        assert TaskExecutor._snowball_net_atr_baseline_periods(
+            strategy_type="snowball_net",
+            config_dict=config,
+        ) == {
+            "snowball_net_adaptive_interval": 70,
+            "snowball_net_volatility_guard": 110,
+            "snowball_net_auto_direction": 50,
+        }
+
     @patch("apps.trading.tasks.executor.EventHandler")
     @patch("apps.trading.tasks.executor.OrderService")
     def test_init_stores_attributes(self, mock_order_svc, mock_handler):
