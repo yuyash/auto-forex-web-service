@@ -743,6 +743,7 @@
     "losing_trades": "負けトレード数",
     "snowball_net_net_units": "ネットユニット数",
     "snowball_net_average_price": "平均建値",
+    "snowball_net_price_levels": "価格ライン",
     "snowball_net_current_price": "現在価格",
     "snowball_net_target_price": "決済価格",
     "snowball_net_next_add_price": "次回増し玉価格",

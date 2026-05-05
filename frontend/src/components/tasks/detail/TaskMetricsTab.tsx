@@ -74,6 +74,7 @@ type ChartMetric = {
 
 type MetricChartDefinition = ChartMetric & {
   series?: ChartMetric[];
+  valueKey?: string;
 };
 
 /** Metrics to chart and their display order */
@@ -101,19 +102,13 @@ const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
   { key: 'snowball_net_net_units', color: '#0288d1', format: 'int' },
   { key: 'snowball_net_average_price', color: '#2563eb' },
   {
-    key: 'snowball_net_target_price',
-    color: '#16a34a',
-    series: [
-      { key: 'snowball_net_target_price', color: '#16a34a' },
-      { key: 'snowball_net_current_price', color: '#0f766e' },
-    ],
-  },
-  {
-    key: 'snowball_net_next_add_price',
-    color: '#dc2626',
+    key: 'snowball_net_price_levels',
+    color: '#0f766e',
+    valueKey: 'snowball_net_current_price',
     series: [
       { key: 'snowball_net_next_add_price', color: '#dc2626' },
       { key: 'snowball_net_current_price', color: '#0f766e' },
+      { key: 'snowball_net_target_price', color: '#16a34a' },
     ],
   },
   {
@@ -444,7 +439,7 @@ export function TaskMetricsTab({
       }
     }
     return chartMetricDefinitions.filter((chart) =>
-      keysWithData.has(chart.key)
+      chartSeries(chart).some((series) => keysWithData.has(series.key))
     );
   }, [chartMetricDefinitions, data]);
 
@@ -500,7 +495,9 @@ export function TaskMetricsTab({
       const yBySeries = seriesMetrics.map(() => [] as Array<number | null>);
       const hasValueBySeries = seriesMetrics.map(() => false);
       const yValues: number[] = [];
+      const valueKey = chart.valueKey ?? chart.key;
       let lastValue: number | null = null;
+      let fallbackLastValue: number | null = null;
       for (const point of data) {
         const values = seriesMetrics.map((metric) => {
           const val = point.metrics[metric.key];
@@ -517,7 +514,8 @@ export function TaskMetricsTab({
             if (value != null) {
               hasValueBySeries[index] = true;
               yValues.push(value);
-              if (seriesMetrics[index].key === chart.key) {
+              fallbackLastValue = value;
+              if (seriesMetrics[index].key === valueKey) {
                 lastValue = value;
               }
             }
@@ -527,12 +525,13 @@ export function TaskMetricsTab({
       const series = seriesMetrics
         .map((metric, index) => ({ metric, y: yBySeries[index] }))
         .filter((_, index) => hasValueBySeries[index]);
-      if (x.length > 0 && series.length > 0 && lastValue != null) {
+      const finalLastValue = lastValue ?? fallbackLastValue;
+      if (x.length > 0 && series.length > 0 && finalLastValue != null) {
         map[chart.key] = {
           x,
           series,
           yValues,
-          lastValue,
+          lastValue: finalLastValue,
         };
       }
     }

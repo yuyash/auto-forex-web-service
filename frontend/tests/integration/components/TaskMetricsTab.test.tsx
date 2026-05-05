@@ -96,8 +96,7 @@ describe('TaskMetricsTab', () => {
       />
     );
 
-    expect(screen.getByText('Exit Price')).toBeInTheDocument();
-    expect(screen.getByText('Next Add Price')).toBeInTheDocument();
+    expect(screen.getByText('Price Levels')).toBeInTheDocument();
     expect(screen.getByText('Pips From Average')).toBeInTheDocument();
     expect(screen.getByText('Margin Closeout Ratio')).toBeInTheDocument();
     expect(screen.getByText('Total PnL')).toBeInTheDocument();
@@ -109,6 +108,8 @@ describe('TaskMetricsTab', () => {
       screen.queryByText('Unrealized PnL (Quote)')
     ).not.toBeInTheDocument();
     expect(screen.getAllByText('Margin Closeout Ratio')).toHaveLength(1);
+    expect(screen.queryByText('Exit Price')).not.toBeInTheDocument();
+    expect(screen.queryByText('Next Add Price')).not.toBeInTheDocument();
     expect(screen.queryByText('Current Net Price')).not.toBeInTheDocument();
     expect(
       screen.queryByText('Theoretical Next Add Price')
@@ -138,10 +139,9 @@ describe('TaskMetricsTab', () => {
         (chartLabels) => chartLabels.length === 1 && chartLabels[0] === label
       );
 
-    expect(hasChartWithLabels('Exit Price', 'Current Net Price')).toBe(true);
-    expect(hasChartWithLabels('Next Add Price', 'Current Net Price')).toBe(
-      true
-    );
+    expect(
+      hasChartWithLabels('Next Add Price', 'Current Net Price', 'Exit Price')
+    ).toBe(true);
     expect(hasChartWithLabels('Pips From Average', 'Loss Cut Threshold')).toBe(
       true
     );
@@ -154,6 +154,8 @@ describe('TaskMetricsTab', () => {
       )
     ).toBe(true);
     expect(hasSingleSeriesChart('Current Net Price')).toBe(false);
+    expect(hasSingleSeriesChart('Exit Price')).toBe(false);
+    expect(hasSingleSeriesChart('Next Add Price')).toBe(false);
     expect(hasSingleSeriesChart('Margin Reduce Threshold')).toBe(false);
     expect(hasSingleSeriesChart('Margin Reduce Target')).toBe(false);
     expect(hasSingleSeriesChart('Emergency Stop Threshold')).toBe(false);
