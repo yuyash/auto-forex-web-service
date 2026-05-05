@@ -24,11 +24,13 @@ import type {
   ConfigProperty,
   StrategyConfig,
   ConfigPreset,
+  FieldComparisonRule,
 } from '../../types/strategy';
 import { orderConfigFieldTuples } from '../../utils/configFieldOrder';
 import {
   conditionMatchesValue,
   isParameterVisible,
+  matchesDependsOn,
   normalizeComparableValue,
 } from '../../utils/strategySchemaDependsOn';
 
@@ -43,6 +45,35 @@ interface StrategyConfigFormProps {
 interface ValidationErrors {
   [key: string]: string;
 }
+
+const cloneDefaultValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return [...value];
+  if (value && typeof value === 'object') {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return value;
+};
+
+const comparisonPasses = (
+  value: number,
+  otherValue: number,
+  operator: FieldComparisonRule['operator']
+): boolean => {
+  switch (operator) {
+    case 'gt':
+      return value > otherValue;
+    case 'gte':
+      return value >= otherValue;
+    case 'lt':
+      return value < otherValue;
+    case 'lte':
+      return value <= otherValue;
+    case 'eq':
+      return value === otherValue;
+    default:
+      return true;
+  }
+};
 
 const StrategyConfigForm = ({
   configSchema,
@@ -269,6 +300,37 @@ const StrategyConfigForm = ({
               defaultValue: 'Must be a whole number',
             });
           }
+
+          fieldSchema.comparisonRules?.forEach((rule) => {
+            if (
+              rule.dependsOn &&
+              !matchesDependsOn(
+                currentConfig,
+                rule.dependsOn,
+                configSchema.properties
+              )
+            ) {
+              return;
+            }
+
+            const otherRaw =
+              currentConfig[rule.field] ??
+              configSchema.properties?.[rule.field]?.default;
+            const otherValue = Number(otherRaw);
+            if (Number.isNaN(otherValue)) return;
+
+            if (!comparisonPasses(numValue, otherValue, rule.operator)) {
+              const langKey =
+                `message_${i18n.language}` as keyof FieldComparisonRule;
+              errors[fieldName] =
+                (rule[langKey] as string | undefined) ??
+                rule.message ??
+                t('validation.invalidComparison', {
+                  defaultValue:
+                    'Value does not satisfy related field constraint',
+                });
+            }
+          });
         }
 
         // Array validation
@@ -341,6 +403,41 @@ const StrategyConfigForm = ({
     ) {
       updatedConfig[fieldSchema.exclusiveWith] = false;
     }
+
+    Object.entries(configSchema.properties || {}).forEach(
+      ([dependentFieldName, dependentSchema]) => {
+        if (
+          !dependentSchema.dependsOn ||
+          dependentSchema.deferDefaultUntilConfigured
+        ) {
+          return;
+        }
+
+        const wasVisible = isParameterVisible(
+          dependentFieldName,
+          config,
+          configSchema.properties
+        );
+        const isVisible = isParameterVisible(
+          dependentFieldName,
+          updatedConfig,
+          configSchema.properties
+        );
+        if (
+          !wasVisible &&
+          isVisible &&
+          !Object.prototype.hasOwnProperty.call(
+            updatedConfig,
+            dependentFieldName
+          ) &&
+          Object.prototype.hasOwnProperty.call(dependentSchema, 'default')
+        ) {
+          updatedConfig[dependentFieldName] = cloneDefaultValue(
+            dependentSchema.default
+          );
+        }
+      }
+    );
 
     onChange(updatedConfig);
   };

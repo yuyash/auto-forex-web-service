@@ -13,8 +13,8 @@
       "enum_labels": { "long": "Long", "short": "Short", "auto": "Auto" },
       "enum_labels_ja": { "long": "買い", "short": "売り", "auto": "自動" },
       "default": "long",
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_fast_period": {
       "type": "integer",
@@ -25,8 +25,8 @@
       "default": 12,
       "minimum": 1,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_slow_period": {
       "type": "integer",
@@ -37,8 +37,8 @@
       "default": 48,
       "minimum": 2,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_min_samples": {
       "type": "integer",
@@ -49,8 +49,8 @@
       "default": 48,
       "minimum": 1,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_threshold_pips": {
       "type": "number",
@@ -61,8 +61,8 @@
       "default": 0,
       "minimum": 0,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction",
-      "group_ja": "自動方向判定"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_filter_enabled": {
       "type": "boolean",
@@ -72,8 +72,8 @@
       "description_ja": "有効時、自動方向モードはスプレッド、ボラティリティ、長期EMA傾きが異常な場合に開始を見送ります。",
       "default": false,
       "dependsOn": { "field": "trade_direction", "values": ["auto"] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_spread_pips": {
       "type": "number",
@@ -82,8 +82,8 @@
       "default": 3,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_volatility_pips": {
       "type": "number",
@@ -92,8 +92,8 @@
       "default": 25,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_volatility_multiplier": {
       "type": "number",
@@ -104,8 +104,8 @@
       "default": 3,
       "minimum": 0.1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "auto_direction_max_slope_pips": {
       "type": "number",
@@ -116,8 +116,8 @@
       "default": 5,
       "minimum": 0.01,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
-      "group": "Auto Direction Filters",
-      "group_ja": "自動方向フィルタ"
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
     },
     "base_units": {
       "type": "integer",
@@ -152,12 +152,31 @@
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
+    "capacity_limit_mode": {
+      "type": "string",
+      "title": "Position Capacity Limit",
+      "title_ja": "建玉上限の指定方法",
+      "description": "Choose whether the maximum net position is derived from add steps or set explicitly with Max Net Units.",
+      "description_ja": "ネット建玉上限を増し玉段数から算出するか、最大ネットユニット数で直接指定するかを選びます。",
+      "enum": ["add_count", "max_net_units"],
+      "enum_labels": {
+        "add_count": "By Add Steps",
+        "max_net_units": "By Max Net Units"
+      },
+      "enum_labels_ja": {
+        "add_count": "増し玉段数で指定",
+        "max_net_units": "最大ネットユニット数で指定"
+      },
+      "default": "add_count",
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
     "max_add_count": {
       "type": "integer",
-      "title": "Max Adds",
-      "title_ja": "最大増し玉回数",
-      "description": "Maximum number of average-price based adds before waiting for recovery.",
-      "description_ja": "平均価格ベースで増し玉する最大回数。",
+      "title": "Add Steps",
+      "title_ja": "増し玉段数",
+      "description": "Number of average-price based add steps. In By Add Steps mode, this also determines the max net capacity.",
+      "description_ja": "平均価格ベースで増し玉する段数。増し玉段数で指定する方式では、これがネット建玉上限も決めます。",
       "default": 7,
       "minimum": 0,
       "group": "Core Parameters",
@@ -167,10 +186,11 @@
       "type": "integer",
       "title": "Max Net Units",
       "title_ja": "最大ネットユニット数",
-      "description": "Absolute cap on the net position. 0 means initial + all configured adds.",
-      "description_ja": "ネット建玉の絶対上限。0の場合は初回と全増し玉の合計。",
-      "default": 0,
+      "description": "Absolute cap on the net position. Used only in By Max Net Units mode.",
+      "description_ja": "ネット建玉の絶対上限。最大ネットユニット数で指定する方式のときだけ使われます。",
+      "default": 8000,
       "minimum": 0,
+      "dependsOn": { "field": "capacity_limit_mode", "values": ["max_net_units"] },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -184,6 +204,7 @@
       "enum_labels": { "fixed": "Fixed", "remaining_linear": "Remaining Linear" },
       "enum_labels_ja": { "fixed": "固定", "remaining_linear": "残余線形" },
       "default": "fixed",
+      "dependsOn": { "field": "capacity_limit_mode", "values": ["max_net_units"] },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -290,60 +311,6 @@
       "group": "Net Take-Profit",
       "group_ja": "ネット利確"
     },
-    "compression_close_enabled": {
-      "type": "boolean",
-      "title": "Compression Close Enabled",
-      "title_ja": "圧縮決済有効",
-      "description": "When enabled, larger net exposure can be reduced at smaller favorable pips instead of waiting for the normal take-profit.",
-      "description_ja": "有効時、ネット数量が大きいほど通常利確幅を待たず、小さい含み益で建玉を圧縮します。",
-      "default": false,
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_min_profit_pips": {
-      "type": "number",
-      "title": "Compression Minimum Profit (pips)",
-      "title_ja": "圧縮最小利益幅（pips）",
-      "default": 5,
-      "minimum": 0.1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_min_close_ratio": {
-      "type": "number",
-      "title": "Compression Min Close Ratio",
-      "title_ja": "圧縮最小決済比率",
-      "default": 0.15,
-      "minimum": 0.01,
-      "maximum": 1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_max_close_ratio": {
-      "type": "number",
-      "title": "Compression Max Close Ratio",
-      "title_ja": "圧縮最大決済比率",
-      "default": 0.5,
-      "minimum": 0.01,
-      "maximum": 1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_exposure_gamma": {
-      "type": "number",
-      "title": "Compression Exposure Gamma",
-      "title_ja": "圧縮エクスポージャーガンマ",
-      "description": "Curve factor for how quickly compression becomes earlier/larger as net exposure rises.",
-      "description_ja": "ネットエクスポージャー上昇に応じて圧縮決済を早め、大きくするカーブ係数。",
-      "default": 1,
-      "minimum": 0.01,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
     "interval_mode": {
       "type": "string",
       "title": "Add Interval Mode",
@@ -384,8 +351,26 @@
       "type": "number",
       "title": "Interval Tail (pips)",
       "title_ja": "間隔終端値（pips）",
-      "default": 14,
+      "description": "Final interval value. Use a value greater than or equal to the initial value for Additive/Multiplicative modes, and less than or equal to the initial value for Subtractive/Divisive modes.",
+      "description_ja": "終端の増し玉間隔。加算/乗算では初期値以上、減算/除算では初期値以下にします。",
+      "default": 30,
       "minimum": 0.1,
+      "comparisonRules": [
+        {
+          "field": "n_pips_head",
+          "operator": "gte",
+          "dependsOn": { "field": "interval_mode", "values": ["additive", "multiplicative"] },
+          "message": "Must be greater than or equal to Interval Head for Additive or Multiplicative modes",
+          "message_ja": "加算または乗算モードでは間隔初期値以上にしてください"
+        },
+        {
+          "field": "n_pips_head",
+          "operator": "lte",
+          "dependsOn": { "field": "interval_mode", "values": ["subtractive", "divisive"] },
+          "message": "Must be less than or equal to Interval Head for Subtractive or Divisive modes",
+          "message_ja": "減算または除算モードでは間隔初期値以下にしてください"
+        }
+      ],
       "dependsOn": {
         "field": "interval_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
@@ -607,8 +592,8 @@
       "title": "Block Adds on Margin Pressure",
       "title_ja": "証拠金圧力時の増し玉停止",
       "default": false,
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "add_margin_guard_max_pct": {
       "type": "number",
@@ -618,8 +603,8 @@
       "minimum": 1,
       "maximum": 99,
       "dependsOn": { "field": "add_margin_guard_enabled", "values": [true] },
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "margin_reduce_enabled": {
       "type": "boolean",

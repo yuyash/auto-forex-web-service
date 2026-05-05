@@ -57,6 +57,9 @@ def event_already_applied(
     execution_id = executor.task.execution_id
 
     if isinstance(strategy_event, OpenPositionEvent):
+        if _is_snowball_net_event(strategy_event):
+            return _snowball_net_open_already_applied(strategy_event, strategy_state)
+
         entry_id = strategy_event.entry_id
         if entry_id is None:
             return False
@@ -86,6 +89,9 @@ def event_already_applied(
         return False
 
     if isinstance(strategy_event, ClosePositionEvent):
+        if _is_snowball_net_event(strategy_event):
+            return _snowball_net_close_already_applied(strategy_event, strategy_state)
+
         position_id = str(strategy_event.position_id or "").strip()
         if not position_id:
             return False
@@ -110,6 +116,84 @@ def event_already_applied(
         return False
 
     return False
+
+
+def _is_snowball_net_event(strategy_event: object) -> bool:
+    strategy_event_type = str(getattr(strategy_event, "strategy_event_type", "") or "")
+    strategy_type = str(getattr(strategy_event, "strategy_type", "") or "")
+    return strategy_type == "snowball_net" or strategy_event_type.startswith("snowball_net_")
+
+
+def _snowball_net_open_already_applied(
+    strategy_event: object,
+    strategy_state: dict,
+) -> bool:
+    last_action = _dict(strategy_state.get("last_action"))
+    if not _snowball_net_action_matches(last_action, action="open", strategy_event=strategy_event):
+        return False
+
+    event_entry_id = getattr(strategy_event, "entry_id", None)
+    if event_entry_id is None:
+        return False
+    action_entry_id = _optional_int(last_action.get("entry_id"))
+    event_entry_id_int = _optional_int(event_entry_id)
+    if action_entry_id is None or event_entry_id_int is None:
+        return False
+    return action_entry_id == event_entry_id_int
+
+
+def _snowball_net_close_already_applied(
+    strategy_event: object,
+    strategy_state: dict,
+) -> bool:
+    last_action = _dict(strategy_state.get("last_action"))
+    if not _snowball_net_action_matches(last_action, action="close", strategy_event=strategy_event):
+        return False
+
+    event_units = int(getattr(strategy_event, "units", 0) or 0)
+    try:
+        action_units = int(last_action.get("units", 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    return action_units >= event_units > 0
+
+
+def _snowball_net_action_matches(
+    last_action: dict,
+    *,
+    action: str,
+    strategy_event: object,
+) -> bool:
+    if str(last_action.get("kind") or "") not in {"executed", "reconciled"}:
+        return False
+    if str(last_action.get("action") or "") != action:
+        return False
+
+    action_timestamp = str(last_action.get("timestamp") or "")
+    event_timestamp = getattr(strategy_event, "timestamp", None)
+    if action_timestamp and event_timestamp is not None:
+        event_timestamp_text = (
+            event_timestamp.isoformat()
+            if hasattr(event_timestamp, "isoformat")
+            else str(event_timestamp)
+        )
+        return action_timestamp == event_timestamp_text
+    return True
+
+
+def _dict(value: object) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def mark_event_processed(trading_event: TradingEvent) -> None:

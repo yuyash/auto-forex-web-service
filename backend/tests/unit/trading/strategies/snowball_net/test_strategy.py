@@ -4,8 +4,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult, Tick
-from apps.trading.enums import EventType
+from apps.trading.enums import Direction, EventType
 from apps.trading.strategies.registry import registry
 from apps.trading.strategies.snowball_net.config import SnowballNetConfig
 from apps.trading.strategies.snowball_net.strategy import SnowballNetStrategy
@@ -27,12 +29,211 @@ def _state(strategy_state=None):
     return SimpleNamespace(strategy_state=strategy_state or {})
 
 
+def _report():
+    return SimpleNamespace(blockers=[], warnings=[])
+
+
+def _position(
+    *,
+    id: str,
+    direction: Direction = Direction.LONG,
+    units: int = 1000,
+    entry_price: str = "150.00",
+):
+    timestamp = datetime(2026, 1, 1, tzinfo=UTC)
+    return SimpleNamespace(
+        id=id,
+        direction=direction,
+        units=units,
+        entry_price=Decimal(entry_price),
+        entry_time=timestamp,
+        created_at=timestamp,
+    )
+
+
 def test_snowball_net_registers_with_net_visualization_capability():
     assert registry.is_registered("snowball_net")
     capabilities = registry.capabilities(identifier="snowball_net")
     assert capabilities["runtime"]["hedging"] is False
     assert capabilities["runtime"]["netting"] is True
     assert capabilities["visualization"]["kind"] == "snowball_net"
+    assert capabilities["resume"]["stateful_broker_reconciliation"] is True
+
+
+def test_capacity_limit_mode_defaults_to_add_count_capacity():
+    config = SnowballNetConfig.from_dict({})
+
+    assert config.capacity_limit_mode == "add_count"
+    assert config.max_net_units == 0
+    assert config.effective_max_net_units == 8000
+    assert config.add_unit_allocation_mode == "fixed"
+
+
+def test_legacy_max_net_units_implies_explicit_capacity_limit_mode():
+    config = SnowballNetConfig.from_dict({"max_net_units": 5000})
+
+    assert config.capacity_limit_mode == "max_net_units"
+    assert config.max_net_units == 5000
+    assert config.effective_max_net_units == 5000
+
+
+def test_add_count_capacity_ignores_stale_net_unit_limit_settings():
+    config = SnowballNetConfig.from_dict(
+        {
+            "capacity_limit_mode": "add_count",
+            "max_net_units": 5000,
+            "add_unit_allocation_mode": "remaining_linear",
+        }
+    )
+
+    assert config.max_net_units == 0
+    assert config.add_unit_allocation_mode == "fixed"
+    assert config.effective_max_net_units == 8000
+
+
+def test_max_net_unit_capacity_requires_positive_max_net_units():
+    config = SnowballNetConfig.from_dict(
+        {
+            "capacity_limit_mode": "max_net_units",
+            "max_net_units": 0,
+        }
+    )
+
+    with pytest.raises(ValueError, match="max_net_units must be set"):
+        config.validate()
+
+
+@pytest.mark.parametrize("mode", ["additive", "multiplicative"])
+def test_increasing_interval_modes_require_tail_at_least_head(mode):
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": mode,
+            "n_pips_head": 30,
+            "n_pips_tail": 14,
+        }
+    )
+
+    with pytest.raises(ValueError, match="greater than or equal to n_pips_head"):
+        config.validate()
+
+
+@pytest.mark.parametrize("mode", ["subtractive", "divisive"])
+def test_decreasing_interval_modes_require_tail_at_most_head(mode):
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": mode,
+            "n_pips_head": 30,
+            "n_pips_tail": 45,
+        }
+    )
+
+    with pytest.raises(ValueError, match="less than or equal to n_pips_head"):
+        config.validate()
+
+
+def test_increasing_interval_mode_progresses_toward_larger_tail():
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": "additive",
+            "n_pips_head": 10,
+            "n_pips_tail": 30,
+            "n_pips_flat_steps": 0,
+            "n_pips_gamma": 1,
+            "max_add_count": 4,
+        }
+    )
+
+    config.validate()
+
+    assert config.add_interval_pips(1) == Decimal("15.0")
+    assert config.add_interval_pips(4) == Decimal("30.0")
+
+
+def test_reconcile_broker_positions_rebuilds_net_state_from_existing_positions():
+    state = _state({})
+    report = _report()
+    strategy_config = SimpleNamespace(
+        config_dict=SnowballNetConfig.from_dict({}).to_dict(),
+    )
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(id="position-1", units=1000, entry_price="150.00"),
+            _position(id="position-2", units=2000, entry_price="150.03"),
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert report.blockers == []
+    assert state.strategy_state["initialised"] is True
+    assert state.strategy_state["direction"] == "long"
+    assert state.strategy_state["net_units"] == 3000
+    assert Decimal(state.strategy_state["average_price"]) == Decimal("150.02")
+    assert state.strategy_state["position_id"] == "position-1"
+    assert state.strategy_state["add_count"] == 2
+
+
+def test_reconcile_broker_positions_blocks_fixed_direction_mismatch():
+    state = _state({})
+    report = _report()
+    strategy_config = SimpleNamespace(
+        config_dict=SnowballNetConfig.from_dict({"trade_direction": "long"}).to_dict(),
+    )
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(
+                id="position-1",
+                direction=Direction.SHORT,
+                units=-1000,
+                entry_price="150.00",
+            )
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert report.blockers
+    assert "does not match configured direction" in report.blockers[0]
+
+
+def test_reconcile_broker_positions_clears_reflected_pending_open():
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 1000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "next_entry_id": 3,
+            "pending_action": {
+                "kind": "open",
+                "entry_id": 2,
+                "units": 1000,
+                "previous_units": 1000,
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            },
+        }
+    )
+    report = _report()
+    strategy_config = SimpleNamespace(config_dict=SnowballNetConfig.from_dict({}).to_dict())
+
+    SnowballNetStrategy.reconcile_broker_positions(
+        state=state,
+        open_positions=[
+            _position(id="position-1", units=2000, entry_price="149.99"),
+        ],
+        report=report,
+        strategy_config=strategy_config,
+    )
+
+    assert state.strategy_state["pending_action"] == {}
+    assert state.strategy_state["last_action"]["kind"] == "reconciled"
+    assert state.strategy_state["last_action"]["action"] == "open"
+    assert report.warnings
 
 
 def test_initial_entry_uses_net_position_merge_flags():
@@ -474,42 +675,6 @@ def test_remaining_linear_add_allocation_uses_remaining_capacity():
     assert len(result.events) == 1
     assert result.events[0].strategy_event_type == "snowball_net_add"
     assert result.events[0].units == 666
-
-
-def test_compression_close_reduces_large_net_position_before_normal_take_profit():
-    strategy = SnowballNetStrategy(
-        "USD_JPY",
-        Decimal("0.01"),
-        SnowballNetConfig.from_dict(
-            {
-                "compression_close_enabled": True,
-                "compression_min_profit_pips": 5,
-                "compression_min_close_ratio": "0.15",
-                "compression_max_close_ratio": "0.50",
-                "max_net_units": 4000,
-                "max_add_count": 3,
-            }
-        ),
-    )
-    state = _state(
-        {
-            "initialised": True,
-            "direction": "long",
-            "net_units": 4000,
-            "average_price": "150.00",
-            "position_id": "position-1",
-            "add_count": 3,
-            "metrics": {"margin_ratio": "0.10"},
-        }
-    )
-
-    result = strategy.on_tick(tick=_tick("150.05", "150.07"), state=state)
-
-    assert len(result.events) == 1
-    event = result.events[0]
-    assert event.strategy_event_type == "snowball_net_compression"
-    assert event.close_reason == "net_compression"
-    assert event.units == 2000
 
 
 def test_staged_margin_loss_cut_closes_partial_units_instead_of_full_net():
