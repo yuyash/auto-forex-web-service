@@ -311,60 +311,6 @@
       "group": "Net Take-Profit",
       "group_ja": "ネット利確"
     },
-    "compression_close_enabled": {
-      "type": "boolean",
-      "title": "Compression Close Enabled",
-      "title_ja": "圧縮決済有効",
-      "description": "When enabled, larger net exposure can be reduced at smaller favorable pips instead of waiting for the normal take-profit.",
-      "description_ja": "有効時、ネット数量が大きいほど通常利確幅を待たず、小さい含み益で建玉を圧縮します。",
-      "default": false,
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_min_profit_pips": {
-      "type": "number",
-      "title": "Compression Minimum Profit (pips)",
-      "title_ja": "圧縮最小利益幅（pips）",
-      "default": 5,
-      "minimum": 0.1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_min_close_ratio": {
-      "type": "number",
-      "title": "Compression Min Close Ratio",
-      "title_ja": "圧縮最小決済比率",
-      "default": 0.15,
-      "minimum": 0.01,
-      "maximum": 1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_max_close_ratio": {
-      "type": "number",
-      "title": "Compression Max Close Ratio",
-      "title_ja": "圧縮最大決済比率",
-      "default": 0.5,
-      "minimum": 0.01,
-      "maximum": 1,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
-    "compression_exposure_gamma": {
-      "type": "number",
-      "title": "Compression Exposure Gamma",
-      "title_ja": "圧縮エクスポージャーガンマ",
-      "description": "Curve factor for how quickly compression becomes earlier/larger as net exposure rises.",
-      "description_ja": "ネットエクスポージャー上昇に応じて圧縮決済を早め、大きくするカーブ係数。",
-      "default": 1,
-      "minimum": 0.01,
-      "dependsOn": { "field": "compression_close_enabled", "values": [true] },
-      "group": "Net Compression",
-      "group_ja": "ネット圧縮"
-    },
     "interval_mode": {
       "type": "string",
       "title": "Add Interval Mode",
@@ -405,8 +351,26 @@
       "type": "number",
       "title": "Interval Tail (pips)",
       "title_ja": "間隔終端値（pips）",
-      "default": 14,
+      "description": "Final interval value. Use a value greater than or equal to the initial value for Additive/Multiplicative modes, and less than or equal to the initial value for Subtractive/Divisive modes.",
+      "description_ja": "終端の増し玉間隔。加算/乗算では初期値以上、減算/除算では初期値以下にします。",
+      "default": 30,
       "minimum": 0.1,
+      "comparisonRules": [
+        {
+          "field": "n_pips_head",
+          "operator": "gte",
+          "dependsOn": { "field": "interval_mode", "values": ["additive", "multiplicative"] },
+          "message": "Must be greater than or equal to Interval Head for Additive or Multiplicative modes",
+          "message_ja": "加算または乗算モードでは間隔初期値以上にしてください"
+        },
+        {
+          "field": "n_pips_head",
+          "operator": "lte",
+          "dependsOn": { "field": "interval_mode", "values": ["subtractive", "divisive"] },
+          "message": "Must be less than or equal to Interval Head for Subtractive or Divisive modes",
+          "message_ja": "減算または除算モードでは間隔初期値以下にしてください"
+        }
+      ],
       "dependsOn": {
         "field": "interval_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
@@ -628,8 +592,8 @@
       "title": "Block Adds on Margin Pressure",
       "title_ja": "証拠金圧力時の増し玉停止",
       "default": false,
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "add_margin_guard_max_pct": {
       "type": "number",
@@ -639,8 +603,8 @@
       "minimum": 1,
       "maximum": 99,
       "dependsOn": { "field": "add_margin_guard_enabled", "values": [true] },
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "margin_reduce_enabled": {
       "type": "boolean",

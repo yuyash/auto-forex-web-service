@@ -103,6 +103,52 @@ def test_max_net_unit_capacity_requires_positive_max_net_units():
         config.validate()
 
 
+@pytest.mark.parametrize("mode", ["additive", "multiplicative"])
+def test_increasing_interval_modes_require_tail_at_least_head(mode):
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": mode,
+            "n_pips_head": 30,
+            "n_pips_tail": 14,
+        }
+    )
+
+    with pytest.raises(ValueError, match="greater than or equal to n_pips_head"):
+        config.validate()
+
+
+@pytest.mark.parametrize("mode", ["subtractive", "divisive"])
+def test_decreasing_interval_modes_require_tail_at_most_head(mode):
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": mode,
+            "n_pips_head": 30,
+            "n_pips_tail": 45,
+        }
+    )
+
+    with pytest.raises(ValueError, match="less than or equal to n_pips_head"):
+        config.validate()
+
+
+def test_increasing_interval_mode_progresses_toward_larger_tail():
+    config = SnowballNetConfig.from_dict(
+        {
+            "interval_mode": "additive",
+            "n_pips_head": 10,
+            "n_pips_tail": 30,
+            "n_pips_flat_steps": 0,
+            "n_pips_gamma": 1,
+            "max_add_count": 4,
+        }
+    )
+
+    config.validate()
+
+    assert config.add_interval_pips(1) == Decimal("15.0")
+    assert config.add_interval_pips(4) == Decimal("30.0")
+
+
 def test_reconcile_broker_positions_rebuilds_net_state_from_existing_positions():
     state = _state({})
     report = _report()
@@ -629,42 +675,6 @@ def test_remaining_linear_add_allocation_uses_remaining_capacity():
     assert len(result.events) == 1
     assert result.events[0].strategy_event_type == "snowball_net_add"
     assert result.events[0].units == 666
-
-
-def test_compression_close_reduces_large_net_position_before_normal_take_profit():
-    strategy = SnowballNetStrategy(
-        "USD_JPY",
-        Decimal("0.01"),
-        SnowballNetConfig.from_dict(
-            {
-                "compression_close_enabled": True,
-                "compression_min_profit_pips": 5,
-                "compression_min_close_ratio": "0.15",
-                "compression_max_close_ratio": "0.50",
-                "max_net_units": 4000,
-                "max_add_count": 3,
-            }
-        ),
-    )
-    state = _state(
-        {
-            "initialised": True,
-            "direction": "long",
-            "net_units": 4000,
-            "average_price": "150.00",
-            "position_id": "position-1",
-            "add_count": 3,
-            "metrics": {"margin_ratio": "0.10"},
-        }
-    )
-
-    result = strategy.on_tick(tick=_tick("150.05", "150.07"), state=state)
-
-    assert len(result.events) == 1
-    event = result.events[0]
-    assert event.strategy_event_type == "snowball_net_compression"
-    assert event.close_reason == "net_compression"
-    assert event.units == 2000
 
 
 def test_staged_margin_loss_cut_closes_partial_units_instead_of_full_net():

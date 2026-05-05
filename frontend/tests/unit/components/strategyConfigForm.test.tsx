@@ -151,3 +151,61 @@ describe('StrategyConfigForm dependencies', () => {
     });
   });
 });
+
+describe('StrategyConfigForm comparisonRules', () => {
+  it('shows cross-field validation errors for visible numeric fields', async () => {
+    const schema: ConfigSchema = {
+      type: 'object',
+      properties: {
+        interval_mode: {
+          type: 'string',
+          title: 'Add Interval Mode',
+          enum: ['additive', 'subtractive'],
+          default: 'additive',
+        },
+        n_pips_head: {
+          type: 'number',
+          title: 'Interval Head',
+          default: 30,
+        },
+        n_pips_tail: {
+          type: 'number',
+          title: 'Interval Tail',
+          default: 30,
+          dependsOn: {
+            field: 'interval_mode',
+            values: ['additive', 'subtractive'],
+          },
+          comparisonRules: [
+            {
+              field: 'n_pips_head',
+              operator: 'gte',
+              dependsOn: {
+                field: 'interval_mode',
+                values: ['additive'],
+              },
+              message: 'Tail must be at least head for additive mode',
+            },
+          ],
+        },
+      },
+    };
+
+    render(
+      <StrategyConfigForm
+        configSchema={schema}
+        config={{
+          interval_mode: 'additive',
+          n_pips_head: 30,
+          n_pips_tail: 14,
+        }}
+        onChange={() => undefined}
+        showValidation
+      />
+    );
+
+    expect(
+      await screen.findByText('Tail must be at least head for additive mode')
+    ).toBeInTheDocument();
+  });
+});

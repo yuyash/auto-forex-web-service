@@ -103,6 +103,11 @@ export interface ConfigProperty {
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
   /**
+   * Numeric cross-field validation rules used by strategy configuration forms.
+   * These are UI metadata; backend strategy validation remains authoritative.
+   */
+  comparisonRules?: FieldComparisonRule[];
+  /**
    * Mutual exclusion for boolean fields.
    * When this field is set to true, the named field is automatically set to false.
    */
@@ -121,6 +126,14 @@ export interface ConfigProperty {
    * `{index}` is replaced with the 1-based element index.
    */
   itemLabel?: string;
+}
+
+export interface FieldComparisonRule {
+  field: string;
+  operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+  dependsOn?: DependsOnCondition;
+  message?: string;
+  [localizedMessageKey: `message_${string}`]: string | undefined;
 }
 
 export interface StrategyConfig {

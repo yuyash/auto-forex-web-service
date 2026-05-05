@@ -95,7 +95,6 @@ class SnowballNetStrategy(Strategy):
             "events": {
                 "close_reason_labels": {
                     "net_take_profit": "Net take profit",
-                    "net_compression": "Net compression",
                     "net_loss_cut": "Net loss cut",
                     "margin_protection": "Margin protection",
                     "manual_close": "Manual close",
@@ -104,7 +103,6 @@ class SnowballNetStrategy(Strategy):
                     "snowball_net_initial": "SnowballNet initial entry",
                     "snowball_net_add": "SnowballNet add",
                     "snowball_net_take_profit": "SnowballNet take profit",
-                    "snowball_net_compression": "SnowballNet compression",
                     "snowball_net_margin_reduce": "SnowballNet margin reduce",
                     "snowball_net_loss_cut": "SnowballNet loss cut",
                 },
@@ -198,12 +196,6 @@ class SnowballNetStrategy(Strategy):
 
         if self._margin_reduce_triggered(sn):
             events = [self._build_close_event(sn, tick, reason="margin_reduce")]
-            self._update_metrics(sn, tick)
-            state.strategy_state = sn.to_dict()
-            return StrategyResult(state=state, events=events)
-
-        if self._compression_close_triggered(sn, tick):
-            events = [self._build_close_event(sn, tick, reason="compression")]
             self._update_metrics(sn, tick)
             state.strategy_state = sn.to_dict()
             return StrategyResult(state=state, events=events)
@@ -459,11 +451,6 @@ class SnowballNetStrategy(Strategy):
     def _take_profit_hit(self, sn: SnowballNetState, tick: Tick) -> bool:
         return sn.net_units > 0 and self._favorable_pips(sn, tick) >= self.config.take_profit_pips
 
-    def _compression_close_triggered(self, sn: SnowballNetState, tick: Tick) -> bool:
-        if not self.config.compression_close_enabled or sn.net_units <= self.config.initial_units:
-            return False
-        return self._favorable_pips(sn, tick) >= self._compression_trigger_pips(sn)
-
     def _should_add(self, sn: SnowballNetState, tick: Tick) -> bool:
         if sn.add_count >= self.config.max_add_count:
             return False
@@ -530,24 +517,6 @@ class SnowballNetStrategy(Strategy):
         if baseline is not None and baseline > 0:
             return baseline
         return self.config.adaptive_interval_reference_pips
-
-    def _compression_trigger_pips(self, sn: SnowballNetState) -> Decimal:
-        ratio = self._exposure_ratio(sn)
-        span = self.config.take_profit_pips - self.config.compression_min_profit_pips
-        trigger = self.config.take_profit_pips - span * (
-            ratio**self.config.compression_exposure_gamma
-        )
-        if trigger < self.config.compression_min_profit_pips:
-            trigger = self.config.compression_min_profit_pips
-        return self.config.round_pips(trigger)
-
-    def _compression_close_ratio(self, sn: SnowballNetState) -> Decimal:
-        ratio = self._exposure_ratio(sn)
-        span = self.config.compression_max_close_ratio - self.config.compression_min_close_ratio
-        close_ratio = self.config.compression_min_close_ratio + span * (
-            ratio**self.config.compression_exposure_gamma
-        )
-        return min(self.config.compression_max_close_ratio, close_ratio)
 
     def _exposure_ratio(self, sn: SnowballNetState) -> Decimal:
         denominator = self.config.effective_max_net_units - self.config.initial_units
@@ -724,12 +693,10 @@ class SnowballNetStrategy(Strategy):
         strategy_event_type = {
             "loss_cut": "snowball_net_loss_cut",
             "margin_reduce": "snowball_net_margin_reduce",
-            "compression": "snowball_net_compression",
         }.get(reason, "snowball_net_take_profit")
         close_reason = {
             "loss_cut": "net_loss_cut",
             "margin_reduce": "margin_protection",
-            "compression": "net_compression",
         }.get(reason, "net_take_profit")
         description = self._close_description(
             reason=reason,
@@ -778,11 +745,7 @@ class SnowballNetStrategy(Strategy):
         event.basket = "net"
         event.close_reason = close_reason
         event.actual_tp_pips = favorable_pips
-        event.expected_tp_pips = (
-            self._compression_trigger_pips(sn)
-            if reason == "compression"
-            else self.config.take_profit_pips
-        )
+        event.expected_tp_pips = self.config.take_profit_pips
         event.actual_exit_price = exit_price
         event.margin_ratio = self._margin_pct(sn) / Decimal("100")
         return event
@@ -816,9 +779,6 @@ class SnowballNetStrategy(Strategy):
             )
         elif reason == "margin_reduce":
             calculated = self._margin_reduce_close_units(sn)
-        elif reason == "compression":
-            raw_units = Decimal(sn.net_units) * self._compression_close_ratio(sn)
-            calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
         else:
             raw_units = Decimal(sn.net_units) * self.config.partial_close_ratio
             calculated = int(raw_units.to_integral_value(rounding=ROUND_HALF_UP))
@@ -1008,9 +968,6 @@ class SnowballNetStrategy(Strategy):
         volatility = self._volatility_pips(sn)
         spread = self._spread_pips(tick)
         trend_deviation = self._trend_deviation_pips(sn, tick)
-        compression_trigger = (
-            self._compression_trigger_pips(sn) if self.config.compression_close_enabled else None
-        )
 
         metrics = dict(sn.metrics)
         metrics.update(
@@ -1071,9 +1028,6 @@ class SnowballNetStrategy(Strategy):
                 "snowball_net_trend_deviation_pips": str(trend_deviation),
                 "snowball_net_trend_slope_pips": (
                     str(sn.risk_trend_slope_pips) if sn.risk_trend_slope_pips is not None else None
-                ),
-                "snowball_net_compression_trigger_pips": (
-                    str(compression_trigger) if compression_trigger is not None else None
                 ),
                 "snowball_net_margin_reduce_enabled": self.config.margin_reduce_enabled,
                 "snowball_net_margin_reduce_threshold_pct": (
@@ -1138,7 +1092,6 @@ class SnowballNetStrategy(Strategy):
         label = {
             "loss_cut": "loss cut",
             "margin_reduce": "margin reduce",
-            "compression": "compression",
         }.get(reason, "take profit")
         return (
             f"SnowballNet {label} | units={units}, avg={average:.5f}, "

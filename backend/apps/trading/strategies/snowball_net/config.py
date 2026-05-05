@@ -18,6 +18,8 @@ INTERVAL_MODES = {
 TRADE_DIRECTIONS = {"long", "short", "auto"}
 CAPACITY_LIMIT_MODES = {"add_count", "max_net_units"}
 ADD_UNIT_ALLOCATION_MODES = {"fixed", "remaining_linear"}
+INCREASING_INTERVAL_MODES = {"additive", "multiplicative"}
+DECREASING_INTERVAL_MODES = {"subtractive", "divisive"}
 LOSS_CUT_MODES = {"full", "staged_margin"}
 
 
@@ -80,11 +82,6 @@ class SnowballNetConfig:
     take_profit_pips: Decimal
     partial_close_ratio: Decimal
     min_close_units: int
-    compression_close_enabled: bool
-    compression_min_profit_pips: Decimal
-    compression_min_close_ratio: Decimal
-    compression_max_close_ratio: Decimal
-    compression_exposure_gamma: Decimal
     interval_mode: str
     n_pips_head: Decimal
     n_pips_tail: Decimal
@@ -157,9 +154,11 @@ class SnowballNetConfig:
         denominator = max(1, self.max_add_count - self.n_pips_flat_steps)
         progress = Decimal(safe_step - self.n_pips_flat_steps) / Decimal(denominator)
         curved = progress**self.n_pips_gamma
-        interval = self.n_pips_head - (self.n_pips_head - self.n_pips_tail) * curved
-        if interval < self.n_pips_tail:
-            interval = self.n_pips_tail
+        interval = self.n_pips_head + (self.n_pips_tail - self.n_pips_head) * curved
+        if self.n_pips_tail >= self.n_pips_head:
+            interval = min(interval, self.n_pips_tail)
+        else:
+            interval = max(interval, self.n_pips_tail)
         return _round_to_step(interval, self.round_step_pips)
 
     def round_pips(self, value: Decimal) -> Decimal:
@@ -215,18 +214,9 @@ class SnowballNetConfig:
             take_profit_pips=_parse_decimal(raw.get("take_profit_pips"), "25"),
             partial_close_ratio=_parse_decimal(raw.get("partial_close_ratio"), "0.5"),
             min_close_units=_parse_int(raw.get("min_close_units"), 1000),
-            compression_close_enabled=_parse_bool(raw.get("compression_close_enabled"), False),
-            compression_min_profit_pips=_parse_decimal(raw.get("compression_min_profit_pips"), "5"),
-            compression_min_close_ratio=_parse_decimal(
-                raw.get("compression_min_close_ratio"), "0.15"
-            ),
-            compression_max_close_ratio=_parse_decimal(
-                raw.get("compression_max_close_ratio"), "0.5"
-            ),
-            compression_exposure_gamma=_parse_decimal(raw.get("compression_exposure_gamma"), "1"),
             interval_mode=_parse_str(raw.get("interval_mode"), "constant").lower(),
             n_pips_head=_parse_decimal(raw.get("n_pips_head"), "30"),
-            n_pips_tail=_parse_decimal(raw.get("n_pips_tail"), "14"),
+            n_pips_tail=_parse_decimal(raw.get("n_pips_tail"), "30"),
             n_pips_flat_steps=_parse_int(raw.get("n_pips_flat_steps"), 2),
             n_pips_gamma=_parse_decimal(raw.get("n_pips_gamma"), "1.4"),
             manual_intervals=manual_intervals,
@@ -310,11 +300,6 @@ class SnowballNetConfig:
             "take_profit_pips": str(self.take_profit_pips),
             "partial_close_ratio": str(self.partial_close_ratio),
             "min_close_units": self.min_close_units,
-            "compression_close_enabled": self.compression_close_enabled,
-            "compression_min_profit_pips": str(self.compression_min_profit_pips),
-            "compression_min_close_ratio": str(self.compression_min_close_ratio),
-            "compression_max_close_ratio": str(self.compression_max_close_ratio),
-            "compression_exposure_gamma": str(self.compression_exposure_gamma),
             "interval_mode": self.interval_mode,
             "n_pips_head": str(self.n_pips_head),
             "n_pips_tail": str(self.n_pips_tail),
@@ -399,25 +384,24 @@ class SnowballNetConfig:
             raise ValueError("partial_close_ratio must be in the range (0, 1]")
         if self.min_close_units <= 0:
             raise ValueError("min_close_units must be greater than 0")
-        if self.compression_min_profit_pips <= 0:
-            raise ValueError("compression_min_profit_pips must be greater than 0")
-        if self.compression_min_profit_pips > self.take_profit_pips:
-            raise ValueError("compression_min_profit_pips must not exceed take_profit_pips")
-        if not (
-            Decimal("0")
-            < self.compression_min_close_ratio
-            <= self.compression_max_close_ratio
-            <= Decimal("1")
-        ):
-            raise ValueError("compression close ratios must satisfy 0 < min <= max <= 1")
-        if self.compression_exposure_gamma <= 0:
-            raise ValueError("compression_exposure_gamma must be greater than 0")
         if self.interval_mode not in INTERVAL_MODES:
             raise ValueError(f"interval_mode must be one of {sorted(INTERVAL_MODES)}")
         if self.n_pips_head <= 0 or self.n_pips_tail <= 0:
             raise ValueError("n_pips_head and n_pips_tail must be greater than 0")
-        if self.n_pips_head < self.n_pips_tail:
-            raise ValueError("n_pips_head must be greater than or equal to n_pips_tail")
+        if self.interval_mode in INCREASING_INTERVAL_MODES and (
+            self.n_pips_tail < self.n_pips_head
+        ):
+            raise ValueError(
+                "n_pips_tail must be greater than or equal to n_pips_head for additive "
+                "or multiplicative interval modes"
+            )
+        if self.interval_mode in DECREASING_INTERVAL_MODES and (
+            self.n_pips_tail > self.n_pips_head
+        ):
+            raise ValueError(
+                "n_pips_tail must be less than or equal to n_pips_head for subtractive "
+                "or divisive interval modes"
+            )
         if self.n_pips_flat_steps < 0:
             raise ValueError("n_pips_flat_steps must be greater than or equal to 0")
         if self.max_add_count > 0 and self.n_pips_flat_steps >= self.max_add_count:
