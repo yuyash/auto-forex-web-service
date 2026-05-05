@@ -29,6 +29,26 @@ This guide covers local development setup for the Auto Forex Trader without SSL/
 
 ---
 
+## Project Structure
+
+```
+.
+├── backend/             # Django application
+│   ├── apps/            # Django apps
+│   ├── config/          # Django settings
+│   ├── requirements.txt # Python dependencies
+│   └── Dockerfile       # Backend container
+├── frontend/            # React application
+│   ├── src/             # React components
+│   ├── package.json     # Node dependencies
+│   └── Dockerfile       # Frontend container
+├── nginx/               # Nginx configuration
+│   ├── nginx.conf       # Nginx config
+│   └── Dockerfile       # Nginx container
+├── docker-compose.yaml  # Docker Compose configuration
+└── README.md            # This file
+```
+
 ## Option 1: Local Development (Without Docker)
 
 Run backend and frontend directly on your machine without Docker.
