@@ -62,6 +62,14 @@ class TestRuntimeMetricsTracker:
             margin_rate=Decimal("0.04"),
             atr_period=2,
             atr_baseline_period=3,
+            atr_periods={
+                "snowball_net_adaptive_interval": 2,
+                "snowball_net_volatility_guard": 3,
+            },
+            atr_baseline_periods={
+                "snowball_net_adaptive_interval": 3,
+                "snowball_net_volatility_guard": 4,
+            },
             volatility_lock_multiplier=Decimal("2"),
         )
 
@@ -79,6 +87,14 @@ class TestRuntimeMetricsTracker:
         assert Decimal(metrics["current_atr"]) > Decimal("0")
         assert Decimal(metrics["baseline_atr"]) > Decimal("0")
         assert Decimal(metrics["volatility_threshold"]) > Decimal("0")
+        assert Decimal(metrics["snowball_net_adaptive_interval_current_atr"]) > Decimal("0")
+        assert Decimal(metrics["snowball_net_adaptive_interval_baseline_atr"]) > Decimal("0")
+        assert Decimal(metrics["snowball_net_volatility_guard_current_atr"]) > Decimal("0")
+        assert Decimal(metrics["snowball_net_volatility_guard_baseline_atr"]) > Decimal("0")
+        assert (
+            metrics["snowball_net_adaptive_interval_current_atr"]
+            != metrics["snowball_net_volatility_guard_current_atr"]
+        )
 
     def test_build_metrics_uses_executable_prices_for_unrealized_pnl(self):
         tracker = RuntimeMetricsTracker(

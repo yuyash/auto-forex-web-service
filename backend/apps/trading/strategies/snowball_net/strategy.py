@@ -304,10 +304,20 @@ class SnowballNetStrategy(Strategy):
         if previous_mid is None:
             return
         move_pips = abs(tick.mid - previous_mid) / self.pip_size
-        sn.volatility_ema_pips = self._ema_next(
-            current=sn.volatility_ema_pips,
+        sn.auto_direction_volatility_ema_pips = self._ema_next(
+            current=sn.auto_direction_volatility_ema_pips,
             price=move_pips,
-            period=self.config.volatility_ema_period,
+            period=self.config.auto_direction_volatility_ema_period,
+        )
+        sn.adaptive_interval_volatility_ema_pips = self._ema_next(
+            current=sn.adaptive_interval_volatility_ema_pips,
+            price=move_pips,
+            period=self.config.adaptive_interval_volatility_ema_period,
+        )
+        sn.volatility_guard_volatility_ema_pips = self._ema_next(
+            current=sn.volatility_guard_volatility_ema_pips,
+            price=move_pips,
+            period=self.config.volatility_guard_volatility_ema_period,
         )
 
     @staticmethod
@@ -357,7 +367,13 @@ class SnowballNetStrategy(Strategy):
                 "timestamp": tick.timestamp.isoformat(),
                 "signal": direction.value,
                 "spread_pips": str(self._spread_pips(tick)),
-                "volatility_pips": str(self._volatility_pips(sn)),
+                "volatility_pips": str(
+                    self._volatility_pips(
+                        sn,
+                        current_atr_key="snowball_net_auto_direction_current_atr",
+                        fallback_volatility=sn.auto_direction_volatility_ema_pips,
+                    )
+                ),
                 "slow_ema_slope_pips": str(sn.auto_direction_slope_pips)
                 if sn.auto_direction_slope_pips is not None
                 else None,
@@ -403,6 +419,9 @@ class SnowballNetStrategy(Strategy):
             return "spread"
         if self._volatility_exceeded(
             sn,
+            current_atr_key="snowball_net_auto_direction_current_atr",
+            baseline_atr_key="snowball_net_auto_direction_baseline_atr",
+            fallback_volatility=sn.auto_direction_volatility_ema_pips,
             max_pips=self.config.auto_direction_max_volatility_pips,
             max_multiplier=self.config.auto_direction_max_volatility_multiplier,
         ):
@@ -501,7 +520,11 @@ class SnowballNetStrategy(Strategy):
         base = self.config.add_interval_pips(step)
         if not self.config.adaptive_interval_enabled:
             return base
-        volatility = self._volatility_pips(sn)
+        volatility = self._volatility_pips(
+            sn,
+            current_atr_key="snowball_net_adaptive_interval_current_atr",
+            fallback_volatility=sn.adaptive_interval_volatility_ema_pips,
+        )
         if volatility <= 0:
             return base
         reference = self._adaptive_reference_pips(sn)
@@ -513,7 +536,11 @@ class SnowballNetStrategy(Strategy):
         return self.config.round_pips(base * multiplier)
 
     def _adaptive_reference_pips(self, sn: SnowballNetState) -> Decimal:
-        baseline = self._decimal_metric(sn, "baseline_atr")
+        baseline = self._decimal_metric(
+            sn,
+            "snowball_net_adaptive_interval_baseline_atr",
+            legacy_key="baseline_atr",
+        )
         if baseline is not None and baseline > 0:
             return baseline
         return self.config.adaptive_interval_reference_pips
@@ -533,6 +560,9 @@ class SnowballNetStrategy(Strategy):
             return "spread"
         if self.config.volatility_guard_enabled and self._volatility_exceeded(
             sn,
+            current_atr_key="snowball_net_volatility_guard_current_atr",
+            baseline_atr_key="snowball_net_volatility_guard_baseline_atr",
+            fallback_volatility=sn.volatility_guard_volatility_ema_pips,
             max_pips=self.config.volatility_guard_max_atr_pips,
             max_multiplier=self.config.volatility_guard_max_atr_multiplier,
         ):
@@ -578,25 +608,42 @@ class SnowballNetStrategy(Strategy):
     def _spread_pips(self, tick: Tick) -> Decimal:
         return max(Decimal("0"), (tick.ask - tick.bid) / self.pip_size)
 
-    def _volatility_pips(self, sn: SnowballNetState) -> Decimal:
-        current_atr = self._decimal_metric(sn, "current_atr")
+    def _volatility_pips(
+        self,
+        sn: SnowballNetState,
+        *,
+        current_atr_key: str,
+        fallback_volatility: Decimal | None,
+    ) -> Decimal:
+        current_atr = self._decimal_metric(
+            sn,
+            current_atr_key,
+            legacy_key="current_atr",
+        )
         if current_atr is not None and current_atr > 0:
             return current_atr
-        return sn.volatility_ema_pips or Decimal("0")
+        return fallback_volatility or Decimal("0")
 
     def _volatility_exceeded(
         self,
         sn: SnowballNetState,
         *,
+        current_atr_key: str,
+        baseline_atr_key: str,
+        fallback_volatility: Decimal | None,
         max_pips: Decimal,
         max_multiplier: Decimal,
     ) -> bool:
-        volatility = self._volatility_pips(sn)
+        volatility = self._volatility_pips(
+            sn,
+            current_atr_key=current_atr_key,
+            fallback_volatility=fallback_volatility,
+        )
         if volatility <= 0:
             return False
         if volatility > max_pips:
             return True
-        baseline = self._decimal_metric(sn, "baseline_atr")
+        baseline = self._decimal_metric(sn, baseline_atr_key, legacy_key="baseline_atr")
         return baseline is not None and baseline > 0 and volatility > baseline * max_multiplier
 
     # ------------------------------------------------------------------
@@ -762,6 +809,8 @@ class SnowballNetStrategy(Strategy):
                 )
             )
             configured = max(1, configured)
+        elif self.config.add_lot_progression_mode == "linear_increment":
+            configured = self.config.add_units * (sn.add_count + 1)
         else:
             configured = self.config.add_units
         return max(0, min(configured, available))
@@ -889,7 +938,10 @@ class SnowballNetStrategy(Strategy):
                 sn.direction = "auto"
         else:
             sn.average_price = self._decimal_from_pending(pending, "previous_average_price")
-            if self.config.add_unit_allocation_mode == "fixed":
+            if (
+                self.config.add_unit_allocation_mode == "fixed"
+                and self.config.add_lot_progression_mode == "fixed"
+            ):
                 sn.add_count = self._recalculate_add_count(remaining_units)
             else:
                 sn.add_count = self._int_from_pending(pending, "previous_add_count")
@@ -965,7 +1017,21 @@ class SnowballNetStrategy(Strategy):
         )
         margin_pct = self._margin_pct(sn)
         self._update_extreme_metrics(sn, favorable_pips=favorable, margin_pct=margin_pct)
-        volatility = self._volatility_pips(sn)
+        adaptive_volatility = self._volatility_pips(
+            sn,
+            current_atr_key="snowball_net_adaptive_interval_current_atr",
+            fallback_volatility=sn.adaptive_interval_volatility_ema_pips,
+        )
+        guard_volatility = self._volatility_pips(
+            sn,
+            current_atr_key="snowball_net_volatility_guard_current_atr",
+            fallback_volatility=sn.volatility_guard_volatility_ema_pips,
+        )
+        auto_direction_volatility = self._volatility_pips(
+            sn,
+            current_atr_key="snowball_net_auto_direction_current_atr",
+            fallback_volatility=sn.auto_direction_volatility_ema_pips,
+        )
         spread = self._spread_pips(tick)
         trend_deviation = self._trend_deviation_pips(sn, tick)
 
@@ -1021,7 +1087,10 @@ class SnowballNetStrategy(Strategy):
                 "snowball_net_exposure_pct": str(exposure_pct),
                 "snowball_net_margin_ratio_pct": str(margin_pct),
                 "snowball_net_spread_pips": str(spread),
-                "snowball_net_volatility_pips": str(volatility),
+                "snowball_net_volatility_pips": str(adaptive_volatility),
+                "snowball_net_adaptive_interval_volatility_pips": str(adaptive_volatility),
+                "snowball_net_volatility_guard_volatility_pips": str(guard_volatility),
+                "snowball_net_auto_direction_volatility_pips": str(auto_direction_volatility),
                 "snowball_net_trend_ema": (
                     str(sn.risk_trend_ema) if sn.risk_trend_ema is not None else None
                 ),
@@ -1125,8 +1194,15 @@ class SnowballNetStrategy(Strategy):
             return None
 
     @staticmethod
-    def _decimal_metric(sn: SnowballNetState, key: str) -> Decimal | None:
+    def _decimal_metric(
+        sn: SnowballNetState,
+        key: str,
+        *,
+        legacy_key: str | None = None,
+    ) -> Decimal | None:
         value = sn.metrics.get(key)
+        if value in (None, "") and legacy_key is not None:
+            value = sn.metrics.get(legacy_key)
         if value in (None, ""):
             return None
         try:

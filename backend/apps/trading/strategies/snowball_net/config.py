@@ -18,6 +18,7 @@ INTERVAL_MODES = {
 TRADE_DIRECTIONS = {"long", "short", "auto"}
 CAPACITY_LIMIT_MODES = {"add_count", "max_net_units"}
 ADD_UNIT_ALLOCATION_MODES = {"fixed", "remaining_linear"}
+ADD_LOT_PROGRESSION_MODES = {"fixed", "linear_increment"}
 INCREASING_INTERVAL_MODES = {"additive", "multiplicative"}
 DECREASING_INTERVAL_MODES = {"subtractive", "divisive"}
 LOSS_CUT_MODES = {"full", "staged_margin"}
@@ -72,9 +73,13 @@ class SnowballNetConfig:
     auto_direction_max_volatility_pips: Decimal
     auto_direction_max_volatility_multiplier: Decimal
     auto_direction_max_slope_pips: Decimal
+    auto_direction_atr_period: int
+    auto_direction_atr_baseline_period: int
+    auto_direction_volatility_ema_period: int
     base_units: int
     initial_lot_size: int
     add_lot_size: int
+    add_lot_progression_mode: str
     capacity_limit_mode: str
     max_add_count: int
     max_net_units: int
@@ -89,16 +94,19 @@ class SnowballNetConfig:
     n_pips_gamma: Decimal
     manual_intervals: list[Decimal]
     round_step_pips: Decimal
-    atr_period: int
-    atr_baseline_period: int
     adaptive_interval_enabled: bool
+    adaptive_interval_atr_period: int
+    adaptive_interval_atr_baseline_period: int
+    adaptive_interval_volatility_ema_period: int
     adaptive_interval_reference_pips: Decimal
     adaptive_interval_min_multiplier: Decimal
     adaptive_interval_max_multiplier: Decimal
     volatility_guard_enabled: bool
+    volatility_guard_atr_period: int
+    volatility_guard_atr_baseline_period: int
+    volatility_guard_volatility_ema_period: int
     volatility_guard_max_atr_pips: Decimal
     volatility_guard_max_atr_multiplier: Decimal
-    volatility_ema_period: int
     spread_guard_enabled: bool
     max_spread_pips: Decimal
     add_trend_guard_enabled: bool
@@ -130,10 +138,16 @@ class SnowballNetConfig:
         return self.base_units * self.add_lot_size
 
     @property
+    def total_add_units_by_steps(self) -> int:
+        if self.add_lot_progression_mode == "linear_increment":
+            return self.add_units * self.max_add_count * (self.max_add_count + 1) // 2
+        return self.add_units * self.max_add_count
+
+    @property
     def effective_max_net_units(self) -> int:
         if self.capacity_limit_mode == "max_net_units" and self.max_net_units > 0:
             return self.max_net_units
-        return self.initial_units + self.add_units * self.max_add_count
+        return self.initial_units + self.total_add_units_by_steps
 
     def add_interval_pips(self, step: int) -> Decimal:
         """Return the adverse-distance threshold for a 1-based add step."""
@@ -180,6 +194,9 @@ class SnowballNetConfig:
         add_unit_allocation_mode = _parse_str(raw.get("add_unit_allocation_mode"), "fixed").lower()
         if capacity_limit_mode == "add_count":
             add_unit_allocation_mode = "fixed"
+        legacy_atr_period = raw.get("atr_period")
+        legacy_atr_baseline_period = raw.get("atr_baseline_period")
+        legacy_volatility_ema_period = raw.get("volatility_ema_period")
 
         return SnowballNetConfig(
             trade_direction=_parse_str(raw.get("trade_direction"), "long").lower(),
@@ -204,9 +221,22 @@ class SnowballNetConfig:
             auto_direction_max_slope_pips=_parse_decimal(
                 raw.get("auto_direction_max_slope_pips"), "5"
             ),
+            auto_direction_atr_period=_parse_int(
+                raw.get("auto_direction_atr_period", legacy_atr_period), 14
+            ),
+            auto_direction_atr_baseline_period=_parse_int(
+                raw.get("auto_direction_atr_baseline_period", legacy_atr_baseline_period), 96
+            ),
+            auto_direction_volatility_ema_period=_parse_int(
+                raw.get("auto_direction_volatility_ema_period", legacy_volatility_ema_period),
+                60,
+            ),
             base_units=_parse_int(raw.get("base_units"), 1000),
             initial_lot_size=_parse_int(raw.get("initial_lot_size"), 1),
             add_lot_size=_parse_int(raw.get("add_lot_size"), 1),
+            add_lot_progression_mode=_parse_str(
+                raw.get("add_lot_progression_mode"), "fixed"
+            ).lower(),
             capacity_limit_mode=capacity_limit_mode,
             max_add_count=_parse_int(raw.get("max_add_count"), 7),
             max_net_units=max_net_units,
@@ -221,9 +251,17 @@ class SnowballNetConfig:
             n_pips_gamma=_parse_decimal(raw.get("n_pips_gamma"), "1.4"),
             manual_intervals=manual_intervals,
             round_step_pips=_parse_decimal(raw.get("round_step_pips"), "0.1"),
-            atr_period=_parse_int(raw.get("atr_period"), 14),
-            atr_baseline_period=_parse_int(raw.get("atr_baseline_period"), 96),
             adaptive_interval_enabled=_parse_bool(raw.get("adaptive_interval_enabled"), False),
+            adaptive_interval_atr_period=_parse_int(
+                raw.get("adaptive_interval_atr_period", legacy_atr_period), 14
+            ),
+            adaptive_interval_atr_baseline_period=_parse_int(
+                raw.get("adaptive_interval_atr_baseline_period", legacy_atr_baseline_period), 96
+            ),
+            adaptive_interval_volatility_ema_period=_parse_int(
+                raw.get("adaptive_interval_volatility_ema_period", legacy_volatility_ema_period),
+                60,
+            ),
             adaptive_interval_reference_pips=_parse_decimal(
                 raw.get("adaptive_interval_reference_pips"), "10"
             ),
@@ -234,13 +272,23 @@ class SnowballNetConfig:
                 raw.get("adaptive_interval_max_multiplier"), "2.5"
             ),
             volatility_guard_enabled=_parse_bool(raw.get("volatility_guard_enabled"), False),
+            volatility_guard_atr_period=_parse_int(
+                raw.get("volatility_guard_atr_period", legacy_atr_period), 14
+            ),
+            volatility_guard_atr_baseline_period=_parse_int(
+                raw.get("volatility_guard_atr_baseline_period", legacy_atr_baseline_period),
+                96,
+            ),
+            volatility_guard_volatility_ema_period=_parse_int(
+                raw.get("volatility_guard_volatility_ema_period", legacy_volatility_ema_period),
+                60,
+            ),
             volatility_guard_max_atr_pips=_parse_decimal(
                 raw.get("volatility_guard_max_atr_pips"), "25"
             ),
             volatility_guard_max_atr_multiplier=_parse_decimal(
                 raw.get("volatility_guard_max_atr_multiplier"), "3"
             ),
-            volatility_ema_period=_parse_int(raw.get("volatility_ema_period"), 60),
             spread_guard_enabled=_parse_bool(raw.get("spread_guard_enabled"), False),
             max_spread_pips=_parse_decimal(raw.get("max_spread_pips"), "3"),
             add_trend_guard_enabled=_parse_bool(raw.get("add_trend_guard_enabled"), False),
@@ -290,9 +338,13 @@ class SnowballNetConfig:
                 self.auto_direction_max_volatility_multiplier
             ),
             "auto_direction_max_slope_pips": str(self.auto_direction_max_slope_pips),
+            "auto_direction_atr_period": self.auto_direction_atr_period,
+            "auto_direction_atr_baseline_period": self.auto_direction_atr_baseline_period,
+            "auto_direction_volatility_ema_period": self.auto_direction_volatility_ema_period,
             "base_units": self.base_units,
             "initial_lot_size": self.initial_lot_size,
             "add_lot_size": self.add_lot_size,
+            "add_lot_progression_mode": self.add_lot_progression_mode,
             "capacity_limit_mode": self.capacity_limit_mode,
             "max_add_count": self.max_add_count,
             "max_net_units": self.max_net_units,
@@ -307,16 +359,21 @@ class SnowballNetConfig:
             "n_pips_gamma": str(self.n_pips_gamma),
             "manual_intervals": [str(value) for value in self.manual_intervals],
             "round_step_pips": str(self.round_step_pips),
-            "atr_period": self.atr_period,
-            "atr_baseline_period": self.atr_baseline_period,
             "adaptive_interval_enabled": self.adaptive_interval_enabled,
+            "adaptive_interval_atr_period": self.adaptive_interval_atr_period,
+            "adaptive_interval_atr_baseline_period": self.adaptive_interval_atr_baseline_period,
+            "adaptive_interval_volatility_ema_period": (
+                self.adaptive_interval_volatility_ema_period
+            ),
             "adaptive_interval_reference_pips": str(self.adaptive_interval_reference_pips),
             "adaptive_interval_min_multiplier": str(self.adaptive_interval_min_multiplier),
             "adaptive_interval_max_multiplier": str(self.adaptive_interval_max_multiplier),
             "volatility_guard_enabled": self.volatility_guard_enabled,
+            "volatility_guard_atr_period": self.volatility_guard_atr_period,
+            "volatility_guard_atr_baseline_period": self.volatility_guard_atr_baseline_period,
+            "volatility_guard_volatility_ema_period": (self.volatility_guard_volatility_ema_period),
             "volatility_guard_max_atr_pips": str(self.volatility_guard_max_atr_pips),
             "volatility_guard_max_atr_multiplier": str(self.volatility_guard_max_atr_multiplier),
-            "volatility_ema_period": self.volatility_ema_period,
             "spread_guard_enabled": self.spread_guard_enabled,
             "max_spread_pips": str(self.max_spread_pips),
             "add_trend_guard_enabled": self.add_trend_guard_enabled,
@@ -361,6 +418,10 @@ class SnowballNetConfig:
             raise ValueError("initial_lot_size must be greater than 0")
         if self.add_lot_size <= 0:
             raise ValueError("add_lot_size must be greater than 0")
+        if self.add_lot_progression_mode not in ADD_LOT_PROGRESSION_MODES:
+            raise ValueError(
+                f"add_lot_progression_mode must be one of {sorted(ADD_LOT_PROGRESSION_MODES)}"
+            )
         if self.capacity_limit_mode not in CAPACITY_LIMIT_MODES:
             raise ValueError(f"capacity_limit_mode must be one of {sorted(CAPACITY_LIMIT_MODES)}")
         if self.max_add_count < 0:
@@ -415,10 +476,18 @@ class SnowballNetConfig:
                 raise ValueError("manual_intervals values must be greater than 0")
         if self.round_step_pips <= 0:
             raise ValueError("round_step_pips must be greater than 0")
-        if self.atr_period <= 0:
-            raise ValueError("atr_period must be greater than 0")
-        if self.atr_baseline_period <= 0:
-            raise ValueError("atr_baseline_period must be greater than 0")
+        if self.auto_direction_atr_period <= 0:
+            raise ValueError("auto_direction_atr_period must be greater than 0")
+        if self.auto_direction_atr_baseline_period <= 0:
+            raise ValueError("auto_direction_atr_baseline_period must be greater than 0")
+        if self.auto_direction_volatility_ema_period <= 0:
+            raise ValueError("auto_direction_volatility_ema_period must be greater than 0")
+        if self.adaptive_interval_atr_period <= 0:
+            raise ValueError("adaptive_interval_atr_period must be greater than 0")
+        if self.adaptive_interval_atr_baseline_period <= 0:
+            raise ValueError("adaptive_interval_atr_baseline_period must be greater than 0")
+        if self.adaptive_interval_volatility_ema_period <= 0:
+            raise ValueError("adaptive_interval_volatility_ema_period must be greater than 0")
         if self.adaptive_interval_reference_pips <= 0:
             raise ValueError("adaptive_interval_reference_pips must be greater than 0")
         if not (
@@ -431,8 +500,12 @@ class SnowballNetConfig:
             raise ValueError("volatility_guard_max_atr_pips must be greater than 0")
         if self.volatility_guard_max_atr_multiplier <= 0:
             raise ValueError("volatility_guard_max_atr_multiplier must be greater than 0")
-        if self.volatility_ema_period <= 0:
-            raise ValueError("volatility_ema_period must be greater than 0")
+        if self.volatility_guard_atr_period <= 0:
+            raise ValueError("volatility_guard_atr_period must be greater than 0")
+        if self.volatility_guard_atr_baseline_period <= 0:
+            raise ValueError("volatility_guard_atr_baseline_period must be greater than 0")
+        if self.volatility_guard_volatility_ema_period <= 0:
+            raise ValueError("volatility_guard_volatility_ema_period must be greater than 0")
         if self.max_spread_pips <= 0:
             raise ValueError("max_spread_pips must be greater than 0")
         if self.add_trend_ema_period <= 0:

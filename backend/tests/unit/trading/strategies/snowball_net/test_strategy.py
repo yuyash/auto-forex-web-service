@@ -77,6 +77,26 @@ def test_legacy_max_net_units_implies_explicit_capacity_limit_mode():
     assert config.effective_max_net_units == 5000
 
 
+def test_legacy_shared_atr_config_maps_to_feature_specific_periods():
+    config = SnowballNetConfig.from_dict(
+        {
+            "atr_period": 7,
+            "atr_baseline_period": 55,
+            "volatility_ema_period": 9,
+        }
+    )
+
+    assert config.adaptive_interval_atr_period == 7
+    assert config.adaptive_interval_atr_baseline_period == 55
+    assert config.adaptive_interval_volatility_ema_period == 9
+    assert config.volatility_guard_atr_period == 7
+    assert config.volatility_guard_atr_baseline_period == 55
+    assert config.volatility_guard_volatility_ema_period == 9
+    assert config.auto_direction_atr_period == 7
+    assert config.auto_direction_atr_baseline_period == 55
+    assert config.auto_direction_volatility_ema_period == 9
+
+
 def test_add_count_capacity_ignores_stale_net_unit_limit_settings():
     config = SnowballNetConfig.from_dict(
         {
@@ -89,6 +109,23 @@ def test_add_count_capacity_ignores_stale_net_unit_limit_settings():
     assert config.max_net_units == 0
     assert config.add_unit_allocation_mode == "fixed"
     assert config.effective_max_net_units == 8000
+
+
+def test_linear_increment_add_lot_progression_updates_add_count_capacity():
+    config = SnowballNetConfig.from_dict(
+        {
+            "add_lot_progression_mode": "linear_increment",
+            "base_units": 1000,
+            "initial_lot_size": 1,
+            "add_lot_size": 2,
+            "max_add_count": 4,
+        }
+    )
+
+    assert config.add_lot_progression_mode == "linear_increment"
+    assert config.add_unit_allocation_mode == "fixed"
+    assert config.total_add_units_by_steps == 20000
+    assert config.effective_max_net_units == 21000
 
 
 def test_max_net_unit_capacity_requires_positive_max_net_units():
@@ -632,7 +669,11 @@ def test_adaptive_interval_widens_add_distance_when_volatility_is_high():
             "average_price": "150.00",
             "position_id": "position-1",
             "add_count": 0,
-            "metrics": {"margin_ratio": "0.10", "current_atr": "20"},
+            "metrics": {
+                "margin_ratio": "0.10",
+                "current_atr": "1",
+                "snowball_net_adaptive_interval_current_atr": "20",
+            },
         }
     )
 
@@ -643,6 +684,40 @@ def test_adaptive_interval_widens_add_distance_when_volatility_is_high():
         result.state.strategy_state["metrics"]["snowball_net_effective_add_interval_pips"]
     )
     assert interval == Decimal("60.0")
+
+
+def test_volatility_guard_uses_feature_specific_atr():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "volatility_guard_enabled": True,
+                "volatility_guard_max_atr_pips": 10,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 1000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 0,
+            "metrics": {
+                "margin_ratio": "0.10",
+                "current_atr": "1",
+                "snowball_net_adaptive_interval_current_atr": "1",
+                "snowball_net_volatility_guard_current_atr": "20",
+            },
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.68", "149.70"), state=state)
+
+    assert result.events == []
+    assert result.state.strategy_state["metrics"]["snowball_net_add_block_reason"] == "volatility"
 
 
 def test_remaining_linear_add_allocation_uses_remaining_capacity():
@@ -675,6 +750,39 @@ def test_remaining_linear_add_allocation_uses_remaining_capacity():
     assert len(result.events) == 1
     assert result.events[0].strategy_event_type == "snowball_net_add"
     assert result.events[0].units == 666
+
+
+def test_linear_increment_add_lot_progression_uses_next_step_multiplier():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "add_lot_progression_mode": "linear_increment",
+                "base_units": 1000,
+                "add_lot_size": 1,
+                "max_add_count": 4,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": True,
+            "direction": "long",
+            "net_units": 4000,
+            "average_price": "150.00",
+            "position_id": "position-1",
+            "add_count": 2,
+            "next_entry_id": 4,
+            "metrics": {"margin_ratio": "0.10"},
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("149.68", "149.70"), state=state)
+
+    assert len(result.events) == 1
+    assert result.events[0].strategy_event_type == "snowball_net_add"
+    assert result.events[0].units == 3000
 
 
 def test_staged_margin_loss_cut_closes_partial_units_instead_of_full_net():
@@ -745,3 +853,44 @@ def test_auto_direction_filter_blocks_start_when_spread_is_wide():
     assert result.events == []
     assert result.state.strategy_state["last_action"]["action"] == "auto_direction_filtered"
     assert result.state.strategy_state["last_action"]["reason"] == "spread"
+
+
+def test_auto_direction_filter_uses_feature_specific_atr():
+    strategy = SnowballNetStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        SnowballNetConfig.from_dict(
+            {
+                "trade_direction": "auto",
+                "auto_direction_fast_period": 2,
+                "auto_direction_slow_period": 3,
+                "auto_direction_min_samples": 3,
+                "auto_direction_filter_enabled": True,
+                "auto_direction_max_spread_pips": 10,
+                "auto_direction_max_volatility_pips": 10,
+            }
+        ),
+    )
+    state = _state(
+        {
+            "initialised": False,
+            "direction": "auto",
+            "direction_mode": "auto",
+            "net_units": 0,
+            "auto_direction_samples": 3,
+            "auto_direction_fast_ema": "150.10",
+            "auto_direction_slow_ema": "150.00",
+            "auto_direction_signal": "long",
+            "metrics": {
+                "margin_ratio": "0.10",
+                "current_atr": "1",
+                "snowball_net_auto_direction_current_atr": "20",
+            },
+        }
+    )
+
+    result = strategy.on_tick(tick=_tick("150.00", "150.03"), state=state)
+
+    assert result.events == []
+    assert result.state.strategy_state["last_action"]["action"] == "auto_direction_filtered"
+    assert result.state.strategy_state["last_action"]["reason"] == "volatility"

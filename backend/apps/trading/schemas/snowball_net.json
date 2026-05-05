@@ -99,10 +99,46 @@
       "type": "number",
       "title": "Auto Max Volatility Multiplier",
       "title_ja": "自動開始 最大ボラティリティ倍率",
-      "description": "Auto mode waits when current ATR exceeds baseline ATR by this multiplier.",
-      "description_ja": "現在ATRが基準ATRのこの倍率を超える場合、自動開始を見送ります。",
+      "description": "Auto mode waits when its own current ATR exceeds its own baseline ATR by this multiplier.",
+      "description_ja": "自動方向フィルタ専用の現在ATRが、同じく専用の基準ATRのこの倍率を超える場合に開始を見送ります。",
       "default": 3,
       "minimum": 0.1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
+    },
+    "auto_direction_atr_period": {
+      "type": "integer",
+      "title": "Auto Direction ATR Period",
+      "title_ja": "自動方向フィルタ 現在ATR期間",
+      "description": "Current ATR period used only by Auto Direction Safety Filters.",
+      "description_ja": "自動方向セーフティフィルタだけで使う現在ATRの期間です。",
+      "default": 14,
+      "minimum": 1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
+    },
+    "auto_direction_atr_baseline_period": {
+      "type": "integer",
+      "title": "Auto Direction Baseline ATR Period",
+      "title_ja": "自動方向フィルタ 基準ATR期間",
+      "description": "Baseline ATR period used only by Auto Direction Safety Filters.",
+      "description_ja": "自動方向セーフティフィルタだけで使う基準ATRの期間です。",
+      "default": 96,
+      "minimum": 1,
+      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "group": "Trade Direction",
+      "group_ja": "取引方向"
+    },
+    "auto_direction_volatility_ema_period": {
+      "type": "integer",
+      "title": "Auto Direction Tick Volatility EMA Period",
+      "title_ja": "自動方向フィルタ TickボラティリティEMA期間",
+      "description": "Fallback tick-volatility period used only by Auto Direction Safety Filters before ATR metrics are available.",
+      "description_ja": "ATRメトリクスが未確定の間、自動方向セーフティフィルタだけで使う代替Tickボラティリティ期間です。",
+      "default": 60,
+      "minimum": 1,
       "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
       "group": "Trade Direction",
       "group_ja": "取引方向"
@@ -145,10 +181,29 @@
       "type": "integer",
       "title": "Add Lot Size",
       "title_ja": "増し玉ロット数",
-      "description": "Each add size as a multiple of Base Units.",
-      "description_ja": "各増し玉サイズ。基本ユニット数に乗算されます。",
+      "description": "Add lot size in Base Units. Fixed uses this lot size every time; Linear Increment adds this many lots per step.",
+      "description_ja": "基本ユニット数を1ロットとした増し玉ロット数。固定では毎回このロット数、線形増加では段ごとにこのロット数ずつ増えます。",
       "default": 1,
       "minimum": 1,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "add_lot_progression_mode": {
+      "type": "string",
+      "title": "Add Lot Progression",
+      "title_ja": "増し玉ロット増加方式",
+      "description": "Fixed keeps every add at Add Lot Size. Linear Increment makes add sizes Add Lot Size, 2x, 3x, 4x... by add step.",
+      "description_ja": "固定は毎回「増し玉ロット数」のままです。線形増加は増し玉ごとに「増し玉ロット数、2倍、3倍、4倍...」と増やします。",
+      "enum": ["fixed", "linear_increment"],
+      "enum_labels": {
+        "fixed": "Fixed",
+        "linear_increment": "Linear Increment"
+      },
+      "enum_labels_ja": {
+        "fixed": "固定",
+        "linear_increment": "線形増加"
+      },
+      "default": "fixed",
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
@@ -198,8 +253,8 @@
       "type": "string",
       "title": "Add Unit Allocation",
       "title_ja": "増し玉数量配分",
-      "description": "Fixed keeps the legacy add_lot_size behavior. Remaining Linear divides remaining capacity up to Max Net Units across remaining add steps.",
-      "description_ja": "固定は従来の増し玉ロット設定を使います。残余線形は最大ネットユニットまでの残り余力を残り増し玉段数へ均等配分します。",
+      "description": "Fixed uses Add Lot Progression. Remaining Linear divides remaining capacity up to Max Net Units across remaining add steps.",
+      "description_ja": "固定は増し玉ロット増加方式に従います。残余線形は最大ネットユニットまでの残り余力を残り増し玉段数へ均等配分します。",
       "enum": ["fixed", "remaining_linear"],
       "enum_labels": { "fixed": "Fixed", "remaining_linear": "Remaining Linear" },
       "enum_labels_ja": { "fixed": "固定", "remaining_linear": "残余線形" },
@@ -426,28 +481,6 @@
       "group": "Average Add Interval",
       "group_ja": "平均価格ベース増し玉間隔"
     },
-    "atr_period": {
-      "type": "integer",
-      "title": "ATR Period",
-      "title_ja": "ATR期間",
-      "description": "Runtime metrics period used for volatility-aware add intervals and guards.",
-      "description_ja": "ボラティリティ連動の増し玉間隔とガードに使う実行時ATR期間。",
-      "default": 14,
-      "minimum": 1,
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
-    },
-    "atr_baseline_period": {
-      "type": "integer",
-      "title": "ATR Baseline Period",
-      "title_ja": "ATR基準期間",
-      "description": "Baseline ATR period for volatility multiplier checks.",
-      "description_ja": "ボラティリティ倍率判定に使う基準ATR期間。",
-      "default": 96,
-      "minimum": 1,
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
-    },
     "adaptive_interval_enabled": {
       "type": "boolean",
       "title": "Adaptive Add Interval",
@@ -455,77 +488,150 @@
       "description": "Scale add intervals with current volatility. Low volatility narrows intervals; high volatility widens them.",
       "description_ja": "現在のボラティリティで増し玉間隔を拡縮します。低ボラでは狭く、荒い相場では広くします。",
       "default": false,
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
+    },
+    "adaptive_interval_atr_period": {
+      "type": "integer",
+      "title": "Adaptive Interval ATR Period",
+      "title_ja": "連動増し玉 現在ATR期間",
+      "description": "Current ATR period used only to scale adaptive add intervals.",
+      "description_ja": "ボラティリティ連動増し玉間隔だけで使う現在ATRの期間です。",
+      "default": 14,
+      "minimum": 1,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
+    },
+    "adaptive_interval_atr_baseline_period": {
+      "type": "integer",
+      "title": "Adaptive Interval Baseline ATR Period",
+      "title_ja": "連動増し玉 基準ATR期間",
+      "description": "Baseline ATR period used only to scale adaptive add intervals.",
+      "description_ja": "ボラティリティ連動増し玉間隔だけで使う基準ATRの期間です。",
+      "default": 96,
+      "minimum": 1,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
+    },
+    "adaptive_interval_volatility_ema_period": {
+      "type": "integer",
+      "title": "Adaptive Interval Tick Volatility EMA Period",
+      "title_ja": "連動増し玉 TickボラティリティEMA期間",
+      "description": "Fallback tick-volatility period used only by adaptive add intervals before ATR metrics are available.",
+      "description_ja": "ATRメトリクスが未確定の間、ボラティリティ連動増し玉間隔だけで使う代替Tickボラティリティ期間です。",
+      "default": 60,
+      "minimum": 1,
+      "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
     },
     "adaptive_interval_reference_pips": {
       "type": "number",
       "title": "Adaptive Reference Volatility (pips)",
-      "title_ja": "適応間隔 基準ボラティリティ（pips）",
+      "title_ja": "基準ATR未確定時の代替基準（pips）",
+      "description": "Fallback reference used only until baseline ATR is available.",
+      "description_ja": "基準ATRがまだ計算できない間だけ、連動増し玉間隔の基準値として使います。",
       "default": 10,
       "minimum": 0.1,
       "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
     },
     "adaptive_interval_min_multiplier": {
       "type": "number",
       "title": "Adaptive Min Multiplier",
       "title_ja": "適応間隔 最小倍率",
+      "description": "Lower clamp for current ATR divided by baseline ATR.",
+      "description_ja": "現在ATR ÷ 基準ATRで求めた連動倍率の下限です。",
       "default": 0.5,
       "minimum": 0.01,
       "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
     },
     "adaptive_interval_max_multiplier": {
       "type": "number",
       "title": "Adaptive Max Multiplier",
       "title_ja": "適応間隔 最大倍率",
+      "description": "Upper clamp for current ATR divided by baseline ATR.",
+      "description_ja": "現在ATR ÷ 基準ATRで求めた連動倍率の上限です。",
       "default": 2.5,
       "minimum": 0.01,
       "dependsOn": { "field": "adaptive_interval_enabled", "values": [true] },
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
+      "group": "Adaptive Add Interval",
+      "group_ja": "ボラティリティ連動増し玉間隔"
     },
     "volatility_guard_enabled": {
       "type": "boolean",
       "title": "Block Adds on Extreme Volatility",
       "title_ja": "異常ボラティリティ時の増し玉停止",
+      "description": "Stop adding when this guard's own current ATR exceeds its configured absolute or baseline-multiplier limit.",
+      "description_ja": "このガード専用の現在ATRが、絶対上限または専用基準ATR倍率上限を超えた場合に増し玉を停止します。",
       "default": false,
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
+    },
+    "volatility_guard_atr_period": {
+      "type": "integer",
+      "title": "Add Guard ATR Period",
+      "title_ja": "増し玉停止 現在ATR期間",
+      "description": "Current ATR period used only by the add volatility guard.",
+      "description_ja": "異常ボラティリティ時の増し玉停止だけで使う現在ATRの期間です。",
+      "default": 14,
+      "minimum": 1,
+      "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
+    },
+    "volatility_guard_atr_baseline_period": {
+      "type": "integer",
+      "title": "Add Guard Baseline ATR Period",
+      "title_ja": "増し玉停止 基準ATR期間",
+      "description": "Baseline ATR period used only by the add volatility guard's multiplier check.",
+      "description_ja": "異常ボラティリティ時の増し玉停止の倍率判定だけで使う基準ATRの期間です。",
+      "default": 96,
+      "minimum": 1,
+      "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
+    },
+    "volatility_guard_volatility_ema_period": {
+      "type": "integer",
+      "title": "Add Guard Tick Volatility EMA Period",
+      "title_ja": "増し玉停止 TickボラティリティEMA期間",
+      "description": "Fallback tick-volatility period used only by the add volatility guard before ATR metrics are available.",
+      "description_ja": "ATRメトリクスが未確定の間、異常ボラティリティ時の増し玉停止だけで使う代替Tickボラティリティ期間です。",
+      "default": 60,
+      "minimum": 1,
+      "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
     },
     "volatility_guard_max_atr_pips": {
       "type": "number",
       "title": "Max ATR for Adds (pips)",
       "title_ja": "増し玉最大ATR（pips）",
+      "description": "Block adds when the add guard's current ATR is above this absolute pips value.",
+      "description_ja": "増し玉停止専用の現在ATRがこのpips値を超えた場合に増し玉を停止します。",
       "default": 25,
       "minimum": 0.1,
       "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
     },
     "volatility_guard_max_atr_multiplier": {
       "type": "number",
       "title": "Max ATR Multiplier for Adds",
       "title_ja": "増し玉最大ATR倍率",
+      "description": "Block adds when the add guard's current ATR is greater than its baseline ATR multiplied by this value.",
+      "description_ja": "増し玉停止専用の現在ATRが「専用基準ATR × この倍率」を超えた場合に増し玉を停止します。",
       "default": 3,
       "minimum": 0.1,
       "dependsOn": { "field": "volatility_guard_enabled", "values": [true] },
-      "group": "Add Safety Gates",
-      "group_ja": "増し玉安全ゲート"
-    },
-    "volatility_ema_period": {
-      "type": "integer",
-      "title": "Tick Volatility EMA Period",
-      "title_ja": "TickボラティリティEMA期間",
-      "description": "Fallback volatility period used before ATR metrics are available.",
-      "description_ja": "ATRメトリクスが未確定の間に使う代替ボラティリティ期間。",
-      "default": 60,
-      "minimum": 1,
-      "group": "Volatility Controls",
-      "group_ja": "ボラティリティ制御"
+      "group": "Add Volatility Guard",
+      "group_ja": "異常ボラティリティ時の増し玉停止"
     },
     "spread_guard_enabled": {
       "type": "boolean",

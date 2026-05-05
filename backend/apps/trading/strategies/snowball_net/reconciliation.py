@@ -188,10 +188,22 @@ def _recalculate_add_count(
     if extra_units <= 0:
         return 0
 
-    if config.add_unit_allocation_mode == "fixed":
+    if config.add_unit_allocation_mode == "fixed" and config.add_lot_progression_mode == "fixed":
         add_units = max(1, config.add_units)
         estimated = (extra_units + add_units - 1) // add_units
         return min(config.max_add_count, estimated)
+
+    if (
+        config.add_unit_allocation_mode == "fixed"
+        and config.add_lot_progression_mode == "linear_increment"
+    ):
+        add_units = max(1, config.add_units)
+        cumulative = 0
+        for step in range(1, config.max_add_count + 1):
+            cumulative += add_units * step
+            if cumulative >= extra_units:
+                return min(config.max_add_count, max(current, step))
+        return config.max_add_count
 
     # Remaining-linear allocations are not invertible from units alone. Keep a
     # persisted count when it is available, otherwise choose a conservative
