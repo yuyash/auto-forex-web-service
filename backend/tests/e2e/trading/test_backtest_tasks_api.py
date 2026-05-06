@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, ExecutionState, TaskLog
+from apps.trading.models import BacktestTask, ExecutionState, TaskExecutionSnapshot, TaskLog
 
 
 def _create_backtest(client, config_id, name):
@@ -234,6 +234,23 @@ class TestBacktestTasks:
             current_balance=Decimal("10000.0000000000"),
             ticks_processed=42,
         )
+        TaskExecutionSnapshot.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            summary={
+                "timestamp": None,
+                "pnl": {"realized": "0", "unrealized": "0"},
+                "counts": {},
+                "execution": {
+                    "current_balance": "10000.0000000000",
+                    "ticks_processed": 42,
+                },
+                "tick": {},
+                "task": {"status": "stopped"},
+            },
+            metrics={"current_balance": "10000.0000000000"},
+        )
 
         resp = authenticated_client.post(
             f"/api/trading/tasks/backtest/{task_id}/adjust-balance/",
@@ -244,6 +261,20 @@ class TestBacktestTasks:
         assert resp.status_code == 200, resp.data
         state.refresh_from_db()
         assert state.current_balance == Decimal("11000.0000000000")
+        snapshot = TaskExecutionSnapshot.objects.get(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+        )
+        assert snapshot.summary["execution"]["current_balance"] == "11000.0000000000"
+        assert snapshot.metrics["current_balance"] == "11000.0000000000"
+
+        summary_resp = authenticated_client.get(
+            f"/api/trading/tasks/backtest/{task_id}/summary/",
+            {"execution_id": str(execution_id)},
+        )
+        assert summary_resp.status_code == 200, summary_resp.data
+        assert summary_resp.data["execution"]["current_balance"] == "11000.0000000000"
 
     def test_adjust_balance_requires_resumable_task(self, authenticated_client, strategy_config):
         task_id = _create_backtest(
