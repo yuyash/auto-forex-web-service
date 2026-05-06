@@ -88,7 +88,7 @@ def _abs_decimal(value: Any) -> Decimal:
 
 
 def _account_max_order_units(account: Any, policy: LiveTradingPolicy) -> int:
-    if not bool(getattr(account, "live_max_order_guard_enabled", True)):
+    if not bool(getattr(account, "live_max_order_guard_enabled", False)):
         return 0
 
     account_limit = getattr(account, "live_max_order_units", None)

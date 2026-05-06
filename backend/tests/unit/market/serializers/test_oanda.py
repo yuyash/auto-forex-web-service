@@ -34,7 +34,9 @@ class TestOandaAccountsSerializerUnit:
         mock_account.snapshot_refresh_status_updated_at = None
         mock_account.live_max_exposure_guard_enabled = False
         mock_account.live_max_estimated_exposure_units = 200000
-        mock_account.live_max_order_guard_enabled = True
+        mock_account.live_max_initial_order_guard_enabled = True
+        mock_account.live_max_initial_order_units = 10000
+        mock_account.live_max_order_guard_enabled = False
         mock_account.live_max_order_units = 10000
         mock_account.is_active = True
         mock_account.is_default = False

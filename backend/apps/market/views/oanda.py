@@ -85,6 +85,8 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     )
     live_max_exposure_guard_enabled = serializers.BooleanField(required=False)
     live_max_estimated_exposure_units = serializers.IntegerField(required=False)
+    live_max_initial_order_guard_enabled = serializers.BooleanField(required=False)
+    live_max_initial_order_units = serializers.IntegerField(required=False)
     live_max_order_guard_enabled = serializers.BooleanField(required=False)
     live_max_order_units = serializers.IntegerField(required=False)
 
@@ -112,6 +114,8 @@ OandaAccountUpdateRequestSerializer = inline_serializer(
         "currency": serializers.CharField(required=False),
         "live_max_exposure_guard_enabled": serializers.BooleanField(required=False),
         "live_max_estimated_exposure_units": serializers.IntegerField(required=False),
+        "live_max_initial_order_guard_enabled": serializers.BooleanField(required=False),
+        "live_max_initial_order_units": serializers.IntegerField(required=False),
         "live_max_order_guard_enabled": serializers.BooleanField(required=False),
         "live_max_order_units": serializers.IntegerField(required=False),
         "is_active": serializers.BooleanField(required=False),

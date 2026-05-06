@@ -207,6 +207,26 @@ export function AccountSummaryCard({
           )}
           <Box>
             <Typography variant="body2" color="text.secondary">
+              {t('settings:accounts.maxInitialOrderUnitsGuard')}
+            </Typography>
+            <Typography variant="body1">
+              {account.live_max_initial_order_guard_enabled
+                ? t('settings:accounts.enabled')
+                : t('settings:accounts.disabled')}
+            </Typography>
+          </Box>
+          {account.live_max_initial_order_guard_enabled && (
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {t('settings:accounts.maxInitialOrderUnits')}
+              </Typography>
+              <Typography variant="body1">
+                {account.live_max_initial_order_units ?? '\u2014'}
+              </Typography>
+            </Box>
+          )}
+          <Box>
+            <Typography variant="body2" color="text.secondary">
               {t('settings:accounts.maxOrderUnitsGuard')}
             </Typography>
             <Typography variant="body1">

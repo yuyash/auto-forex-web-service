@@ -228,7 +228,9 @@ class TestOandaAccountDetailView:
         assert response.data["account_id"] == "101-001-1234567-005"
         assert response.data["live_max_exposure_guard_enabled"] is False
         assert response.data["live_max_estimated_exposure_units"] == 200000
-        assert response.data["live_max_order_guard_enabled"] is True
+        assert response.data["live_max_initial_order_guard_enabled"] is True
+        assert response.data["live_max_initial_order_units"] == 10000
+        assert response.data["live_max_order_guard_enabled"] is False
         assert response.data["live_max_order_units"] == 10000
 
     @patch("apps.market.services.accounts.OandaService")
@@ -284,6 +286,8 @@ class TestOandaAccountDetailView:
             "is_active": False,
             "live_max_exposure_guard_enabled": True,
             "live_max_estimated_exposure_units": 350000,
+            "live_max_initial_order_guard_enabled": True,
+            "live_max_initial_order_units": 20000,
             "live_max_order_guard_enabled": True,
             "live_max_order_units": 25000,
         }
@@ -294,6 +298,8 @@ class TestOandaAccountDetailView:
         assert response.data["is_active"] is False
         assert response.data["live_max_exposure_guard_enabled"] is True
         assert response.data["live_max_estimated_exposure_units"] == 350000
+        assert response.data["live_max_initial_order_guard_enabled"] is True
+        assert response.data["live_max_initial_order_units"] == 20000
         assert response.data["live_max_order_guard_enabled"] is True
         assert response.data["live_max_order_units"] == 25000
 
@@ -302,6 +308,8 @@ class TestOandaAccountDetailView:
         assert account.is_active is False
         assert account.live_max_exposure_guard_enabled is True
         assert account.live_max_estimated_exposure_units == 350000
+        assert account.live_max_initial_order_guard_enabled is True
+        assert account.live_max_initial_order_units == 20000
         assert account.live_max_order_guard_enabled is True
         assert account.live_max_order_units == 25000
         mock_invalidate.assert_called_once_with({account.api_hostname})

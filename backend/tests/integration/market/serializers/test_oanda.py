@@ -37,7 +37,9 @@ class TestOandaAccountsSerializer:
         assert float(data["balance"]) == 10000.00
         assert data["live_max_exposure_guard_enabled"] is False
         assert data["live_max_estimated_exposure_units"] == 200000
-        assert data["live_max_order_guard_enabled"] is True
+        assert data["live_max_initial_order_guard_enabled"] is True
+        assert data["live_max_initial_order_units"] == 10000
+        assert data["live_max_order_guard_enabled"] is False
         assert data["live_max_order_units"] == 10000
         assert "api_token" not in data  # Should not be in output
 
@@ -194,6 +196,60 @@ class TestOandaAccountsSerializer:
         assert updated_account.live_max_order_guard_enabled is True
         assert updated_account.live_max_order_units == 25000
 
+    def test_update_live_max_initial_order_units(self, user: Any) -> None:
+        """Test updating account-level initial-order units limit."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-021",
+            api_type=ApiType.PRACTICE,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.put("/")
+        request.user = user
+
+        serializer = OandaAccountsSerializer(
+            account,
+            data={
+                "live_max_initial_order_guard_enabled": True,
+                "live_max_initial_order_units": 25000,
+            },
+            partial=True,
+            context={"request": request},
+        )
+        assert serializer.is_valid(), serializer.errors
+
+        updated_account = serializer.save()
+        assert updated_account.live_max_initial_order_guard_enabled is True
+        assert updated_account.live_max_initial_order_units == 25000
+
+    def test_disabled_live_max_initial_order_guard_allows_zero_limit(self, user: Any) -> None:
+        """Test account-level initial-order units guard can be disabled."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-022",
+            api_type=ApiType.PRACTICE,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.put("/")
+        request.user = user
+
+        serializer = OandaAccountsSerializer(
+            account,
+            data={
+                "live_max_initial_order_guard_enabled": False,
+                "live_max_initial_order_units": 0,
+            },
+            partial=True,
+            context={"request": request},
+        )
+        assert serializer.is_valid(), serializer.errors
+
+        updated_account = serializer.save()
+        assert updated_account.live_max_initial_order_guard_enabled is False
+        assert updated_account.live_max_initial_order_units == 0
+
     def test_disabled_live_max_order_guard_allows_zero_limit(self, user: Any) -> None:
         """Test account-level single-order units guard can be disabled."""
         account = OandaAccounts.objects.create(
@@ -238,6 +294,30 @@ class TestOandaAccountsSerializer:
         )
         assert not serializer.is_valid()
         assert "live_max_order_units" in serializer.errors
+
+    def test_live_max_initial_order_units_requires_positive_limit(self, user: Any) -> None:
+        """Test account-level initial-order units limit validation."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-023",
+            api_type=ApiType.PRACTICE,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.put("/")
+        request.user = user
+
+        serializer = OandaAccountsSerializer(
+            account,
+            data={
+                "live_max_initial_order_guard_enabled": True,
+                "live_max_initial_order_units": 0,
+            },
+            partial=True,
+            context={"request": request},
+        )
+        assert not serializer.is_valid()
+        assert "live_max_initial_order_units" in serializer.errors
 
     def test_enabled_live_max_exposure_guard_requires_positive_limit(self, user: Any) -> None:
         """Test account-level max gross units guard limit validation."""

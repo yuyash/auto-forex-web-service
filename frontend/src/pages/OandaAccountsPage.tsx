@@ -74,12 +74,15 @@ interface AccountFormData {
   api_type: 'practice' | 'live';
   live_max_exposure_guard_enabled: boolean;
   live_max_estimated_exposure_units: string;
+  live_max_initial_order_guard_enabled: boolean;
+  live_max_initial_order_units: string;
   live_max_order_guard_enabled: boolean;
   live_max_order_units: string;
 }
 
 const DEFAULT_ACCOUNT_CURRENCY = 'USD';
 const DEFAULT_MAX_GROSS_UNITS = '200000';
+const DEFAULT_MAX_INITIAL_ORDER_UNITS = '10000';
 const DEFAULT_MAX_ORDER_UNITS = '10000';
 
 const resolveCurrencyCode = (currency?: string | null) => {
@@ -327,6 +330,18 @@ function AccountCard({
                 variant="outlined"
               />
             )}
+            {a.live_max_initial_order_guard_enabled && (
+              <Chip
+                label={t('settings:accounts.maxInitialOrderUnitsChip', {
+                  defaultValue: 'Max Initial {{units}}',
+                  units: formatNumber(a.live_max_initial_order_units ?? 0, {
+                    maximumFractionDigits: 0,
+                  }),
+                })}
+                color="secondary"
+                variant="outlined"
+              />
+            )}
             {a.live_max_order_guard_enabled && (
               <Chip
                 label={t('settings:accounts.maxOrderUnitsChip', {
@@ -463,7 +478,9 @@ export default function OandaAccountsPage() {
     api_type: 'practice',
     live_max_exposure_guard_enabled: false,
     live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
-    live_max_order_guard_enabled: true,
+    live_max_initial_order_guard_enabled: true,
+    live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
+    live_max_order_guard_enabled: false,
     live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
   });
   const [isDefault, setIsDefault] = useState(false);
@@ -491,7 +508,9 @@ export default function OandaAccountsPage() {
       api_type: 'practice',
       live_max_exposure_guard_enabled: false,
       live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
-      live_max_order_guard_enabled: true,
+      live_max_initial_order_guard_enabled: true,
+      live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
+      live_max_order_guard_enabled: false,
       live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
     });
     setIsDefault(!hasAnyAccount);
@@ -512,8 +531,14 @@ export default function OandaAccountsPage() {
         account.live_max_estimated_exposure_units ??
           Number(DEFAULT_MAX_GROSS_UNITS)
       ),
+      live_max_initial_order_guard_enabled:
+        account.live_max_initial_order_guard_enabled ?? true,
+      live_max_initial_order_units: String(
+        account.live_max_initial_order_units ??
+          Number(DEFAULT_MAX_INITIAL_ORDER_UNITS)
+      ),
       live_max_order_guard_enabled:
-        account.live_max_order_guard_enabled ?? true,
+        account.live_max_order_guard_enabled ?? false,
       live_max_order_units: String(
         account.live_max_order_units ?? Number(DEFAULT_MAX_ORDER_UNITS)
       ),
@@ -533,7 +558,9 @@ export default function OandaAccountsPage() {
       api_type: 'practice',
       live_max_exposure_guard_enabled: false,
       live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
-      live_max_order_guard_enabled: true,
+      live_max_initial_order_guard_enabled: true,
+      live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
+      live_max_order_guard_enabled: false,
       live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
     });
     setIsDefault(false);
@@ -557,6 +584,20 @@ export default function OandaAccountsPage() {
       ) {
         errors.live_max_estimated_exposure_units = t(
           'settings:accounts.maxGrossUnitsValidation'
+        );
+      }
+    }
+    if (formData.live_max_initial_order_guard_enabled) {
+      const maxInitialOrderUnits = Number(
+        formData.live_max_initial_order_units
+      );
+      if (
+        !Number.isInteger(maxInitialOrderUnits) ||
+        !Number.isFinite(maxInitialOrderUnits) ||
+        maxInitialOrderUnits <= 0
+      ) {
+        errors.live_max_initial_order_units = t(
+          'settings:accounts.maxInitialOrderUnitsValidation'
         );
       }
     }
@@ -586,14 +627,26 @@ export default function OandaAccountsPage() {
         is_default: isDefault,
         live_max_exposure_guard_enabled:
           formData.live_max_exposure_guard_enabled,
-        live_max_estimated_exposure_units: Number(
-          formData.live_max_estimated_exposure_units || DEFAULT_MAX_GROSS_UNITS
-        ),
+        live_max_initial_order_guard_enabled:
+          formData.live_max_initial_order_guard_enabled,
         live_max_order_guard_enabled: formData.live_max_order_guard_enabled,
-        live_max_order_units: Number(
-          formData.live_max_order_units || DEFAULT_MAX_ORDER_UNITS
-        ),
       };
+      if (formData.live_max_exposure_guard_enabled) {
+        payload.live_max_estimated_exposure_units = Number(
+          formData.live_max_estimated_exposure_units || DEFAULT_MAX_GROSS_UNITS
+        );
+      }
+      if (formData.live_max_initial_order_guard_enabled) {
+        payload.live_max_initial_order_units = Number(
+          formData.live_max_initial_order_units ||
+            DEFAULT_MAX_INITIAL_ORDER_UNITS
+        );
+      }
+      if (formData.live_max_order_guard_enabled) {
+        payload.live_max_order_units = Number(
+          formData.live_max_order_units || DEFAULT_MAX_ORDER_UNITS
+        );
+      }
       if (formData.api_token.trim()) {
         payload.api_token = formData.api_token;
       }
@@ -1065,6 +1118,38 @@ export default function OandaAccountsPage() {
                   }
                   error={!!formErrors.live_max_estimated_exposure_units}
                   helperText={formErrors.live_max_estimated_exposure_units}
+                  margin="normal"
+                  inputProps={{ min: 1, step: 1 }}
+                />
+              )}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.live_max_initial_order_guard_enabled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        live_max_initial_order_guard_enabled: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={t('settings:accounts.maxInitialOrderUnitsGuard')}
+              />
+              {formData.live_max_initial_order_guard_enabled && (
+                <TextField
+                  fullWidth
+                  label={t('settings:accounts.maxInitialOrderUnits')}
+                  type="number"
+                  value={formData.live_max_initial_order_units}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      live_max_initial_order_units: e.target.value,
+                    })
+                  }
+                  error={!!formErrors.live_max_initial_order_units}
+                  helperText={formErrors.live_max_initial_order_units}
                   margin="normal"
                   inputProps={{ min: 1, step: 1 }}
                 />
