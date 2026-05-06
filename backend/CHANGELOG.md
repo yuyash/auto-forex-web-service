@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.51.0...backend-v1.51.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **backtest:** refresh balance adjustment state ([#675](https://github.com/yuyash/auto-forex-web-service/issues/675)) ([f59ecb4](https://github.com/yuyash/auto-forex-web-service/commit/f59ecb4a6a27323d5325a9e5428433037bcb2455))
+
 ## [1.51.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.50.1...backend-v1.51.0) (2026-05-06)
 
 
