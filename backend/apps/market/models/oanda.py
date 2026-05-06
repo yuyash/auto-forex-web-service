@@ -145,6 +145,19 @@ class OandaAccounts(models.Model):
             "guard is enabled"
         ),
     )
+    live_max_order_units = models.PositiveIntegerField(
+        default=10000,
+        help_text=(
+            "Account-specific maximum absolute units allowed for a single broker-bound order"
+        ),
+    )
+    live_max_order_guard_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether to enforce the account-specific maximum order units check before "
+            "submitting broker-bound orders on this account"
+        ),
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",

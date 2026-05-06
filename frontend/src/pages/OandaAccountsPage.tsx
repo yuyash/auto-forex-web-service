@@ -74,10 +74,13 @@ interface AccountFormData {
   api_type: 'practice' | 'live';
   live_max_exposure_guard_enabled: boolean;
   live_max_estimated_exposure_units: string;
+  live_max_order_guard_enabled: boolean;
+  live_max_order_units: string;
 }
 
 const DEFAULT_ACCOUNT_CURRENCY = 'USD';
 const DEFAULT_MAX_GROSS_UNITS = '200000';
+const DEFAULT_MAX_ORDER_UNITS = '10000';
 
 const resolveCurrencyCode = (currency?: string | null) => {
   if (!currency) return DEFAULT_ACCOUNT_CURRENCY;
@@ -269,7 +272,7 @@ function AccountCard({
             </Typography>
             <Typography variant="body1">{a.currency}</Typography>
           </Box>
-          <Box display="flex" gap={1}>
+          <Box display="flex" gap={1} flexWrap="wrap">
             <Chip
               label={
                 a.is_active
@@ -309,25 +312,33 @@ function AccountCard({
                 variant="outlined"
               />
             )}
-            <Chip
-              label={
-                a.live_max_exposure_guard_enabled
-                  ? t('settings:accounts.maxGrossUnitsChip', {
-                      defaultValue: 'Max Gross {{units}}',
-                      units: formatNumber(
-                        a.live_max_estimated_exposure_units ?? 0,
-                        {
-                          maximumFractionDigits: 0,
-                        }
-                      ),
-                    })
-                  : t('settings:accounts.maxGrossUnitsGuardOff')
-              }
-              color={
-                a.live_max_exposure_guard_enabled ? 'secondary' : 'default'
-              }
-              variant="outlined"
-            />
+            {a.live_max_exposure_guard_enabled && (
+              <Chip
+                label={t('settings:accounts.maxGrossUnitsChip', {
+                  defaultValue: 'Max Gross {{units}}',
+                  units: formatNumber(
+                    a.live_max_estimated_exposure_units ?? 0,
+                    {
+                      maximumFractionDigits: 0,
+                    }
+                  ),
+                })}
+                color="secondary"
+                variant="outlined"
+              />
+            )}
+            {a.live_max_order_guard_enabled && (
+              <Chip
+                label={t('settings:accounts.maxOrderUnitsChip', {
+                  defaultValue: 'Max Order {{units}}',
+                  units: formatNumber(a.live_max_order_units ?? 0, {
+                    maximumFractionDigits: 0,
+                  }),
+                })}
+                color="secondary"
+                variant="outlined"
+              />
+            )}
           </Box>
         </CardContent>
       </CardActionArea>
@@ -452,6 +463,8 @@ export default function OandaAccountsPage() {
     api_type: 'practice',
     live_max_exposure_guard_enabled: false,
     live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
+    live_max_order_guard_enabled: true,
+    live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
   });
   const [isDefault, setIsDefault] = useState(false);
   const [formErrors, setFormErrors] = useState<
@@ -478,6 +491,8 @@ export default function OandaAccountsPage() {
       api_type: 'practice',
       live_max_exposure_guard_enabled: false,
       live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
+      live_max_order_guard_enabled: true,
+      live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
     });
     setIsDefault(!hasAnyAccount);
     setFormErrors({});
@@ -497,6 +512,11 @@ export default function OandaAccountsPage() {
         account.live_max_estimated_exposure_units ??
           Number(DEFAULT_MAX_GROSS_UNITS)
       ),
+      live_max_order_guard_enabled:
+        account.live_max_order_guard_enabled ?? true,
+      live_max_order_units: String(
+        account.live_max_order_units ?? Number(DEFAULT_MAX_ORDER_UNITS)
+      ),
     });
     setIsDefault(account.is_default || false);
     setFormErrors({});
@@ -513,6 +533,8 @@ export default function OandaAccountsPage() {
       api_type: 'practice',
       live_max_exposure_guard_enabled: false,
       live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
+      live_max_order_guard_enabled: true,
+      live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
     });
     setIsDefault(false);
     setFormErrors({});
@@ -538,6 +560,18 @@ export default function OandaAccountsPage() {
         );
       }
     }
+    if (formData.live_max_order_guard_enabled) {
+      const maxOrderUnits = Number(formData.live_max_order_units);
+      if (
+        !Number.isInteger(maxOrderUnits) ||
+        !Number.isFinite(maxOrderUnits) ||
+        maxOrderUnits <= 0
+      ) {
+        errors.live_max_order_units = t(
+          'settings:accounts.maxOrderUnitsValidation'
+        );
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -554,6 +588,10 @@ export default function OandaAccountsPage() {
           formData.live_max_exposure_guard_enabled,
         live_max_estimated_exposure_units: Number(
           formData.live_max_estimated_exposure_units || DEFAULT_MAX_GROSS_UNITS
+        ),
+        live_max_order_guard_enabled: formData.live_max_order_guard_enabled,
+        live_max_order_units: Number(
+          formData.live_max_order_units || DEFAULT_MAX_ORDER_UNITS
         ),
       };
       if (formData.api_token.trim()) {
@@ -1013,23 +1051,56 @@ export default function OandaAccountsPage() {
                 }
                 label={t('settings:accounts.maxGrossUnitsGuard')}
               />
-              <TextField
-                fullWidth
-                label={t('settings:accounts.maxGrossUnits')}
-                type="number"
-                value={formData.live_max_estimated_exposure_units}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    live_max_estimated_exposure_units: e.target.value,
-                  })
+              {formData.live_max_exposure_guard_enabled && (
+                <TextField
+                  fullWidth
+                  label={t('settings:accounts.maxGrossUnits')}
+                  type="number"
+                  value={formData.live_max_estimated_exposure_units}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      live_max_estimated_exposure_units: e.target.value,
+                    })
+                  }
+                  error={!!formErrors.live_max_estimated_exposure_units}
+                  helperText={formErrors.live_max_estimated_exposure_units}
+                  margin="normal"
+                  inputProps={{ min: 1, step: 1 }}
+                />
+              )}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.live_max_order_guard_enabled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        live_max_order_guard_enabled: e.target.checked,
+                      })
+                    }
+                  />
                 }
-                error={!!formErrors.live_max_estimated_exposure_units}
-                helperText={formErrors.live_max_estimated_exposure_units}
-                margin="normal"
-                disabled={!formData.live_max_exposure_guard_enabled}
-                inputProps={{ min: 1, step: 1 }}
+                label={t('settings:accounts.maxOrderUnitsGuard')}
               />
+              {formData.live_max_order_guard_enabled && (
+                <TextField
+                  fullWidth
+                  label={t('settings:accounts.maxOrderUnits')}
+                  type="number"
+                  value={formData.live_max_order_units}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      live_max_order_units: e.target.value,
+                    })
+                  }
+                  error={!!formErrors.live_max_order_units}
+                  helperText={formErrors.live_max_order_units}
+                  margin="normal"
+                  inputProps={{ min: 1, step: 1 }}
+                />
+              )}
             </Box>
             <Box sx={{ mt: 2 }}>
               <Box display="flex" alignItems="center" gap={1}>

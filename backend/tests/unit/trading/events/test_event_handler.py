@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -30,6 +31,7 @@ def _make_order_service(task_type=TaskType.TRADING):
     svc.task = SimpleNamespace(id=uuid4(), execution_id=uuid4())
     svc.task_type = task_type
     svc.execution_id = svc.task.execution_id
+    svc.dry_run = False
     return svc
 
 
@@ -73,6 +75,36 @@ class TestEventHandlerInit:
         assert handler.position_map == {}
         assert handler._position_cache == {}
         assert handler.layer_position_ids == {}
+
+    def test_live_trade_timestamp_uses_order_fill_time(self):
+        handler = EventHandler(order_service=_make_order_service(), instrument="EUR_USD")
+        strategy_timestamp = datetime(2026, 5, 6, 4, 43, 40, tzinfo=UTC)
+        broker_fill_time = datetime(2026, 5, 6, 4, 57, 38, tzinfo=UTC)
+        order = MagicMock(filled_at=broker_fill_time)
+
+        assert (
+            handler._trade_execution_timestamp(
+                fallback_timestamp=strategy_timestamp,
+                order=order,
+            )
+            == broker_fill_time
+        )
+
+    def test_dry_run_trade_timestamp_keeps_strategy_timestamp(self):
+        order_service = _make_order_service()
+        order_service.dry_run = True
+        handler = EventHandler(order_service=order_service, instrument="EUR_USD")
+        strategy_timestamp = datetime(2026, 5, 6, 4, 43, 40, tzinfo=UTC)
+        simulator_fill_time = datetime(2026, 5, 6, 4, 57, 38, tzinfo=UTC)
+        order = MagicMock(filled_at=simulator_fill_time)
+
+        assert (
+            handler._trade_execution_timestamp(
+                fallback_timestamp=strategy_timestamp,
+                order=order,
+            )
+            == strategy_timestamp
+        )
 
 
 class TestHandleOpenPosition:

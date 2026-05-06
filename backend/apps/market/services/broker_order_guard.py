@@ -35,7 +35,7 @@ class BrokerOrderGuard:
         policy = get_live_trading_policy()
         self._validate_account_mode(account, policy)
         self._validate_instrument(instrument, policy)
-        self._validate_units(units, policy)
+        self._validate_units(units, policy, account)
 
     def _validate_account_mode(self, account: Any, policy: LiveTradingPolicy) -> None:
         api_type = str(getattr(account, "api_type", "")).strip().lower()
@@ -61,17 +61,22 @@ class BrokerOrderGuard:
             "Update TRADING_LIVE_ALLOWED_INSTRUMENTS to allow it."
         )
 
-    def _validate_units(self, units: Decimal | int | str, policy: LiveTradingPolicy) -> None:
+    def _validate_units(
+        self,
+        units: Decimal | int | str,
+        policy: LiveTradingPolicy,
+        account: Any,
+    ) -> None:
         abs_units = _abs_decimal(units)
         if abs_units <= 0:
             raise BrokerOrderGuardError("Order units must be non-zero.")
 
-        max_units = policy.max_order_units
+        max_units = _account_max_order_units(account, policy)
         if max_units and abs_units > Decimal(max_units):
             raise BrokerOrderGuardError(
                 "Order size exceeds the configured broker order limit "
                 f"({abs_units} > {max_units}). "
-                "Reduce order units or raise TRADING_LIVE_MAX_ORDER_UNITS."
+                "Reduce order units or raise the OANDA account maximum order units setting."
             )
 
 
@@ -80,3 +85,20 @@ def _abs_decimal(value: Any) -> Decimal:
         return abs(Decimal(str(value)))
     except (InvalidOperation, ValueError):
         raise BrokerOrderGuardError("Order units must be numeric.") from None
+
+
+def _account_max_order_units(account: Any, policy: LiveTradingPolicy) -> int:
+    if not bool(getattr(account, "live_max_order_guard_enabled", True)):
+        return 0
+
+    account_limit = getattr(account, "live_max_order_units", None)
+    if isinstance(account_limit, bool) or account_limit is None:
+        return policy.max_order_units
+    if isinstance(account_limit, int):
+        return max(account_limit, 0)
+    if isinstance(account_limit, str):
+        try:
+            return max(int(account_limit), 0)
+        except ValueError:
+            return policy.max_order_units
+    return policy.max_order_units

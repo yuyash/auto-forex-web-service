@@ -47,6 +47,8 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "snapshot_refresh_status_updated_at",
         "live_max_exposure_guard_enabled",
         "live_max_estimated_exposure_units",
+        "live_max_order_guard_enabled",
+        "live_max_order_units",
         "is_active",
         "created_at",
     ]
@@ -54,6 +56,7 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "api_type",
         "jurisdiction",
         "live_max_exposure_guard_enabled",
+        "live_max_order_guard_enabled",
         "is_active",
         "snapshot_refresh_status",
         OandaAccountSnapshotStateFilter,
@@ -112,6 +115,8 @@ class OandaAccountAdmin(admin.ModelAdmin):
                 "fields": (
                     "live_max_exposure_guard_enabled",
                     "live_max_estimated_exposure_units",
+                    "live_max_order_guard_enabled",
+                    "live_max_order_units",
                 )
             },
         ),

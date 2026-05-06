@@ -195,14 +195,36 @@ export function AccountSummaryCard({
                 : t('settings:accounts.disabled')}
             </Typography>
           </Box>
+          {account.live_max_exposure_guard_enabled && (
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {t('settings:accounts.maxGrossUnits')}
+              </Typography>
+              <Typography variant="body1">
+                {account.live_max_estimated_exposure_units ?? '\u2014'}
+              </Typography>
+            </Box>
+          )}
           <Box>
             <Typography variant="body2" color="text.secondary">
-              {t('settings:accounts.maxGrossUnits')}
+              {t('settings:accounts.maxOrderUnitsGuard')}
             </Typography>
             <Typography variant="body1">
-              {account.live_max_estimated_exposure_units ?? '\u2014'}
+              {account.live_max_order_guard_enabled
+                ? t('settings:accounts.enabled')
+                : t('settings:accounts.disabled')}
             </Typography>
           </Box>
+          {account.live_max_order_guard_enabled && (
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {t('settings:accounts.maxOrderUnits')}
+              </Typography>
+              <Typography variant="body1">
+                {account.live_max_order_units ?? '\u2014'}
+              </Typography>
+            </Box>
+          )}
           <Box>
             <Typography variant="body2" color="text.secondary">
               {t('settings:accounts.snapshotRefreshedAt', 'Snapshot refreshed')}
