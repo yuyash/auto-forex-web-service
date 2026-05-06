@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -216,3 +217,49 @@ class TestGetOrderHistory:
         service.get_order_history(limit=25)
 
         mock_ordered_qs.__getitem__.assert_called_once_with(slice(None, 25))
+
+
+class TestOrderExecutionTime:
+    """Tests for persisted order execution timestamps."""
+
+    @patch("apps.trading.order.OandaService")
+    def test_live_order_uses_broker_fill_time_over_tick_timestamp(self, mock_oanda_svc):
+        account = MagicMock()
+        account.account_id = "001-001-123"
+        task = MagicMock()
+        task.id = uuid4()
+        task.execution_id = uuid4()
+        task.__class__.__name__ = "TradingTask"
+        service = OrderService(account=account, task=task, dry_run=False)
+
+        tick_timestamp = datetime(2026, 5, 6, 4, 43, 40, tzinfo=UTC)
+        broker_fill_time = datetime(2026, 5, 6, 4, 57, 38, tzinfo=UTC)
+        oanda_order = MagicMock(fill_time=broker_fill_time, create_time=None)
+
+        assert (
+            service._order_execution_time(
+                oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
+            )
+            == broker_fill_time
+        )
+
+    @patch("apps.trading.order.OandaService")
+    def test_dry_run_order_keeps_strategy_tick_timestamp(self, mock_oanda_svc):
+        task = MagicMock()
+        task.id = uuid4()
+        task.execution_id = uuid4()
+        task.__class__.__name__ = "BacktestTask"
+        service = OrderService(account=None, task=task, dry_run=True)
+
+        tick_timestamp = datetime(2026, 5, 6, 4, 43, 40, tzinfo=UTC)
+        simulator_fill_time = datetime(2026, 5, 6, 4, 57, 38, tzinfo=UTC)
+        oanda_order = MagicMock(fill_time=simulator_fill_time, create_time=None)
+
+        assert (
+            service._order_execution_time(
+                oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
+            )
+            == tick_timestamp
+        )

@@ -10,8 +10,19 @@ import pytest
 from apps.market.services.broker_order_guard import BrokerOrderGuard, BrokerOrderGuardError
 
 
-def _account(*, api_type: str = "practice", is_active: bool = True) -> SimpleNamespace:
-    return SimpleNamespace(api_type=api_type, is_active=is_active)
+def _account(
+    *,
+    api_type: str = "practice",
+    is_active: bool = True,
+    live_max_order_guard_enabled: bool | None = None,
+    live_max_order_units: int | None = None,
+) -> SimpleNamespace:
+    kwargs = {"api_type": api_type, "is_active": is_active}
+    if live_max_order_guard_enabled is not None:
+        kwargs["live_max_order_guard_enabled"] = live_max_order_guard_enabled
+    if live_max_order_units is not None:
+        kwargs["live_max_order_units"] = live_max_order_units
+    return SimpleNamespace(**kwargs)
 
 
 def test_dry_run_bypasses_broker_order_guard(settings):
@@ -81,4 +92,34 @@ def test_allows_configured_order(settings):
         dry_run=False,
         instrument="USD_JPY",
         units=Decimal("1000"),
+    )
+
+
+def test_account_order_limit_overrides_global_setting(settings):
+    settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
+
+    BrokerOrderGuard().validate_order(
+        account=_account(live_max_order_units=1200),
+        dry_run=False,
+        instrument="USD_JPY",
+        units=Decimal("1200"),
+    )
+
+    with pytest.raises(BrokerOrderGuardError, match="Order size exceeds"):
+        BrokerOrderGuard().validate_order(
+            account=_account(live_max_order_units=1200),
+            dry_run=False,
+            instrument="USD_JPY",
+            units=Decimal("1201"),
+        )
+
+
+def test_account_order_limit_can_be_disabled(settings):
+    settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
+
+    BrokerOrderGuard().validate_order(
+        account=_account(live_max_order_guard_enabled=False, live_max_order_units=1000),
+        dry_run=False,
+        instrument="USD_JPY",
+        units=Decimal("100000"),
     )

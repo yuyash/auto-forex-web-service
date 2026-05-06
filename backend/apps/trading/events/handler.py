@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import datetime
 from decimal import Decimal
 from logging import Logger, getLogger
 
@@ -289,6 +290,17 @@ class EventHandler:
             is_rebuild=is_rebuild,
         )
         return trade
+
+    def _trade_execution_timestamp(
+        self,
+        *,
+        fallback_timestamp: datetime | None,
+        order: Order | None,
+    ) -> datetime:
+        filled_at = getattr(order, "filled_at", None)
+        if not self.order_service.dry_run and isinstance(filled_at, datetime):
+            return filled_at
+        return fallback_timestamp or dj_timezone.now()
 
     def handle_event(self, trading_event: TradingEvent) -> EventExecutionResult:
         """Handle a single trading event by executing appropriate order.
@@ -614,7 +626,10 @@ class EventHandler:
             instrument=position.instrument,
             price=position.entry_price,
             execution_method=str(event.event_type.value),
-            timestamp=event.timestamp,
+            timestamp=self._trade_execution_timestamp(
+                fallback_timestamp=event.timestamp,
+                order=order,
+            ),
             layer_index=event.layer_number,
             retracement_count=event.retracement_count,
             oanda_trade_id=position.oanda_trade_id,
@@ -666,7 +681,7 @@ class EventHandler:
                 "instrument": position.instrument,
                 "units": event.units,
                 "entry_price": str(position.entry_price),
-                "entry_time": str(event.timestamp),
+                "entry_time": str(position.entry_time),
                 "layer_index": event.layer_number,
                 "retracement_count": event.retracement_count,
                 "planned_exit_price": str(position.planned_exit_price)
@@ -1003,7 +1018,10 @@ class EventHandler:
                     if event.close_reason in self._PROTECTION_CLOSE_REASONS
                     else str(event.event_type.value)
                 ),
-                timestamp=event.timestamp,
+                timestamp=self._trade_execution_timestamp(
+                    fallback_timestamp=event.timestamp,
+                    order=close_order,
+                ),
                 layer_index=position.layer_index,
                 retracement_count=position.retracement_count,
                 oanda_trade_id=position.oanda_trade_id,
@@ -1217,7 +1235,10 @@ class EventHandler:
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
                     execution_method=str(event.event_type.value),
-                    timestamp=event.timestamp,
+                    timestamp=self._trade_execution_timestamp(
+                        fallback_timestamp=event.timestamp,
+                        order=close_order,
+                    ),
                     layer_index=position.layer_index,
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,
@@ -1333,7 +1354,7 @@ class EventHandler:
                         "instrument": self.instrument,
                         "units": units,
                         "entry_price": str(hedged.entry_price),
-                        "entry_time": str(event.timestamp),
+                        "entry_time": str(hedged.entry_time),
                         "layer_index": layer_index,
                         "open_reason": "volatility_hedge_neutralize",
                         "description": f"Hedge neutralize: {event.reason}",
@@ -1422,7 +1443,10 @@ class EventHandler:
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
                     execution_method=str(event.event_type.value),
-                    timestamp=event.timestamp,
+                    timestamp=self._trade_execution_timestamp(
+                        fallback_timestamp=event.timestamp,
+                        order=close_order,
+                    ),
                     layer_index=position.layer_index,
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,

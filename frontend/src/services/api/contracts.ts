@@ -195,6 +195,8 @@ export interface BackendAccount {
   oanda_account?: Record<string, unknown>;
   live_max_exposure_guard_enabled?: boolean;
   live_max_estimated_exposure_units?: number;
+  live_max_order_guard_enabled?: boolean;
+  live_max_order_units?: number;
 }
 
 export type BackendAccountSnapshotRefreshStatus =

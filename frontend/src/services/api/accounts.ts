@@ -46,6 +46,8 @@ function toAccount(account: BackendAccount): Account {
       account.live_max_exposure_guard_enabled ?? false,
     live_max_estimated_exposure_units:
       account.live_max_estimated_exposure_units ?? 200000,
+    live_max_order_guard_enabled: account.live_max_order_guard_enabled ?? true,
+    live_max_order_units: account.live_max_order_units ?? 10000,
     is_active: account.is_active ?? false,
   };
 }

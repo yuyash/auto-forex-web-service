@@ -253,14 +253,18 @@ class OrderService:
                 retracement_count=position.retracement_count,
             )
 
+            execution_time = self._order_execution_time(
+                oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
+            )
+
             # Update position
             if units is None or units >= abs(position.units):
                 # Full close
                 original_units = abs(position.units)
-                exit_time_value = tick_timestamp or oanda_order.fill_time or timezone.now()
                 position.close(
                     exit_price=oanda_order.price or Decimal("0"),
-                    exit_time=exit_time_value,  # type: ignore[arg-type]
+                    exit_time=execution_time,  # type: ignore[arg-type]
                 )
                 position.save()
 
@@ -301,10 +305,9 @@ class OrderService:
 
                 # If partial close reduced units to zero, treat as full close
                 if position.units == 0:
-                    exit_time_value = tick_timestamp or oanda_order.fill_time or timezone.now()
                     position.close(
                         exit_price=close_price,
-                        exit_time=exit_time_value,  # type: ignore[arg-type]
+                        exit_time=execution_time,  # type: ignore[arg-type]
                     )
 
                 position.save()
@@ -405,7 +408,10 @@ class OrderService:
             )
 
             # Create or update position first so we can link the order to it
-            entry_time = tick_timestamp or oanda_order.fill_time or timezone.now()
+            entry_time = self._order_execution_time(
+                oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
+            )
             position = self._create_or_update_position(
                 instrument=instrument,
                 direction=direction,
@@ -515,7 +521,10 @@ class OrderService:
             requested_price=requested_price,
             fill_price=oanda_order.price,
             status=OrderStatus.FILLED,
-            filled_at=tick_timestamp or oanda_order.fill_time,
+            filled_at=self._order_execution_time(
+                oanda_order=oanda_order,
+                tick_timestamp=tick_timestamp,
+            ),
             stop_loss=stop_loss,
             is_dry_run=self.dry_run,
             position=position,
@@ -523,6 +532,27 @@ class OrderService:
             retracement_count=retracement_count,
         )
         return order
+
+    def _order_execution_time(
+        self,
+        *,
+        oanda_order: OandaMarketOrder,
+        tick_timestamp: datetime | None,
+    ) -> datetime:
+        """Resolve the persisted execution timestamp for an order.
+
+        Backtests and dry-run trading intentionally use the strategy tick time
+        so simulations remain reproducible. Broker-bound orders must use the
+        broker fill time; otherwise a delayed tick/event can make a real order
+        look filled before it was submitted.
+        """
+        if self.dry_run and tick_timestamp is not None:
+            return tick_timestamp
+        if isinstance(oanda_order.fill_time, datetime):
+            return oanda_order.fill_time
+        if isinstance(oanda_order.create_time, datetime):
+            return oanda_order.create_time
+        return timezone.now()
 
     def _create_or_update_position(
         self,

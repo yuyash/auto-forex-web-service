@@ -1,11 +1,15 @@
 """OANDA account serializer."""
 
-from typing import Any
+from typing import Any, cast
 
 from rest_framework import serializers
 
 from apps.market.enums import ApiType, Jurisdiction
 from apps.market.models import OandaAccounts
+
+
+def _model_field_default(field_name: str) -> Any:
+    return cast(Any, OandaAccounts._meta.get_field(field_name)).default
 
 
 class OandaAccountsSerializer(serializers.ModelSerializer):
@@ -44,6 +48,8 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "snapshot_refresh_status_updated_at",
             "live_max_exposure_guard_enabled",
             "live_max_estimated_exposure_units",
+            "live_max_order_guard_enabled",
+            "live_max_order_units",
             "is_active",
             "is_default",
             "created_at",
@@ -97,11 +103,19 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
 
         exposure_guard_enabled = attrs.get(
             "live_max_exposure_guard_enabled",
-            getattr(self.instance, "live_max_exposure_guard_enabled", False),
+            getattr(
+                self.instance,
+                "live_max_exposure_guard_enabled",
+                _model_field_default("live_max_exposure_guard_enabled"),
+            ),
         )
         exposure_limit = attrs.get(
             "live_max_estimated_exposure_units",
-            getattr(self.instance, "live_max_estimated_exposure_units", None),
+            getattr(
+                self.instance,
+                "live_max_estimated_exposure_units",
+                _model_field_default("live_max_estimated_exposure_units"),
+            ),
         )
         if exposure_guard_enabled and (exposure_limit is None or int(exposure_limit) <= 0):
             raise serializers.ValidationError(
@@ -110,6 +124,27 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
                         "Set a positive maximum gross units value when the guard is enabled."
                     ]
                 }
+            )
+
+        order_guard_enabled = attrs.get(
+            "live_max_order_guard_enabled",
+            getattr(
+                self.instance,
+                "live_max_order_guard_enabled",
+                _model_field_default("live_max_order_guard_enabled"),
+            ),
+        )
+        order_limit = attrs.get(
+            "live_max_order_units",
+            getattr(
+                self.instance,
+                "live_max_order_units",
+                _model_field_default("live_max_order_units"),
+            ),
+        )
+        if order_guard_enabled and (order_limit is None or int(order_limit) <= 0):
+            raise serializers.ValidationError(
+                {"live_max_order_units": ["Set a positive maximum order units value."]}
             )
 
         return attrs

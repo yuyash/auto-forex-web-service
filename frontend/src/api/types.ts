@@ -46,6 +46,8 @@ export interface OandaAccounts {
   readonly unrealized_pnl?: string;
   live_max_exposure_guard_enabled?: boolean;
   live_max_estimated_exposure_units?: number;
+  live_max_order_guard_enabled?: boolean;
+  live_max_order_units?: number;
   is_active?: boolean;
   is_default?: boolean;
   readonly created_at?: string;
@@ -60,6 +62,8 @@ export interface OandaAccountsRequest {
   currency?: string;
   live_max_exposure_guard_enabled?: boolean;
   live_max_estimated_exposure_units?: number;
+  live_max_order_guard_enabled?: boolean;
+  live_max_order_units?: number;
   is_active?: boolean;
   is_default?: boolean;
 }
