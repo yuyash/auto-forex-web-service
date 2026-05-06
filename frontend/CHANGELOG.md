@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.1...frontend-v1.66.2) (2026-05-06)
+
+
+### Bug Fixes
+
+* **trading:** correct live order timestamps and account limits ([#677](https://github.com/yuyash/auto-forex-web-service/issues/677)) ([763fbf7](https://github.com/yuyash/auto-forex-web-service/commit/763fbf7087aad72fa6a0949a8220ddd2c20b7f13))
+
 ## [1.66.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.0...frontend-v1.66.1) (2026-05-06)
 
 
