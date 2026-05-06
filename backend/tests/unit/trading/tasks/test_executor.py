@@ -951,6 +951,7 @@ class TestTradingExecutorSafety:
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"
+        task.broker_drift_check_interval_seconds = 60
 
         with patch(
             "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
@@ -1048,7 +1049,11 @@ class TestTradingExecutorSafety:
                 data_source=MagicMock(),
             )
 
-        loop = ExecutionLoopState(state=MagicMock(), batch_count=5)
+        loop = ExecutionLoopState(
+            state=MagicMock(),
+            batch_count=5,
+            last_runtime_drift_check_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
         mock_reconciler_cls.return_value.detect_runtime_drift.return_value = ReconciliationReport(
             blockers=["broker trade missing"]
         )
@@ -1112,6 +1117,7 @@ class TestTradingExecutorSafety:
         task.celery_task_id = "celery-123"
         task.execution_run_id = 4
         task.oanda_account.balance = Decimal("10000")
+        task.live_tick_stale_guard_enabled = False
 
         engine = MagicMock()
         executor = TaskExecutor(
@@ -1125,6 +1131,7 @@ class TestTradingExecutorSafety:
 
         state = MagicMock()
         state.ticks_processed = 0
+        state.current_balance = Decimal("10000")
         state.strategy_state = {}
 
         strategy_event = MagicMock()
@@ -1264,6 +1271,277 @@ class TestCommonRuntimeMetrics:
         assert state.last_tick_ask == tick.ask
         assert state.last_tick_price == tick.mid
         assert state.strategy_state["metrics"]["ticks_processed"] == "42"
+
+
+class TestLiveTickDeliveryGuard:
+    """Live tick freshness diagnostics and stale-tick fail-fast behavior."""
+
+    def _make_executor(self):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.execution_id = uuid4()
+        task.config.config_dict = {}
+        task.config.strategy_type = ""
+        task.oanda_account.currency = "JPY"
+        task.live_tick_stale_guard_enabled = True
+        task.live_tick_max_age_seconds = 30
+        task.live_tick_status_log_interval_seconds = 60
+        task.oanda_account.live_tick_latency_metric_interval_seconds = 60
+
+        engine = MagicMock()
+        with patch.object(TaskExecutor, "_get_initial_balance", return_value=Decimal("100000")):
+            executor = TaskExecutor(
+                task=task,
+                engine=engine,
+                data_source=MagicMock(),
+                event_context=MagicMock(),
+                order_service=MagicMock(),
+                state_manager=MagicMock(),
+            )
+        return executor, engine
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-01-01 00:01:00", tz_offset=0)
+    def test_stale_live_tick_stops_before_strategy_processing(self, mock_handler):
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+
+        loop = ExecutionLoopState(state=state)
+        should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is True
+        assert loop.stopped_early is True
+        assert loop.is_error is True
+        assert loop.stop_reason.startswith("live_tick_stale:")
+        assert state.ticks_processed == 5
+        engine.on_tick.assert_not_called()
+        delivery = state.strategy_state["live_tick_delivery"]
+        assert delivery["status"] == "stale"
+        assert delivery["age_seconds"] == 60.0
+        assert delivery["max_age_seconds"] == 30
+        assert delivery["tick_timestamp"] == "2026-01-01T00:00:00+00:00"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-01-01 00:00:05", tz_offset=0)
+    def test_current_live_tick_records_delivery_status_and_processes_strategy(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+        engine.on_tick.return_value = StrategyResult.from_state(state)
+
+        with patch.object(executor, "save_events", return_value=[]):
+            loop = ExecutionLoopState(state=state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        engine.on_tick.assert_called_once()
+        assert state.ticks_processed == 6
+        delivery = state.strategy_state["live_tick_delivery"]
+        assert delivery["status"] == "ok"
+        assert delivery["age_seconds"] == 5.0
+        assert delivery["max_age_seconds"] == 30
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-01-01 00:01:00", tz_offset=0)
+    def test_disabled_live_tick_guard_records_status_but_processes_strategy(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        executor.task.live_tick_stale_guard_enabled = False
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+        engine.on_tick.return_value = StrategyResult.from_state(state)
+
+        with patch.object(executor, "save_events", return_value=[]):
+            loop = ExecutionLoopState(state=state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        engine.on_tick.assert_called_once()
+        assert state.ticks_processed == 6
+        delivery = state.strategy_state["live_tick_delivery"]
+        assert delivery["status"] == "disabled"
+        assert delivery["age_seconds"] == 60.0
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-01-01 00:00:05", tz_offset=0)
+    def test_live_tick_delivery_survives_strategy_state_replacement(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        original_state = MagicMock()
+        original_state.ticks_processed = 5
+        original_state.current_balance = Decimal("100000")
+        original_state.strategy_state = {}
+        returned_state = MagicMock()
+        returned_state.ticks_processed = 5
+        returned_state.current_balance = Decimal("100000")
+        returned_state.strategy_state = {"strategy_value": "kept"}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+        engine.on_tick.return_value = StrategyResult.from_state(returned_state)
+
+        with patch.object(executor, "save_events", return_value=[]):
+            loop = ExecutionLoopState(state=original_state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        assert loop.state is returned_state
+        assert returned_state.strategy_state["strategy_value"] == "kept"
+        assert returned_state.strategy_state["live_tick_delivery"]["status"] == "ok"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_live_tick_latency_metrics_are_sampled_by_account_interval(self, mock_handler):
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, _engine = self._make_executor()
+        executor.task.oanda_account.live_tick_latency_metric_interval_seconds = 30
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+            oanda_tick_publish_latency_seconds=Decimal("0.125"),
+        )
+        loop = ExecutionLoopState(state=state)
+
+        first = executor._maybe_update_live_tick_latency_metrics(
+            loop=loop,
+            tick=tick,
+            tick_ts=tick.timestamp,
+            observed_at=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC),
+        )
+        second = executor._maybe_update_live_tick_latency_metrics(
+            loop=loop,
+            tick=tick,
+            tick_ts=tick.timestamp,
+            observed_at=datetime(2026, 1, 1, 0, 0, 20, tzinfo=UTC),
+        )
+        third = executor._maybe_update_live_tick_latency_metrics(
+            loop=loop,
+            tick=tick,
+            tick_ts=tick.timestamp,
+            observed_at=datetime(2026, 1, 1, 0, 0, 36, tzinfo=UTC),
+        )
+
+        assert first == {
+            "trading_tick_receive_latency_seconds": 5.0,
+            "oanda_tick_publish_latency_seconds": 0.125,
+        }
+        assert second is None
+        assert third == {
+            "trading_tick_receive_latency_seconds": 36.0,
+            "oanda_tick_publish_latency_seconds": 0.125,
+        }
+        assert state.strategy_state["metrics"]["trading_tick_receive_latency_seconds"] == 36.0
+        assert state.strategy_state["metrics"]["oanda_tick_publish_latency_seconds"] == 0.125
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_live_tick_latency_metrics_can_be_disabled_from_account(self, mock_handler):
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, _engine = self._make_executor()
+        executor.task.oanda_account.live_tick_latency_metric_interval_seconds = 0
+        state = MagicMock()
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+            oanda_tick_publish_latency_seconds=Decimal("0.125"),
+        )
+
+        result = executor._maybe_update_live_tick_latency_metrics(
+            loop=ExecutionLoopState(state=state),
+            tick=tick,
+            tick_ts=tick.timestamp,
+            observed_at=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC),
+        )
+
+        assert result is None
+        assert state.strategy_state == {}
+
+
+class TestRuntimeDriftCheckScheduling:
+    """Runtime broker drift checks are throttled by wall-clock interval."""
+
+    @freeze_time("2026-01-01 00:00:30", tz_offset=0)
+    def test_runtime_drift_check_waits_for_interval(self):
+        from apps.trading.tasks.executor import ExecutionLoopState, TradingExecutor
+
+        executor = object.__new__(TradingExecutor)
+        executor.task = SimpleNamespace(dry_run=False, broker_drift_check_interval_seconds=60)
+        loop = ExecutionLoopState(
+            state=MagicMock(),
+            last_runtime_drift_check_at=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        )
+
+        with patch.object(executor, "_assert_runtime_broker_sync") as assert_sync:
+            executor._after_batch_processed(loop)
+
+        assert_sync.assert_not_called()
+
+    @freeze_time("2026-01-01 00:01:01", tz_offset=0)
+    def test_runtime_drift_check_runs_after_interval(self):
+        from apps.trading.tasks.executor import ExecutionLoopState, TradingExecutor
+
+        executor = object.__new__(TradingExecutor)
+        executor.task = SimpleNamespace(dry_run=False, broker_drift_check_interval_seconds=60)
+        loop = ExecutionLoopState(
+            state=MagicMock(),
+            last_runtime_drift_check_at=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        )
+
+        with patch.object(executor, "_assert_runtime_broker_sync") as assert_sync:
+            executor._after_batch_processed(loop)
+
+        assert_sync.assert_called_once_with(state=loop.state)
+        assert loop.last_runtime_drift_check_at == datetime(2026, 1, 1, 0, 1, 1, tzinfo=UTC)
 
     @patch("apps.trading.tasks.executor.EventHandler")
     def test_restore_metric_counters_prefers_persisted_metrics(self, mock_handler):

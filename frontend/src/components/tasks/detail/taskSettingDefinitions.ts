@@ -279,6 +279,32 @@ export function buildTradingTaskSettingDefinitions(
         'Market resume delay (minutes)'
       ),
     },
+    {
+      key: 'live_tick_stale_guard_enabled',
+      label: t(
+        'trading:form.liveTickStaleGuardEnabled',
+        'Enable live tick delay guard'
+      ),
+      format: formatBoolean,
+    },
+    {
+      key: 'live_tick_max_age_seconds',
+      label: t('trading:form.liveTickMaxAgeSeconds', 'Max live tick age (s)'),
+    },
+    {
+      key: 'live_tick_status_log_interval_seconds',
+      label: t(
+        'trading:form.liveTickStatusLogIntervalSeconds',
+        'Tick status log interval (s)'
+      ),
+    },
+    {
+      key: 'broker_drift_check_interval_seconds',
+      label: t(
+        'trading:form.brokerDriftCheckIntervalSeconds',
+        'OANDA drift check interval (s)'
+      ),
+    },
     ...(options.includeDebugOptions
       ? [{ key: 'debug_options', label: t('common:debug.title') }]
       : []),

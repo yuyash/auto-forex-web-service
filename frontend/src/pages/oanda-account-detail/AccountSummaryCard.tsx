@@ -247,6 +247,19 @@ export function AccountSummaryCard({
           )}
           <Box>
             <Typography variant="body2" color="text.secondary">
+              {t('settings:accounts.tickLatencyMetricIntervalSeconds')}
+            </Typography>
+            <Typography variant="body1">
+              {typeof account.live_tick_latency_metric_interval_seconds ===
+              'number'
+                ? t('settings:accounts.tickLatencyMetricIntervalValue', {
+                    seconds: account.live_tick_latency_metric_interval_seconds,
+                  })
+                : '\u2014'}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" color="text.secondary">
               {t('settings:accounts.snapshotRefreshedAt', 'Snapshot refreshed')}
             </Typography>
             <Typography variant="body1">

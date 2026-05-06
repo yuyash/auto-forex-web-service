@@ -15,6 +15,7 @@ from apps.trading.services.summary import (
     PnlInfo,
     TaskInfo,
     TaskSummary,
+    TickDeliveryInfo,
     TickInfo,
     compute_task_summary,
 )
@@ -200,6 +201,7 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
                 str(item) for item in execution.get("recovery_blockers", []) if item is not None
             ],
             reconciled_at=_to_str_or_none(execution.get("reconciled_at")),
+            tick_delivery=_deserialize_tick_delivery(execution.get("tick_delivery")),
         ),
         tick=TickInfo(
             timestamp=_to_str_or_none(tick.get("timestamp")),
@@ -218,6 +220,19 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
     )
 
 
+def _deserialize_tick_delivery(raw: Any) -> TickDeliveryInfo | None:
+    if not isinstance(raw, dict):
+        return None
+    return TickDeliveryInfo(
+        status=_to_str_or_none(raw.get("status")),
+        tick_timestamp=_to_str_or_none(raw.get("tick_timestamp")),
+        observed_at=_to_str_or_none(raw.get("observed_at")),
+        age_seconds=_to_optional_float(raw.get("age_seconds")),
+        max_age_seconds=_to_optional_int(raw.get("max_age_seconds")),
+        message=_to_str_or_none(raw.get("message")),
+    )
+
+
 def _to_decimal(value: Any) -> Decimal:
     return Decimal(str(value or "0"))
 
@@ -232,6 +247,18 @@ def _to_str_or_none(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _to_optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)
+
+
+def _to_optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    return int(value)
 
 
 class _DecimalEncoder(json.JSONEncoder):

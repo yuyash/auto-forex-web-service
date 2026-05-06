@@ -96,6 +96,25 @@ const tradingTaskSchema = z.object({
     .min(0, 'Must be non-negative')
     .max(720, 'Must not exceed 720 minutes (12 hours)')
     .optional(),
+  live_tick_stale_guard_enabled: z.boolean().optional(),
+  live_tick_max_age_seconds: z
+    .number({ message: 'Must be a positive integer' })
+    .int('Must be an integer')
+    .min(1, 'Must be at least 1 second')
+    .max(3600, 'Must not exceed 3600 seconds')
+    .optional(),
+  live_tick_status_log_interval_seconds: z
+    .number({ message: 'Must be a non-negative integer' })
+    .int('Must be an integer')
+    .min(0, 'Must be non-negative')
+    .max(3600, 'Must not exceed 3600 seconds')
+    .optional(),
+  broker_drift_check_interval_seconds: z
+    .number({ message: 'Must be a non-negative integer' })
+    .int('Must be an integer')
+    .min(0, 'Must be non-negative')
+    .max(3600, 'Must not exceed 3600 seconds')
+    .optional(),
 });
 
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
@@ -151,6 +170,13 @@ export default function TradingTaskForm({
         initialData?.market_idle_pre_close_minutes ?? 0,
       market_idle_resume_delay_minutes:
         initialData?.market_idle_resume_delay_minutes ?? 0,
+      live_tick_stale_guard_enabled:
+        initialData?.live_tick_stale_guard_enabled ?? true,
+      live_tick_max_age_seconds: initialData?.live_tick_max_age_seconds ?? 30,
+      live_tick_status_log_interval_seconds:
+        initialData?.live_tick_status_log_interval_seconds ?? 60,
+      broker_drift_check_interval_seconds:
+        initialData?.broker_drift_check_interval_seconds ?? 60,
     },
   });
 
@@ -168,6 +194,10 @@ export default function TradingTaskForm({
   }, [formData, setValue]);
 
   const selectedAccountId = useWatch({ control, name: 'account_id' });
+  const liveTickStaleGuardEnabled = useWatch({
+    control,
+    name: 'live_tick_stale_guard_enabled',
+  });
 
   const selectedConfigId = useWatch({ control, name: 'config_id' });
 
@@ -333,6 +363,13 @@ export default function TradingTaskForm({
           completeData.market_idle_pre_close_minutes,
         market_idle_resume_delay_minutes:
           completeData.market_idle_resume_delay_minutes,
+        live_tick_stale_guard_enabled:
+          completeData.live_tick_stale_guard_enabled,
+        live_tick_max_age_seconds: completeData.live_tick_max_age_seconds,
+        live_tick_status_log_interval_seconds:
+          completeData.live_tick_status_log_interval_seconds,
+        broker_drift_check_interval_seconds:
+          completeData.broker_drift_check_interval_seconds,
         debug_options: isSuperuser ? { tracemalloc } : undefined,
       };
 
@@ -360,6 +397,16 @@ export default function TradingTaskForm({
           config_id: t('common:labels.configuration'),
           name: t('trading:form.taskName'),
           hedging_enabled: t('trading:form.hedgingEnabled'),
+          live_tick_stale_guard_enabled: t(
+            'trading:form.liveTickStaleGuardEnabled'
+          ),
+          live_tick_max_age_seconds: t('trading:form.liveTickMaxAgeSeconds'),
+          live_tick_status_log_interval_seconds: t(
+            'trading:form.liveTickStatusLogIntervalSeconds'
+          ),
+          broker_drift_check_interval_seconds: t(
+            'trading:form.brokerDriftCheckIntervalSeconds'
+          ),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -879,6 +926,132 @@ export default function TradingTaskForm({
                       }
                       error={!!errors.market_idle_resume_delay_minutes}
                       inputProps={{ min: 0, max: 720, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="live_tick_stale_guard_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? true}
+                          onChange={(event) =>
+                            field.onChange(event.target.checked)
+                          }
+                        />
+                      }
+                      label={t(
+                        'trading:form.liveTickStaleGuardEnabled',
+                        'Enable live tick delay guard'
+                      )}
+                    />
+                  )}
+                />
+                <FormHelperText>
+                  {t(
+                    'trading:form.liveTickStaleGuardEnabledHelp',
+                    'Stop before strategy/order processing when live tick delivery is delayed.'
+                  )}
+                </FormHelperText>
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="live_tick_max_age_seconds"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      disabled={liveTickStaleGuardEnabled === false}
+                      type="number"
+                      label={t(
+                        'trading:form.liveTickMaxAgeSeconds',
+                        'Max live tick age (s)'
+                      )}
+                      helperText={
+                        errors.live_tick_max_age_seconds?.message ||
+                        t(
+                          'trading:form.liveTickMaxAgeSecondsHelp',
+                          'Fail the task if an incoming live tick is older than this many seconds.'
+                        )
+                      }
+                      error={!!errors.live_tick_max_age_seconds}
+                      inputProps={{ min: 1, max: 3600, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="live_tick_status_log_interval_seconds"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'trading:form.liveTickStatusLogIntervalSeconds',
+                        'Tick status log interval (s)'
+                      )}
+                      helperText={
+                        errors.live_tick_status_log_interval_seconds?.message ||
+                        t(
+                          'trading:form.liveTickStatusLogIntervalSecondsHelp',
+                          'Write periodic live tick delivery status to the task log. 0 disables OK-status logs.'
+                        )
+                      }
+                      error={!!errors.live_tick_status_log_interval_seconds}
+                      inputProps={{ min: 0, max: 3600, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="broker_drift_check_interval_seconds"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'trading:form.brokerDriftCheckIntervalSeconds',
+                        'OANDA drift check interval (s)'
+                      )}
+                      helperText={
+                        errors.broker_drift_check_interval_seconds?.message ||
+                        t(
+                          'trading:form.brokerDriftCheckIntervalSecondsHelp',
+                          'Check OANDA/local exposure drift at this interval. 0 disables runtime checks after startup reconciliation.'
+                        )
+                      }
+                      error={!!errors.broker_drift_check_interval_seconds}
+                      inputProps={{ min: 0, max: 3600, step: 1 }}
                     />
                   )}
                 />

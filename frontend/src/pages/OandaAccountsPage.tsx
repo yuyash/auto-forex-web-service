@@ -78,12 +78,14 @@ interface AccountFormData {
   live_max_initial_order_units: string;
   live_max_order_guard_enabled: boolean;
   live_max_order_units: string;
+  live_tick_latency_metric_interval_seconds: string;
 }
 
 const DEFAULT_ACCOUNT_CURRENCY = 'USD';
 const DEFAULT_MAX_GROSS_UNITS = '200000';
 const DEFAULT_MAX_INITIAL_ORDER_UNITS = '10000';
 const DEFAULT_MAX_ORDER_UNITS = '10000';
+const DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS = '60';
 
 const resolveCurrencyCode = (currency?: string | null) => {
   if (!currency) return DEFAULT_ACCOUNT_CURRENCY;
@@ -354,6 +356,21 @@ function AccountCard({
                 variant="outlined"
               />
             )}
+            {(a.live_tick_latency_metric_interval_seconds ?? 60) > 0 && (
+              <Chip
+                label={t('settings:accounts.tickLatencyMetricIntervalChip', {
+                  defaultValue: 'Tick latency {{seconds}}s',
+                  seconds: formatNumber(
+                    a.live_tick_latency_metric_interval_seconds ?? 60,
+                    {
+                      maximumFractionDigits: 0,
+                    }
+                  ),
+                })}
+                color="info"
+                variant="outlined"
+              />
+            )}
           </Box>
         </CardContent>
       </CardActionArea>
@@ -482,6 +499,8 @@ export default function OandaAccountsPage() {
     live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
     live_max_order_guard_enabled: false,
     live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
+    live_tick_latency_metric_interval_seconds:
+      DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS,
   });
   const [isDefault, setIsDefault] = useState(false);
   const [formErrors, setFormErrors] = useState<
@@ -512,6 +531,8 @@ export default function OandaAccountsPage() {
       live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
       live_max_order_guard_enabled: false,
       live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
+      live_tick_latency_metric_interval_seconds:
+        DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS,
     });
     setIsDefault(!hasAnyAccount);
     setFormErrors({});
@@ -542,6 +563,10 @@ export default function OandaAccountsPage() {
       live_max_order_units: String(
         account.live_max_order_units ?? Number(DEFAULT_MAX_ORDER_UNITS)
       ),
+      live_tick_latency_metric_interval_seconds: String(
+        account.live_tick_latency_metric_interval_seconds ??
+          Number(DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS)
+      ),
     });
     setIsDefault(account.is_default || false);
     setFormErrors({});
@@ -562,6 +587,8 @@ export default function OandaAccountsPage() {
       live_max_initial_order_units: DEFAULT_MAX_INITIAL_ORDER_UNITS,
       live_max_order_guard_enabled: false,
       live_max_order_units: DEFAULT_MAX_ORDER_UNITS,
+      live_tick_latency_metric_interval_seconds:
+        DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS,
     });
     setIsDefault(false);
     setFormErrors({});
@@ -613,6 +640,18 @@ export default function OandaAccountsPage() {
         );
       }
     }
+    const tickLatencyMetricInterval = Number(
+      formData.live_tick_latency_metric_interval_seconds
+    );
+    if (
+      !Number.isInteger(tickLatencyMetricInterval) ||
+      !Number.isFinite(tickLatencyMetricInterval) ||
+      tickLatencyMetricInterval < 0
+    ) {
+      errors.live_tick_latency_metric_interval_seconds = t(
+        'settings:accounts.tickLatencyMetricIntervalValidation'
+      );
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -630,6 +669,10 @@ export default function OandaAccountsPage() {
         live_max_initial_order_guard_enabled:
           formData.live_max_initial_order_guard_enabled,
         live_max_order_guard_enabled: formData.live_max_order_guard_enabled,
+        live_tick_latency_metric_interval_seconds: Number(
+          formData.live_tick_latency_metric_interval_seconds ||
+            DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS
+        ),
       };
       if (formData.live_max_exposure_guard_enabled) {
         payload.live_max_estimated_exposure_units = Number(
@@ -760,6 +803,10 @@ export default function OandaAccountsPage() {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.accounts.lists(),
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.accounts.pages(),
         refetchType: 'active',
       });
     },
@@ -1089,6 +1136,25 @@ export default function OandaAccountsPage() {
                 <MenuItem value="live">{t('settings:accounts.live')}</MenuItem>
               </Select>
             </FormControl>
+            <TextField
+              fullWidth
+              label={t('settings:accounts.tickLatencyMetricIntervalSeconds')}
+              type="number"
+              value={formData.live_tick_latency_metric_interval_seconds}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  live_tick_latency_metric_interval_seconds: e.target.value,
+                })
+              }
+              error={!!formErrors.live_tick_latency_metric_interval_seconds}
+              helperText={
+                formErrors.live_tick_latency_metric_interval_seconds ||
+                t('settings:accounts.tickLatencyMetricIntervalSecondsHelper')
+              }
+              margin="normal"
+              inputProps={{ min: 0, step: 1 }}
+            />
             <Box sx={{ mt: 2 }}>
               <FormControlLabel
                 control={

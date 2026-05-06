@@ -65,6 +65,10 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "drain_duration_hours",
             "market_idle_pre_close_minutes",
             "market_idle_resume_delay_minutes",
+            "live_tick_stale_guard_enabled",
+            "live_tick_max_age_seconds",
+            "live_tick_status_log_interval_seconds",
+            "broker_drift_check_interval_seconds",
             # State management fields
             "has_strategy_state",
             "can_resume",
@@ -153,6 +157,10 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "drain_duration_hours",
             "market_idle_pre_close_minutes",
             "market_idle_resume_delay_minutes",
+            "live_tick_stale_guard_enabled",
+            "live_tick_max_age_seconds",
+            "live_tick_status_log_interval_seconds",
+            "broker_drift_check_interval_seconds",
             "action_policy",
             "created_at",
             "updated_at",
@@ -200,6 +208,10 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "drain_duration_hours",
             "market_idle_pre_close_minutes",
             "market_idle_resume_delay_minutes",
+            "live_tick_stale_guard_enabled",
+            "live_tick_max_age_seconds",
+            "live_tick_status_log_interval_seconds",
+            "broker_drift_check_interval_seconds",
             "debug_options",
         ]
         extra_kwargs = {
@@ -215,6 +227,10 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "drain_duration_hours": {"required": False, "min_value": 0},
             "market_idle_pre_close_minutes": {"required": False, "min_value": 0},
             "market_idle_resume_delay_minutes": {"required": False, "min_value": 0},
+            "live_tick_stale_guard_enabled": {"required": False},
+            "live_tick_max_age_seconds": {"required": False, "min_value": 1},
+            "live_tick_status_log_interval_seconds": {"required": False, "min_value": 0},
+            "broker_drift_check_interval_seconds": {"required": False, "min_value": 0},
             "debug_options": {"required": False},
         }
 

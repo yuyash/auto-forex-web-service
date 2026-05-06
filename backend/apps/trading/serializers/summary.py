@@ -12,6 +12,17 @@ class TickInfoSerializer(serializers.Serializer):
     mid = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
 
 
+class TickDeliveryInfoSerializer(serializers.Serializer):
+    """Serializer for live tick delivery diagnostics."""
+
+    status = serializers.CharField(allow_null=True)
+    tick_timestamp = serializers.CharField(allow_null=True)
+    observed_at = serializers.CharField(allow_null=True)
+    age_seconds = serializers.FloatField(allow_null=True)
+    max_age_seconds = serializers.IntegerField(allow_null=True)
+    message = serializers.CharField(allow_null=True)
+
+
 class PnlInfoSerializer(serializers.Serializer):
     """Serializer for PnL information."""
 
@@ -52,6 +63,7 @@ class ExecutionInfoSerializer(serializers.Serializer):
         child=serializers.CharField(), required=False, allow_empty=True
     )
     reconciled_at = serializers.CharField(allow_null=True, required=False)
+    tick_delivery = TickDeliveryInfoSerializer(allow_null=True, required=False)
 
 
 class TaskInfoSerializer(serializers.Serializer):

@@ -93,6 +93,15 @@ const CHART_METRICS: MetricChartDefinition[] = [
   { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
   { key: 'total_return', color: '#7b1fa2', format: 'pct' },
   { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
+  {
+    key: 'live_tick_latency_seconds',
+    color: '#00897b',
+    valueKey: 'trading_tick_receive_latency_seconds',
+    series: [
+      { key: 'oanda_tick_publish_latency_seconds', color: '#00897b' },
+      { key: 'trading_tick_receive_latency_seconds', color: '#c2185b' },
+    ],
+  },
   { key: 'open_positions', color: '#0288d1', format: 'int' },
   { key: 'closed_positions', color: '#455a64', format: 'int' },
   { key: 'total_trades', color: '#5d4037', format: 'int' },
@@ -107,6 +116,15 @@ const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
   { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
   { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
   { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
+  {
+    key: 'live_tick_latency_seconds',
+    color: '#00897b',
+    valueKey: 'trading_tick_receive_latency_seconds',
+    series: [
+      { key: 'oanda_tick_publish_latency_seconds', color: '#00897b' },
+      { key: 'trading_tick_receive_latency_seconds', color: '#c2185b' },
+    ],
+  },
   { key: 'snowball_net_net_units', color: '#0288d1', format: 'int' },
   { key: 'snowball_net_average_price', color: '#2563eb' },
   {

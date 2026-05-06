@@ -171,6 +171,13 @@ class OandaAccounts(models.Model):
             "submitting broker-bound orders on this account"
         ),
     )
+    live_tick_latency_metric_interval_seconds = models.PositiveIntegerField(
+        default=60,
+        help_text=(
+            "Minimum interval in seconds for persisting live tick latency metrics. "
+            "Set to 0 to disable periodic latency metric samples."
+        ),
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",

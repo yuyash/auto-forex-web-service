@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime
 from logging import Logger, getLogger
 from typing import Any
 
@@ -25,6 +26,9 @@ from apps.market.tasks.base import (
 
 logger: Logger = getLogger(name=__name__)
 
+OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY = "oanda_tick_publish_latency_seconds"
+OANDA_TICK_PUBLISHED_AT_KEY = "oanda_tick_published_at"
+
 
 def publisher_lock_key_for_account(account_id: int) -> str:
     """Return the Redis lock key for a specific publisher account."""
@@ -37,6 +41,41 @@ def normalize_instruments(instruments: list[str] | tuple[str, ...] | None) -> li
     source = instruments or getattr(settings, "MARKET_TICK_INSTRUMENTS", ["EUR_USD"])
     normalized = sorted({str(instrument) for instrument in source if instrument})
     return normalized or ["EUR_USD"]
+
+
+def _coerce_aware_datetime(value: Any) -> datetime | None:
+    """Return a timezone-aware datetime when *value* can be parsed."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+    try:
+        value_str = str(value).strip()
+        if value_str.endswith("Z"):
+            value_str = value_str[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(value_str)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def build_tick_latency_payload(
+    tick_timestamp: Any,
+    *,
+    observed_at: datetime | None = None,
+) -> dict[str, str]:
+    """Build Redis payload fields describing OANDA tick publish latency."""
+    tick_ts = _coerce_aware_datetime(tick_timestamp)
+    if tick_ts is None:
+        return {}
+
+    published_at = observed_at or datetime.now(UTC)
+    if published_at.tzinfo is None:
+        published_at = published_at.replace(tzinfo=UTC)
+    latency_seconds = max(0.0, (published_at - tick_ts).total_seconds())
+    return {
+        OANDA_TICK_PUBLISHED_AT_KEY: isoformat(published_at),
+        OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY: f"{latency_seconds:.6f}",
+    }
 
 
 @shared_task(bind=True, name="market.tasks.publish_oanda_ticks")
@@ -159,6 +198,8 @@ class TickPublisherRunner:
         assert self.task_service is not None
         oanda_account_id = self.account.account_id
         shared_channel = getattr(settings, "MARKET_TICK_CHANNEL", "market:ticks")
+        latency_log_interval_seconds = self._live_tick_latency_metric_interval_seconds()
+        last_latency_log_at_by_instrument: dict[str, datetime] = {}
 
         ticks_published = 0
         try:
@@ -183,6 +224,11 @@ class TickPublisherRunner:
                             break
 
                         instrument = str(tick.instrument)
+                        observed_at = datetime.now(UTC)
+                        latency_payload = build_tick_latency_payload(
+                            tick.timestamp,
+                            observed_at=observed_at,
+                        )
                         payload = {
                             "instrument": instrument,
                             "timestamp": isoformat(tick.timestamp),
@@ -190,6 +236,7 @@ class TickPublisherRunner:
                             "ask": str(tick.ask),
                             "mid": str(tick.mid),
                         }
+                        payload.update(latency_payload)
                         encoded_payload = json.dumps(payload)
                         client.publish(shared_channel, encoded_payload)
                         client.publish(f"live:{oanda_account_id}:{instrument}", encoded_payload)
@@ -203,6 +250,29 @@ class TickPublisherRunner:
                                 tick.bid,
                                 tick.ask,
                             )
+
+                        if (
+                            latency_log_interval_seconds > 0
+                            and latency_payload
+                            and self._should_log_tick_latency(
+                                last_logged_at=last_latency_log_at_by_instrument.get(instrument),
+                                observed_at=observed_at,
+                                interval_seconds=latency_log_interval_seconds,
+                            )
+                        ):
+                            logger.info(
+                                "[PUBLISHER:TICK_LATENCY] account_id=%s oanda_id=%s "
+                                "instrument=%s tick_ts=%s published_at=%s "
+                                "oanda_tick_publish_latency_seconds=%s published=%s",
+                                account_id,
+                                oanda_account_id,
+                                instrument,
+                                isoformat(tick.timestamp),
+                                latency_payload[OANDA_TICK_PUBLISHED_AT_KEY],
+                                latency_payload[OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY],
+                                ticks_published,
+                            )
+                            last_latency_log_at_by_instrument[instrument] = observed_at
 
                         if ticks_published % 1000 == 0:
                             logger.info(
@@ -234,6 +304,27 @@ class TickPublisherRunner:
                 account_id,
             )
             self._cleanup_and_stop(client, lock_key, f"published={ticks_published}")
+
+    def _live_tick_latency_metric_interval_seconds(self) -> int:
+        """Return the account-configured latency metric/log interval."""
+        raw_value = getattr(self.account, "live_tick_latency_metric_interval_seconds", 60)
+        try:
+            return max(0, int(raw_value))
+        except (TypeError, ValueError):
+            return 60
+
+    @staticmethod
+    def _should_log_tick_latency(
+        *,
+        last_logged_at: datetime | None,
+        observed_at: datetime,
+        interval_seconds: int,
+    ) -> bool:
+        if interval_seconds <= 0:
+            return False
+        if last_logged_at is None:
+            return True
+        return (observed_at - last_logged_at).total_seconds() >= interval_seconds
 
     def _cleanup_and_stop(
         self, client: Any, lock_key: str, message: str, failed: bool = False

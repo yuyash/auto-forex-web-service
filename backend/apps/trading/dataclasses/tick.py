@@ -7,6 +7,43 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY = "oanda_tick_publish_latency_seconds"
+OANDA_TICK_PUBLISHED_AT_KEY = "oanda_tick_published_at"
+
+
+def _parse_datetime(value: Any) -> datetime:
+    """Parse a timezone-aware datetime from an ISO string or datetime."""
+    from datetime import UTC
+
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+    timestamp_str = str(value).strip()
+    if timestamp_str.endswith("Z"):
+        timestamp_str = timestamp_str[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(timestamp_str)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _parse_optional_datetime(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        return _parse_datetime(value)
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _parse_optional_decimal(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (ValueError, InvalidOperation):
+        return None
+
 
 @dataclass(frozen=True, slots=True)
 class Tick:
@@ -24,6 +61,9 @@ class Tick:
         bid: Bid price as Decimal
         ask: Ask price as Decimal
         mid: Mid price as Decimal (calculated from bid/ask if not provided)
+        oanda_tick_publish_latency_seconds: Seconds between the tick timestamp and
+            the publisher receiving/publishing it from OANDA.
+        oanda_tick_published_at: Publisher wall-clock timestamp for the latency sample.
     Example:
         >>> from datetime import datetime, UTC
         >>> tick = Tick(
@@ -40,6 +80,8 @@ class Tick:
     bid: Decimal
     ask: Decimal
     mid: Decimal
+    oanda_tick_publish_latency_seconds: Decimal | None = None
+    oanda_tick_published_at: datetime | None = None
 
     def __post_init__(self) -> None:
         """Calculate mid if not provided."""
@@ -54,6 +96,8 @@ class Tick:
         bid: Decimal,
         ask: Decimal,
         mid: Decimal | None = None,
+        oanda_tick_publish_latency_seconds: Decimal | None = None,
+        oanda_tick_published_at: datetime | None = None,
     ) -> "Tick":
         """Create a Tick with automatic mid calculation if not provided.
 
@@ -75,6 +119,8 @@ class Tick:
             bid=bid,
             ask=ask,
             mid=mid,
+            oanda_tick_publish_latency_seconds=oanda_tick_publish_latency_seconds,
+            oanda_tick_published_at=oanda_tick_published_at,
         )
 
     @staticmethod
@@ -90,8 +136,6 @@ class Tick:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        from datetime import UTC, datetime
-
         instrument = data.get("instrument")
         if not instrument:
             raise ValueError("Tick must have instrument")
@@ -102,16 +146,8 @@ class Tick:
 
         # Parse timestamp
         try:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                timestamp_str = str(timestamp_raw).strip()
-                if timestamp_str.endswith("Z"):
-                    timestamp_str = timestamp_str[:-1] + "+00:00"
-                timestamp = datetime.fromisoformat(timestamp_str)
-                if timestamp.tzinfo is None:
-                    timestamp = timestamp.replace(tzinfo=UTC)
-        except (ValueError, AttributeError) as exc:
+            timestamp = _parse_datetime(timestamp_raw)
+        except (ValueError, AttributeError, TypeError) as exc:
             raise ValueError(f"Invalid timestamp: {exc}") from exc
 
         bid_raw = data.get("bid")
@@ -134,6 +170,10 @@ class Tick:
             bid=bid,
             ask=ask,
             mid=mid,
+            oanda_tick_publish_latency_seconds=_parse_optional_decimal(
+                data.get(OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY)
+            ),
+            oanda_tick_published_at=_parse_optional_datetime(data.get(OANDA_TICK_PUBLISHED_AT_KEY)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -143,10 +183,17 @@ class Tick:
             dict: Dictionary representation with Decimal values as strings
                   and timestamp as ISO format string
         """
-        return {
+        data = {
             "instrument": self.instrument,
             "timestamp": self.timestamp.isoformat(),
             "bid": str(self.bid),
             "ask": str(self.ask),
             "mid": str(self.mid),
         }
+        if self.oanda_tick_publish_latency_seconds is not None:
+            data[OANDA_TICK_PUBLISH_LATENCY_SECONDS_KEY] = str(
+                self.oanda_tick_publish_latency_seconds
+            )
+        if self.oanda_tick_published_at is not None:
+            data[OANDA_TICK_PUBLISHED_AT_KEY] = self.oanda_tick_published_at.isoformat()
+        return data

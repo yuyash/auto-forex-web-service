@@ -73,6 +73,12 @@ export function useCreateTradingTask(options?: {
         market_idle_pre_close_minutes: variables.market_idle_pre_close_minutes,
         market_idle_resume_delay_minutes:
           variables.market_idle_resume_delay_minutes,
+        live_tick_stale_guard_enabled: variables.live_tick_stale_guard_enabled,
+        live_tick_max_age_seconds: variables.live_tick_max_age_seconds,
+        live_tick_status_log_interval_seconds:
+          variables.live_tick_status_log_interval_seconds,
+        broker_drift_check_interval_seconds:
+          variables.broker_drift_check_interval_seconds,
         debug_options: variables.debug_options,
       }),
     {
@@ -111,6 +117,13 @@ export function useUpdateTradingTask(options?: {
           variables.data.market_idle_pre_close_minutes,
         market_idle_resume_delay_minutes:
           variables.data.market_idle_resume_delay_minutes,
+        live_tick_stale_guard_enabled:
+          variables.data.live_tick_stale_guard_enabled,
+        live_tick_max_age_seconds: variables.data.live_tick_max_age_seconds,
+        live_tick_status_log_interval_seconds:
+          variables.data.live_tick_status_log_interval_seconds,
+        broker_drift_check_interval_seconds:
+          variables.data.broker_drift_check_interval_seconds,
         debug_options: variables.data.debug_options,
       }),
     {

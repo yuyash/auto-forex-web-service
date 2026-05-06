@@ -202,6 +202,7 @@ export interface Account {
   live_max_initial_order_units?: number;
   live_max_order_guard_enabled?: boolean;
   live_max_order_units?: number;
+  live_tick_latency_metric_interval_seconds?: number;
   is_active: boolean;
   is_default?: boolean;
   jurisdiction?: string;
@@ -226,6 +227,7 @@ export interface AccountUpsertData {
   live_max_initial_order_units?: number;
   live_max_order_guard_enabled?: boolean;
   live_max_order_units?: number;
+  live_tick_latency_metric_interval_seconds?: number;
   is_active?: boolean;
   is_default?: boolean;
 }

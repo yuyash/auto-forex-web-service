@@ -3,7 +3,10 @@ import { Alert, Box, Divider, Grid, Link } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
-import { ExecutionStatusSummary } from '../../tasks/detail/ExecutionStatusSummary';
+import {
+  ExecutionStatusSummary,
+  type ExecutionStatusExtraItem,
+} from '../../tasks/detail/ExecutionStatusSummary';
 import { HistoricalStrategyConfigDialog } from '../../tasks/detail/HistoricalStrategyConfigDialog';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildTradingTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
@@ -174,7 +177,23 @@ export function TradingOverviewTab({
   );
   const recoveryBlockers = summary.execution.recoveryBlockers ?? [];
   const recoveryWarnings = summary.execution.recoveryWarnings ?? [];
-  const executionStatusExtraItems = [
+  const tickDelivery = summary.execution.tickDelivery;
+  const tickDeliveryAlert = buildTickDeliveryAlert(
+    tickDelivery,
+    t,
+    formatDateTime
+  );
+  const executionStatusExtraItems: ExecutionStatusExtraItem[] = [
+    ...(tickDelivery
+      ? [
+          {
+            id: 'live_tick_delivery',
+            label: t('trading:detail.tickDelivery'),
+            value: formatTickDeliveryValue(tickDelivery, t, formatDateTime),
+            color: tickDeliveryColor(tickDelivery.status),
+          },
+        ]
+      : []),
     ...(summary.execution.resumeCursorTimestamp
       ? [
           {
@@ -218,6 +237,11 @@ export function TradingOverviewTab({
               {recoveryWarnings[0]}
             </Alert>
           ) : null}
+          {tickDeliveryAlert ? (
+            <Alert severity={tickDeliveryAlert.severity} sx={{ mb: 2 }}>
+              {tickDeliveryAlert.message}
+            </Alert>
+          ) : null}
           <ExecutionStatusSummary
             taskNamespace="trading"
             summary={summary}
@@ -249,4 +273,74 @@ export function TradingOverviewTab({
       />
     </Box>
   );
+}
+
+type TickDelivery = NonNullable<TaskSummary['execution']['tickDelivery']>;
+
+function formatTickDeliveryValue(
+  delivery: TickDelivery,
+  t: ReturnType<typeof useTranslation>['t'],
+  formatDateTime: (value: string) => string
+) {
+  const status = tickDeliveryStatusLabel(delivery.status, t);
+  const age = formatDeliveryAge(delivery.ageSeconds);
+  const timestamp = delivery.tickTimestamp
+    ? formatDateTime(delivery.tickTimestamp)
+    : null;
+  return [status, age, timestamp].filter(Boolean).join(' / ');
+}
+
+function buildTickDeliveryAlert(
+  delivery: TickDelivery | null,
+  t: ReturnType<typeof useTranslation>['t'],
+  formatDateTime: (value: string) => string
+) {
+  if (!delivery || delivery.status !== 'stale') {
+    return null;
+  }
+  const age = formatDeliveryAge(delivery.ageSeconds) ?? '-';
+  const max = formatDeliveryAge(delivery.maxAgeSeconds) ?? '-';
+  const timestamp = delivery.tickTimestamp
+    ? formatDateTime(delivery.tickTimestamp)
+    : '-';
+  return {
+    severity: 'error' as const,
+    message: t('trading:detail.tickDeliveryStaleAlert', {
+      age,
+      max,
+      timestamp,
+    }),
+  };
+}
+
+function tickDeliveryStatusLabel(
+  status: string | null,
+  t: ReturnType<typeof useTranslation>['t']
+) {
+  const normalized = status || 'unknown';
+  return t(`trading:detail.tickDeliveryStatuses.${normalized}`, {
+    defaultValue: normalized,
+  });
+}
+
+function tickDeliveryColor(status: string | null) {
+  if (status === 'stale') return 'error.main' as const;
+  if (status === 'waiting') return 'warning.main' as const;
+  if (status === 'ok') return 'success.main' as const;
+  return undefined;
+}
+
+function formatDeliveryAge(seconds: number | null) {
+  if (seconds == null || !Number.isFinite(seconds)) {
+    return null;
+  }
+  if (seconds < 60) {
+    return `${seconds < 10 ? seconds.toFixed(1) : seconds.toFixed(0)}s`;
+  }
+  const minutes = seconds / 60;
+  if (minutes < 60) {
+    return `${minutes < 10 ? minutes.toFixed(1) : minutes.toFixed(0)}m`;
+  }
+  const hours = minutes / 60;
+  return `${hours < 10 ? hours.toFixed(1) : hours.toFixed(0)}h`;
 }

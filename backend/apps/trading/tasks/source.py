@@ -1074,12 +1074,18 @@ class LiveTickDataSource(TickDataSource):
                     else:
                         mid = Decimal(str(mid_raw))
 
-                    tick = Tick(
-                        instrument=instrument,
-                        timestamp=timestamp,
-                        bid=bid,
-                        ask=ask,
-                        mid=mid,
+                    tick = Tick.from_dict(
+                        {
+                            "instrument": instrument,
+                            "timestamp": timestamp,
+                            "bid": bid,
+                            "ask": ask,
+                            "mid": mid,
+                            "oanda_tick_publish_latency_seconds": payload.get(
+                                "oanda_tick_publish_latency_seconds"
+                            ),
+                            "oanda_tick_published_at": payload.get("oanda_tick_published_at"),
+                        }
                     )
                 except (ValueError, InvalidOperation):
                     continue  # Skip ticks with invalid prices

@@ -65,6 +65,10 @@ export function useRefreshAccountSnapshot(options?: {
         queryKey: queryKeys.accounts.lists(),
         refetchType: 'active',
       });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.accounts.pages(),
+        refetchType: 'active',
+      });
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),

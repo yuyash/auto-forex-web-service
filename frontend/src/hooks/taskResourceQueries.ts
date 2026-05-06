@@ -50,6 +50,14 @@ interface TaskSummaryResponse {
     recovery_warnings?: string[];
     recovery_blockers?: string[];
     reconciled_at?: string | null;
+    tick_delivery?: {
+      status?: string | null;
+      tick_timestamp?: string | null;
+      observed_at?: string | null;
+      age_seconds?: string | number | null;
+      max_age_seconds?: string | number | null;
+      message?: string | null;
+    } | null;
   };
   tick?: {
     timestamp?: string | null;
@@ -208,6 +216,21 @@ export function createTaskSummaryQuery(
               ? d.execution.recovery_blockers
               : [],
             reconciledAt: d.execution?.reconciled_at ?? null,
+            tickDelivery: d.execution?.tick_delivery
+              ? {
+                  status: d.execution.tick_delivery.status ?? null,
+                  tickTimestamp:
+                    d.execution.tick_delivery.tick_timestamp ?? null,
+                  observedAt: d.execution.tick_delivery.observed_at ?? null,
+                  ageSeconds: parseNullableNumber(
+                    d.execution.tick_delivery.age_seconds
+                  ),
+                  maxAgeSeconds: parseNullableNumber(
+                    d.execution.tick_delivery.max_age_seconds
+                  ),
+                  message: d.execution.tick_delivery.message ?? null,
+                }
+              : null,
           },
           tick: {
             timestamp: d.tick?.timestamp ?? null,
