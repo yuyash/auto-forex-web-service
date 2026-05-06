@@ -312,14 +312,23 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         )
 
     @staticmethod
-    def _task_validation_payload(*, action_name: str) -> dict[str, Any]:
+    def _task_validation_payload(
+        *,
+        action_name: str,
+        exc: TaskValidationError | None = None,
+    ) -> dict[str, Any]:
+        detail = (
+            str(exc)
+            if exc
+            else (
+                f"This task cannot be {action_name}ed with its current configuration or lifecycle "
+                "state. Review the task settings and try again."
+            )
+        )
         return api_error(
             f"Invalid {action_name} request for current task state",
             code=f"invalid_{action_name}_state",
-            detail=(
-                f"This task cannot be {action_name}ed with its current configuration or lifecycle "
-                "state. Review the task settings and try again."
-            ),
+            detail=detail,
         )
 
     @action(detail=True, methods=["post"])
@@ -378,7 +387,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 exc,
             )
             return Response(
-                self._task_validation_payload(action_name="start"),
+                self._task_validation_payload(action_name="start", exc=exc),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except TaskSubmissionError:
@@ -582,6 +591,12 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
             return Response(
                 self._task_conflict_payload(task_type_label=self.task_type_label),
                 status=status.HTTP_409_CONFLICT,
+            )
+        except TaskValidationError as exc:
+            logger.warning("Restart validation failed: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                self._task_validation_payload(action_name="restart", exc=exc),
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except ValueError as exc:
             logger.warning("Restart validation failed: task_id=%s, detail=%s", task.pk, exc)
