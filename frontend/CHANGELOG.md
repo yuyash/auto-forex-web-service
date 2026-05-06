@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.5...frontend-v1.66.0) (2026-05-06)
+
+
+### Features
+
+* backtest balance adjustment ([#673](https://github.com/yuyash/auto-forex-web-service/issues/673)) ([d7a9897](https://github.com/yuyash/auto-forex-web-service/commit/d7a9897ac7bd6e8bc5d80027f934bd896319134d))
+
 ## [1.65.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.4...frontend-v1.65.5) (2026-05-05)
 
 
