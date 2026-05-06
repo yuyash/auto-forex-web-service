@@ -48,6 +48,8 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "snapshot_refresh_status_updated_at",
             "live_max_exposure_guard_enabled",
             "live_max_estimated_exposure_units",
+            "live_max_initial_order_guard_enabled",
+            "live_max_initial_order_units",
             "live_max_order_guard_enabled",
             "live_max_order_units",
             "is_active",
@@ -122,6 +124,33 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
                 {
                     "live_max_estimated_exposure_units": [
                         "Set a positive maximum gross units value when the guard is enabled."
+                    ]
+                }
+            )
+
+        initial_order_guard_enabled = attrs.get(
+            "live_max_initial_order_guard_enabled",
+            getattr(
+                self.instance,
+                "live_max_initial_order_guard_enabled",
+                _model_field_default("live_max_initial_order_guard_enabled"),
+            ),
+        )
+        initial_order_limit = attrs.get(
+            "live_max_initial_order_units",
+            getattr(
+                self.instance,
+                "live_max_initial_order_units",
+                _model_field_default("live_max_initial_order_units"),
+            ),
+        )
+        if initial_order_guard_enabled and (
+            initial_order_limit is None or int(initial_order_limit) <= 0
+        ):
+            raise serializers.ValidationError(
+                {
+                    "live_max_initial_order_units": [
+                        "Set a positive maximum initial order units value."
                     ]
                 }
             )

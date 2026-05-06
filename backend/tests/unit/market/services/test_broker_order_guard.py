@@ -75,11 +75,22 @@ def test_rejects_oversized_order(settings):
 
     with pytest.raises(BrokerOrderGuardError, match="Order size exceeds"):
         BrokerOrderGuard().validate_order(
-            account=_account(),
+            account=_account(live_max_order_guard_enabled=True),
             dry_run=False,
             instrument="USD_JPY",
             units=Decimal("-1001"),
         )
+
+
+def test_order_limit_defaults_to_disabled(settings):
+    settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
+
+    BrokerOrderGuard().validate_order(
+        account=_account(),
+        dry_run=False,
+        instrument="USD_JPY",
+        units=Decimal("100000"),
+    )
 
 
 def test_allows_configured_order(settings):
@@ -88,7 +99,7 @@ def test_allows_configured_order(settings):
     settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
 
     BrokerOrderGuard().validate_order(
-        account=_account(api_type="live"),
+        account=_account(api_type="live", live_max_order_guard_enabled=True),
         dry_run=False,
         instrument="USD_JPY",
         units=Decimal("1000"),
@@ -99,7 +110,7 @@ def test_account_order_limit_overrides_global_setting(settings):
     settings.TRADING_LIVE_MAX_ORDER_UNITS = 1000
 
     BrokerOrderGuard().validate_order(
-        account=_account(live_max_order_units=1200),
+        account=_account(live_max_order_guard_enabled=True, live_max_order_units=1200),
         dry_run=False,
         instrument="USD_JPY",
         units=Decimal("1200"),
@@ -107,7 +118,7 @@ def test_account_order_limit_overrides_global_setting(settings):
 
     with pytest.raises(BrokerOrderGuardError, match="Order size exceeds"):
         BrokerOrderGuard().validate_order(
-            account=_account(live_max_order_units=1200),
+            account=_account(live_max_order_guard_enabled=True, live_max_order_units=1200),
             dry_run=False,
             instrument="USD_JPY",
             units=Decimal("1201"),

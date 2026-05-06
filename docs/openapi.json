@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.51.1",
+        "version": "1.51.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -8801,6 +8801,12 @@
                     "live_max_estimated_exposure_units": {
                         "type": "integer"
                     },
+                    "live_max_initial_order_guard_enabled": {
+                        "type": "boolean"
+                    },
+                    "live_max_initial_order_units": {
+                        "type": "integer"
+                    },
                     "live_max_order_guard_enabled": {
                         "type": "boolean"
                     },
@@ -8966,6 +8972,12 @@
                     "live_max_estimated_exposure_units": {
                         "type": "integer"
                     },
+                    "live_max_initial_order_guard_enabled": {
+                        "type": "boolean"
+                    },
+                    "live_max_initial_order_units": {
+                        "type": "integer"
+                    },
                     "live_max_order_guard_enabled": {
                         "type": "boolean"
                     },
@@ -9113,6 +9125,16 @@
                         "minimum": 0,
                         "description": "Account-specific maximum estimated gross units allowed when the live max exposure guard is enabled"
                     },
+                    "live_max_initial_order_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Whether to enforce the account-specific maximum initial order units check before starting non-dry-run trading tasks on this account"
+                    },
+                    "live_max_initial_order_units": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Account-specific maximum absolute units allowed for the initial strategy order"
+                    },
                     "live_max_order_guard_enabled": {
                         "type": "boolean",
                         "description": "Whether to enforce the account-specific maximum order units check before submitting broker-bound orders on this account"
@@ -9212,6 +9234,16 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Account-specific maximum estimated gross units allowed when the live max exposure guard is enabled"
+                    },
+                    "live_max_initial_order_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Whether to enforce the account-specific maximum initial order units check before starting non-dry-run trading tasks on this account"
+                    },
+                    "live_max_initial_order_units": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Account-specific maximum absolute units allowed for the initial strategy order"
                     },
                     "live_max_order_guard_enabled": {
                         "type": "boolean",

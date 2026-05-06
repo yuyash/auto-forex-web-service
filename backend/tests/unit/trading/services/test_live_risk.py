@@ -19,6 +19,8 @@ def _trading_task(
     debug_options: dict | None = None,
     live_max_exposure_guard_enabled: bool = False,
     live_max_estimated_exposure_units: int = 200_000,
+    live_max_initial_order_guard_enabled: bool = True,
+    live_max_initial_order_units: int = 10_000,
 ) -> TradingTask:
     return TradingTask(
         config=StrategyConfiguration(
@@ -35,6 +37,8 @@ def _trading_task(
             api_type=api_type,
             live_max_exposure_guard_enabled=live_max_exposure_guard_enabled,
             live_max_estimated_exposure_units=live_max_estimated_exposure_units,
+            live_max_initial_order_guard_enabled=live_max_initial_order_guard_enabled,
+            live_max_initial_order_units=live_max_initial_order_units,
         ),
         dry_run=dry_run,
         instrument=instrument,
@@ -76,6 +80,30 @@ def test_rejects_oversized_initial_order(settings):
 
     with pytest.raises(LiveTradingRiskError, match="Initial order size exceeds"):
         LiveTradingRiskGuard().validate_task_start(task)
+
+
+def test_account_initial_order_limit_overrides_global_setting(settings):
+    settings.TRADING_LIVE_MAX_INITIAL_UNITS = 10_000
+
+    task = _trading_task(
+        live_max_initial_order_guard_enabled=True,
+        live_max_initial_order_units=25_000,
+        parameters={"base_units": 20_000, "trend_lot_size": 1},
+    )
+
+    LiveTradingRiskGuard().validate_task_start(task)
+
+
+def test_skips_initial_order_limit_when_account_guard_disabled(settings):
+    settings.TRADING_LIVE_MAX_INITIAL_UNITS = 10_000
+
+    task = _trading_task(
+        live_max_initial_order_guard_enabled=False,
+        live_max_initial_order_units=10_000,
+        parameters={"base_units": 20_000, "trend_lot_size": 1},
+    )
+
+    LiveTradingRiskGuard().validate_task_start(task)
 
 
 def test_rejects_oversized_estimated_gross_exposure(settings):

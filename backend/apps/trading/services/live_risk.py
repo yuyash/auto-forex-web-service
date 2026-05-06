@@ -73,14 +73,15 @@ class LiveTradingRiskGuard:
 
     def _validate_unit_limits(self, task: TradingTask, policy: LiveTradingPolicy) -> None:
         estimate = self._estimate_task_units(task)
-        max_initial = policy.max_initial_units
+        max_initial = self._account_max_initial_order_units(task, policy)
         max_exposure = self._account_max_estimated_exposure_units(task, policy)
 
         if max_initial and estimate.initial_order_units > max_initial:
             raise LiveTradingRiskError(
                 "Initial order size exceeds the configured live-trading limit "
                 f"({estimate.initial_order_units} > {max_initial}). "
-                "Reduce strategy units or raise TRADING_LIVE_MAX_INITIAL_UNITS."
+                "Reduce strategy units or adjust the OANDA account maximum initial order "
+                "units setting."
             )
 
         if max_exposure and estimate.estimated_gross_units > max_exposure:
@@ -89,6 +90,23 @@ class LiveTradingRiskGuard:
                 f"({estimate.estimated_gross_units} > {max_exposure}). "
                 "Reduce grid size/units or adjust the OANDA account maximum gross units setting."
             )
+
+    def _account_max_initial_order_units(
+        self,
+        task: TradingTask,
+        policy: LiveTradingPolicy,
+    ) -> int:
+        account = getattr(task, "oanda_account", None)
+        if not bool(getattr(account, "live_max_initial_order_guard_enabled", True)):
+            return 0
+
+        account_limit = getattr(account, "live_max_initial_order_units", None)
+        if account_limit is None:
+            return policy.max_initial_units
+        try:
+            return max(int(account_limit), 0)
+        except (TypeError, ValueError):
+            return policy.max_initial_units
 
     def _account_max_estimated_exposure_units(
         self,

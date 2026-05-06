@@ -145,6 +145,19 @@ class OandaAccounts(models.Model):
             "guard is enabled"
         ),
     )
+    live_max_initial_order_guard_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether to enforce the account-specific maximum initial order units check "
+            "before starting non-dry-run trading tasks on this account"
+        ),
+    )
+    live_max_initial_order_units = models.PositiveIntegerField(
+        default=10000,
+        help_text=(
+            "Account-specific maximum absolute units allowed for the initial strategy order"
+        ),
+    )
     live_max_order_units = models.PositiveIntegerField(
         default=10000,
         help_text=(
@@ -152,7 +165,7 @@ class OandaAccounts(models.Model):
         ),
     )
     live_max_order_guard_enabled = models.BooleanField(
-        default=True,
+        default=False,
         help_text=(
             "Whether to enforce the account-specific maximum order units check before "
             "submitting broker-bound orders on this account"
