@@ -42,6 +42,8 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "snapshot_refresh_task_id",
             "snapshot_refresh_status",
             "snapshot_refresh_status_updated_at",
+            "live_max_exposure_guard_enabled",
+            "live_max_estimated_exposure_units",
             "is_active",
             "is_default",
             "created_at",
@@ -92,6 +94,23 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
                         ]
                     }
                 )
+
+        exposure_guard_enabled = attrs.get(
+            "live_max_exposure_guard_enabled",
+            getattr(self.instance, "live_max_exposure_guard_enabled", False),
+        )
+        exposure_limit = attrs.get(
+            "live_max_estimated_exposure_units",
+            getattr(self.instance, "live_max_estimated_exposure_units", None),
+        )
+        if exposure_guard_enabled and (exposure_limit is None or int(exposure_limit) <= 0):
+            raise serializers.ValidationError(
+                {
+                    "live_max_estimated_exposure_units": [
+                        "Set a positive maximum gross units value when the guard is enabled."
+                    ]
+                }
+            )
 
         return attrs
 

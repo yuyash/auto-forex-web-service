@@ -29,6 +29,11 @@ class TestOandaAccountsSerializerUnit:
         mock_account.hedging_enabled = True
         mock_account.snapshot_refreshed_at = None
         mock_account.snapshot_refresh_error = ""
+        mock_account.snapshot_refresh_task_id = ""
+        mock_account.snapshot_refresh_status = "idle"
+        mock_account.snapshot_refresh_status_updated_at = None
+        mock_account.live_max_exposure_guard_enabled = False
+        mock_account.live_max_estimated_exposure_units = 200000
         mock_account.is_active = True
         mock_account.is_default = False
         mock_account.created_at = "2024-01-01T00:00:00Z"

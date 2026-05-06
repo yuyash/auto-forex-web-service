@@ -193,6 +193,8 @@ export interface BackendAccount {
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
+  live_max_exposure_guard_enabled?: boolean;
+  live_max_estimated_exposure_units?: number;
 }
 
 export type BackendAccountSnapshotRefreshStatus =

@@ -8794,6 +8794,12 @@
                         "type": "string",
                         "format": "date-time",
                         "nullable": true
+                    },
+                    "live_max_exposure_guard_enabled": {
+                        "type": "boolean"
+                    },
+                    "live_max_estimated_exposure_units": {
+                        "type": "integer"
                     }
                 },
                 "required": [
@@ -8948,6 +8954,12 @@
                         "type": "string",
                         "minLength": 1
                     },
+                    "live_max_exposure_guard_enabled": {
+                        "type": "boolean"
+                    },
+                    "live_max_estimated_exposure_units": {
+                        "type": "integer"
+                    },
                     "is_active": {
                         "type": "boolean"
                     },
@@ -9079,6 +9091,16 @@
                         "nullable": true,
                         "description": "Timestamp when the manual OANDA account snapshot refresh status changed"
                     },
+                    "live_max_exposure_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Whether to enforce the maximum estimated gross units check before starting non-dry-run trading tasks on this account"
+                    },
+                    "live_max_estimated_exposure_units": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Account-specific maximum estimated gross units allowed when the live max exposure guard is enabled"
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -9158,6 +9180,16 @@
                         "minLength": 1,
                         "description": "Account base currency",
                         "maxLength": 3
+                    },
+                    "live_max_exposure_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Whether to enforce the maximum estimated gross units check before starting non-dry-run trading tasks on this account"
+                    },
+                    "live_max_estimated_exposure_units": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Account-specific maximum estimated gross units allowed when the live max exposure guard is enabled"
                     },
                     "is_active": {
                         "type": "boolean",

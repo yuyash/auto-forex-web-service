@@ -131,6 +131,20 @@ class OandaAccounts(models.Model):
         blank=True,
         help_text="Timestamp when the manual OANDA account snapshot refresh status changed",
     )
+    live_max_exposure_guard_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether to enforce the maximum estimated gross units check before starting "
+            "non-dry-run trading tasks on this account"
+        ),
+    )
+    live_max_estimated_exposure_units = models.PositiveIntegerField(
+        default=200000,
+        help_text=(
+            "Account-specific maximum estimated gross units allowed when the live max exposure "
+            "guard is enabled"
+        ),
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",
