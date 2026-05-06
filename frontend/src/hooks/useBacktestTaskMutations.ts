@@ -7,7 +7,7 @@ import type {
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../types';
-import { TaskStatus } from '../types/common';
+import { TaskStatus, TaskType } from '../types/common';
 import {
   beginTaskStatusTransition,
   clearTaskStatusTransitionByKind,
@@ -25,6 +25,7 @@ import {
   createResumeHook,
   createStartHook,
 } from './useTaskMutationFactory';
+import { refreshTaskExecution, refreshTaskSummary } from './taskResourceCache';
 import { useWrappedMutation } from './useWrappedMutation';
 
 // --- hooks that need custom create/update logic (not generic) -------------
@@ -152,7 +153,19 @@ export function useAdjustBacktestBalance(options?: {
       backtestTasksApi.adjustBalance(variables.id, variables.data),
     {
       onSuccess: async (data, variables) => {
-        await invalidateTaskDerivedCaches('backtest', variables.id);
+        await Promise.all([
+          invalidateTaskDerivedCaches('backtest', variables.id),
+          refreshTaskSummary(
+            variables.id,
+            TaskType.BACKTEST,
+            data.execution_id
+          ),
+          refreshTaskExecution(
+            variables.id,
+            data.execution_id,
+            TaskType.BACKTEST
+          ),
+        ]);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),

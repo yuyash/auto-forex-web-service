@@ -188,6 +188,7 @@ export function useTaskMetrics({
           );
           const nextLatest =
             nextData.length > 0 ? nextData[nextData.length - 1] : null;
+          dataRef.current = nextData;
           latestTimestampRef.current = nextLatest
             ? new Date(nextLatest.t * 1000).toISOString()
             : latestTimestampRef.current;

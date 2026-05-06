@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.models import BacktestTask, ExecutionState, TaskLog
+from apps.trading.services.execution_snapshots import sync_execution_snapshot
 
 
 class BacktestBalanceAdjustmentError(Exception):
@@ -93,6 +95,8 @@ def set_backtest_current_balance(
             updated_at=updated_at,
             state_version=F("state_version") + 1,
         )
+        task.updated_at = updated_at
+        task.save(update_fields=["updated_at"])
         state.refresh_from_db(fields=["current_balance", "state_version"])
 
         TaskLog.objects.create(
@@ -110,6 +114,7 @@ def set_backtest_current_balance(
                 "reason": reason,
             },
         )
+        _refresh_balance_dependent_snapshots(task)
 
         return BacktestBalanceAdjustmentResult(
             task_id=task.pk,
@@ -119,3 +124,12 @@ def set_backtest_current_balance(
             adjustment=adjustment,
             state_version=state.state_version,
         )
+
+
+def _refresh_balance_dependent_snapshots(task: BacktestTask) -> None:
+    """Refresh terminal snapshot data that includes execution balance."""
+    if task.execution_id is None:
+        return
+
+    cache.delete(f"task-summary-snapshot:{TaskType.BACKTEST}:{task.pk}:{task.execution_id}")
+    sync_execution_snapshot(task=task, task_type=TaskType.BACKTEST)

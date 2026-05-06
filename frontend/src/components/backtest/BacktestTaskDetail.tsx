@@ -26,6 +26,7 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
+  IconButton,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -356,6 +357,7 @@ export const BacktestTaskDetail: React.FC = () => {
       setBalanceDialogOpen(false);
       showSuccess(t('backtest:toast.balanceAdjustedSuccessfully'));
       await Promise.all([
+        refreshTask(),
         refreshOverviewSummary(),
         metricsResult.refresh(),
         overviewStrategySnapshot.refetch(),
@@ -509,15 +511,15 @@ export const BacktestTaskDetail: React.FC = () => {
         extraActions={
           <Tooltip title={balanceAdjustmentTooltip}>
             <span>
-              <Button
+              <IconButton
                 size={isMobile ? 'small' : 'medium'}
-                variant="outlined"
-                startIcon={<AccountBalanceWalletIcon />}
+                color="primary"
                 disabled={!canAdjustBalance}
                 onClick={() => setBalanceDialogOpen(true)}
+                aria-label={t('backtest:detail.adjustBalance')}
               >
-                {t('backtest:detail.adjustBalance')}
-              </Button>
+                <AccountBalanceWalletIcon fontSize="small" />
+              </IconButton>
             </span>
           </Tooltip>
         }
