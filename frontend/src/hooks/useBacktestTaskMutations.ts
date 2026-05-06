@@ -1,6 +1,8 @@
 import { backtestTasksApi } from '../services/api';
 import type { BackendTaskStopResponse } from '../services/api/contracts';
 import type {
+  BacktestBalanceAdjustmentData,
+  BacktestBalanceAdjustmentResult,
   BacktestTask,
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
@@ -137,6 +139,23 @@ export function useStopBacktestTask(options?: {
         void refreshTaskStatusCaches('backtest', variables.id);
         options?.onError?.(error);
       },
+    }
+  );
+}
+
+export function useAdjustBacktestBalance(options?: {
+  onSuccess?: (data: BacktestBalanceAdjustmentResult) => void;
+  onError?: (error: Error) => void;
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; data: BacktestBalanceAdjustmentData }) =>
+      backtestTasksApi.adjustBalance(variables.id, variables.data),
+    {
+      onSuccess: async (data, variables) => {
+        await invalidateTaskDerivedCaches('backtest', variables.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
     }
   );
 }

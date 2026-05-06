@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.50.0",
+        "version": "1.50.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2613,6 +2613,54 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/adjust-balance/": {
+            "post": {
+                "operationId": "backtest_tasks_adjust_balance",
+                "description": "Set the current balance for a paused or stopped backtest execution.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BacktestBalanceAdjustmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BacktestBalanceAdjustmentResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -6803,6 +6851,66 @@
                 ],
                 "type": "string",
                 "description": "* `practice` - Practice\n* `live` - Live"
+            },
+            "BacktestBalanceAdjustmentRequest": {
+                "type": "object",
+                "description": "Request serializer for changing a resumable backtest execution balance.",
+                "properties": {
+                    "current_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "description": "New current balance for the paused or stopped backtest execution."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Optional audit note for the balance change.",
+                        "maxLength": 255
+                    }
+                },
+                "required": [
+                    "current_balance"
+                ]
+            },
+            "BacktestBalanceAdjustmentResponse": {
+                "type": "object",
+                "description": "Response serializer for backtest balance changes.",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "previous_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "current_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "adjustment": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "state_version": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "adjustment",
+                    "current_balance",
+                    "execution_id",
+                    "previous_balance",
+                    "state_version",
+                    "task_id"
+                ]
             },
             "BacktestTask": {
                 "type": "object",

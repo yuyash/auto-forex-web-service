@@ -25,9 +25,11 @@ import {
   Link,
   CircularProgress,
   Alert,
+  Tooltip,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { AccountBalanceWallet as AccountBalanceWalletIcon } from '@mui/icons-material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import {
   shouldEnableRealtimeTaskUpdates,
@@ -53,6 +55,7 @@ import {
 import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import {
+  useAdjustBacktestBalance,
   useDeleteBacktestTask,
   usePauseBacktestTask,
   useResumeBacktestTask,
@@ -80,6 +83,7 @@ import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { useTaskExecution } from '../../hooks/useTaskExecutions';
+import { BacktestBalanceAdjustmentDialog } from './BacktestBalanceAdjustmentDialog';
 
 const TaskMetricsTab = React.lazy(() =>
   import('../tasks/detail/TaskMetricsTab').then((module) => ({
@@ -95,6 +99,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const taskId = id || '';
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isRefreshingExecutionStatus, setIsRefreshingExecutionStatus] =
     useState(false);
@@ -106,9 +111,10 @@ export const BacktestTaskDetail: React.FC = () => {
   const resumeTask = useResumeBacktestTask();
   const pauseTask = usePauseBacktestTask();
   const stopTask = useStopBacktestTask();
+  const adjustBalance = useAdjustBacktestBalance();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const { user } = useAuth();
   const timezone = user?.timezone || 'UTC';
   const language = user?.language;
@@ -341,6 +347,29 @@ export const BacktestTaskDetail: React.FC = () => {
     }
   };
 
+  const handleBalanceConfirm = async (data: {
+    current_balance: string;
+    reason?: string;
+  }) => {
+    try {
+      await adjustBalance.mutate({ id: taskId, data });
+      setBalanceDialogOpen(false);
+      showSuccess(t('backtest:toast.balanceAdjustedSuccessfully'));
+      await Promise.all([
+        refreshOverviewSummary(),
+        metricsResult.refresh(),
+        overviewStrategySnapshot.refetch(),
+      ]);
+    } catch (error) {
+      showError(
+        formatTaskActionError(
+          error,
+          t('backtest:detail.balanceAdjustmentFailed')
+        )
+      );
+    }
+  };
+
   if (isLoading) {
     return (
       <Container maxWidth={false} sx={{ py: 4 }}>
@@ -375,6 +404,13 @@ export const BacktestTaskDetail: React.FC = () => {
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
     : 'N/A';
+  const canAdjustBalance =
+    (currentStatus === TaskStatus.PAUSED ||
+      currentStatus === TaskStatus.STOPPED) &&
+    s.execution.currentBalance != null;
+  const balanceAdjustmentTooltip = canAdjustBalance
+    ? t('backtest:detail.adjustBalance')
+    : t('backtest:detail.pauseOrStopBeforeBalanceAdjustment');
 
   return (
     <Container maxWidth={false} sx={taskDetailLayout.container}>
@@ -470,6 +506,21 @@ export const BacktestTaskDetail: React.FC = () => {
         }}
         onEdit={() => navigate(`/backtest-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}
+        extraActions={
+          <Tooltip title={balanceAdjustmentTooltip}>
+            <span>
+              <Button
+                size={isMobile ? 'small' : 'medium'}
+                variant="outlined"
+                startIcon={<AccountBalanceWalletIcon />}
+                disabled={!canAdjustBalance}
+                onClick={() => setBalanceDialogOpen(true)}
+              >
+                {t('backtest:detail.adjustBalance')}
+              </Button>
+            </span>
+          </Tooltip>
+        }
       />
 
       {/* Tabs */}
@@ -705,6 +756,16 @@ export const BacktestTaskDetail: React.FC = () => {
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
       />
+      {balanceDialogOpen ? (
+        <BacktestBalanceAdjustmentDialog
+          open={balanceDialogOpen}
+          currentBalance={s.execution.currentBalance}
+          accountCurrency={s.execution.accountCurrency || pnlCurrency || 'USD'}
+          isLoading={adjustBalance.isLoading}
+          onCancel={() => setBalanceDialogOpen(false)}
+          onConfirm={handleBalanceConfirm}
+        />
+      ) : null}
       {pendingAction && (
         <TaskActionConfirmDialog
           open={true}

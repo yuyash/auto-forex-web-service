@@ -16,6 +16,7 @@ const {
   mockBacktestPause,
   mockBacktestResume,
   mockBacktestRestart,
+  mockBacktestAdjust,
   mockShowError,
 } = vi.hoisted(() => ({
   mockBacktestStart: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockBacktestPause: vi.fn(),
   mockBacktestResume: vi.fn(),
   mockBacktestRestart: vi.fn(),
+  mockBacktestAdjust: vi.fn(),
   mockShowError: vi.fn(),
 }));
 
@@ -115,6 +117,10 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
   })),
   useRerunBacktestTask: vi.fn(() => ({
     mutate: mockBacktestRestart,
+    isLoading: false,
+  })),
+  useAdjustBacktestBalance: vi.fn(() => ({
+    mutate: mockBacktestAdjust,
     isLoading: false,
   })),
   useDeleteBacktestTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
@@ -229,6 +235,9 @@ describe('BacktestTaskDetail', () => {
     mockBacktestRestart.mockResolvedValue({
       ...mockTaskData,
       status: TaskStatus.STARTING,
+    });
+    mockBacktestAdjust.mockResolvedValue({
+      current_balance: '12500.0000000000',
     });
   });
 
@@ -412,6 +421,76 @@ describe('BacktestTaskDetail', () => {
 
     await waitFor(() => {
       expect(mockBacktestRestart).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('adjusts balance for paused backtest tasks from the detail header', async () => {
+    const taskMod = await import('../../../src/hooks/useBacktestTasks');
+    const summaryMod = await import('../../../src/hooks/useTaskSummary');
+    vi.mocked(taskMod.useBacktestTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.PAUSED },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    const summary = {
+      timestamp: null,
+      pnl: { realized: 0, unrealized: 0 },
+      counts: {
+        totalTrades: 0,
+        openPositions: 0,
+        closedPositions: 0,
+        openLongUnits: 0,
+        openShortUnits: 0,
+        winningTrades: 0,
+        losingTrades: 0,
+      },
+      execution: {
+        currentBalance: 10000,
+        ticksProcessed: 0,
+        accountCurrency: 'USD',
+        currentBalanceDisplay: null,
+        displayCurrency: null,
+        resumeCursorTimestamp: null,
+        marginRatio: null,
+        currentAtr: null,
+        recoveryStatus: null,
+        recoveryWarnings: [],
+        recoveryBlockers: [],
+        reconciledAt: null,
+      },
+      tick: { timestamp: null, bid: null, ask: null, mid: null },
+      task: {
+        status: '',
+        startedAt: null,
+        completedAt: null,
+        errorMessage: null,
+        stopReason: null,
+        progress: 0,
+      },
+    };
+    vi.mocked(summaryMod.useTaskSummary).mockReturnValueOnce({
+      data: summary,
+      summary,
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    const user = userEvent.setup();
+
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Adjust Balance' }));
+    const input = screen.getByLabelText('New Current Balance');
+    await user.clear(input);
+    await user.type(input, '12500');
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => {
+      expect(mockBacktestAdjust).toHaveBeenCalledWith({
+        id: '1',
+        data: { current_balance: '12500' },
+      });
     });
   });
 

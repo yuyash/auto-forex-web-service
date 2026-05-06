@@ -1,6 +1,8 @@
 import { api } from '../../api/apiClient';
 import type {
   BacktestTask,
+  BacktestBalanceAdjustmentData,
+  BacktestBalanceAdjustmentResult,
   BacktestTaskCreateData,
   BacktestTaskListParams,
   BacktestTaskUpdateData,
@@ -82,4 +84,13 @@ export const backtestTasksApi = {
       payload
     );
   },
+
+  adjustBalance: async (
+    id: string,
+    data: BacktestBalanceAdjustmentData
+  ): Promise<BacktestBalanceAdjustmentResult> =>
+    api.post<BacktestBalanceAdjustmentResult>(
+      `/api/trading/tasks/backtest/${id}/adjust-balance/`,
+      data
+    ),
 };

@@ -44,6 +44,7 @@ interface TaskDetailHeaderProps {
   deleteLabel: string;
   /** When true, hides action buttons (start/stop/edit/delete) */
   isViewingHistorical?: boolean;
+  extraActions?: ReactNode;
   onStart: (id: string) => Promise<void>;
   onStop: (id: string) => Promise<void>;
   onRestart: (id: string) => Promise<void>;
@@ -147,6 +148,7 @@ export function TaskDetailHeader({
   editLabel,
   deleteLabel,
   isViewingHistorical = false,
+  extraActions,
   onStart,
   onStop,
   onRestart,
@@ -227,6 +229,7 @@ export function TaskDetailHeader({
                     onResume={onResume}
                     onPause={onPause}
                   />
+                  {extraActions}
                   <ActionButton
                     title={editLabel}
                     disabled={editDisabled}

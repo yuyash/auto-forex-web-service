@@ -110,6 +110,34 @@ class BacktestTaskListSerializer(BacktestTaskSerializer):
         read_only_fields = fields
 
 
+class BacktestBalanceAdjustmentSerializer(serializers.Serializer):
+    """Request serializer for changing a resumable backtest execution balance."""
+
+    current_balance = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        min_value=Decimal("0"),
+        help_text="New current balance for the paused or stopped backtest execution.",
+    )
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        help_text="Optional audit note for the balance change.",
+    )
+
+
+class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
+    """Response serializer for backtest balance changes."""
+
+    task_id = serializers.UUIDField()
+    execution_id = serializers.UUIDField()
+    previous_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    current_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    adjustment = serializers.DecimalField(max_digits=20, decimal_places=10)
+    state_version = serializers.IntegerField()
+
+
 class BacktestTaskCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating BacktestTask."""
 
