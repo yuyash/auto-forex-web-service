@@ -226,6 +226,8 @@ class TestOandaAccountDetailView:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["account_id"] == "101-001-1234567-005"
+        assert response.data["live_max_exposure_guard_enabled"] is False
+        assert response.data["live_max_estimated_exposure_units"] == 200000
 
     @patch("apps.market.services.accounts.OandaService")
     def test_get_account_detail_uses_cached_snapshot(
@@ -276,16 +278,24 @@ class TestOandaAccountDetailView:
         client = APIClient()
         client.force_authenticate(user=user)
 
-        data = {"is_active": False}
+        data = {
+            "is_active": False,
+            "live_max_exposure_guard_enabled": True,
+            "live_max_estimated_exposure_units": 350000,
+        }
 
         response = client.put(f"/api/market/accounts/{account.id}/", data, format="json")
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["is_active"] is False
+        assert response.data["live_max_exposure_guard_enabled"] is True
+        assert response.data["live_max_estimated_exposure_units"] == 350000
 
         # Verify update
         account.refresh_from_db()
         assert account.is_active is False
+        assert account.live_max_exposure_guard_enabled is True
+        assert account.live_max_estimated_exposure_units == 350000
         mock_invalidate.assert_called_once_with({account.api_hostname})
 
     @patch("apps.market.models.oanda.invalidate_market_metadata_cache")

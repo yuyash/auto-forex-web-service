@@ -225,6 +225,7 @@ class TestStart:
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "Invalid start request for current task state"
+        assert response.data["detail"] == "bad config"
 
     def test_start_submission_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.CREATED)
@@ -453,6 +454,21 @@ class TestRestart:
         response = vs.restart(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "Invalid restart request for current task state"
+        assert "retry limit" not in response.data["detail"]
+
+    def test_restart_task_validation_error_returns_detail(self):
+        task = _make_task(task_status=TaskStatus.RUNNING)
+        vs = _build_viewset(action="restart")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.restart_task.side_effect = TaskValidationError("risk limit")
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.restart(request, pk=1)
+        assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Invalid restart request for current task state"
+        assert response.data["detail"] == "risk limit"
 
     def test_restart_capacity_error_returns_409(self):
         task = _make_task(task_status=TaskStatus.STOPPED)

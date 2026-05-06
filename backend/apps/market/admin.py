@@ -45,12 +45,15 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "snapshot_refreshed_at",
         "snapshot_refresh_status",
         "snapshot_refresh_status_updated_at",
+        "live_max_exposure_guard_enabled",
+        "live_max_estimated_exposure_units",
         "is_active",
         "created_at",
     ]
     list_filter = [
         "api_type",
         "jurisdiction",
+        "live_max_exposure_guard_enabled",
         "is_active",
         "snapshot_refresh_status",
         OandaAccountSnapshotStateFilter,
@@ -100,6 +103,15 @@ class OandaAccountAdmin(admin.ModelAdmin):
                     "snapshot_refresh_task_id",
                     "snapshot_refresh_status",
                     "snapshot_refresh_status_updated_at",
+                )
+            },
+        ),
+        (
+            "Live Trading Risk",
+            {
+                "fields": (
+                    "live_max_exposure_guard_enabled",
+                    "live_max_estimated_exposure_units",
                 )
             },
         ),

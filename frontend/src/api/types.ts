@@ -44,6 +44,8 @@ export interface OandaAccounts {
   readonly margin_used?: string;
   readonly margin_available?: string;
   readonly unrealized_pnl?: string;
+  live_max_exposure_guard_enabled?: boolean;
+  live_max_estimated_exposure_units?: number;
   is_active?: boolean;
   is_default?: boolean;
   readonly created_at?: string;
@@ -56,6 +58,8 @@ export interface OandaAccountsRequest {
   api_type?: ApiTypeEnum;
   jurisdiction?: JurisdictionEnum;
   currency?: string;
+  live_max_exposure_guard_enabled?: boolean;
+  live_max_estimated_exposure_units?: number;
   is_active?: boolean;
   is_default?: boolean;
 }

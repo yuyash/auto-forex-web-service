@@ -1,6 +1,12 @@
 """E2E tests for /api/trading/tasks/backtest/."""
 
+from decimal import Decimal
+from uuid import uuid4
+
 import pytest
+
+from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.models import BacktestTask, ExecutionState, TaskLog
 
 
 def _create_backtest(client, config_id, name):
@@ -170,6 +176,100 @@ class TestBacktestTasks:
         ):
             resp = authenticated_client.get(f"/api/trading/tasks/backtest/{task_id}/{endpoint}/")
             assert resp.status_code == 200, f"{endpoint} returned {resp.status_code}"
+
+    def test_adjust_balance_updates_paused_execution_state(
+        self, authenticated_client, strategy_config
+    ):
+        task_id = _create_backtest(
+            authenticated_client, strategy_config.id, "E2E Backtest Balance Adjust"
+        )
+        execution_id = uuid4()
+        task = BacktestTask.objects.get(pk=task_id)
+        task.status = TaskStatus.PAUSED
+        task.execution_id = execution_id
+        task.save(update_fields=["status", "execution_id", "updated_at"])
+        state = ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            current_balance=Decimal("10000.0000000000"),
+            ticks_processed=42,
+        )
+
+        resp = authenticated_client.post(
+            f"/api/trading/tasks/backtest/{task_id}/adjust-balance/",
+            {"current_balance": "12500.5000000000", "reason": "manual deposit"},
+            format="json",
+        )
+
+        assert resp.status_code == 200, resp.data
+        state.refresh_from_db()
+        assert state.current_balance == Decimal("12500.5000000000")
+        assert state.state_version == 1
+        assert resp.data["previous_balance"] == "10000.0000000000"
+        assert resp.data["current_balance"] == "12500.5000000000"
+        assert resp.data["adjustment"] == "2500.5000000000"
+        log = TaskLog.objects.get(
+            task_id=task.pk,
+            component="backtest.balance_adjustment",
+        )
+        assert log.execution_id == execution_id
+        assert log.details["reason"] == "manual deposit"
+
+    def test_adjust_balance_updates_stopped_execution_state(
+        self, authenticated_client, strategy_config
+    ):
+        task_id = _create_backtest(
+            authenticated_client, strategy_config.id, "E2E Backtest Balance Stopped"
+        )
+        execution_id = uuid4()
+        task = BacktestTask.objects.get(pk=task_id)
+        task.status = TaskStatus.STOPPED
+        task.execution_id = execution_id
+        task.save(update_fields=["status", "execution_id", "updated_at"])
+        state = ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            current_balance=Decimal("10000.0000000000"),
+            ticks_processed=42,
+        )
+
+        resp = authenticated_client.post(
+            f"/api/trading/tasks/backtest/{task_id}/adjust-balance/",
+            {"current_balance": "11000.0000000000"},
+            format="json",
+        )
+
+        assert resp.status_code == 200, resp.data
+        state.refresh_from_db()
+        assert state.current_balance == Decimal("11000.0000000000")
+
+    def test_adjust_balance_requires_resumable_task(self, authenticated_client, strategy_config):
+        task_id = _create_backtest(
+            authenticated_client, strategy_config.id, "E2E Backtest Balance Running"
+        )
+        execution_id = uuid4()
+        task = BacktestTask.objects.get(pk=task_id)
+        task.status = TaskStatus.RUNNING
+        task.execution_id = execution_id
+        task.save(update_fields=["status", "execution_id", "updated_at"])
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            current_balance=Decimal("10000.0000000000"),
+            ticks_processed=42,
+        )
+
+        resp = authenticated_client.post(
+            f"/api/trading/tasks/backtest/{task_id}/adjust-balance/",
+            {"current_balance": "12500.0000000000"},
+            format="json",
+        )
+
+        assert resp.status_code == 400
+        assert resp.data["error_code"] == "backtest_balance_requires_paused_or_stopped"
 
     # ── Auth ──────────────────────────────────────────────────────────────
 

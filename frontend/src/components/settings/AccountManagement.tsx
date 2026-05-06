@@ -15,11 +15,13 @@ import {
   DialogActions,
   TextField,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
   CircularProgress,
   Alert,
+  Switch,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -47,7 +49,11 @@ interface AccountFormData {
   account_id: string;
   api_token: string;
   api_type: 'practice' | 'live';
+  live_max_exposure_guard_enabled: boolean;
+  live_max_estimated_exposure_units: string;
 }
+
+const DEFAULT_MAX_GROSS_UNITS = '200000';
 
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
@@ -73,6 +79,8 @@ const AccountManagement = () => {
     account_id: '',
     api_token: '',
     api_type: 'practice',
+    live_max_exposure_guard_enabled: false,
+    live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
   });
   const [isDefault, setIsDefault] = useState(false);
 
@@ -87,6 +95,8 @@ const AccountManagement = () => {
       account_id: '',
       api_token: '',
       api_type: 'practice',
+      live_max_exposure_guard_enabled: false,
+      live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
     });
     setIsDefault(accounts.length === 0); // First account is default
     setFormErrors({});
@@ -101,6 +111,12 @@ const AccountManagement = () => {
       account_id: account.account_id,
       api_token: '', // Don't populate token for security
       api_type: account.api_type,
+      live_max_exposure_guard_enabled:
+        account.live_max_exposure_guard_enabled ?? false,
+      live_max_estimated_exposure_units: String(
+        account.live_max_estimated_exposure_units ??
+          Number(DEFAULT_MAX_GROSS_UNITS)
+      ),
     });
     setIsDefault(account.is_default || false);
     setFormErrors({});
@@ -116,6 +132,8 @@ const AccountManagement = () => {
       account_id: '',
       api_token: '',
       api_type: 'practice',
+      live_max_exposure_guard_enabled: false,
+      live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
     });
     setIsDefault(false);
     setFormErrors({});
@@ -123,7 +141,7 @@ const AccountManagement = () => {
 
   // Validate form
   const validateForm = (): boolean => {
-    const errors: Partial<AccountFormData> = {};
+    const errors: Partial<Record<keyof AccountFormData, string>> = {};
 
     if (!formData.account_id.trim()) {
       errors.account_id = t(
@@ -138,6 +156,19 @@ const AccountManagement = () => {
         'common:validation.required',
         'This field is required'
       );
+    }
+    if (formData.live_max_exposure_guard_enabled) {
+      const maxGrossUnits = Number(formData.live_max_estimated_exposure_units);
+      if (
+        !Number.isInteger(maxGrossUnits) ||
+        !Number.isFinite(maxGrossUnits) ||
+        maxGrossUnits <= 0
+      ) {
+        errors.live_max_estimated_exposure_units = t(
+          'settings:accounts.maxGrossUnitsValidation',
+          'Enter a positive whole number.'
+        );
+      }
     }
 
     setFormErrors(errors);
@@ -154,10 +185,15 @@ const AccountManagement = () => {
 
     try {
       // Only include api_token if it's provided
-      const payload: Partial<AccountFormData> & { is_default?: boolean } = {
+      const payload: AccountUpsertData = {
         account_id: formData.account_id,
         api_type: formData.api_type,
         is_default: isDefault,
+        live_max_exposure_guard_enabled:
+          formData.live_max_exposure_guard_enabled,
+        live_max_estimated_exposure_units: Number(
+          formData.live_max_estimated_exposure_units || DEFAULT_MAX_GROSS_UNITS
+        ),
       };
 
       if (formData.api_token.trim()) {
@@ -443,6 +479,28 @@ const AccountManagement = () => {
                           variant="outlined"
                         />
                       )}
+                      <Chip
+                        label={
+                          account.live_max_exposure_guard_enabled
+                            ? t('settings:accounts.maxGrossUnitsChip', {
+                                defaultValue: 'Max Gross {{units}}',
+                                units: formatNumber(
+                                  account.live_max_estimated_exposure_units ??
+                                    0,
+                                  {
+                                    maximumFractionDigits: 0,
+                                  }
+                                ),
+                              })
+                            : t('settings:accounts.maxGrossUnitsGuardOff')
+                        }
+                        color={
+                          account.live_max_exposure_guard_enabled
+                            ? 'secondary'
+                            : 'default'
+                        }
+                        variant="outlined"
+                      />
                     </Box>
                   </CardContent>
                 </CardActionArea>
@@ -557,6 +615,43 @@ const AccountManagement = () => {
                 <MenuItem value="live">{t('settings:accounts.live')}</MenuItem>
               </Select>
             </FormControl>
+
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.live_max_exposure_guard_enabled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        live_max_exposure_guard_enabled: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={t(
+                  'settings:accounts.maxGrossUnitsGuard',
+                  'Max Gross Units check'
+                )}
+              />
+              <TextField
+                fullWidth
+                label={t('settings:accounts.maxGrossUnits', 'Max Gross Units')}
+                type="number"
+                value={formData.live_max_estimated_exposure_units}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    live_max_estimated_exposure_units: e.target.value,
+                  })
+                }
+                error={!!formErrors.live_max_estimated_exposure_units}
+                helperText={formErrors.live_max_estimated_exposure_units}
+                margin="normal"
+                disabled={!formData.live_max_exposure_guard_enabled}
+                inputProps={{ min: 1, step: 1 }}
+              />
+            </Box>
 
             <Box sx={{ mt: 2 }}>
               <Box display="flex" alignItems="center" gap={1}>

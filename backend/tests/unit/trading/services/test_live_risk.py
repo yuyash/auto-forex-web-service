@@ -17,6 +17,8 @@ def _trading_task(
     instrument: str = "USD_JPY",
     parameters: dict | None = None,
     debug_options: dict | None = None,
+    live_max_exposure_guard_enabled: bool = False,
+    live_max_estimated_exposure_units: int = 200_000,
 ) -> TradingTask:
     return TradingTask(
         config=StrategyConfiguration(
@@ -29,7 +31,11 @@ def _trading_task(
                 "f_max": 3,
             },
         ),
-        oanda_account=OandaAccounts(api_type=api_type),
+        oanda_account=OandaAccounts(
+            api_type=api_type,
+            live_max_exposure_guard_enabled=live_max_exposure_guard_enabled,
+            live_max_estimated_exposure_units=live_max_estimated_exposure_units,
+        ),
         dry_run=dry_run,
         instrument=instrument,
         hedging_enabled=True,
@@ -74,19 +80,37 @@ def test_rejects_oversized_initial_order(settings):
 
 def test_rejects_oversized_estimated_gross_exposure(settings):
     settings.TRADING_LIVE_MAX_INITIAL_UNITS = 10_000
-    settings.TRADING_LIVE_MAX_ESTIMATED_EXPOSURE_UNITS = 50_000
 
     task = _trading_task(
+        live_max_exposure_guard_enabled=True,
+        live_max_estimated_exposure_units=50_000,
         parameters={
             "base_units": 5_000,
             "trend_lot_size": 1,
             "r_max": 5,
             "f_max": 3,
-        }
+        },
     )
 
     with pytest.raises(LiveTradingRiskError, match="Estimated gross strategy exposure"):
         LiveTradingRiskGuard().validate_task_start(task)
+
+
+def test_skips_estimated_gross_exposure_when_account_guard_disabled(settings):
+    settings.TRADING_LIVE_MAX_INITIAL_UNITS = 10_000
+    settings.TRADING_LIVE_MAX_ESTIMATED_EXPOSURE_UNITS = 50_000
+
+    task = _trading_task(
+        live_max_exposure_guard_enabled=False,
+        parameters={
+            "base_units": 5_000,
+            "trend_lot_size": 1,
+            "r_max": 5,
+            "f_max": 3,
+        },
+    )
+
+    LiveTradingRiskGuard().validate_task_start(task)
 
 
 def test_rejects_unknown_debug_option():

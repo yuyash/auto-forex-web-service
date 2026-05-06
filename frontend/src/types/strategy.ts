@@ -196,6 +196,8 @@ export interface Account {
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
+  live_max_exposure_guard_enabled?: boolean;
+  live_max_estimated_exposure_units?: number;
   is_active: boolean;
   is_default?: boolean;
   jurisdiction?: string;
@@ -210,10 +212,12 @@ export type AccountSnapshotRefreshStatus =
 
 export interface AccountUpsertData {
   account_id: string;
-  api_token: string;
+  api_token?: string;
   api_type?: 'practice' | 'live';
   jurisdiction?: string;
   currency?: string;
+  live_max_exposure_guard_enabled?: boolean;
+  live_max_estimated_exposure_units?: number;
   is_active?: boolean;
   is_default?: boolean;
 }

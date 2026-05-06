@@ -15,6 +15,7 @@ import {
   DialogActions,
   TextField,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
@@ -23,6 +24,7 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
+  Switch,
   type SelectChangeEvent,
 } from '@mui/material';
 import {
@@ -70,9 +72,12 @@ interface AccountFormData {
   account_id: string;
   api_token: string;
   api_type: 'practice' | 'live';
+  live_max_exposure_guard_enabled: boolean;
+  live_max_estimated_exposure_units: string;
 }
 
 const DEFAULT_ACCOUNT_CURRENCY = 'USD';
+const DEFAULT_MAX_GROSS_UNITS = '200000';
 
 const resolveCurrencyCode = (currency?: string | null) => {
   if (!currency) return DEFAULT_ACCOUNT_CURRENCY;
@@ -304,6 +309,25 @@ function AccountCard({
                 variant="outlined"
               />
             )}
+            <Chip
+              label={
+                a.live_max_exposure_guard_enabled
+                  ? t('settings:accounts.maxGrossUnitsChip', {
+                      defaultValue: 'Max Gross {{units}}',
+                      units: formatNumber(
+                        a.live_max_estimated_exposure_units ?? 0,
+                        {
+                          maximumFractionDigits: 0,
+                        }
+                      ),
+                    })
+                  : t('settings:accounts.maxGrossUnitsGuardOff')
+              }
+              color={
+                a.live_max_exposure_guard_enabled ? 'secondary' : 'default'
+              }
+              variant="outlined"
+            />
           </Box>
         </CardContent>
       </CardActionArea>
@@ -426,6 +450,8 @@ export default function OandaAccountsPage() {
     account_id: '',
     api_token: '',
     api_type: 'practice',
+    live_max_exposure_guard_enabled: false,
+    live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
   });
   const [isDefault, setIsDefault] = useState(false);
   const [formErrors, setFormErrors] = useState<
@@ -446,7 +472,13 @@ export default function OandaAccountsPage() {
 
   const handleAddClick = () => {
     setEditingAccount(null);
-    setFormData({ account_id: '', api_token: '', api_type: 'practice' });
+    setFormData({
+      account_id: '',
+      api_token: '',
+      api_type: 'practice',
+      live_max_exposure_guard_enabled: false,
+      live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
+    });
     setIsDefault(!hasAnyAccount);
     setFormErrors({});
     setShowApiToken(false);
@@ -459,6 +491,12 @@ export default function OandaAccountsPage() {
       account_id: account.account_id,
       api_token: '',
       api_type: account.api_type,
+      live_max_exposure_guard_enabled:
+        account.live_max_exposure_guard_enabled ?? false,
+      live_max_estimated_exposure_units: String(
+        account.live_max_estimated_exposure_units ??
+          Number(DEFAULT_MAX_GROSS_UNITS)
+      ),
     });
     setIsDefault(account.is_default || false);
     setFormErrors({});
@@ -469,18 +507,36 @@ export default function OandaAccountsPage() {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditingAccount(null);
-    setFormData({ account_id: '', api_token: '', api_type: 'practice' });
+    setFormData({
+      account_id: '',
+      api_token: '',
+      api_type: 'practice',
+      live_max_exposure_guard_enabled: false,
+      live_max_estimated_exposure_units: DEFAULT_MAX_GROSS_UNITS,
+    });
     setIsDefault(false);
     setFormErrors({});
   };
 
   const validateForm = (): boolean => {
-    const errors: Partial<AccountFormData> = {};
+    const errors: Partial<Record<keyof AccountFormData, string>> = {};
     if (!formData.account_id.trim()) {
       errors.account_id = t('common:validation.required');
     }
     if (!editingAccount && !formData.api_token.trim()) {
       errors.api_token = t('common:validation.required');
+    }
+    if (formData.live_max_exposure_guard_enabled) {
+      const maxGrossUnits = Number(formData.live_max_estimated_exposure_units);
+      if (
+        !Number.isInteger(maxGrossUnits) ||
+        !Number.isFinite(maxGrossUnits) ||
+        maxGrossUnits <= 0
+      ) {
+        errors.live_max_estimated_exposure_units = t(
+          'settings:accounts.maxGrossUnitsValidation'
+        );
+      }
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -490,10 +546,15 @@ export default function OandaAccountsPage() {
     if (!validateForm()) return;
     setSubmitting(true);
     try {
-      const payload: Partial<AccountFormData> & { is_default?: boolean } = {
+      const payload: AccountUpsertData = {
         account_id: formData.account_id,
         api_type: formData.api_type,
         is_default: isDefault,
+        live_max_exposure_guard_enabled:
+          formData.live_max_exposure_guard_enabled,
+        live_max_estimated_exposure_units: Number(
+          formData.live_max_estimated_exposure_units || DEFAULT_MAX_GROSS_UNITS
+        ),
       };
       if (formData.api_token.trim()) {
         payload.api_token = formData.api_token;
@@ -937,6 +998,39 @@ export default function OandaAccountsPage() {
                 <MenuItem value="live">{t('settings:accounts.live')}</MenuItem>
               </Select>
             </FormControl>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.live_max_exposure_guard_enabled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        live_max_exposure_guard_enabled: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={t('settings:accounts.maxGrossUnitsGuard')}
+              />
+              <TextField
+                fullWidth
+                label={t('settings:accounts.maxGrossUnits')}
+                type="number"
+                value={formData.live_max_estimated_exposure_units}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    live_max_estimated_exposure_units: e.target.value,
+                  })
+                }
+                error={!!formErrors.live_max_estimated_exposure_units}
+                helperText={formErrors.live_max_estimated_exposure_units}
+                margin="normal"
+                disabled={!formData.live_max_exposure_guard_enabled}
+                inputProps={{ min: 1, step: 1 }}
+              />
+            </Box>
             <Box sx={{ mt: 2 }}>
               <Box display="flex" alignItems="center" gap={1}>
                 <input

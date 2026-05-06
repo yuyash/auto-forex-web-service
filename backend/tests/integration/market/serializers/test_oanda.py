@@ -35,6 +35,8 @@ class TestOandaAccountsSerializer:
         assert data["api_type"] == ApiType.PRACTICE
         assert data["jurisdiction"] == Jurisdiction.OTHER
         assert float(data["balance"]) == 10000.00
+        assert data["live_max_exposure_guard_enabled"] is False
+        assert data["live_max_estimated_exposure_units"] == 200000
         assert "api_token" not in data  # Should not be in output
 
     def test_create_account(self, user: Any) -> None:
@@ -139,6 +141,56 @@ class TestOandaAccountsSerializer:
 
         updated_account = serializer.save()
         assert updated_account.is_active is False
+
+    def test_update_live_max_exposure_guard(self, user: Any) -> None:
+        """Test updating account-level max gross units guard settings."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-016",
+            api_type=ApiType.PRACTICE,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.put("/")
+        request.user = user
+
+        data = {
+            "live_max_exposure_guard_enabled": True,
+            "live_max_estimated_exposure_units": 350000,
+        }
+
+        serializer = OandaAccountsSerializer(
+            account, data=data, partial=True, context={"request": request}
+        )
+        assert serializer.is_valid(), serializer.errors
+
+        updated_account = serializer.save()
+        assert updated_account.live_max_exposure_guard_enabled is True
+        assert updated_account.live_max_estimated_exposure_units == 350000
+
+    def test_enabled_live_max_exposure_guard_requires_positive_limit(self, user: Any) -> None:
+        """Test account-level max gross units guard limit validation."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-017",
+            api_type=ApiType.PRACTICE,
+        )
+
+        factory = APIRequestFactory()
+        request = factory.put("/")
+        request.user = user
+
+        serializer = OandaAccountsSerializer(
+            account,
+            data={
+                "live_max_exposure_guard_enabled": True,
+                "live_max_estimated_exposure_units": 0,
+            },
+            partial=True,
+            context={"request": request},
+        )
+        assert not serializer.is_valid()
+        assert "live_max_estimated_exposure_units" in serializer.errors
 
     def test_first_account_is_default(self, user: Any) -> None:
         """Test that first account is automatically set as default."""

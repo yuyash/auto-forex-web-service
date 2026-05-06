@@ -6,16 +6,25 @@ from typing import Any
 
 from django.db import IntegrityError
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
+from rest_framework.response import Response
 
 from apps.trading.models import BacktestTask
 from apps.trading.serializers.backtest import (
+    BacktestBalanceAdjustmentResponseSerializer,
+    BacktestBalanceAdjustmentSerializer,
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
     BacktestTaskSerializer,
 )
+from apps.trading.services.backtest_balance import (
+    BacktestBalanceAdjustmentError,
+    set_backtest_current_balance,
+)
+from apps.trading.views.errors import api_error
 from apps.trading.views.task_base import (
     TASK_LIST_PARAMETERS,
     TaskViewSetBase,
@@ -105,6 +114,12 @@ def _integrity_constraint_id(exc: IntegrityError) -> str:
         tags=["Trading"],
         responses={201: BacktestTaskSerializer},
     ),
+    adjust_balance=extend_schema(
+        operation_id="backtest_tasks_adjust_balance",
+        tags=["Trading"],
+        request=BacktestBalanceAdjustmentSerializer,
+        responses={200: BacktestBalanceAdjustmentResponseSerializer},
+    ),
 )
 @extend_schema(tags=["Trading"])
 class BacktestTaskViewSet(TaskViewSetBase):
@@ -164,3 +179,42 @@ class BacktestTaskViewSet(TaskViewSetBase):
     def get_stop_response_extras(self, request: Request) -> dict[str, Any]:
         """Echo the resolved stop mode in the stop response."""
         return {"mode": self.get_stop_mode(request)}
+
+    @action(detail=True, methods=["post"], url_path="adjust-balance")
+    def adjust_balance(self, request: Request, pk: str | None = None) -> Response:
+        """Set the current balance for a paused or stopped backtest execution."""
+        task = self.get_object()
+        serializer = BacktestBalanceAdjustmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            result = set_backtest_current_balance(
+                task_id=task.pk,
+                user_id=request.user.id,
+                current_balance=serializer.validated_data["current_balance"],
+                reason=serializer.validated_data.get("reason", ""),
+            )
+        except BacktestBalanceAdjustmentError as exc:
+            logger.warning(
+                "Backtest balance adjustment rejected",
+                extra={"task_id": str(task.pk), "code": exc.code},
+            )
+            return Response(
+                api_error(exc.public_message, code=exc.code),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected backtest balance adjustment failure",
+                extra={"task_id": str(task.pk)},
+            )
+            return Response(
+                api_error(
+                    "Failed to adjust backtest balance",
+                    code="backtest_balance_adjustment_failed",
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        response = BacktestBalanceAdjustmentResponseSerializer(result)
+        return Response(response.data)

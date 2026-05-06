@@ -126,6 +126,20 @@ export interface BacktestTaskUpdateData {
   debug_options?: Record<string, unknown>;
 }
 
+export interface BacktestBalanceAdjustmentData {
+  current_balance: number | string;
+  reason?: string;
+}
+
+export interface BacktestBalanceAdjustmentResult {
+  task_id: string;
+  execution_id: string;
+  previous_balance: string;
+  current_balance: string;
+  adjustment: string;
+  state_version: number;
+}
+
 export interface BacktestTaskListParams {
   page?: number;
   page_size?: number;

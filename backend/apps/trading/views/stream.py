@@ -20,7 +20,7 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.models import BacktestTask, ExecutionState, TradingTask
 
 logger = logging.getLogger(__name__)
 
@@ -156,39 +156,78 @@ class TaskEventStreamView(APIView):
         task_type: str,
     ) -> dict[str, Any] | None:
         try:
-            task = (
-                task_model.objects.only(
-                    "id",
-                    "status",
-                    "progress",
-                    "execution_id",
-                    "started_at",
-                    "completed_at",
-                    "error_message",
-                    "updated_at",
-                )
-                .filter(pk=task_id, user=user_id)
-                .first()
-            )
+            only_fields = [
+                "id",
+                "status",
+                "execution_id",
+                "started_at",
+                "completed_at",
+                "error_message",
+                "updated_at",
+            ]
+            if task_type == TaskType.BACKTEST:
+                only_fields.extend(["start_time", "end_time"])
+
+            task = task_model.objects.only(*only_fields).filter(pk=task_id, user=user_id).first()
             if task is None:
                 return None
-            return TaskEventStreamView._snapshot(task, task_type)
+            progress = TaskEventStreamView._compute_progress(task, task_type)
+            return TaskEventStreamView._snapshot(task, task_type, progress=progress)
         finally:
             connections.close_all()
 
     @staticmethod
-    def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
+    def _snapshot(
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        *,
+        progress: int | None,
+    ) -> dict[str, Any]:
         return {
             "id": str(task.pk),
             "task_type": task_type,
             "status": task.status,
-            "progress": getattr(task, "progress", None),
+            "progress": progress,
             "execution_id": str(task.execution_id) if task.execution_id else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "error_message": task.error_message,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
         }
+
+    @staticmethod
+    def _compute_progress(task: BacktestTask | TradingTask, task_type: str) -> int:
+        if task_type != TaskType.BACKTEST:
+            return 0
+        if not isinstance(task, BacktestTask):
+            return 0
+
+        if task.status == TaskStatus.COMPLETED:
+            return 100
+        if task.status != TaskStatus.RUNNING or not task.execution_id:
+            return 0
+
+        state = (
+            ExecutionState.objects.only("last_tick_timestamp")
+            .filter(
+                task_type=task_type,
+                task_id=task.pk,
+                execution_id=task.execution_id,
+            )
+            .first()
+        )
+        if state is None or state.last_tick_timestamp is None:
+            return 0
+
+        try:
+            total_seconds = (task.end_time - task.start_time).total_seconds()
+            if total_seconds <= 0:
+                return 0
+            elapsed_seconds = (state.last_tick_timestamp - task.start_time).total_seconds()
+            progress = int((elapsed_seconds / total_seconds) * 100)
+        except Exception:
+            return 0
+        return max(0, min(progress, 99))
 
     @staticmethod
     def _task_model(task_type: str):

@@ -42,6 +42,10 @@ function toAccount(account: BackendAccount): Account {
     margin_used: account.margin_used ?? '0',
     margin_available: account.margin_available ?? '0',
     unrealized_pnl: account.unrealized_pnl ?? '0',
+    live_max_exposure_guard_enabled:
+      account.live_max_exposure_guard_enabled ?? false,
+    live_max_estimated_exposure_units:
+      account.live_max_estimated_exposure_units ?? 200000,
     is_active: account.is_active ?? false,
   };
 }

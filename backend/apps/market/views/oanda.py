@@ -83,6 +83,8 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
         required=False,
         allow_null=True,
     )
+    live_max_exposure_guard_enabled = serializers.BooleanField(required=False)
+    live_max_estimated_exposure_units = serializers.IntegerField(required=False)
 
 
 class OandaAccountSnapshotRefreshResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
@@ -106,6 +108,8 @@ OandaAccountUpdateRequestSerializer = inline_serializer(
         "api_type": serializers.CharField(required=False),
         "jurisdiction": serializers.CharField(required=False),
         "currency": serializers.CharField(required=False),
+        "live_max_exposure_guard_enabled": serializers.BooleanField(required=False),
+        "live_max_estimated_exposure_units": serializers.IntegerField(required=False),
         "is_active": serializers.BooleanField(required=False),
         "is_default": serializers.BooleanField(required=False),
     },
