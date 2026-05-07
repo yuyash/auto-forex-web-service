@@ -187,6 +187,7 @@ describe('taskMutationCache', () => {
         completed_count: 0,
         total_trades: 0,
       },
+      pagination: null,
     });
   });
 

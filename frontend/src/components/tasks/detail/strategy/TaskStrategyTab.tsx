@@ -159,11 +159,14 @@ export function TaskStrategyTab({
       ),
     [t]
   );
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | 'active' | 'completed'
+  const [sortOrder, setSortOrderState] = useState<'asc' | 'desc'>('asc');
+  const [statusFilter, setStatusFilterState] = useState<
+    'all' | 'active' | 'completed' | 'pending'
   >('all');
-  const [positionIdFilter, setPositionIdFilter] = useState('');
+  const [positionIdFilter, setPositionIdFilterState] = useState('');
+  const [tradeIdFilter, setTradeIdFilterState] = useState('');
+  const [cyclePage, setCyclePage] = useState(0);
+  const [cycleRowsPerPage, setCycleRowsPerPage] = useState(50);
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const isDragging = useRef(false);
@@ -174,12 +177,68 @@ export function TaskStrategyTab({
   const [tradePage, setTradePage] = useState(0);
   const [tradeRowsPerPage, setTradeRowsPerPage] = useState(50);
 
+  // Wrap the filter/sort setters so that any change also resets the
+  // cycle page back to the first page.  Without this the user can end
+  // up on a page beyond the new filtered universe.
+  const setSortOrder = useCallback((next: 'asc' | 'desc') => {
+    setSortOrderState(next);
+    setCyclePage(0);
+  }, []);
+  const setStatusFilter = useCallback(
+    (next: 'all' | 'active' | 'completed' | 'pending') => {
+      setStatusFilterState(next);
+      setCyclePage(0);
+    },
+    []
+  );
+  const setPositionIdFilter = useCallback((next: string) => {
+    setPositionIdFilterState(next);
+    setCyclePage(0);
+  }, []);
+  const setTradeIdFilter = useCallback((next: string) => {
+    setTradeIdFilterState(next);
+    setCyclePage(0);
+  }, []);
+
+  // Server-side filter / sort / pagination params.  ``position_id`` and
+  // ``trade_id`` are only sent when at least three characters are typed
+  // because the backend ignores shorter substrings.
+  const listParams = useMemo<
+    Record<string, string | number | undefined>
+  >(() => {
+    const params: Record<string, string | number | undefined> = {
+      cycle_page: cyclePage + 1,
+      cycle_page_size: cycleRowsPerPage,
+      cycle_sort: sortOrder,
+    };
+    if (statusFilter !== 'all') {
+      params.cycle_status = statusFilter;
+    }
+    const trimmedPosition = positionIdFilter.trim();
+    if (trimmedPosition.length >= 3) {
+      params.position_id = trimmedPosition;
+    }
+    const trimmedTrade = tradeIdFilter.trim();
+    if (trimmedTrade.length >= 3) {
+      params.trade_id = trimmedTrade;
+    }
+    return params;
+  }, [
+    cyclePage,
+    cycleRowsPerPage,
+    sortOrder,
+    statusFilter,
+    positionIdFilter,
+    tradeIdFilter,
+  ]);
+
   const { data, isLoading, error, refresh } = useTaskStrategyEvents({
     taskId,
     taskType,
     executionRunId,
     enableRealTimeUpdates: true,
     refreshInterval: 5_000,
+    params: listParams,
   });
   const {
     data: detailData,
@@ -263,21 +322,7 @@ export function TaskStrategyTab({
     [sidebarWidth]
   );
 
-  const displayedCycles = useMemo(() => {
-    let list = sortOrder === 'asc' ? cycles : [...cycles].reverse();
-    if (statusFilter !== 'all') {
-      list = list.filter((c) => c.status === statusFilter);
-    }
-    if (positionIdFilter.trim()) {
-      const needle = positionIdFilter.trim().toLowerCase();
-      list = list.filter((c) =>
-        (c.position_ids ?? []).some((positionId) =>
-          positionId.toLowerCase().includes(needle)
-        )
-      );
-    }
-    return list;
-  }, [cycles, sortOrder, statusFilter, positionIdFilter]);
+  const displayedCycles = cycles;
 
   /** Extended grid states for sidebar cycles (includes layers from trade history). */
   const sidebarExtendedGridStates = useMemo(() => {
@@ -393,7 +438,22 @@ export function TaskStrategyTab({
     );
   }
 
-  if (!data || cycles.length === 0) {
+  const hasAnyActiveFilter =
+    statusFilter !== 'all' ||
+    positionIdFilter.trim().length >= 3 ||
+    tradeIdFilter.trim().length >= 3;
+
+  if (!data) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info">
+          {t('common:strategyVisualization.noData')}
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (cycles.length === 0 && !hasAnyActiveFilter) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="info">
@@ -521,7 +581,7 @@ export function TaskStrategyTab({
               variant={statusFilter === 'active' ? 'filled' : 'outlined'}
               label={t('common:strategyVisualization.cycleList.filterActive')}
               onClick={() =>
-                setStatusFilter((p) => (p === 'active' ? 'all' : 'active'))
+                setStatusFilter(statusFilter === 'active' ? 'all' : 'active')
               }
             />
             <Chip
@@ -533,9 +593,22 @@ export function TaskStrategyTab({
                 'common:strategyVisualization.cycleList.filterCompleted'
               )}
               onClick={() =>
-                setStatusFilter((p) =>
-                  p === 'completed' ? 'all' : 'completed'
+                setStatusFilter(
+                  statusFilter === 'completed' ? 'all' : 'completed'
                 )
+              }
+            />
+            <Chip
+              size="small"
+              clickable
+              color={statusFilter === 'pending' ? 'primary' : 'default'}
+              variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
+              label={t(
+                'common:strategyVisualization.cycleList.filterPending',
+                'Pending'
+              )}
+              onClick={() =>
+                setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')
               }
             />
           </Box>
@@ -549,6 +622,15 @@ export function TaskStrategyTab({
               )}
               value={positionIdFilter}
               onChange={(e) => setPositionIdFilter(e.target.value)}
+              helperText={
+                positionIdFilter.trim().length > 0 &&
+                positionIdFilter.trim().length < 3
+                  ? t(
+                      'common:strategyVisualization.cycleList.idFilterTooShort',
+                      'Enter at least 3 characters'
+                    )
+                  : undefined
+              }
               slotProps={{
                 input: {
                   startAdornment: (
@@ -561,6 +643,47 @@ export function TaskStrategyTab({
                       <IconButton
                         size="small"
                         onClick={() => setPositionIdFilter('')}
+                        edge="end"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
+            />
+          </Box>
+          <Box sx={{ px: 1.5, pb: 0.75, flexShrink: 0 }}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder={t(
+                'common:strategyVisualization.cycleList.tradeIdFilter',
+                'Filter by trade ID'
+              )}
+              value={tradeIdFilter}
+              onChange={(e) => setTradeIdFilter(e.target.value)}
+              helperText={
+                tradeIdFilter.trim().length > 0 &&
+                tradeIdFilter.trim().length < 3
+                  ? t(
+                      'common:strategyVisualization.cycleList.idFilterTooShort',
+                      'Enter at least 3 characters'
+                    )
+                  : undefined
+              }
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: tradeIdFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setTradeIdFilter('')}
                         edge="end"
                       >
                         <ClearIcon fontSize="small" />
@@ -707,6 +830,49 @@ export function TaskStrategyTab({
               ))
             )}
           </Box>
+          {data?.pagination ? (
+            <>
+              <Divider />
+              <TablePagination
+                component="div"
+                count={data.pagination.total_count}
+                page={Math.max(
+                  0,
+                  Math.min(
+                    cyclePage,
+                    Math.max(0, data.pagination.total_pages - 1)
+                  )
+                )}
+                rowsPerPage={cycleRowsPerPage}
+                rowsPerPageOptions={[25, 50, 100, 200]}
+                onPageChange={(_event, nextPage) => setCyclePage(nextPage)}
+                onRowsPerPageChange={(event) => {
+                  const value = parseInt(event.target.value, 10);
+                  if (!Number.isNaN(value)) {
+                    setCycleRowsPerPage(value);
+                    setCyclePage(0);
+                  }
+                }}
+                labelRowsPerPage={t(
+                  'common:strategyVisualization.cycleList.rowsPerPage',
+                  'Cycles per page'
+                )}
+                sx={{
+                  flexShrink: 0,
+                  '& .MuiTablePagination-toolbar': {
+                    minHeight: 44,
+                    paddingLeft: 1.5,
+                    paddingRight: 1.5,
+                  },
+                  '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows':
+                    {
+                      fontSize: '0.75rem',
+                      margin: 0,
+                    },
+                }}
+              />
+            </>
+          ) : null}
         </Paper>
 
         {/* Resize handle */}

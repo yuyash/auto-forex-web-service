@@ -59,9 +59,13 @@ def test_strategy_events_uses_strategy_events_query_params():
     ):
         from_request.return_value = SimpleNamespace(
             execution_id="exec-1",
-            ledger_page=2,
-            ledger_page_size=50,
-            ledger_ordering="timestamp",
+            cycle_id=None,
+            cycle_page=2,
+            cycle_page_size=25,
+            cycle_sort="desc",
+            cycle_status="active",
+            position_id="abc",
+            trade_id="",
         )
         build.return_value = {"cycles": [], "summary": {}}
 
@@ -73,9 +77,12 @@ def test_strategy_events_uses_strategy_events_query_params():
         task_type="backtest",
         execution_id="exec-1",
         cycle_id=None,
-        ledger_page=2,
-        ledger_page_size=50,
-        ledger_ordering="timestamp",
+        cycle_page=2,
+        cycle_page_size=25,
+        cycle_sort="desc",
+        cycle_status="active",
+        position_id="abc",
+        trade_id="",
     )
     assert response.data == {"cycles": [], "summary": {}}
 

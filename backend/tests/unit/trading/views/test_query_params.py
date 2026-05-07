@@ -151,8 +151,11 @@ def test_position_query_parses_filters_and_overlap_range():
 
 def test_strategy_events_query_params_uses_default_execution_id():
     default_execution_id = uuid4()
+    cycle_id = uuid4()
     request = _request(
-        "?root_entry_id=42&ledger_page=3&ledger_page_size=50&ledger_ordering=-realized_pnl"
+        f"?cycle_id={cycle_id}"
+        "&cycle_page=3&cycle_page_size=75&cycle_sort=desc"
+        "&cycle_status=active&position_id=abc123&trade_id=def456"
     )
 
     query = StrategyEventsQueryParams.from_request(
@@ -161,10 +164,30 @@ def test_strategy_events_query_params_uses_default_execution_id():
     )
 
     assert query.execution_id == default_execution_id
-    assert query.root_entry_id == 42
-    assert query.ledger_page == 3
-    assert query.ledger_page_size == 50
-    assert query.ledger_ordering == "-realized_pnl"
+    assert query.cycle_id == cycle_id
+    assert query.cycle_page == 3
+    assert query.cycle_page_size == 75
+    assert query.cycle_sort == "desc"
+    assert query.cycle_status == "active"
+    assert query.position_id == "abc123"
+    assert query.trade_id == "def456"
+
+
+def test_strategy_events_query_params_defaults_are_safe():
+    default_execution_id = uuid4()
+    query = StrategyEventsQueryParams.from_request(
+        _request(),
+        default_execution_id=default_execution_id,
+    )
+
+    assert query.execution_id == default_execution_id
+    assert query.cycle_id is None
+    assert query.cycle_page == 1
+    assert query.cycle_page_size == 50
+    assert query.cycle_sort == "asc"
+    assert query.cycle_status == "all"
+    assert query.position_id == ""
+    assert query.trade_id == ""
 
 
 def test_log_components_query_params_uses_default_execution_id():

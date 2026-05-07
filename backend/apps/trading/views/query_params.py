@@ -200,43 +200,40 @@ SINCE_SPEC = QueryFieldSpec(
     kind="datetime",
     help_text="RFC3339 timestamp for incremental fetch.",
 )
-ROOT_ENTRY_ID_SPEC = QueryFieldSpec(
-    name="root_entry_id",
-    kind="int",
-    help_text="Optional root entry group filter.",
-)
-LEDGER_PAGE_SPEC = QueryFieldSpec(
-    name="ledger_page",
+CYCLE_PAGE_SPEC = QueryFieldSpec(
+    name="cycle_page",
     kind="int",
     default=1,
-    help_text="Net grid ledger page number (1-based).",
+    help_text="Cycle list page number (1-based).",
 )
-LEDGER_PAGE_SIZE_SPEC = QueryFieldSpec(
-    name="ledger_page_size",
+CYCLE_PAGE_SIZE_SPEC = QueryFieldSpec(
+    name="cycle_page_size",
     kind="int",
-    default=25,
+    default=50,
     max_value=200,
-    help_text="Net grid ledger rows per page. Default 25, maximum 200.",
+    help_text="Cycles per page. Default 50, maximum 200.",
 )
-LEDGER_ORDERING_SPEC = QueryFieldSpec(
-    name="ledger_ordering",
+CYCLE_SORT_SPEC = QueryFieldSpec(
+    name="cycle_sort",
     kind="choice",
-    default="-timestamp",
-    choices=(
-        "-timestamp",
-        "timestamp",
-        "-action",
-        "action",
-        "-units_delta",
-        "units_delta",
-        "-filled_price",
-        "filled_price",
-        "-net_units_after",
-        "net_units_after",
-        "-realized_pnl",
-        "realized_pnl",
+    default="asc",
+    choices=("asc", "desc"),
+    help_text=(
+        "Cycle ordering by started_at. 'asc' for oldest first (default), 'desc' for newest."
     ),
-    help_text="Net grid ledger ordering field. Prefix with '-' for descending.",
+)
+CYCLE_STATUS_SPEC = QueryFieldSpec(
+    name="cycle_status",
+    kind="choice",
+    default="all",
+    choices=("all", "active", "completed", "pending"),
+    help_text="Filter cycles by status.",
+)
+CYCLE_TRADE_ID_SPEC = QueryFieldSpec(
+    name="trade_id",
+    kind="string",
+    allow_blank=True,
+    help_text="Filter cycles containing a trade whose id starts with this value.",
 )
 LEVEL_SPEC = QueryFieldSpec(
     name="level",
@@ -574,10 +571,13 @@ QUERY_GROUP_SPECS = {
         name="StrategyEventsQueryParamsSchemaSerializer",
         specs=(
             EXECUTION_ID_SPEC,
-            ROOT_ENTRY_ID_SPEC,
-            LEDGER_PAGE_SPEC,
-            LEDGER_PAGE_SIZE_SPEC,
-            LEDGER_ORDERING_SPEC,
+            CYCLE_ID_SPEC,
+            CYCLE_PAGE_SPEC,
+            CYCLE_PAGE_SIZE_SPEC,
+            CYCLE_SORT_SPEC,
+            CYCLE_STATUS_SPEC,
+            POSITION_ID_SPEC,
+            CYCLE_TRADE_ID_SPEC,
         ),
         description="OpenAPI serializer for strategy event visualization parameters.",
         base=QueryParamsSerializer,
@@ -1148,10 +1148,13 @@ class LogComponentsQueryParams:
 @dataclass(frozen=True)
 class StrategyEventsQueryParams:
     execution_id: UUID | None
-    root_entry_id: int | None
-    ledger_page: int
-    ledger_page_size: int
-    ledger_ordering: str
+    cycle_id: UUID | None
+    cycle_page: int
+    cycle_page_size: int
+    cycle_sort: str
+    cycle_status: str
+    position_id: str
+    trade_id: str
 
     @classmethod
     def from_request(
@@ -1161,13 +1164,15 @@ class StrategyEventsQueryParams:
         default_execution_id: UUID | None,
     ) -> StrategyEventsQueryParams:
         parsed = _parse_endpoint_group("strategy_events", request)
-        root_entry_id = cast(int | None, parsed["root_entry_id"])
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
-            root_entry_id=root_entry_id,
-            ledger_page=cast(int, parsed["ledger_page"]),
-            ledger_page_size=cast(int, parsed["ledger_page_size"]),
-            ledger_ordering=cast(str, parsed["ledger_ordering"]) or "-timestamp",
+            cycle_id=cast(UUID | None, parsed["cycle_id"]),
+            cycle_page=cast(int, parsed["cycle_page"]),
+            cycle_page_size=cast(int, parsed["cycle_page_size"]),
+            cycle_sort=cast(str, parsed["cycle_sort"]) or "asc",
+            cycle_status=cast(str, parsed["cycle_status"]) or "all",
+            position_id=cast(str, parsed["position_id"] or "").strip(),
+            trade_id=cast(str, parsed["trade_id"] or "").strip(),
         )
 
 

@@ -1,6 +1,16 @@
 """Cycle-based strategy visualization service.
 
-Builds cycle list from Trade.cycle_id.
+Builds the cycle list from Trade.cycle_id with server-side pagination,
+filtering, and sorting.  The service has two modes:
+
+* **List mode** (no ``cycle_id``): returns a page of cycles with lightweight
+  per-cycle aggregates (counts, PnL, grid_state) plus an overall ``summary``
+  computed after filters are applied.  Individual trades are **not** included.
+* **Detail mode** (``cycle_id`` supplied): returns a single cycle with its
+  full trade ledger, identical in shape to the list mode entries but with
+  ``trades`` populated.
+
+Heavy full-trade serialisation is therefore avoided on every list render.
 """
 
 from __future__ import annotations
@@ -11,7 +21,21 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from django.db.models import Q
+
 from apps.trading.services.strategy_grid_state import build_cycle_grid_state_map
+
+# Execution methods we treat as opening a slot in the cycle grid.
+_OPEN_METHODS: frozenset[str] = frozenset({"open_position", "rebuild_position"})
+
+# Execution methods flagged as protection events in the cycle badge.
+_PROTECTION_METHODS: frozenset[str] = frozenset(
+    {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
+)
+
+# Minimum number of characters required for substring filters on UUIDs to
+# keep the query cheap while still being useful for search-by-prefix.
+_MIN_ID_FILTER_LENGTH = 3
 
 
 class StrategyCyclesService:
@@ -23,54 +47,17 @@ class StrategyCyclesService:
         task: Any,
         task_type: str,
         execution_id: UUID | str | None,
-        cycle_id: str | None = None,
-        include_trades: bool | None = None,
-        ledger_page: int = 1,
-        ledger_page_size: int = 25,
-        ledger_ordering: str = "-timestamp",
+        cycle_id: UUID | str | None = None,
+        cycle_page: int = 1,
+        cycle_page_size: int = 50,
+        cycle_sort: str = "asc",
+        cycle_status: str = "all",
+        position_id: str = "",
+        trade_id: str = "",
     ) -> dict[str, Any]:
-        from apps.trading.models.trades import Trade
-
         if not execution_id:
-            return {"cycles": [], "summary": _empty_summary(), "last_tick_timestamp": None}
+            return self._empty_response(execution_id=None, strategy_type="")
 
-        if include_trades is None:
-            include_trades = bool(cycle_id)
-
-        qs = Trade.objects.filter(
-            task_type=task_type,
-            task_id=task.pk,
-            execution_id=execution_id,
-            cycle_id__isnull=False,
-        ).order_by("timestamp")
-
-        if cycle_id:
-            qs = qs.filter(cycle_id=cycle_id)
-
-        value_fields = [
-            "id",
-            "cycle_id",
-            "direction",
-            "units",
-            "instrument",
-            "price",
-            "execution_method",
-            "layer_index",
-            "retracement_count",
-            "timestamp",
-            "position_id",
-            "is_rebuild",
-        ]
-        if include_trades:
-            value_fields.extend(
-                [
-                    "description",
-                    "updated_at",
-                    "margin_ratio",
-                ]
-            )
-
-        rows = list(qs.values(*value_fields))
         execution_state = _load_execution_state_snapshot(
             task_type=task_type,
             task_id=str(task.pk),
@@ -83,35 +70,7 @@ class StrategyCyclesService:
         )
         strategy_type = str(getattr(task.config, "strategy_type", "") or "")
         strategy_capabilities = _load_strategy_capabilities(strategy_type)
-
-        if not rows:
-            return {
-                "execution_id": str(execution_id),
-                "visualization": strategy_capabilities.get("visualization", {}),
-                "strategy_state": _public_strategy_state(strategy_type, strategy_state),
-                "cycles": [],
-                "summary": _empty_summary(),
-                "last_tick_timestamp": _resolve_last_tick_timestamp(execution_state),
-            }
-
-        # Look up metrics (volatility, margin) at each trade timestamp
-        metrics_by_minute = (
-            _load_metrics_for_trades(
-                task_type=task_type,
-                task_id=str(task.pk),
-                execution_id=str(execution_id),
-                trades=rows,
-            )
-            if include_trades
-            else {}
-        )
-
-        by_cycle: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in rows:
-            by_cycle[str(row["cycle_id"])].append(row)
-
-        unrealized_pnl_by_position = _load_unrealized_pnl_map(rows)
-
+        last_tick_ts = _resolve_last_tick_timestamp(execution_state)
         cycle_status_map = _load_cycle_statuses(
             strategy_type=strategy_type,
             strategy_state=strategy_state,
@@ -121,30 +80,275 @@ class StrategyCyclesService:
             strategy_state=strategy_state,
         )
 
-        cycles = [
-            _build_cycle(
-                cid,
-                trades,
-                metrics_by_minute,
-                cycle_status_map.get(cid),
-                cycle_grid_state_map.get(cid),
-                unrealized_pnl_by_position,
-                include_trades=include_trades,
+        if cycle_id:
+            return self._build_detail_response(
+                task=task,
+                task_type=task_type,
+                execution_id=str(execution_id),
+                cycle_id=str(cycle_id),
+                strategy_type=strategy_type,
+                strategy_capabilities=strategy_capabilities,
+                cycle_status_map=cycle_status_map,
+                cycle_grid_state_map=cycle_grid_state_map,
+                last_tick_ts=last_tick_ts,
             )
-            for cid, trades in by_cycle.items()
-        ]
-        cycles.sort(key=lambda c: c["started_at"] or "")
 
-        last_tick_ts = _resolve_last_tick_timestamp(execution_state)
+        return self._build_list_response(
+            task=task,
+            task_type=task_type,
+            execution_id=str(execution_id),
+            strategy_type=strategy_type,
+            strategy_capabilities=strategy_capabilities,
+            cycle_status_map=cycle_status_map,
+            cycle_grid_state_map=cycle_grid_state_map,
+            last_tick_ts=last_tick_ts,
+            page=cycle_page,
+            page_size=cycle_page_size,
+            sort=cycle_sort,
+            status_filter=cycle_status,
+            position_id_filter=position_id,
+            trade_id_filter=trade_id,
+        )
+
+    # ------------------------------------------------------------------
+    # Detail mode (single cycle with full trade ledger)
+    # ------------------------------------------------------------------
+
+    def _build_detail_response(
+        self,
+        *,
+        task: Any,
+        task_type: str,
+        execution_id: str,
+        cycle_id: str,
+        strategy_type: str,
+        strategy_capabilities: dict[str, Any],
+        cycle_status_map: dict[str, str],
+        cycle_grid_state_map: dict[str, dict[str, Any]],
+        last_tick_ts: str | None,
+    ) -> dict[str, Any]:
+        from apps.trading.models.trades import Trade
+
+        rows = list(
+            Trade.objects.filter(
+                task_type=task_type,
+                task_id=task.pk,
+                execution_id=execution_id,
+                cycle_id=cycle_id,
+            )
+            .order_by("timestamp")
+            .values(
+                "id",
+                "cycle_id",
+                "direction",
+                "units",
+                "instrument",
+                "price",
+                "execution_method",
+                "layer_index",
+                "retracement_count",
+                "timestamp",
+                "position_id",
+                "is_rebuild",
+                "description",
+                "updated_at",
+                "margin_ratio",
+            )
+        )
+
+        if not rows:
+            return {
+                "execution_id": execution_id,
+                "visualization": strategy_capabilities.get("visualization", {}),
+                "cycles": [],
+                "summary": _empty_summary(),
+                "pagination": None,
+                "last_tick_timestamp": last_tick_ts,
+            }
+
+        metrics_by_minute = _load_metrics_for_trades(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+            trades=rows,
+        )
+        unrealized_pnl_by_position = _load_unrealized_pnl_map(rows)
+
+        cycle = _build_cycle(
+            cycle_id=cycle_id,
+            trades=rows,
+            metrics_by_minute=metrics_by_minute,
+            authoritative_status=cycle_status_map.get(cycle_id),
+            grid_state=cycle_grid_state_map.get(cycle_id),
+            unrealized_pnl_by_position=unrealized_pnl_by_position,
+            include_trades=True,
+        )
 
         return {
-            "execution_id": str(execution_id),
+            "execution_id": execution_id,
             "visualization": strategy_capabilities.get("visualization", {}),
-            "strategy_state": _public_strategy_state(strategy_type, strategy_state),
-            "cycles": cycles,
-            "summary": _build_summary(cycles),
+            "cycles": [cycle],
+            "summary": _build_summary([cycle]),
+            "pagination": None,
             "last_tick_timestamp": last_tick_ts,
+            "strategy_type": strategy_type,
         }
+
+    # ------------------------------------------------------------------
+    # List mode (paginated, filtered aggregates)
+    # ------------------------------------------------------------------
+
+    def _build_list_response(
+        self,
+        *,
+        task: Any,
+        task_type: str,
+        execution_id: str,
+        strategy_type: str,
+        strategy_capabilities: dict[str, Any],
+        cycle_status_map: dict[str, str],
+        cycle_grid_state_map: dict[str, dict[str, Any]],
+        last_tick_ts: str | None,
+        page: int,
+        page_size: int,
+        sort: str,
+        status_filter: str,
+        position_id_filter: str,
+        trade_id_filter: str,
+    ) -> dict[str, Any]:
+        # Step 1: find all cycle_ids belonging to this execution along with
+        # a started_at anchor (the min timestamp in the cycle).
+        cycle_meta = _load_cycle_started_at_map(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+        )
+
+        # Step 2: apply id-substring filters that require scanning the
+        # trades table.  These narrow the cycle_id universe *before* we
+        # spend any effort serialising.  Both filters require a minimum
+        # length to avoid accidentally returning every cycle.
+        allowed_cycle_ids: set[str] | None = None
+        if len(position_id_filter) >= _MIN_ID_FILTER_LENGTH:
+            matched = _cycle_ids_with_position_id_like(
+                task_type=task_type,
+                task_id=str(task.pk),
+                execution_id=execution_id,
+                needle=position_id_filter,
+            )
+            allowed_cycle_ids = (
+                matched if allowed_cycle_ids is None else allowed_cycle_ids & matched
+            )
+        if len(trade_id_filter) >= _MIN_ID_FILTER_LENGTH:
+            matched = _cycle_ids_with_trade_id_like(
+                task_type=task_type,
+                task_id=str(task.pk),
+                execution_id=execution_id,
+                needle=trade_id_filter,
+            )
+            allowed_cycle_ids = (
+                matched if allowed_cycle_ids is None else allowed_cycle_ids & matched
+            )
+
+        # Step 3: build the candidate id list (id filters + ordering only).
+        candidate_cycle_ids: list[str] = []
+        for cid, _started_at in cycle_meta:
+            if allowed_cycle_ids is not None and cid not in allowed_cycle_ids:
+                continue
+            candidate_cycle_ids.append(cid)
+
+        # Step 4: apply status filter.  Status requires aggregated trade
+        # data for cycles lacking an authoritative entry in the strategy
+        # state, so we resolve status lazily per cycle using the aggregate
+        # fallback.  To avoid loading aggregates for every cycle when no
+        # status filter is applied, we only do this work when filtering.
+        if status_filter != "all":
+            status_filtered_ids = _filter_cycle_ids_by_status(
+                task_type=task_type,
+                task_id=str(task.pk),
+                execution_id=execution_id,
+                cycle_ids=candidate_cycle_ids,
+                cycle_status_map=cycle_status_map,
+                status_filter=status_filter,
+            )
+        else:
+            status_filtered_ids = candidate_cycle_ids
+
+        if sort == "desc":
+            status_filtered_ids = list(reversed(status_filtered_ids))
+
+        total_count = len(status_filtered_ids)
+        total_pages = (total_count + page_size - 1) // page_size if total_count else 0
+        safe_page = max(1, page)
+        start_index = (safe_page - 1) * page_size
+        end_index = start_index + page_size
+        page_cycle_ids = status_filtered_ids[start_index:end_index]
+
+        # Step 5: load a lightweight trade slice for the cycles on this
+        # page only.  We need trades for PnL/unit counting and grid
+        # reconstruction, not for rendering — so we skip description /
+        # metrics columns to keep the payload small.
+        aggregates = _load_cycle_aggregates(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+            cycle_ids=page_cycle_ids,
+        )
+        unrealized_pnl_by_position = _load_unrealized_pnl_map_for_position_ids(
+            aggregates.still_open_position_ids
+        )
+
+        cycles = [
+            _build_list_cycle(
+                cycle_id=cid,
+                aggregate=aggregates.per_cycle[cid],
+                authoritative_status=cycle_status_map.get(cid),
+                grid_state=cycle_grid_state_map.get(cid),
+                unrealized_pnl_by_position=unrealized_pnl_by_position,
+            )
+            for cid in page_cycle_ids
+        ]
+
+        # Step 6: summary counts over the full filtered universe.  Counts
+        # come from the same cycle universe we paginated over so numbers
+        # stay self-consistent.
+        summary = _build_filtered_summary(
+            cycle_ids=status_filtered_ids,
+            cycle_status_map=cycle_status_map,
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+        )
+
+        return {
+            "execution_id": execution_id,
+            "visualization": strategy_capabilities.get("visualization", {}),
+            "cycles": cycles,
+            "summary": summary,
+            "pagination": {
+                "page": safe_page,
+                "page_size": page_size,
+                "total_count": total_count,
+                "total_pages": total_pages,
+            },
+            "last_tick_timestamp": last_tick_ts,
+            "strategy_type": strategy_type,
+        }
+
+    def _empty_response(self, *, execution_id: str | None, strategy_type: str) -> dict[str, Any]:
+        return {
+            "execution_id": execution_id,
+            "cycles": [],
+            "summary": _empty_summary(),
+            "pagination": None,
+            "last_tick_timestamp": None,
+            "strategy_type": strategy_type,
+        }
+
+
+# ----------------------------------------------------------------------
+# Shared helpers
+# ----------------------------------------------------------------------
 
 
 def _load_execution_state_snapshot(
@@ -172,18 +376,17 @@ def _public_strategy_state(
     strategy_type: str,
     strategy_state: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """Expose visualization-safe strategy state for non-grid strategy pages."""
+    """Expose visualization-safe strategy state for non-grid strategy pages.
+
+    Retained for external callers / tests; list responses no longer embed
+    the raw strategy_state (it is only used server-side now).
+    """
     if not isinstance(strategy_state, dict):
         return None
     return None
 
 
 def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:
-    """Return the ISO-formatted last_tick_timestamp from ExecutionState.
-
-    This is the simulated "current time" for a running or completed backtest,
-    used by the frontend to anchor active-cycle charts instead of wall-clock time.
-    """
     row = execution_state.get("last_tick_timestamp")
     if row is not None:
         return row.isoformat()
@@ -225,16 +428,12 @@ def _load_metrics_for_trades(
     execution_id: str,
     trades: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Load minute-level metrics closest to each trade timestamp.
-
-    Returns a dict keyed by ISO-formatted minute bucket → metrics dict.
-    """
+    """Load minute-level metrics closest to each trade timestamp."""
     from apps.trading.models.metrics import Metrics
 
     if not trades:
         return {}
 
-    # Collect unique minute buckets for all trade timestamps
     minute_keys: set[str] = set()
     for t in trades:
         ts = t.get("timestamp")
@@ -245,7 +444,6 @@ def _load_metrics_for_trades(
     if not minute_keys:
         return {}
 
-    # Find the time range and query metrics in one go
     timestamps = [t["timestamp"] for t in trades if t.get("timestamp")]
     min_ts = min(timestamps) - timedelta(minutes=1)
     max_ts = max(timestamps) + timedelta(minutes=1)
@@ -267,6 +465,379 @@ def _load_metrics_for_trades(
     return result
 
 
+def _load_cycle_started_at_map(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+) -> list[tuple[str, Any]]:
+    """Return [(cycle_id, started_at)] sorted by started_at ascending."""
+    from django.db.models import Min
+
+    from apps.trading.models.trades import Trade
+
+    rows = (
+        Trade.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_id__isnull=False,
+        )
+        .values("cycle_id")
+        .annotate(started_at=Min("timestamp"))
+        .order_by("started_at")
+    )
+    return [(str(row["cycle_id"]), row["started_at"]) for row in rows]
+
+
+def _cycle_ids_with_position_id_like(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    needle: str,
+) -> set[str]:
+    from django.db.models import TextField
+    from django.db.models.functions import Cast
+
+    from apps.trading.models.trades import Trade
+
+    rows = (
+        Trade.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_id__isnull=False,
+        )
+        .annotate(position_id_text=Cast("position_id", output_field=TextField()))
+        .filter(_position_id_icontains_q(needle))
+        .values_list("cycle_id", flat=True)
+    )
+    return {str(cid) for cid in rows}
+
+
+def _cycle_ids_with_trade_id_like(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    needle: str,
+) -> set[str]:
+    from django.db.models import TextField
+    from django.db.models.functions import Cast
+
+    from apps.trading.models.trades import Trade
+
+    rows = (
+        Trade.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_id__isnull=False,
+        )
+        .annotate(id_text=Cast("id", output_field=TextField()))
+        .filter(_trade_id_icontains_q(needle))
+        .values_list("cycle_id", flat=True)
+    )
+    return {str(cid) for cid in rows}
+
+
+def _filter_cycle_ids_by_status(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    cycle_ids: list[str],
+    cycle_status_map: dict[str, str],
+    status_filter: str,
+) -> list[str]:
+    """Return the subset of ``cycle_ids`` whose resolved status matches.
+
+    Cycles present in the authoritative map are resolved with a cheap
+    dict lookup.  Cycles without an authoritative entry have their
+    status derived from trade aggregates; those cycles are loaded in a
+    single follow-up query.
+    """
+    authoritative_matches: list[str] = []
+    unresolved_cycle_ids: list[str] = []
+    for cid in cycle_ids:
+        if cid in cycle_status_map:
+            if cycle_status_map[cid] == status_filter:
+                authoritative_matches.append(cid)
+        else:
+            unresolved_cycle_ids.append(cid)
+
+    fallback_matches: list[str] = []
+    if unresolved_cycle_ids:
+        aggregates = _load_cycle_aggregates(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_ids=unresolved_cycle_ids,
+        )
+        for cid in unresolved_cycle_ids:
+            status = _resolve_cycle_status(aggregates.per_cycle[cid], None)
+            if status == status_filter:
+                fallback_matches.append(cid)
+
+    matched = set(authoritative_matches) | set(fallback_matches)
+    return [cid for cid in cycle_ids if cid in matched]
+
+
+def _position_id_icontains_q(needle: str) -> Q:
+    """Build a Q object that matches Position IDs containing ``needle``.
+
+    ``position_id`` is the UUID raw column that backs a ``ForeignKey`` so
+    ``__icontains`` on it is rejected by Django.  We cast to text via an
+    annotation instead (the caller is expected to do the cast).
+    """
+    return Q(position_id_text__icontains=needle)
+
+
+def _trade_id_icontains_q(needle: str) -> Q:
+    """Build a Q object that matches Trade IDs containing ``needle``."""
+    return Q(id_text__icontains=needle)
+
+
+class _CycleAggregates:
+    """Lightweight container of per-cycle aggregate data for list mode."""
+
+    __slots__ = ("per_cycle", "still_open_position_ids")
+
+    def __init__(
+        self,
+        per_cycle: dict[str, dict[str, Any]],
+        still_open_position_ids: set[str],
+    ) -> None:
+        self.per_cycle = per_cycle
+        self.still_open_position_ids = still_open_position_ids
+
+
+def _load_cycle_aggregates(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    cycle_ids: list[str],
+) -> _CycleAggregates:
+    """Load the trade slice needed for list-mode aggregates.
+
+    Returns a container holding per-cycle aggregate dicts ready for
+    :func:`_build_list_cycle`.  Only the minimum set of columns is loaded
+    since list rendering never displays individual trades.
+    """
+    from apps.trading.models.trades import Trade
+
+    per_cycle: dict[str, dict[str, Any]] = {}
+    still_open_position_ids: set[str] = set()
+
+    if not cycle_ids:
+        return _CycleAggregates(
+            per_cycle=per_cycle, still_open_position_ids=still_open_position_ids
+        )
+
+    rows = list(
+        Trade.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_id__in=cycle_ids,
+        )
+        .order_by("timestamp")
+        .values(
+            "id",
+            "cycle_id",
+            "direction",
+            "units",
+            "price",
+            "execution_method",
+            "timestamp",
+            "position_id",
+            "is_rebuild",
+        )
+    )
+
+    by_cycle: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_cycle[str(row["cycle_id"])].append(row)
+
+    for cid in cycle_ids:
+        trades = by_cycle.get(cid, [])
+        aggregate = _aggregate_cycle(cid, trades)
+        per_cycle[cid] = aggregate
+        still_open_position_ids.update(aggregate["still_open_position_ids"])
+
+    return _CycleAggregates(
+        per_cycle=per_cycle,
+        still_open_position_ids=still_open_position_ids,
+    )
+
+
+def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, Any]:
+    """Fold a cycle's trade rows into the aggregate dict list mode needs."""
+    if not trades:
+        return {
+            "cycle_id": cycle_id,
+            "direction": "",
+            "trade_count": 0,
+            "open_count": 0,
+            "close_count": 0,
+            "open_units_total": 0,
+            "position_ids": [],
+            "realized_pnl": Decimal("0"),
+            "rebuild_count": 0,
+            "protection_count": 0,
+            "has_protection": False,
+            "started_at": None,
+            "last_timestamp": None,
+            "still_open_position_ids": set(),
+            "initial_is_closed": False,
+            "has_unresolved_rebuilds": False,
+            "has_open_remaining": False,
+        }
+
+    first = trades[0]
+    last = trades[-1]
+    direction = str(first.get("direction") or "").lower()
+
+    open_price_by_pos: dict[str, Decimal] = {}
+    open_ids: set[str] = set()
+    close_ids: set[str] = set()
+    rebuild_open_ids: set[str] = set()
+    open_count = 0
+    close_count = 0
+    realized_pnl = Decimal("0")
+    protection_count = 0
+    rebuild_count = 0
+    position_ids_seen: set[str] = set()
+    units_by_open_pos: dict[str, int] = {}
+
+    for trade in trades:
+        pid = str(trade["position_id"]) if trade.get("position_id") else None
+        if pid:
+            position_ids_seen.add(pid)
+
+        exec_method = trade["execution_method"]
+        if exec_method in _OPEN_METHODS:
+            open_count += 1
+            if pid is not None:
+                open_ids.add(pid)
+                open_price_by_pos[pid] = Decimal(str(trade["price"]))
+                units_by_open_pos[pid] = abs(int(trade["units"] or 0))
+                if trade.get("is_rebuild") and exec_method == "rebuild_position":
+                    rebuild_open_ids.add(pid)
+        else:
+            close_count += 1
+            if pid is not None:
+                close_ids.add(pid)
+                entry_px = open_price_by_pos.get(pid)
+                if entry_px is not None:
+                    exit_px = Decimal(str(trade["price"]))
+                    units = abs(int(trade["units"] or 0))
+                    if direction == "long":
+                        realized_pnl += (exit_px - entry_px) * units
+                    else:
+                        realized_pnl += (entry_px - exit_px) * units
+
+        if trade.get("is_rebuild"):
+            rebuild_count += 1
+        if exec_method in _PROTECTION_METHODS or str(trade.get("description", "") or "").startswith(
+            "[PROTECTION]"
+        ):
+            protection_count += 1
+
+    still_open_position_ids = open_ids - close_ids
+    has_open_remaining = bool(still_open_position_ids)
+    has_unresolved_rebuilds = bool(rebuild_open_ids - close_ids)
+
+    initial_trade = next(
+        (t for t in trades if t["execution_method"] in _OPEN_METHODS and str(t["id"]) == cycle_id),
+        first,
+    )
+    initial_pid = (
+        str(initial_trade.get("position_id")) if initial_trade.get("position_id") else None
+    )
+    initial_is_closed = bool(initial_pid) and initial_pid in close_ids
+
+    open_units_total = sum(units_by_open_pos.get(pid, 0) for pid in still_open_position_ids)
+
+    return {
+        "cycle_id": cycle_id,
+        "direction": direction,
+        "trade_count": len(trades),
+        "open_count": open_count,
+        "close_count": close_count,
+        "open_units_total": open_units_total,
+        "position_ids": sorted(position_ids_seen),
+        "realized_pnl": realized_pnl,
+        "rebuild_count": rebuild_count,
+        "protection_count": protection_count,
+        "has_protection": protection_count > 0,
+        "started_at": first["timestamp"],
+        "last_timestamp": last["timestamp"],
+        "still_open_position_ids": still_open_position_ids,
+        "initial_is_closed": initial_is_closed,
+        "has_unresolved_rebuilds": has_unresolved_rebuilds,
+        "has_open_remaining": has_open_remaining,
+    }
+
+
+def _build_list_cycle(
+    *,
+    cycle_id: str,
+    aggregate: dict[str, Any],
+    authoritative_status: str | None,
+    grid_state: dict[str, Any] | None,
+    unrealized_pnl_by_position: dict[str, Decimal],
+) -> dict[str, Any]:
+    """Shape a single aggregated cycle into the list-mode payload."""
+    status = _resolve_cycle_status(aggregate, authoritative_status)
+
+    unrealized_pnl = Decimal("0")
+    for pid in aggregate["still_open_position_ids"]:
+        unrealized_pnl += unrealized_pnl_by_position.get(pid, Decimal("0"))
+
+    started_at = aggregate["started_at"]
+    ended_at = aggregate["last_timestamp"] if status == "completed" else None
+    return {
+        "cycle_id": cycle_id,
+        "direction": aggregate["direction"],
+        "status": status,
+        "started_at": started_at.isoformat() if started_at else None,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "trade_count": aggregate["trade_count"],
+        "open_count": aggregate["open_count"],
+        "close_count": aggregate["close_count"],
+        "open_units_total": aggregate["open_units_total"],
+        "has_protection": aggregate["has_protection"],
+        "protection_count": aggregate["protection_count"],
+        "rebuild_count": aggregate["rebuild_count"],
+        "position_ids": aggregate["position_ids"],
+        "realized_pnl": str(aggregate["realized_pnl"]),
+        "unrealized_pnl": str(unrealized_pnl),
+        "grid_state": grid_state,
+        "trades": [],
+    }
+
+
+def _resolve_cycle_status(aggregate: dict[str, Any], authoritative_status: str | None) -> str:
+    """Pick the status for a cycle, preferring the authoritative map."""
+    if authoritative_status is not None:
+        return authoritative_status
+
+    if (
+        aggregate["initial_is_closed"]
+        and not aggregate["has_open_remaining"]
+        and not aggregate["has_unresolved_rebuilds"]
+    ):
+        return "completed"
+    if aggregate["has_open_remaining"]:
+        return "active"
+    if not aggregate["has_open_remaining"] and aggregate["has_unresolved_rebuilds"]:
+        return "pending"
+    return "completed"
+
+
 def _build_cycle(
     cycle_id: str,
     trades: list[dict[str, Any]],
@@ -277,119 +848,41 @@ def _build_cycle(
     *,
     include_trades: bool = True,
 ) -> dict[str, Any]:
-    first = trades[0]
-    last = trades[-1]
-    direction = str(first.get("direction") or "")
+    """Detail-mode cycle builder that serialises every trade in the cycle."""
+    aggregate = _aggregate_cycle(cycle_id, trades)
+    status = _resolve_cycle_status(aggregate, authoritative_status)
 
-    _OPEN_METHODS = {"open_position", "rebuild_position"}
-    opens = [t for t in trades if t["execution_method"] in _OPEN_METHODS]
-    closes = [t for t in trades if t["execution_method"] not in _OPEN_METHODS]
-    open_ids = {str(t["position_id"]) for t in opens if t.get("position_id")}
-    close_ids = {str(t["position_id"]) for t in closes if t.get("position_id")}
-    has_open_remaining = bool(open_ids - close_ids)
-
-    # Use authoritative status from strategy_state when available;
-    # otherwise fall back to event-based inference.
-    if authoritative_status is not None:
-        status = authoritative_status
-    else:
-        initial = next(
-            (t for t in opens if str(t["id"]) == cycle_id),
-            opens[0] if opens else first,
-        )
-        initial_closed = str(initial.get("position_id", "")) in close_ids
-
-        # Check if there are rebuild trades that haven't been closed yet,
-        # indicating pending stop-loss rebuilds that didn't complete.
-        rebuild_open_ids = {
-            str(t["position_id"])
-            for t in trades
-            if t.get("is_rebuild")
-            and t["execution_method"] == "rebuild_position"
-            and t.get("position_id")
-        }
-        has_unresolved_rebuilds = bool(rebuild_open_ids - close_ids)
-
-        if initial_closed and not has_open_remaining and not has_unresolved_rebuilds:
-            status = "completed"
-        elif has_open_remaining:
-            status = "active"
-        elif not has_open_remaining and has_unresolved_rebuilds:
-            # All positions closed but rebuilds pending
-            status = "pending"
-        else:
-            status = "completed"
-
-    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
-    protection_trades = [
-        t
-        for t in trades
-        if t["execution_method"] in _PROTECTION_METHODS
-        or str(t.get("description") or "").startswith("[PROTECTION]")
-    ]
-    has_protection = len(protection_trades) > 0
-
-    rebuild_trades = [t for t in trades if t.get("is_rebuild")]
-    rebuild_count = len(rebuild_trades)
-
-    # --- PnL calculation ---
-    # Realized PnL: sum of (exit_price - entry_price) * units for closed positions.
-    # For SHORT: PnL = (open_price - close_price) * units.
-    # We pair open trades with their close trades by position_id.
-    realized_pnl = Decimal("0")
     unrealized_pnl = Decimal("0")
+    for pid in aggregate["still_open_position_ids"]:
+        unrealized_pnl += (unrealized_pnl_by_position or {}).get(pid, Decimal("0"))
 
-    # Build a map of open_price by position_id (from open/rebuild trades)
     open_price_by_pos: dict[str, Decimal] = {}
-    for t in opens:
-        pid = str(t["position_id"]) if t.get("position_id") else None
-        if pid:
-            open_price_by_pos[pid] = Decimal(str(t["price"]))
+    for trade in trades:
+        if trade["execution_method"] in _OPEN_METHODS and trade.get("position_id"):
+            open_price_by_pos[str(trade["position_id"])] = Decimal(str(trade["price"]))
 
-    for t in closes:
-        pid = str(t["position_id"]) if t.get("position_id") else None
-        if pid and pid in open_price_by_pos:
-            entry_px = open_price_by_pos[pid]
-            exit_px = Decimal(str(t["price"]))
-            units = abs(t["units"])
-            if direction.lower() == "long":
-                realized_pnl += (exit_px - entry_px) * units
-            else:
-                realized_pnl += (entry_px - exit_px) * units
-
-    # Unrealized PnL: sum for positions that are still open.
-    still_open_ids = open_ids - close_ids
-    open_units_total = 0
-    if still_open_ids:
-        open_units_total = sum(
-            abs(int(t["units"]))
-            for t in opens
-            if str(t.get("position_id")) in still_open_ids and t.get("position_id")
-        )
-        for position_id in still_open_ids:
-            unrealized_pnl += (unrealized_pnl_by_position or {}).get(position_id, Decimal("0"))
-
+    started_at = aggregate["started_at"]
+    ended_at = aggregate["last_timestamp"] if status == "completed" else None
     return {
         "cycle_id": cycle_id,
-        "direction": direction,
+        "direction": aggregate["direction"],
         "status": status,
-        "started_at": first["timestamp"].isoformat() if first.get("timestamp") else None,
-        "ended_at": last["timestamp"].isoformat()
-        if status == "completed" and last.get("timestamp")
-        else None,
-        "trade_count": len(trades),
-        "open_count": len(opens),
-        "close_count": len(closes),
-        "open_units_total": open_units_total,
-        "has_protection": has_protection,
-        "protection_count": len(protection_trades),
-        "rebuild_count": rebuild_count,
-        "position_ids": sorted({str(t["position_id"]) for t in trades if t.get("position_id")}),
-        "realized_pnl": str(realized_pnl),
+        "started_at": started_at.isoformat() if started_at else None,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "trade_count": aggregate["trade_count"],
+        "open_count": aggregate["open_count"],
+        "close_count": aggregate["close_count"],
+        "open_units_total": aggregate["open_units_total"],
+        "has_protection": aggregate["has_protection"],
+        "protection_count": aggregate["protection_count"],
+        "rebuild_count": aggregate["rebuild_count"],
+        "position_ids": aggregate["position_ids"],
+        "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
         "grid_state": grid_state,
         "trades": [
-            _serialize_trade(t, metrics_by_minute, open_price_by_pos, direction) for t in trades
+            _serialize_trade(t, metrics_by_minute, open_price_by_pos, aggregate["direction"])
+            for t in trades
         ]
         if include_trades
         else [],
@@ -412,7 +905,6 @@ def _serialize_trade(
             else direction
         )
 
-    # Look up metrics at the trade's minute bucket
     volatility = None
     margin_ratio = None
     ts = t.get("timestamp")
@@ -424,17 +916,12 @@ def _serialize_trade(
         if metrics.get("margin_ratio") is not None:
             margin_ratio = f"{float(metrics['margin_ratio']):.3f}"
 
-    # Prefer the margin_ratio stored directly on the trade (captured at
-    # the moment the event fired) over the metrics bucket (which reflects
-    # the post-tick state).
     trade_mr = t.get("margin_ratio")
     if trade_mr is not None:
         margin_ratio = f"{float(trade_mr):.3f}"
 
-    # Compute quote-currency PnL for close trades
     pnl: str | None = None
-    _OPEN_METHODS_SET = {"open_position", "rebuild_position"}
-    if t["execution_method"] not in _OPEN_METHODS_SET and open_price_by_pos:
+    if t["execution_method"] not in _OPEN_METHODS and open_price_by_pos:
         pid = str(t["position_id"]) if t.get("position_id") else None
         if pid and pid in open_price_by_pos:
             entry_px = open_price_by_pos[pid]
@@ -473,16 +960,105 @@ def _empty_summary() -> dict[str, int]:
     }
 
 
-def _load_unrealized_pnl_map(trades: list[dict[str, Any]]) -> dict[str, Decimal]:
-    """Load unrealized pnl for any position IDs referenced by open/rebuild trades."""
-    from apps.trading.models.positions import Position
+def _build_summary(cycles: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "cycle_count": len(cycles),
+        "active_count": sum(1 for c in cycles if c["status"] == "active"),
+        "pending_count": sum(1 for c in cycles if c["status"] == "pending"),
+        "completed_count": sum(1 for c in cycles if c["status"] == "completed"),
+        "total_trades": sum(c["trade_count"] for c in cycles),
+    }
 
-    _OPEN_METHODS = {"open_position", "rebuild_position"}
+
+def _build_filtered_summary(
+    *,
+    cycle_ids: list[str],
+    cycle_status_map: dict[str, str],
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+) -> dict[str, int]:
+    """Summary counts over the filtered cycle universe.
+
+    Authoritative statuses from ``cycle_status_map`` are used where
+    available; cycles without an entry fall back to the aggregate-based
+    resolution used for list rendering.
+    """
+    from django.db.models import Count
+
+    from apps.trading.models.trades import Trade
+
+    cycle_count = len(cycle_ids)
+    if cycle_count == 0:
+        return _empty_summary()
+
+    active_count = 0
+    pending_count = 0
+    completed_count = 0
+    unresolved_cycle_ids: list[str] = []
+    for cid in cycle_ids:
+        status = cycle_status_map.get(cid)
+        if status == "active":
+            active_count += 1
+        elif status == "pending":
+            pending_count += 1
+        elif status == "completed":
+            completed_count += 1
+        elif status is None:
+            unresolved_cycle_ids.append(cid)
+
+    if unresolved_cycle_ids:
+        aggregates = _load_cycle_aggregates(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_ids=unresolved_cycle_ids,
+        )
+        for cid in unresolved_cycle_ids:
+            status = _resolve_cycle_status(aggregates.per_cycle[cid], None)
+            if status == "active":
+                active_count += 1
+            elif status == "pending":
+                pending_count += 1
+            else:
+                completed_count += 1
+
+    total_trades = (
+        Trade.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            cycle_id__in=cycle_ids,
+        )
+        .aggregate(total=Count("id"))
+        .get("total")
+        or 0
+    )
+
+    return {
+        "cycle_count": cycle_count,
+        "active_count": active_count,
+        "pending_count": pending_count,
+        "completed_count": completed_count,
+        "total_trades": total_trades,
+    }
+
+
+def _load_unrealized_pnl_map(trades: list[dict[str, Any]]) -> dict[str, Decimal]:
+    """Load unrealized pnl for any position IDs referenced by open trades."""
     position_ids = {
         str(t["position_id"])
         for t in trades
         if t.get("position_id") and t.get("execution_method") in _OPEN_METHODS
     }
+    return _load_unrealized_pnl_map_for_position_ids(position_ids)
+
+
+def _load_unrealized_pnl_map_for_position_ids(
+    position_ids: set[str],
+) -> dict[str, Decimal]:
+    from apps.trading.models.positions import Position
+
     if not position_ids:
         return {}
 
@@ -491,14 +1067,4 @@ def _load_unrealized_pnl_map(trades: list[dict[str, Any]]) -> dict[str, Decimal]
         for position_id, unrealized_pnl in Position.objects.filter(id__in=position_ids).values_list(
             "id", "unrealized_pnl"
         )
-    }
-
-
-def _build_summary(cycles: list[dict[str, Any]]) -> dict[str, int]:
-    return {
-        "cycle_count": len(cycles),
-        "active_count": sum(1 for c in cycles if c["status"] == "active"),
-        "pending_count": sum(1 for c in cycles if c["status"] == "pending"),
-        "completed_count": sum(1 for c in cycles if c["status"] == "completed"),
-        "total_trades": sum(c["trade_count"] for c in cycles),
     }
