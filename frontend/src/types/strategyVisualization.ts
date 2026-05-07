@@ -70,6 +70,13 @@ export interface StrategyCyclesSummary {
   total_trades: number;
 }
 
+export interface StrategyCyclesPagination {
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+}
+
 export interface StrategyCyclesResponse {
   execution_id: string | null;
   visualization?: {
@@ -79,7 +86,9 @@ export interface StrategyCyclesResponse {
   };
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
+  pagination: StrategyCyclesPagination | null;
   last_tick_timestamp: string | null;
+  strategy_type?: string;
 }
 
 export interface StrategySnapshotCard {

@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.51.5",
+        "version": "1.51.6",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -3853,8 +3853,65 @@
         "/api/trading/tasks/backtest/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_events_retrieve",
-                "description": "Retrieve strategy cycles built from Trade.cycle_id.",
+                "description": "Retrieve strategy cycles built from Trade.cycle_id. When ``cycle_id`` is omitted, returns a paginated list of cycle aggregates (no per-cycle trade ledger).  When ``cycle_id`` is supplied, returns a single cycle with its full trade ledger.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Cycle list page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Cycles per page. Default 50, maximum 200."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_sort",
+                        "schema": {
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Cycle ordering by started_at. 'asc' for oldest first (default), 'desc' for newest.\n\n* `asc` - asc\n* `desc` - desc"
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_status",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "active",
+                                "completed",
+                                "pending"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter cycles by status.\n\n* `all` - all\n* `active` - active\n* `completed` - completed\n* `pending` - pending"
+                    },
                     {
                         "in": "query",
                         "name": "execution_id",
@@ -3877,54 +3934,19 @@
                     },
                     {
                         "in": "query",
-                        "name": "ledger_ordering",
+                        "name": "position_id",
                         "schema": {
-                            "enum": [
-                                "-timestamp",
-                                "timestamp",
-                                "-action",
-                                "action",
-                                "-units_delta",
-                                "units_delta",
-                                "-filled_price",
-                                "filled_price",
-                                "-net_units_after",
-                                "net_units_after",
-                                "-realized_pnl",
-                                "realized_pnl"
-                            ],
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                         },
-                        "description": "Net grid ledger ordering field. Prefix with '-' for descending.\n\n* `-timestamp` - -timestamp\n* `timestamp` - timestamp\n* `-action` - -action\n* `action` - action\n* `-units_delta` - -units_delta\n* `units_delta` - units_delta\n* `-filled_price` - -filled_price\n* `filled_price` - filled_price\n* `-net_units_after` - -net_units_after\n* `net_units_after` - net_units_after\n* `-realized_pnl` - -realized_pnl\n* `realized_pnl` - realized_pnl"
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
-                        "name": "ledger_page",
+                        "name": "trade_id",
                         "schema": {
-                            "type": "integer",
-                            "minimum": 1
+                            "type": "string"
                         },
-                        "description": "Net grid ledger page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "ledger_page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 200,
-                            "minimum": 1
-                        },
-                        "description": "Net grid ledger rows per page. Default 25, maximum 200."
-                    },
-                    {
-                        "in": "query",
-                        "name": "root_entry_id",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Optional root entry group filter."
+                        "description": "Filter cycles containing a trade whose id starts with this value."
                     }
                 ],
                 "tags": [
@@ -6077,8 +6099,65 @@
         "/api/trading/tasks/trading/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_trading_strategy_events_retrieve",
-                "description": "Retrieve strategy cycles built from Trade.cycle_id.",
+                "description": "Retrieve strategy cycles built from Trade.cycle_id. When ``cycle_id`` is omitted, returns a paginated list of cycle aggregates (no per-cycle trade ledger).  When ``cycle_id`` is supplied, returns a single cycle with its full trade ledger.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Cycle list page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Cycles per page. Default 50, maximum 200."
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_sort",
+                        "schema": {
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Cycle ordering by started_at. 'asc' for oldest first (default), 'desc' for newest.\n\n* `asc` - asc\n* `desc` - desc"
+                    },
+                    {
+                        "in": "query",
+                        "name": "cycle_status",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "active",
+                                "completed",
+                                "pending"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter cycles by status.\n\n* `all` - all\n* `active` - active\n* `completed` - completed\n* `pending` - pending"
+                    },
                     {
                         "in": "query",
                         "name": "execution_id",
@@ -6101,54 +6180,19 @@
                     },
                     {
                         "in": "query",
-                        "name": "ledger_ordering",
+                        "name": "position_id",
                         "schema": {
-                            "enum": [
-                                "-timestamp",
-                                "timestamp",
-                                "-action",
-                                "action",
-                                "-units_delta",
-                                "units_delta",
-                                "-filled_price",
-                                "filled_price",
-                                "-net_units_after",
-                                "net_units_after",
-                                "-realized_pnl",
-                                "realized_pnl"
-                            ],
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                         },
-                        "description": "Net grid ledger ordering field. Prefix with '-' for descending.\n\n* `-timestamp` - -timestamp\n* `timestamp` - timestamp\n* `-action` - -action\n* `action` - action\n* `-units_delta` - -units_delta\n* `units_delta` - units_delta\n* `-filled_price` - -filled_price\n* `filled_price` - filled_price\n* `-net_units_after` - -net_units_after\n* `net_units_after` - net_units_after\n* `-realized_pnl` - -realized_pnl\n* `realized_pnl` - realized_pnl"
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
-                        "name": "ledger_page",
+                        "name": "trade_id",
                         "schema": {
-                            "type": "integer",
-                            "minimum": 1
+                            "type": "string"
                         },
-                        "description": "Net grid ledger page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "ledger_page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 200,
-                            "minimum": 1
-                        },
-                        "description": "Net grid ledger rows per page. Default 25, maximum 200."
-                    },
-                    {
-                        "in": "query",
-                        "name": "root_entry_id",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Optional root entry group filter."
+                        "description": "Filter cycles containing a trade whose id starts with this value."
                     }
                 ],
                 "tags": [
@@ -11516,12 +11560,28 @@
                         "type": "array",
                         "items": {}
                     },
-                    "summary": {}
+                    "summary": {},
+                    "pagination": {
+                        "nullable": true
+                    },
+                    "last_tick_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "visualization": {}
                 },
                 "required": [
                     "cycles",
                     "execution_id",
-                    "summary"
+                    "last_tick_timestamp",
+                    "pagination",
+                    "strategy_type",
+                    "summary",
+                    "visualization"
                 ]
             },
             "TaskStrategyHistoryResponse": {

@@ -153,10 +153,19 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
                     "execution_id": serializers.CharField(allow_null=True),
                     "cycles": serializers.ListField(child=serializers.JSONField()),
                     "summary": serializers.JSONField(),
+                    "pagination": serializers.JSONField(allow_null=True),
+                    "last_tick_timestamp": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(allow_null=True),
+                    "visualization": serializers.JSONField(),
                 },
             )
         },
-        description="Retrieve strategy cycles built from Trade.cycle_id.",
+        description=(
+            "Retrieve strategy cycles built from Trade.cycle_id. "
+            "When ``cycle_id`` is omitted, returns a paginated list of cycle "
+            "aggregates (no per-cycle trade ledger).  When ``cycle_id`` is "
+            "supplied, returns a single cycle with its full trade ledger."
+        ),
     )
     @action(
         detail=True,
@@ -172,15 +181,17 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
             request,
             default_execution_id=task.execution_id,
         )
-        cycle_id = request.query_params.get("cycle_id")
         response = StrategyCyclesService().build(
             task=task,
             task_type=self.task_type_label,
             execution_id=query.execution_id,
-            cycle_id=cycle_id,
-            ledger_page=query.ledger_page,
-            ledger_page_size=query.ledger_page_size,
-            ledger_ordering=query.ledger_ordering,
+            cycle_id=query.cycle_id,
+            cycle_page=query.cycle_page,
+            cycle_page_size=query.cycle_page_size,
+            cycle_sort=query.cycle_sort,
+            cycle_status=query.cycle_status,
+            position_id=query.position_id,
+            trade_id=query.trade_id,
         )
         return Response(response)
 
