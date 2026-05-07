@@ -21,7 +21,7 @@ export function createAccountsPageQuery(
   options?: { enabled?: boolean }
 ): UseQueryOptions<PaginatedResponse<Account>> {
   return {
-    queryKey: queryKeys.accounts.list(params as Record<string, unknown>),
+    queryKey: queryKeys.accounts.page(params as Record<string, unknown>),
     queryFn: () => accountsApi.listPage(params),
     enabled: options?.enabled !== false,
   };

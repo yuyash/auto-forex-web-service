@@ -2,170 +2,146 @@
 
 ## [1.66.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.2...frontend-v1.66.3) (2026-05-06)
 
-
 ### Bug Fixes
 
-* **account:** configure live unit guards ([10eefbc](https://github.com/yuyash/auto-forex-web-service/commit/10eefbc3669432f6636bc82d937ea854faa4a73e))
-* configure account unit guards ([#679](https://github.com/yuyash/auto-forex-web-service/issues/679)) ([10eefbc](https://github.com/yuyash/auto-forex-web-service/commit/10eefbc3669432f6636bc82d937ea854faa4a73e))
+- **account:** configure live unit guards ([10eefbc](https://github.com/yuyash/auto-forex-web-service/commit/10eefbc3669432f6636bc82d937ea854faa4a73e))
+- configure account unit guards ([#679](https://github.com/yuyash/auto-forex-web-service/issues/679)) ([10eefbc](https://github.com/yuyash/auto-forex-web-service/commit/10eefbc3669432f6636bc82d937ea854faa4a73e))
 
 ## [1.66.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.1...frontend-v1.66.2) (2026-05-06)
 
-
 ### Bug Fixes
 
-* **trading:** correct live order timestamps and account limits ([#677](https://github.com/yuyash/auto-forex-web-service/issues/677)) ([763fbf7](https://github.com/yuyash/auto-forex-web-service/commit/763fbf7087aad72fa6a0949a8220ddd2c20b7f13))
+- **trading:** correct live order timestamps and account limits ([#677](https://github.com/yuyash/auto-forex-web-service/issues/677)) ([763fbf7](https://github.com/yuyash/auto-forex-web-service/commit/763fbf7087aad72fa6a0949a8220ddd2c20b7f13))
 
 ## [1.66.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.0...frontend-v1.66.1) (2026-05-06)
 
-
 ### Bug Fixes
 
-* **backtest:** refresh balance adjustment state ([#675](https://github.com/yuyash/auto-forex-web-service/issues/675)) ([f59ecb4](https://github.com/yuyash/auto-forex-web-service/commit/f59ecb4a6a27323d5325a9e5428433037bcb2455))
+- **backtest:** refresh balance adjustment state ([#675](https://github.com/yuyash/auto-forex-web-service/issues/675)) ([f59ecb4](https://github.com/yuyash/auto-forex-web-service/commit/f59ecb4a6a27323d5325a9e5428433037bcb2455))
 
 ## [1.66.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.5...frontend-v1.66.0) (2026-05-06)
 
-
 ### Features
 
-* backtest balance adjustment ([#673](https://github.com/yuyash/auto-forex-web-service/issues/673)) ([d7a9897](https://github.com/yuyash/auto-forex-web-service/commit/d7a9897ac7bd6e8bc5d80027f934bd896319134d))
+- backtest balance adjustment ([#673](https://github.com/yuyash/auto-forex-web-service/issues/673)) ([d7a9897](https://github.com/yuyash/auto-forex-web-service/commit/d7a9897ac7bd6e8bc5d80027f934bd896319134d))
 
 ## [1.65.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.4...frontend-v1.65.5) (2026-05-05)
 
-
 ### Bug Fixes
 
-* **trading:** record Trade on sell_on_stop and add loss-cut chart markers ([#671](https://github.com/yuyash/auto-forex-web-service/issues/671)) ([89c27e4](https://github.com/yuyash/auto-forex-web-service/commit/89c27e404db9f4394deba38e7715860a2b8f9756))
+- **trading:** record Trade on sell_on_stop and add loss-cut chart markers ([#671](https://github.com/yuyash/auto-forex-web-service/issues/671)) ([89c27e4](https://github.com/yuyash/auto-forex-web-service/commit/89c27e404db9f4394deba38e7715860a2b8f9756))
 
 ## [1.65.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.3...frontend-v1.65.4) (2026-05-05)
 
-
 ### Bug Fixes
 
-* snowball net metrics v2 ([#666](https://github.com/yuyash/auto-forex-web-service/issues/666)) ([324d366](https://github.com/yuyash/auto-forex-web-service/commit/324d3662934c969b975ac623675313a6b3caed0f))
+- snowball net metrics v2 ([#666](https://github.com/yuyash/auto-forex-web-service/issues/666)) ([324d366](https://github.com/yuyash/auto-forex-web-service/commit/324d3662934c969b975ac623675313a6b3caed0f))
 
 ## [1.65.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.2...frontend-v1.65.3) (2026-05-05)
 
-
 ### Bug Fixes
 
-* snowball net metrics range ([#664](https://github.com/yuyash/auto-forex-web-service/issues/664)) ([8e257c6](https://github.com/yuyash/auto-forex-web-service/commit/8e257c6314ef01ec91fc1a9e8693814687e10f23))
+- snowball net metrics range ([#664](https://github.com/yuyash/auto-forex-web-service/issues/664)) ([8e257c6](https://github.com/yuyash/auto-forex-web-service/commit/8e257c6314ef01ec91fc1a9e8693814687e10f23))
 
 ## [1.65.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.1...frontend-v1.65.2) (2026-05-05)
 
-
 ### Bug Fixes
 
-* snowball net config exclusivity ([#662](https://github.com/yuyash/auto-forex-web-service/issues/662)) ([06e5ef8](https://github.com/yuyash/auto-forex-web-service/commit/06e5ef8d25eb36b2f22d17b7ea5e3d629d6d167f))
+- snowball net config exclusivity ([#662](https://github.com/yuyash/auto-forex-web-service/issues/662)) ([06e5ef8](https://github.com/yuyash/auto-forex-web-service/commit/06e5ef8d25eb36b2f22d17b7ea5e3d629d6d167f))
 
 ## [1.65.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.65.0...frontend-v1.65.1) (2026-05-05)
 
-
 ### Performance
 
-* **strategy:** improve SnowballNet chart loading ([#659](https://github.com/yuyash/auto-forex-web-service/issues/659)) ([57a0b26](https://github.com/yuyash/auto-forex-web-service/commit/57a0b26ecb95ae8dee46c131c98c3d75ddf02494))
+- **strategy:** improve SnowballNet chart loading ([#659](https://github.com/yuyash/auto-forex-web-service/issues/659)) ([57a0b26](https://github.com/yuyash/auto-forex-web-service/commit/57a0b26ecb95ae8dee46c131c98c3d75ddf02494))
 
 ## [1.65.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.64.1...frontend-v1.65.0) (2026-05-04)
 
-
 ### Features
 
-* **snowball-net:** sync chart range controls ([#657](https://github.com/yuyash/auto-forex-web-service/issues/657)) ([2b336a8](https://github.com/yuyash/auto-forex-web-service/commit/2b336a830a4077828aceadebe3bccc933ef4dd63))
+- **snowball-net:** sync chart range controls ([#657](https://github.com/yuyash/auto-forex-web-service/issues/657)) ([2b336a8](https://github.com/yuyash/auto-forex-web-service/commit/2b336a830a4077828aceadebe3bccc933ef4dd63))
 
 ## [1.64.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.64.0...frontend-v1.64.1) (2026-05-04)
 
-
 ### Bug Fixes
 
-* snowball net follow chart lines ([#655](https://github.com/yuyash/auto-forex-web-service/issues/655)) ([2f061d3](https://github.com/yuyash/auto-forex-web-service/commit/2f061d375c408acc37c68d52fd4877a89eaa2b48))
+- snowball net follow chart lines ([#655](https://github.com/yuyash/auto-forex-web-service/issues/655)) ([2f061d3](https://github.com/yuyash/auto-forex-web-service/commit/2f061d375c408acc37c68d52fd4877a89eaa2b48))
 
 ## [1.64.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.63.0...frontend-v1.64.0) (2026-05-04)
 
-
 ### Features
 
-* **snowball-net:** add adaptive risk controls ([#653](https://github.com/yuyash/auto-forex-web-service/issues/653)) ([eb84d50](https://github.com/yuyash/auto-forex-web-service/commit/eb84d502e4c1b3eb3f3aea2a14f02e63b83635a9))
-
+- **snowball-net:** add adaptive risk controls ([#653](https://github.com/yuyash/auto-forex-web-service/issues/653)) ([eb84d50](https://github.com/yuyash/auto-forex-web-service/commit/eb84d502e4c1b3eb3f3aea2a14f02e63b83635a9))
 
 ### Bug Fixes
 
-* **frontend:** show historical strategy config snapshots ([#654](https://github.com/yuyash/auto-forex-web-service/issues/654)) ([fc5f212](https://github.com/yuyash/auto-forex-web-service/commit/fc5f2128be73ca7b609ac8ff38c8398f564f191e))
-* snowball chart follow window ([#651](https://github.com/yuyash/auto-forex-web-service/issues/651)) ([16c3e31](https://github.com/yuyash/auto-forex-web-service/commit/16c3e3161c93d18355066893fc8c2bd272acc997))
+- **frontend:** show historical strategy config snapshots ([#654](https://github.com/yuyash/auto-forex-web-service/issues/654)) ([fc5f212](https://github.com/yuyash/auto-forex-web-service/commit/fc5f2128be73ca7b609ac8ff38c8398f564f191e))
+- snowball chart follow window ([#651](https://github.com/yuyash/auto-forex-web-service/issues/651)) ([16c3e31](https://github.com/yuyash/auto-forex-web-service/commit/16c3e3161c93d18355066893fc8c2bd272acc997))
 
 ## [1.63.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.3...frontend-v1.63.0) (2026-05-03)
 
-
 ### Features
 
-* **tasks:** add pnl summaries and localize forms ([#648](https://github.com/yuyash/auto-forex-web-service/issues/648)) ([e7bdadd](https://github.com/yuyash/auto-forex-web-service/commit/e7bdadd3492572ed08b16102f80ee46c627505d7))
-
+- **tasks:** add pnl summaries and localize forms ([#648](https://github.com/yuyash/auto-forex-web-service/issues/648)) ([e7bdadd](https://github.com/yuyash/auto-forex-web-service/commit/e7bdadd3492572ed08b16102f80ee46c627505d7))
 
 ### Bug Fixes
 
-* **frontend:** show X-axis labels when zoomed into few data points ([#646](https://github.com/yuyash/auto-forex-web-service/issues/646)) ([ff65fd6](https://github.com/yuyash/auto-forex-web-service/commit/ff65fd66651206b3e10630f578d15aade0d71934))
+- **frontend:** show X-axis labels when zoomed into few data points ([#646](https://github.com/yuyash/auto-forex-web-service/issues/646)) ([ff65fd6](https://github.com/yuyash/auto-forex-web-service/commit/ff65fd66651206b3e10630f578d15aade0d71934))
 
 ## [1.62.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.2...frontend-v1.62.3) (2026-05-03)
 
-
 ### Bug Fixes
 
-* **frontend:** inline custom date range fields into the selector row ([#644](https://github.com/yuyash/auto-forex-web-service/issues/644)) ([8980258](https://github.com/yuyash/auto-forex-web-service/commit/898025809c68284e1e091393261f9dba6e533cc2))
+- **frontend:** inline custom date range fields into the selector row ([#644](https://github.com/yuyash/auto-forex-web-service/issues/644)) ([8980258](https://github.com/yuyash/auto-forex-web-service/commit/898025809c68284e1e091393261f9dba6e533cc2))
 
 ## [1.62.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.1...frontend-v1.62.2) (2026-05-03)
 
-
 ### Bug Fixes
 
-* safari chart sizing ([#642](https://github.com/yuyash/auto-forex-web-service/issues/642)) ([e472bb8](https://github.com/yuyash/auto-forex-web-service/commit/e472bb84a46bcbe15aae15602805213a7b26a573))
+- safari chart sizing ([#642](https://github.com/yuyash/auto-forex-web-service/issues/642)) ([e472bb8](https://github.com/yuyash/auto-forex-web-service/commit/e472bb84a46bcbe15aae15602805213a7b26a573))
 
 ## [1.62.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.62.0...frontend-v1.62.1) (2026-05-03)
 
-
 ### Bug Fixes
 
-* snowball net chart range ([#639](https://github.com/yuyash/auto-forex-web-service/issues/639)) ([6ddef22](https://github.com/yuyash/auto-forex-web-service/commit/6ddef22e54e159dada621f3c480e07ab60d5b7a7))
+- snowball net chart range ([#639](https://github.com/yuyash/auto-forex-web-service/issues/639)) ([6ddef22](https://github.com/yuyash/auto-forex-web-service/commit/6ddef22e54e159dada621f3c480e07ab60d5b7a7))
 
 ## [1.62.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.61.0...frontend-v1.62.0) (2026-05-03)
 
-
 ### Features
 
-* snowball net chart order UI ([#637](https://github.com/yuyash/auto-forex-web-service/issues/637)) ([6509b87](https://github.com/yuyash/auto-forex-web-service/commit/6509b873f0a4d9a7839689e0b6429f939796a98c))
+- snowball net chart order UI ([#637](https://github.com/yuyash/auto-forex-web-service/issues/637)) ([6509b87](https://github.com/yuyash/auto-forex-web-service/commit/6509b873f0a4d9a7839689e0b6429f939796a98c))
 
 ## [1.61.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.60.1...frontend-v1.61.0) (2026-05-03)
 
-
 ### Features
 
-* snowball net strategy ([#634](https://github.com/yuyash/auto-forex-web-service/issues/634)) ([a8ad8a0](https://github.com/yuyash/auto-forex-web-service/commit/a8ad8a07029c8716ace199b6d202f2f5dfffd388))
+- snowball net strategy ([#634](https://github.com/yuyash/auto-forex-web-service/issues/634)) ([a8ad8a0](https://github.com/yuyash/auto-forex-web-service/commit/a8ad8a07029c8716ace199b6d202f2f5dfffd388))
 
 ## [1.60.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.60.0...frontend-v1.60.1) (2026-05-02)
 
-
 ### Performance
 
-* metrics api pagination and mobile layout ([#632](https://github.com/yuyash/auto-forex-web-service/issues/632)) ([810c267](https://github.com/yuyash/auto-forex-web-service/commit/810c267593b9be01d338d9d4b25a2e80681ff263))
+- metrics api pagination and mobile layout ([#632](https://github.com/yuyash/auto-forex-web-service/issues/632)) ([810c267](https://github.com/yuyash/auto-forex-web-service/commit/810c267593b9be01d338d9d4b25a2e80681ff263))
 
 ## [1.60.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.59.1...frontend-v1.60.0) (2026-05-02)
 
-
 ### Features
 
-* rebuild take profit mode ([#624](https://github.com/yuyash/auto-forex-web-service/issues/624)) ([9d68b8a](https://github.com/yuyash/auto-forex-web-service/commit/9d68b8a8490ca9c818d803654e121b92b31c86fd))
-* refactoring and improve separation of concerns. ([#627](https://github.com/yuyash/auto-forex-web-service/issues/627)) ([670a0c8](https://github.com/yuyash/auto-forex-web-service/commit/670a0c872bb8a5a03d69b6d6587b9b0801280851))
-* **snowball:** recover stop-loss pips on rebuild ([#626](https://github.com/yuyash/auto-forex-web-service/issues/626)) ([406b8ea](https://github.com/yuyash/auto-forex-web-service/commit/406b8ead4d31703c3c82881c2ecf5454b8ea8956))
-* task detail controls and snowball docs ([#629](https://github.com/yuyash/auto-forex-web-service/issues/629)) ([60cc632](https://github.com/yuyash/auto-forex-web-service/commit/60cc63209aae517518f95dba0be26b1fbb8de67e))
-
+- rebuild take profit mode ([#624](https://github.com/yuyash/auto-forex-web-service/issues/624)) ([9d68b8a](https://github.com/yuyash/auto-forex-web-service/commit/9d68b8a8490ca9c818d803654e121b92b31c86fd))
+- refactoring and improve separation of concerns. ([#627](https://github.com/yuyash/auto-forex-web-service/issues/627)) ([670a0c8](https://github.com/yuyash/auto-forex-web-service/commit/670a0c872bb8a5a03d69b6d6587b9b0801280851))
+- **snowball:** recover stop-loss pips on rebuild ([#626](https://github.com/yuyash/auto-forex-web-service/issues/626)) ([406b8ea](https://github.com/yuyash/auto-forex-web-service/commit/406b8ead4d31703c3c82881c2ecf5454b8ea8956))
+- task detail controls and snowball docs ([#629](https://github.com/yuyash/auto-forex-web-service/issues/629)) ([60cc632](https://github.com/yuyash/auto-forex-web-service/commit/60cc63209aae517518f95dba0be26b1fbb8de67e))
 
 ### Bug Fixes
 
-* **frontend:** improve mobile task filter layouts ([#620](https://github.com/yuyash/auto-forex-web-service/issues/620)) ([3f46035](https://github.com/yuyash/auto-forex-web-service/commit/3f4603596eb964dc4693057fd393e4429b27e32f))
-* harden auth session ([#628](https://github.com/yuyash/auto-forex-web-service/issues/628)) ([b6e798b](https://github.com/yuyash/auto-forex-web-service/commit/b6e798b53cf567a10e406fd351f4591ee42205c5))
-
+- **frontend:** improve mobile task filter layouts ([#620](https://github.com/yuyash/auto-forex-web-service/issues/620)) ([3f46035](https://github.com/yuyash/auto-forex-web-service/commit/3f4603596eb964dc4693057fd393e4429b27e32f))
+- harden auth session ([#628](https://github.com/yuyash/auto-forex-web-service/issues/628)) ([b6e798b](https://github.com/yuyash/auto-forex-web-service/commit/b6e798b53cf567a10e406fd351f4591ee42205c5))
 
 ### Refactoring
 
-* **adaptive-net:** add cost-aware decision gates ([#623](https://github.com/yuyash/auto-forex-web-service/issues/623)) ([ec3a623](https://github.com/yuyash/auto-forex-web-service/commit/ec3a623537bceef65110e89912d6242694d3eec3))
-* **frontend:** harden task detail mobile layouts ([#622](https://github.com/yuyash/auto-forex-web-service/issues/622)) ([d92706f](https://github.com/yuyash/auto-forex-web-service/commit/d92706f213f2aed839894a9f297eab69386c80b1))
+- **adaptive-net:** add cost-aware decision gates ([#623](https://github.com/yuyash/auto-forex-web-service/issues/623)) ([ec3a623](https://github.com/yuyash/auto-forex-web-service/commit/ec3a623537bceef65110e89912d6242694d3eec3))
+- **frontend:** harden task detail mobile layouts ([#622](https://github.com/yuyash/auto-forex-web-service/issues/622)) ([d92706f](https://github.com/yuyash/auto-forex-web-service/commit/d92706f213f2aed839894a9f297eab69386c80b1))
 
 ## [1.59.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.59.0...frontend-v1.59.1) (2026-04-26)
 

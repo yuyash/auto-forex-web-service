@@ -118,6 +118,10 @@ export interface BackendTradingTask {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  live_tick_stale_guard_enabled?: boolean;
+  live_tick_max_age_seconds?: number;
+  live_tick_status_log_interval_seconds?: number;
+  broker_drift_check_interval_seconds?: number;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;
@@ -199,6 +203,7 @@ export interface BackendAccount {
   live_max_initial_order_units?: number;
   live_max_order_guard_enabled?: boolean;
   live_max_order_units?: number;
+  live_tick_latency_metric_interval_seconds?: number;
 }
 
 export type BackendAccountSnapshotRefreshStatus =

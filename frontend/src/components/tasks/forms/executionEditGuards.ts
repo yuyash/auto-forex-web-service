@@ -12,6 +12,10 @@ const EXECUTION_SETTING_FIELDS = new Set([
   'tick_window_value_mode',
   'hedging_enabled',
   'account_id',
+  'live_tick_stale_guard_enabled',
+  'live_tick_max_age_seconds',
+  'live_tick_status_log_interval_seconds',
+  'broker_drift_check_interval_seconds',
 ]);
 
 export function hasDirtyExecutionSettings(

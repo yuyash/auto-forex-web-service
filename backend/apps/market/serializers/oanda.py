@@ -52,6 +52,7 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "live_max_initial_order_units",
             "live_max_order_guard_enabled",
             "live_max_order_units",
+            "live_tick_latency_metric_interval_seconds",
             "is_active",
             "is_default",
             "created_at",

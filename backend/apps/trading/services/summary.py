@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from typing import cast
 
 from django.core.cache import cache
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
@@ -29,6 +30,18 @@ class TickInfo:
     bid: Decimal | None
     ask: Decimal | None
     mid: Decimal | None
+
+
+@dataclass(frozen=True)
+class TickDeliveryInfo:
+    """Live tick delivery diagnostics."""
+
+    status: str | None
+    tick_timestamp: str | None
+    observed_at: str | None
+    age_seconds: float | None
+    max_age_seconds: int | None
+    message: str | None
 
 
 @dataclass(frozen=True)
@@ -68,6 +81,7 @@ class ExecutionInfo:
     recovery_warnings: list[str]
     recovery_blockers: list[str]
     reconciled_at: str | None
+    tick_delivery: TickDeliveryInfo | None
 
 
 @dataclass(frozen=True)
@@ -212,6 +226,7 @@ def compute_task_summary(
     recovery_warnings: list[str] = []
     recovery_blockers: list[str] = []
     reconciled_at: str | None = None
+    tick_delivery: TickDeliveryInfo | None = None
     metrics_dict: dict[str, object] = {}
 
     from apps.trading.models.state import ExecutionState
@@ -270,6 +285,7 @@ def compute_task_summary(
         reconciled_at = (
             str(ss.get("broker_reconciled_at")) if ss.get("broker_reconciled_at") else None
         )
+        tick_delivery = _tick_delivery_info(ss.get("live_tick_delivery"))
 
     # Task info
     status = ""
@@ -360,6 +376,7 @@ def compute_task_summary(
             recovery_warnings=recovery_warnings,
             recovery_blockers=recovery_blockers,
             reconciled_at=reconciled_at,
+            tick_delivery=tick_delivery,
         ),
         tick=TickInfo(
             timestamp=tick_timestamp,
@@ -466,6 +483,51 @@ def _metric_decimal(metrics: dict[str, object], key: str) -> Decimal | None:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _tick_delivery_info(raw: object) -> TickDeliveryInfo | None:
+    if not isinstance(raw, dict):
+        return None
+    raw_map = cast(dict[str, object], raw)
+
+    return TickDeliveryInfo(
+        status=_str_or_none(raw_map.get("status")),
+        tick_timestamp=_str_or_none(raw_map.get("tick_timestamp")),
+        observed_at=_str_or_none(raw_map.get("observed_at")),
+        age_seconds=_float_or_none(raw_map.get("age_seconds")),
+        max_age_seconds=_int_or_none(raw_map.get("max_age_seconds")),
+        message=_str_or_none(raw_map.get("message")),
+    )
+
+
+def _str_or_none(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _float_or_none(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_or_none(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        return int(str(value))
+    except (TypeError, ValueError):
         return None
 
 

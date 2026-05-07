@@ -74,10 +74,14 @@ class TestTickFromDict:
             "bid": "150.25",
             "ask": "150.27",
             "mid": "150.26",
+            "oanda_tick_publish_latency_seconds": "1.250000",
+            "oanda_tick_published_at": "2024-01-01T00:00:01.250000Z",
         }
         tick = Tick.from_dict(data)
         assert tick.instrument == "USD_JPY"
         assert tick.bid == Decimal("150.25")
+        assert tick.oanda_tick_publish_latency_seconds == Decimal("1.250000")
+        assert tick.oanda_tick_published_at == datetime(2024, 1, 1, 0, 0, 1, 250000, tzinfo=UTC)
 
     def test_from_dict_missing_instrument(self):
         with pytest.raises(ValueError, match="instrument"):
@@ -111,10 +115,14 @@ class TestTickToDict:
             bid=Decimal("1.1"),
             ask=Decimal("1.2"),
             mid=Decimal("1.15"),
+            oanda_tick_publish_latency_seconds=Decimal("0.5"),
+            oanda_tick_published_at=ts,
         )
         d = tick.to_dict()
         assert d["instrument"] == "EUR_USD"
         assert d["bid"] == "1.1"
         assert d["ask"] == "1.2"
         assert d["mid"] == "1.15"
+        assert d["oanda_tick_publish_latency_seconds"] == "0.5"
+        assert d["oanda_tick_published_at"] == "2024-01-01T00:00:00+00:00"
         assert "timestamp" in d

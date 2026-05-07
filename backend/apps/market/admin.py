@@ -51,6 +51,7 @@ class OandaAccountAdmin(admin.ModelAdmin):
         "live_max_initial_order_units",
         "live_max_order_guard_enabled",
         "live_max_order_units",
+        "live_tick_latency_metric_interval_seconds",
         "is_active",
         "created_at",
     ]
@@ -122,6 +123,7 @@ class OandaAccountAdmin(admin.ModelAdmin):
                     "live_max_initial_order_units",
                     "live_max_order_guard_enabled",
                     "live_max_order_units",
+                    "live_tick_latency_metric_interval_seconds",
                 )
             },
         ),

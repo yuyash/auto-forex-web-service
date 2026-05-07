@@ -134,6 +134,9 @@ export const queryKeys = {
     lists: () => [...queryKeys.accounts.all, 'list'] as const,
     list: (params?: Record<string, unknown>) =>
       [...queryKeys.accounts.lists(), params] as const,
+    pages: () => [...queryKeys.accounts.all, 'page'] as const,
+    page: (params?: Record<string, unknown>) =>
+      [...queryKeys.accounts.pages(), params] as const,
     details: () => [...queryKeys.accounts.all, 'detail'] as const,
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
     snapshotRefresh: (id: number, taskId: string) =>

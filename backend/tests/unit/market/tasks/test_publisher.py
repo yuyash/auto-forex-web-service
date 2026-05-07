@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from apps.market.tasks.publisher import (
     TickPublisherRunner,
+    build_tick_latency_payload,
     normalize_instruments,
     publisher_lock_key_for_account,
 )
@@ -40,6 +42,31 @@ def test_normalize_instruments_falls_back_to_settings(settings):
     settings.MARKET_TICK_INSTRUMENTS = ["USD_JPY"]
 
     assert normalize_instruments(None) == ["USD_JPY"]
+
+
+def test_build_tick_latency_payload_uses_observed_wall_clock():
+    payload = build_tick_latency_payload(
+        datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        observed_at=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC),
+    )
+
+    assert payload["oanda_tick_published_at"] == "2026-01-01T00:00:05Z"
+    assert payload["oanda_tick_publish_latency_seconds"] == "5.000000"
+
+
+def test_should_log_tick_latency_respects_interval():
+    observed_at = datetime(2026, 1, 1, 0, 1, tzinfo=UTC)
+
+    assert TickPublisherRunner._should_log_tick_latency(
+        last_logged_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
+        observed_at=observed_at,
+        interval_seconds=60,
+    )
+    assert not TickPublisherRunner._should_log_tick_latency(
+        last_logged_at=datetime(2026, 1, 1, 0, 0, 30, tzinfo=UTC),
+        observed_at=observed_at,
+        interval_seconds=60,
+    )
 
 
 class TestTickPublisherRunnerRun:

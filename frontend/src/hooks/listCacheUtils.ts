@@ -37,7 +37,7 @@ export function removeFromListQueries<TCached>(
   );
 }
 
-export function upsertPaginatedEntity<T extends { id: string }>(
+export function upsertPaginatedEntity<T extends { id: string | number }>(
   cached: PaginatedResponse<T> | undefined,
   entity: T,
   options: {
@@ -78,7 +78,7 @@ export function upsertPaginatedEntity<T extends { id: string }>(
 }
 
 export function upsertFilteredPaginatedEntity<
-  T extends { id: string },
+  T extends { id: string | number },
   TParams extends CacheListParams = CacheListParams,
 >(
   cached: PaginatedResponse<T> | undefined,
@@ -135,9 +135,9 @@ export function upsertFilteredListEntity<
   return sort([entity, ...cached], params);
 }
 
-export function removePaginatedEntity<T extends { id: string }>(
+export function removePaginatedEntity<T extends { id: string | number }>(
   cached: PaginatedResponse<T> | undefined,
-  entityId: string
+  entityId: string | number
 ): PaginatedResponse<T> | undefined {
   if (!cached) {
     return cached;

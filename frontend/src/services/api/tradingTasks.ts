@@ -26,6 +26,10 @@ interface TradingTaskCreateRequest {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  live_tick_stale_guard_enabled?: boolean;
+  live_tick_max_age_seconds?: number;
+  live_tick_status_log_interval_seconds?: number;
+  broker_drift_check_interval_seconds?: number;
   debug_options?: Record<string, unknown>;
 }
 
@@ -43,6 +47,10 @@ interface TradingTaskUpdateRequest {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  live_tick_stale_guard_enabled?: boolean;
+  live_tick_max_age_seconds?: number;
+  live_tick_status_log_interval_seconds?: number;
+  broker_drift_check_interval_seconds?: number;
   debug_options?: Record<string, unknown>;
 }
 

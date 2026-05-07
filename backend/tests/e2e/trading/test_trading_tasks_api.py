@@ -10,7 +10,14 @@ from tests.e2e.helpers import CsvTickDataSource
 TICK_CSV = Path(__file__).parent.parent / "fixtures" / "tick_data_usd_jpy.csv"
 
 
-def _create_task(client, config_id, account_id, name, dry_run=True):
+def _create_task(
+    client,
+    config_id,
+    account_id,
+    name,
+    dry_run=True,
+    live_tick_stale_guard_enabled=True,
+):
     """Helper: create a trading task and return its ID."""
     resp = client.post(
         "/api/trading/tasks/trading/",
@@ -19,6 +26,7 @@ def _create_task(client, config_id, account_id, name, dry_run=True):
             "config_id": str(config_id),
             "account_id": account_id,
             "dry_run": dry_run,
+            "live_tick_stale_guard_enabled": live_tick_stale_guard_enabled,
         },
         format="json",
     )
@@ -138,6 +146,7 @@ class TestTradingTasks:
             strategy_config.id,
             oanda_account.id,
             "TT Execute SubRes",
+            live_tick_stale_guard_enabled=False,
         )
 
         csv_source = CsvTickDataSource(TICK_CSV, batch_size=200)

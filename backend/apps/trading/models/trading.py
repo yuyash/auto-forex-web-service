@@ -235,6 +235,31 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
             "0 disables the resume delay."
         ),
     )
+    live_tick_stale_guard_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Fail the task before strategy/order processing when a live tick is older than "
+            "live_tick_max_age_seconds."
+        ),
+    )
+    live_tick_max_age_seconds = models.PositiveIntegerField(
+        default=30,
+        help_text="Maximum accepted age in seconds for a live tick before the task fails.",
+    )
+    live_tick_status_log_interval_seconds = models.PositiveIntegerField(
+        default=60,
+        help_text=(
+            "Interval in seconds for periodic live tick delivery status logs. "
+            "Set to 0 to disable periodic OK logs."
+        ),
+    )
+    broker_drift_check_interval_seconds = models.PositiveIntegerField(
+        default=60,
+        help_text=(
+            "Interval in seconds for runtime OANDA/local broker drift checks. "
+            "Set to 0 to disable runtime drift checks after startup reconciliation."
+        ),
+    )
 
     class Meta:
         db_table = "trading_tasks"

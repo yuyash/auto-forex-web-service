@@ -24,6 +24,15 @@ export interface TickInfo {
   mid: number | null;
 }
 
+export interface TickDeliveryInfo {
+  status: string | null;
+  tickTimestamp: string | null;
+  observedAt: string | null;
+  ageSeconds: number | null;
+  maxAgeSeconds: number | null;
+  message: string | null;
+}
+
 export interface PnlInfo {
   realized: number;
   unrealized: number;
@@ -52,6 +61,7 @@ export interface ExecutionInfo {
   recoveryWarnings: string[];
   recoveryBlockers: string[];
   reconciledAt: string | null;
+  tickDelivery: TickDeliveryInfo | null;
 }
 
 export interface TaskInfo {
@@ -110,6 +120,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     recoveryWarnings: [],
     recoveryBlockers: [],
     reconciledAt: null,
+    tickDelivery: null,
   },
   tick: { timestamp: null, bid: null, ask: null, mid: null },
   task: {

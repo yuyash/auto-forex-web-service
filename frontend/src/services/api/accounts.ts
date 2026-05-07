@@ -51,6 +51,8 @@ function toAccount(account: BackendAccount): Account {
     live_max_initial_order_units: account.live_max_initial_order_units ?? 10000,
     live_max_order_guard_enabled: account.live_max_order_guard_enabled ?? false,
     live_max_order_units: account.live_max_order_units ?? 10000,
+    live_tick_latency_metric_interval_seconds:
+      account.live_tick_latency_metric_interval_seconds ?? 60,
     is_active: account.is_active ?? false,
   };
 }

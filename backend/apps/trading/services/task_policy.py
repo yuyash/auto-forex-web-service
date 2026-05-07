@@ -41,6 +41,10 @@ EXECUTION_SETTING_FIELDS = frozenset(
         "trading_mode",
         "oanda_account",
         "account_id",
+        "live_tick_stale_guard_enabled",
+        "live_tick_max_age_seconds",
+        "live_tick_status_log_interval_seconds",
+        "broker_drift_check_interval_seconds",
     }
 )
 

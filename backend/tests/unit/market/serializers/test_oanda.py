@@ -38,6 +38,7 @@ class TestOandaAccountsSerializerUnit:
         mock_account.live_max_initial_order_units = 10000
         mock_account.live_max_order_guard_enabled = False
         mock_account.live_max_order_units = 10000
+        mock_account.live_tick_latency_metric_interval_seconds = 60
         mock_account.is_active = True
         mock_account.is_default = False
         mock_account.created_at = "2024-01-01T00:00:00Z"
@@ -48,6 +49,7 @@ class TestOandaAccountsSerializerUnit:
 
         assert data["account_id"] == "101-001-1234567-001"
         assert data["api_type"] == ApiType.PRACTICE
+        assert data["live_tick_latency_metric_interval_seconds"] == 60
 
     def test_validate_api_type_valid(self) -> None:
         """Test API type validation with valid value."""

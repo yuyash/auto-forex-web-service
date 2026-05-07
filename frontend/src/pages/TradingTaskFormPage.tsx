@@ -79,6 +79,13 @@ export default function TradingTaskFormPage() {
                   task.market_idle_pre_close_minutes,
                 market_idle_resume_delay_minutes:
                   task.market_idle_resume_delay_minutes,
+                live_tick_stale_guard_enabled:
+                  task.live_tick_stale_guard_enabled,
+                live_tick_max_age_seconds: task.live_tick_max_age_seconds,
+                live_tick_status_log_interval_seconds:
+                  task.live_tick_status_log_interval_seconds,
+                broker_drift_check_interval_seconds:
+                  task.broker_drift_check_interval_seconds,
               }}
             />
           ) : (

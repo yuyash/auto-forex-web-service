@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.51.2",
+        "version": "1.51.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -8004,6 +8004,14 @@
                     "reconciled_at": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "tick_delivery": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickDeliveryInfo"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -9145,6 +9153,12 @@
                         "minimum": 0,
                         "description": "Account-specific maximum absolute units allowed for a single broker-bound order"
                     },
+                    "live_tick_latency_metric_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Minimum interval in seconds for persisting live tick latency metrics. Set to 0 to disable periodic latency metric samples."
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -9254,6 +9268,12 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Account-specific maximum absolute units allowed for a single broker-bound order"
+                    },
+                    "live_tick_latency_metric_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Minimum interval in seconds for persisting live tick latency metrics. Set to 0 to disable periodic latency metric samples."
                     },
                     "is_active": {
                         "type": "boolean",
@@ -10090,6 +10110,28 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "live_tick_stale_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Fail the task before strategy/order processing when a live tick is older than live_tick_max_age_seconds."
+                    },
+                    "live_tick_max_age_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum accepted age in seconds for a live tick before the task fails."
+                    },
+                    "live_tick_status_log_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for periodic live tick delivery status logs. Set to 0 to disable periodic OK logs."
+                    },
+                    "broker_drift_check_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for runtime OANDA/local broker drift checks. Set to 0 to disable runtime drift checks after startup reconciliation."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -11769,6 +11811,45 @@
                     "min_timestamp"
                 ]
             },
+            "TickDeliveryInfo": {
+                "type": "object",
+                "description": "Serializer for live tick delivery diagnostics.",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "tick_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "observed_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "age_seconds": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "max_age_seconds": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "age_seconds",
+                    "max_age_seconds",
+                    "message",
+                    "observed_at",
+                    "status",
+                    "tick_timestamp"
+                ]
+            },
             "TickGranularityEnum": {
                 "enum": [
                     "tick",
@@ -12236,6 +12317,28 @@
                         "minimum": 0,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
+                    "live_tick_stale_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Fail the task before strategy/order processing when a live tick is older than live_tick_max_age_seconds."
+                    },
+                    "live_tick_max_age_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum accepted age in seconds for a live tick before the task fails."
+                    },
+                    "live_tick_status_log_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for periodic live tick delivery status logs. Set to 0 to disable periodic OK logs."
+                    },
+                    "broker_drift_check_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for runtime OANDA/local broker drift checks. Set to 0 to disable runtime drift checks after startup reconciliation."
+                    },
                     "has_strategy_state": {
                         "type": "boolean",
                         "description": "Check if task has saved strategy state.",
@@ -12369,6 +12472,28 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "live_tick_stale_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Fail the task before strategy/order processing when a live tick is older than live_tick_max_age_seconds."
+                    },
+                    "live_tick_max_age_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum accepted age in seconds for a live tick before the task fails."
+                    },
+                    "live_tick_status_log_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for periodic live tick delivery status logs. Set to 0 to disable periodic OK logs."
+                    },
+                    "broker_drift_check_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for runtime OANDA/local broker drift checks. Set to 0 to disable runtime drift checks after startup reconciliation."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -12521,6 +12646,26 @@
                         "readOnly": true,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
+                    "live_tick_stale_guard_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Fail the task before strategy/order processing when a live tick is older than live_tick_max_age_seconds."
+                    },
+                    "live_tick_max_age_seconds": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Maximum accepted age in seconds for a live tick before the task fails."
+                    },
+                    "live_tick_status_log_interval_seconds": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Interval in seconds for periodic live tick delivery status logs. Set to 0 to disable periodic OK logs."
+                    },
+                    "broker_drift_check_interval_seconds": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Interval in seconds for runtime OANDA/local broker drift checks. Set to 0 to disable runtime drift checks after startup reconciliation."
+                    },
                     "action_policy": {
                         "type": "object",
                         "additionalProperties": {
@@ -12550,6 +12695,7 @@
                     "api_retry_backoff_base_seconds",
                     "api_retry_backoff_max_seconds",
                     "api_retry_max_attempts",
+                    "broker_drift_check_interval_seconds",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -12562,6 +12708,9 @@
                     "hedging_enabled",
                     "id",
                     "instrument",
+                    "live_tick_max_age_seconds",
+                    "live_tick_stale_guard_enabled",
+                    "live_tick_status_log_interval_seconds",
                     "market_idle_pre_close_minutes",
                     "market_idle_resume_delay_minutes",
                     "name",
@@ -12635,6 +12784,28 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "live_tick_stale_guard_enabled": {
+                        "type": "boolean",
+                        "description": "Fail the task before strategy/order processing when a live tick is older than live_tick_max_age_seconds."
+                    },
+                    "live_tick_max_age_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum accepted age in seconds for a live tick before the task fails."
+                    },
+                    "live_tick_status_log_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for periodic live tick delivery status logs. Set to 0 to disable periodic OK logs."
+                    },
+                    "broker_drift_check_interval_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Interval in seconds for runtime OANDA/local broker drift checks. Set to 0 to disable runtime drift checks after startup reconciliation."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
