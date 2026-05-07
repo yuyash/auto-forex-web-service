@@ -191,6 +191,7 @@ def executed_trading_task_id(authenticated_client, oanda_account, strategy_confi
             "config_id": str(strategy_config.id),
             "account_id": oanda_account.id,
             "dry_run": True,
+            "live_tick_stale_guard_enabled": False,
         },
         format="json",
     )
