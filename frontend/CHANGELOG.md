@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.3...frontend-v1.66.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* account units guards ([#681](https://github.com/yuyash/auto-forex-web-service/issues/681)) ([a371402](https://github.com/yuyash/auto-forex-web-service/commit/a3714027db19ddc4868655c15fa24e262860f471))
+
 ## [1.66.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.2...frontend-v1.66.3) (2026-05-06)
 
 ### Bug Fixes
