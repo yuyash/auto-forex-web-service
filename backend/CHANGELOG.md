@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.51.4...backend-v1.51.5) (2026-05-07)
+
+
+### Bug Fixes
+
+* **snowball:** tolerate grid close order drift ([#683](https://github.com/yuyash/auto-forex-web-service/issues/683)) ([a99a61e](https://github.com/yuyash/auto-forex-web-service/commit/a99a61ea79a3a78020c2db6842c7c5bbfbc11e2b))
+
 ## [1.51.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.51.3...backend-v1.51.4) (2026-05-07)
 
 
