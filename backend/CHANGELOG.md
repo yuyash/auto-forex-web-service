@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.51.3...backend-v1.51.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* account units guards ([#681](https://github.com/yuyash/auto-forex-web-service/issues/681)) ([a371402](https://github.com/yuyash/auto-forex-web-service/commit/a3714027db19ddc4868655c15fa24e262860f471))
+
 ## [1.51.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.51.2...backend-v1.51.3) (2026-05-06)
 
 
