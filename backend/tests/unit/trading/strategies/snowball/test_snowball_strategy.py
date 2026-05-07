@@ -383,6 +383,222 @@ class TestCounterAdds:
 
         assert events == []
 
+    def test_short_counter_add_is_skipped_when_earlier_layer_has_more_adverse_entry(self):
+        """Regression: cycle 20883 from production.
+
+        After a rebuild re-establishes an adverse entry in L1/R1 at a
+        price above the current market, a new counter add in L2 must not
+        be opened on the wrong side of that rebuilt entry (otherwise the
+        strategy-level grid-ordering validator would stop the task).
+        """
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16"],
+            n_pips_head="30",
+            n_pips_tail="14",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=20883, direction=Direction.SHORT)
+
+        # L1/R0 and L1/R1 are rebuilt ghosts left over at prices above
+        # the current market — this is exactly the production shape when
+        # the bug fires.
+        layer1 = Layer.create(1, 5, 9000, 3)
+        layer1.slot_at(0).fill(
+            Entry(
+                entry_id=20946,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.315"),
+                close_price=Decimal("141.929"),
+                units=9000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=20883,
+                is_rebuild=True,
+            )
+        )
+        layer1.slot_at(1).fill(
+            Entry(
+                entry_id=20943,
+                step=2,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.687"),
+                close_price=Decimal("142.207"),
+                units=18000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=20883,
+                parent_entry_id=20883,
+                is_rebuild=True,
+            )
+        )
+        # L2/R0 is sealed (was opened then TP-closed and marked ever_closed).
+        layer2 = Layer.create(2, 5, 9000, 3)
+        layer2.slot_at(0).ever_closed = True
+        cycle.add_layer(layer1)
+        cycle.add_layer(layer2)
+        ss.cycles.append(cycle)
+
+        # Market is adverse enough against the L1/R0 fallback reference
+        # (the only one the per-layer check sees once L2/R0 is sealed):
+        # bid - 142.315 ≥ 30 pips.  But the new entry would sit at
+        # 142.616 which is below the L1/R1 ghost at 142.687.  For a
+        # SHORT grid that breaks the ascending ordering; the guard must
+        # skip the open regardless.
+        tick = _tick(T0 + timedelta(minutes=1), "142.616", "142.618")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert events == []
+        # And the full on_tick path must not raise a grid-ordering
+        # violation because no new entry was created.
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=tick, state=state)
+        assert result.should_stop is False
+        assert result.is_error is False
+
+    def test_long_counter_add_is_skipped_when_earlier_layer_has_more_adverse_entry(self):
+        """Mirror of the SHORT regression for LONG cycles."""
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16"],
+            n_pips_head="30",
+            n_pips_tail="14",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=99, direction=Direction.LONG)
+
+        layer1 = Layer.create(1, 5, 9000, 3)
+        layer1.slot_at(0).fill(
+            Entry(
+                entry_id=100,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("142.687"),
+                close_price=Decimal("143.067"),
+                units=9000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=100,
+                is_rebuild=True,
+            )
+        )
+        layer1.slot_at(1).fill(
+            Entry(
+                entry_id=101,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("142.315"),
+                close_price=Decimal("142.795"),
+                units=18000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=100,
+                parent_entry_id=100,
+                is_rebuild=True,
+            )
+        )
+        layer2 = Layer.create(2, 5, 9000, 3)
+        layer2.slot_at(0).ever_closed = True
+        cycle.add_layer(layer1)
+        cycle.add_layer(layer2)
+        ss.cycles.append(cycle)
+
+        # For LONG, the entry side price is tick.ask.  adverse from the
+        # L1/R0 fallback (142.687) is (142.687 - ask)/0.01; using
+        # ask=142.386 gives adverse=30.1 pips which clears the manual
+        # interval threshold (30).  But 142.386 > 142.315, i.e. it would
+        # sit above the L1/R1 ghost at 142.315 and break the descending
+        # grid ordering.
+        tick = _tick(T0 + timedelta(minutes=1), "142.384", "142.386")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert events == []
+
+    def test_counter_add_still_opens_when_market_has_cleared_preceding_bound(self):
+        """Sanity check: the guard must not block legitimate adds.
+
+        When the market has actually moved past the most-adverse earlier
+        entry, a new counter add is still permitted.
+        """
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16"],
+            n_pips_head="30",
+            n_pips_tail="14",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=20884, direction=Direction.SHORT)
+
+        layer1 = Layer.create(1, 5, 9000, 3)
+        layer1.slot_at(0).fill(
+            Entry(
+                entry_id=200,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.315"),
+                close_price=Decimal("141.929"),
+                units=9000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=200,
+            )
+        )
+        layer1.slot_at(1).fill(
+            Entry(
+                entry_id=201,
+                step=2,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.687"),
+                close_price=Decimal("142.207"),
+                units=18000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=200,
+                parent_entry_id=200,
+            )
+        )
+        layer2 = Layer.create(2, 5, 9000, 3)
+        layer2.slot_at(0).ever_closed = True
+        cycle.add_layer(layer1)
+        cycle.add_layer(layer2)
+        ss.cycles.append(cycle)
+
+        # Market has moved adversely past the L1/R1 bound: bid=142.720
+        # is greater than 142.687, so the open is allowed.
+        tick = _tick(T0 + timedelta(minutes=1), "142.720", "142.722")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        assert isinstance(events[0], OpenPositionEvent)
+
 
 # ==================================================================
 # 3. Counter TP closes

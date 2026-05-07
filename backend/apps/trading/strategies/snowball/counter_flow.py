@@ -16,6 +16,7 @@ from apps.trading.strategies.snowball.calculators import (
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.events import entry_open_event
+from apps.trading.strategies.snowball.grid_policy import preceding_entry_bound
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -346,6 +347,18 @@ def process_cycle_counter_adds(
     if adverse < interval:
         return []
 
+    # Guard against cross-layer grid-ordering violations.  The per-layer
+    # adverse check above only considers the previous present slot inside
+    # ``layer``; when earlier layers still hold more-adverse rebuilt or
+    # live entries (a common outcome of stop-loss rebuild cycles) the new
+    # counter entry would be placed on the wrong side of them and the
+    # strategy-level ``validate_grid_ordering`` would kill the task.
+    # Skip the open when the current tick has not moved past the tightest
+    # preceding entry bound — the strategy will retry on a later tick.
+    new_price = _entry_side_price(cycle.direction, tick)
+    if _violates_preceding_entry_bound(cycle, layer, slot, new_price):
+        return []
+
     return _open_counter_entry(
         strategy,
         ss,
@@ -577,6 +590,49 @@ def _slot_reference_price(slot: Slot) -> Decimal | None:
     if slot.pending_rebuild is not None:
         return slot.pending_rebuild.entry_price
     return None
+
+
+def _violates_preceding_entry_bound(
+    cycle: SnowballCycle,
+    layer: Layer,
+    slot: Slot,
+    new_price: Decimal,
+) -> bool:
+    """Return True when opening a counter at ``new_price`` would break grid order.
+
+    For LONG cycles the grid is descending, so any preceding occupied slot
+    must have an entry price no lower than ``new_price``.  For SHORT
+    cycles the grid is ascending, so the bound caps ``new_price`` from
+    below.  ``preceding_entry_bound`` already walks earlier layers plus
+    the lower slots of the current layer and returns the tightest live
+    entry price — we just need to check which side of it we're on.
+    """
+    bound = preceding_entry_bound(cycle, layer, slot.index)
+    if bound is None:
+        return False
+    if cycle.direction == Direction.LONG:
+        if new_price > bound:
+            logger.info(
+                "Skipping counter add L%d/R%d: entry %.5f would exceed "
+                "preceding-layer bound %.5f (grid ordering)",
+                layer.layer_number,
+                slot.index,
+                new_price,
+                bound,
+            )
+            return True
+        return False
+    if new_price < bound:
+        logger.info(
+            "Skipping counter add L%d/R%d: entry %.5f would be below "
+            "preceding-layer bound %.5f (grid ordering)",
+            layer.layer_number,
+            slot.index,
+            new_price,
+            bound,
+        )
+        return True
+    return False
 
 
 def _layer_r0_reference_price(layer: Layer) -> Decimal | None:
