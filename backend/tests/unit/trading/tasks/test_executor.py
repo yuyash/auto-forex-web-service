@@ -240,6 +240,7 @@ class TestExecutorPauseControl:
         executor.save_events = MagicMock(return_value=[])
         executor.save_state = MagicMock()
         executor._metrics_aggregator = MagicMock()
+        executor._close_all_positions_on_stop_if_requested = MagicMock()
 
         state = MagicMock()
         state.current_balance = Decimal("10000")
@@ -248,6 +249,7 @@ class TestExecutorPauseControl:
 
         executor._finalize_execution(loop)
 
+        executor._close_all_positions_on_stop_if_requested.assert_not_called()
         task_model.objects.filter.assert_called_once()
         state_manager.pause.assert_called_once_with(status_message="Execution paused")
 
@@ -1704,6 +1706,37 @@ class TestHandleEmptyBatch:
 
 class TestSellOnStop:
     """Tests for sell-on-stop finalisation behavior."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_graceful_stop_mode_ignores_sticky_sell_on_stop(self, _mock_handler):
+        from apps.trading.enums import StopMode
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("10000")
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+        task.sell_on_stop = True
+
+        order_service = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=order_service,
+            state_manager=MagicMock(),
+        )
+
+        loop = ExecutionLoopState(state=MagicMock(), stop_mode=StopMode.GRACEFUL)
+
+        executor._close_all_positions_on_stop_if_requested(loop)
+
+        order_service.get_open_positions.assert_not_called()
 
     @patch("apps.trading.tasks.drain.Trade")
     @patch("apps.trading.tasks.executor.EventHandler")

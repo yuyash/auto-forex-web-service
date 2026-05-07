@@ -22,7 +22,7 @@ import {
 import Grid from '@mui/material/Grid';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import { useForm, Controller, useWatch, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +60,7 @@ const tradingTaskSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   instrument: z.string().min(1, 'Instrument is required'),
+  sell_on_stop: z.boolean().optional().default(false),
   dry_run: z.boolean().optional(),
   hedging_enabled: z.boolean().optional(),
   risk_acknowledged: z.boolean().optional(),
@@ -150,13 +151,14 @@ export default function TradingTaskForm({
     getValues,
     setValue,
   } = useForm<TradingTaskFormData>({
-    resolver: zodResolver(tradingTaskSchema),
+    resolver: zodResolver(tradingTaskSchema) as Resolver<TradingTaskFormData>,
     defaultValues: {
       account_id: initialData?.account_id || '',
       config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
       instrument: initialData?.instrument || 'USD_JPY',
+      sell_on_stop: initialData?.sell_on_stop ?? false,
       dry_run: false,
       hedging_enabled: true,
       risk_acknowledged: false,
@@ -348,6 +350,7 @@ export default function TradingTaskForm({
         name: completeData.name,
         description: completeData.description,
         instrument: completeData.instrument,
+        sell_on_stop: completeData.sell_on_stop ?? false,
         dry_run: completeData.dry_run,
         hedging_enabled:
           selectedAccount?.hedging_enabled === false || !strategySupportsHedging
@@ -396,6 +399,7 @@ export default function TradingTaskForm({
           account_id: t('trading:form.account'),
           config_id: t('common:labels.configuration'),
           name: t('trading:form.taskName'),
+          sell_on_stop: t('common:labels.sellOnStop'),
           hedging_enabled: t('trading:form.hedgingEnabled'),
           live_tick_stale_guard_enabled: t(
             'trading:form.liveTickStaleGuardEnabled'
@@ -649,6 +653,33 @@ export default function TradingTaskForm({
                     />
                   )}
                 />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="sell_on_stop"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={(event) =>
+                            field.onChange(event.target.checked)
+                          }
+                        />
+                      }
+                      label={t('common:labels.sellOnStop')}
+                    />
+                  )}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', ml: 4 }}
+                >
+                  {t('trading:form.sellOnStopDescription')}
+                </Typography>
               </Grid>
 
               <Grid size={{ xs: 12 }}>
@@ -1143,6 +1174,17 @@ export default function TradingTaskForm({
                       {formData.instrument
                         ? formData.instrument.replace('_', '/')
                         : '\u2014'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('common:labels.sellOnStop')}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {formData.sell_on_stop
+                        ? t('common:labels.yes')
+                        : t('common:labels.no')}
                     </Typography>
                   </Box>
                 </Paper>

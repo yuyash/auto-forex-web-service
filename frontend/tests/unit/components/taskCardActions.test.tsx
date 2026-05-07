@@ -364,10 +364,12 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
-    const confirmButtons = screen.getAllByRole('button', { name: 'Stop' });
-    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await user.click(screen.getByRole('button', { name: 'Confirm Stop' }));
 
-    expect(mockTradingStop).toHaveBeenCalledWith({ id: 'trading-1' });
+    expect(mockTradingStop).toHaveBeenCalledWith({
+      id: 'trading-1',
+      mode: 'graceful',
+    });
     expect(mockShowSuccess).toHaveBeenCalledWith(
       'Trading stopped successfully'
     );

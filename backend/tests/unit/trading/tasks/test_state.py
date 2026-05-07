@@ -7,6 +7,7 @@ import fakeredis
 
 from apps.trading.tasks.lifecycle_coordination import (
     TASK_COORDINATION_STATUS_FIELD,
+    TASK_COORDINATION_STOP_MODE_FIELD,
     TaskCoordinationStatus,
 )
 from apps.trading.tasks.state import StateManager
@@ -63,8 +64,10 @@ class TestStateManager:
         mgr.start()
         mgr.redis.hset(
             mgr.redis_key,
-            TASK_COORDINATION_STATUS_FIELD,
-            TaskCoordinationStatus.STOPPING,
+            mapping={
+                TASK_COORDINATION_STATUS_FIELD: TaskCoordinationStatus.STOPPING,
+                TASK_COORDINATION_STOP_MODE_FIELD: "graceful_close",
+            },
         )
         with patch("apps.trading.models.BacktestTask") as mock_bt:
             mock_bt.objects.filter.return_value.values_list.return_value.first.return_value = None
@@ -74,6 +77,7 @@ class TestStateManager:
                 )
                 ctrl = mgr.check_control(force=True)
         assert ctrl.should_stop is True
+        assert ctrl.stop_mode == "graceful_close"
 
     def test_stop_marks_stopped(self):
         mgr = self._make_manager()

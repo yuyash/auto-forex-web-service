@@ -102,6 +102,7 @@
     "dryRunDescription": "有効にすると、注文はローカルでシミュレートされ、OANDAには送信されません。実際の資金をリスクにさらさずに、リアルな市場データで戦略をテストするのに便利です。",
     "dryRunModeEnabled": "ドライランモード有効",
     "dryRunWarning": "注文はローカルでシミュレートされます。OANDAに実際の注文は発注されません。",
+    "sellOnStopDescription": "有効にすると、停止ダイアログの初期選択が「全ポジションをクローズ」になります。デプロイや一時停止ではポジションを保持します。",
     "hedgingEnabled": "両建てを有効にする",
     "hedgingDescription": "有効にすると、ロングとショートのポジションを同時に保有できます。両建て対応のOANDAアカウントが必要です。",
     "advancedSettings": "詳細設定",

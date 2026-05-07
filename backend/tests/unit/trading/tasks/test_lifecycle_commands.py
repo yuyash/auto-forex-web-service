@@ -156,7 +156,7 @@ def _make_lifecycle_task(
             TaskLifecycleKind.STOP_REQUESTED,
             True,
             False,
-            {"sell_on_stop": True},
+            {},
         ),
         (
             "trading",
@@ -209,6 +209,7 @@ def test_stop_transition_contract(
         task_id,
         expected_task_name,
         task.execution_id,
+        expected_mode,
     )
     if expected_revoke:
         adapters.revoke_execution.assert_called_once_with(task.celery_task_id)

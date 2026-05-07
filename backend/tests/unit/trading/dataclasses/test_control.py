@@ -9,6 +9,7 @@ class TestTaskControl:
     def test_default_should_stop_is_false(self):
         control = TaskControl()
         assert control.should_stop is False
+        assert control.stop_mode is None
 
     def test_set_should_stop(self):
         control = TaskControl(should_stop=True)

@@ -15,7 +15,7 @@ from typing import Any, List, cast
 
 from apps.trading.dataclasses import EventContext, StrategyResult
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.enums import StopMode, TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.events.handler import CycleResolutionError  # noqa: F401 — used in handle_events
@@ -87,6 +87,7 @@ class ExecutionLoopState:
     max_no_tick_batches: int = 60
     stopped_early: bool = False
     paused_early: bool = False
+    stop_mode: StopMode | None = None
     stop_reason: str = ""
     is_error: bool = False
     resume_last_tick_timestamp: datetime | None = None
@@ -608,6 +609,7 @@ class TaskExecutor:
         should_stop = getattr(control, "should_stop", False) is True
         should_pause = getattr(control, "should_pause", False) is True
         if should_stop:
+            self._record_requested_stop_mode(loop, control)
             logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
             loop.stopped_early = True
             return True
@@ -782,6 +784,7 @@ class TaskExecutor:
         should_stop = getattr(control, "should_stop", False) is True
         should_pause = getattr(control, "should_pause", False) is True
         if should_stop:
+            self._record_requested_stop_mode(loop, control)
             logger.info(
                 "Stop signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
                 self.task.pk,
@@ -804,6 +807,16 @@ class TaskExecutor:
         )
         loop.paused_early = True
         return True
+
+    @staticmethod
+    def _record_requested_stop_mode(loop: ExecutionLoopState, control: object) -> None:
+        raw_mode = getattr(control, "stop_mode", None)
+        if raw_mode in (None, ""):
+            return
+        try:
+            loop.stop_mode = StopMode(str(raw_mode))
+        except ValueError:
+            logger.warning("Ignoring unknown stop mode from control signal: %s", raw_mode)
 
     def _process_single_tick(self, loop: ExecutionLoopState, tick) -> bool:
         """Process one tick; return True when execution should stop."""
@@ -1478,7 +1491,8 @@ class TaskExecutor:
         # them here before the strategy's on_stop hook runs so that the
         # final balance and metrics reflect the closed positions.  Applies
         # to both live trading and backtest tasks.
-        self._close_all_positions_on_stop_if_requested(loop)
+        if not loop.paused_early:
+            self._close_all_positions_on_stop_if_requested(loop)
         logger.info("Calling engine.on_stop")
         result = self.engine.on_stop(state=loop.state)
         loop.state = result.state

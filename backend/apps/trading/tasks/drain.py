@@ -10,7 +10,7 @@ from typing import Any, Protocol, cast
 
 from django.utils import timezone as dj_timezone
 
-from apps.trading.enums import Direction, TaskStatus, TaskType
+from apps.trading.enums import Direction, StopMode, TaskStatus, TaskType
 from apps.trading.models import Position, TradingTask
 from apps.trading.models.trades import Trade
 from apps.trading.order import OrderServiceError
@@ -101,10 +101,14 @@ class TaskDrainCoordinator:
             )
 
     def close_all_positions_on_stop_if_requested(self, loop: Any) -> None:
-        """Close every open position when ``sell_on_stop`` was requested."""
+        """Close every open position for an explicit close-on-stop request."""
         executor = self.executor
         executor.task.refresh_from_db(fields=["sell_on_stop"])
-        if not getattr(executor.task, "sell_on_stop", False):
+        stop_mode = getattr(loop, "stop_mode", None)
+        close_positions = stop_mode == StopMode.GRACEFUL_CLOSE
+        if stop_mode is None:
+            close_positions = getattr(executor.task, "sell_on_stop", False)
+        if not close_positions:
             return
 
         open_positions = executor.order_service.get_open_positions(instrument=executor.instrument)
