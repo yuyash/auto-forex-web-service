@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.4...frontend-v1.66.5) (2026-05-07)
+
+
+### Bug Fixes
+
+* **trading:** keep positions on deploy stop ([#685](https://github.com/yuyash/auto-forex-web-service/issues/685)) ([b7e88e2](https://github.com/yuyash/auto-forex-web-service/commit/b7e88e23e25aed8b83390be4ccea27c6df31e7b6))
+
 ## [1.66.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.3...frontend-v1.66.4) (2026-05-07)
 
 
