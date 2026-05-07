@@ -370,23 +370,41 @@ class SnowballStrategy(Strategy):
         cycle: SnowballCycle,
         *,
         allow_reentry: bool = True,
+        entry: Entry | None = None,
     ) -> list[StrategyEvent]:
-        """Close the cycle's R0 (TP hit) and create a new cycle.
+        """Close the cycle head (TP hit) and create a new cycle.
 
-        This is only called when R0's active close target is reached and R0 is
-        a live entry.  Rebuilt R0 slots can carry a close target beyond the
+        This is only called when the dynamic head's active close target is
+        reached and the head is a live entry.  Rebuilt head slots can carry a
+        close target beyond the
         initial ``entry ± m_pips`` target.  The cycle transitions to COMPLETED
         via the unified status check in on_tick.
         """
-        # Find R0 entry in L1
-        layer = cycle.grid.layers[0] if cycle.grid.layers else None
-        if layer is None:
-            return []
-        r0_slot = layer.slot_at(0)
-        if r0_slot is None or r0_slot.entry is None:
+        entry = entry or cycle.initial_entry
+        if entry is None:
             return []
 
-        entry = r0_slot.entry
+        slot_ref = cycle.grid.slot_for_entry(entry.entry_id)
+        if slot_ref is None:
+            return []
+        layer, slot = slot_ref
+        remaining_entries = [
+            other for other in cycle.grid.all_entries() if other.entry_id != entry.entry_id
+        ]
+        if remaining_entries:
+            logger.warning(
+                "Cycle head close blocked because other live entries remain: "
+                "cycle_id=%d, head=L%d/R%d, remaining=[%s]",
+                cycle.cycle_id,
+                entry.layer_number,
+                entry.retracement_count,
+                ", ".join(
+                    f"L{other.layer_number}/R{other.retracement_count}"
+                    for other in remaining_entries
+                ),
+            )
+            return []
+
         direction = cycle.direction
         exit_price = entry.exit_price(tick)
         pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
@@ -415,8 +433,8 @@ class SnowballStrategy(Strategy):
             )
         )
 
-        # Close R0 slot — not refillable (cycle is ending).
-        layer.close_slot(0, refillable=False)
+        # Close the head slot — not refillable (cycle is ending).
+        layer.close_slot(slot.index, refillable=False)
 
         # Do NOT clear pending rebuilds here.  If other slots have
         # pending rebuilds, the cycle status update in on_tick will
@@ -487,15 +505,19 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        if not self.config.grid_order_validation_enabled:
-            self._grid_order_violation = None
-            return
         self._grid_order_violation = validate_grid_ordering(
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
         )
         if self._grid_order_violation:
-            logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
+            if self.config.grid_order_validation_enabled:
+                logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
+            else:
+                logger.warning(
+                    "Grid ordering violation ignored because "
+                    "grid_order_validation_enabled=false; continuing strategy: %s",
+                    self._grid_order_violation,
+                )
 
     # ------------------------------------------------------------------
     # Per-cycle tick processing
@@ -519,13 +541,13 @@ class SnowballStrategy(Strategy):
         *,
         allow_reentry: bool = True,
     ) -> list[StrategyEvent]:
-        """Check if the cycle's R0 TP target is hit.
+        """Check if the cycle head's TP target is hit.
 
-        The cycle TP follows R0's current close target. For ordinary entries
+        The cycle TP follows the dynamic head's current close target. For ordinary entries
         this is ``R0.entry_price ± m_pips * pip_size``; for rebuilt entries it
         may be pushed farther out to recover prior stop-losses.
 
-        The R0 position can only close when no other entries remain open
+        The head position can only close when no other entries remain open
         in the grid.  If counter entries are still present, their TPs
         should be reached first (they are closer to the current price).
         """
@@ -535,63 +557,44 @@ class SnowballStrategy(Strategy):
         direction = cycle.direction
         cfg = self.config
 
-        # Determine R0's entry and close target — live entry or pending-rebuild
-        # snapshot. Rebuilds can carry an adjusted close_price; using the raw
-        # m_pips target here would close the lifecycle before prior SL losses
-        # have been recovered.
-        layer = cycle.grid.layers[0] if cycle.grid.layers else None
-        if layer is None:
-            return []
-        r0_slot = layer.slot_at(0)
-        if r0_slot is None:
+        # Determine the dynamic head and its close target.  Shrink and
+        # out-of-order closes can move the cycle head away from L1/R0.
+        head_entry = cycle.initial_entry
+        if head_entry is None:
             return []
 
-        r0_entry = r0_slot.entry
-        r0_pending = r0_slot.pending_rebuild
-        if r0_entry is not None:
-            r0_price = r0_entry.entry_price
-            r0_close_price = r0_entry.close_price
-        elif r0_pending is not None:
-            r0_price = r0_pending.entry_price
-            r0_close_price = r0_pending.close_price
-        else:
-            return []
-
-        if r0_close_price <= 0:
+        head_close_price = head_entry.close_price
+        if head_close_price <= 0:
             if direction == Direction.LONG:
-                r0_close_price = r0_price + cfg.m_pips * self.pip_size
+                head_close_price = head_entry.entry_price + cfg.m_pips * self.pip_size
             else:
-                r0_close_price = r0_price - cfg.m_pips * self.pip_size
+                head_close_price = head_entry.entry_price - cfg.m_pips * self.pip_size
 
-        # Check if cycle TP is hit based on R0's active close target.
+        # Check if cycle TP is hit based on the head's active close target.
         hit = False
-        if direction == Direction.LONG and tick.bid >= r0_close_price:
+        if direction == Direction.LONG and tick.bid >= head_close_price:
             hit = True
-        elif direction == Direction.SHORT and tick.ask <= r0_close_price:
+        elif direction == Direction.SHORT and tick.ask <= head_close_price:
             hit = True
 
         if not hit:
             return []
 
-        # R0 must be a live entry to close it.  If R0 is pending rebuild,
-        # the TP region is reached but we cannot close — just log and
-        # wait for the rebuild to complete.
-        if r0_entry is None:
-            logger.info(
-                "Cycle TP region reached (%s) but R0 is pending rebuild — waiting",
-                direction.value.upper(),
-            )
-            return []
-
         if not cycle.grid.has_counter_entries():
-            return self._close_and_reenter(ss, tick, cycle, allow_reentry=allow_reentry)
+            return self._close_and_reenter(
+                ss,
+                tick,
+                cycle,
+                allow_reentry=allow_reentry,
+                entry=head_entry,
+            )
 
         # Counter entries are still open while the head TP is hit.
         # Check whether every remaining counter's TP is also reached
         # on this tick.  If so, flush them all and proceed normally.
         all_counters_tp_hit = True
         for e in cycle.grid.all_entries():
-            if e.entry_id == r0_entry.entry_id:
+            if e.entry_id == head_entry.entry_id:
                 continue
             if e.close_price <= 0:
                 all_counters_tp_hit = False
@@ -621,7 +624,7 @@ class SnowballStrategy(Strategy):
         for layer_iter in reversed(list(cycle.grid.layers)):
             for slot in reversed(layer_iter.occupied_slots()):
                 counter = slot.entry
-                if counter is None or counter.entry_id == r0_entry.entry_id:
+                if counter is None or counter.entry_id == head_entry.entry_id:
                     continue
                 exit_price = counter.exit_price(tick)
                 pips_gained = abs(exit_price - counter.entry_price) / self.pip_size
@@ -653,10 +656,18 @@ class SnowballStrategy(Strategy):
                     )
                 )
             # Remove empty non-L1 layers
-            if layer_iter.layer_number > 1 and not layer_iter.has_open_entries():
+            if layer_iter.layer_number > 1 and not layer_iter.has_present_entries():
                 cycle.grid.layers.remove(layer_iter)
 
-        events.extend(self._close_and_reenter(ss, tick, cycle, allow_reentry=allow_reentry))
+        events.extend(
+            self._close_and_reenter(
+                ss,
+                tick,
+                cycle,
+                allow_reentry=allow_reentry,
+                entry=head_entry,
+            )
+        )
         return events
 
     def _process_cycle_counter_closes(

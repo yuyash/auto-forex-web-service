@@ -41,70 +41,147 @@ def process_cycle_counter_closes(
     *,
     close_entry: Callable[..., StrategyEvent],
 ) -> list[StrategyEvent]:
-    """Close counter entries from the back (newest first)."""
+    """Close TP-hit non-head entries, preferring the newest hit slot first."""
     if cycle.completed:
         return []
 
     events: list[StrategyEvent] = []
     while True:
-        closed_this_pass = False
-        for layer in reversed(list(cycle.grid.layers)):
-            highest = layer.highest_occupied_slot()
-            if highest is None or highest.entry is None:
-                continue
+        candidate = _next_tp_close_candidate(cycle, tick)
+        if candidate is None:
+            return events
+        layer, slot, blocked_newer = candidate
+        entry = slot.entry
+        if entry is None:
+            return events
 
-            entry = highest.entry
-            if entry.layer_number == 1 and entry.retracement_count == 0:
-                continue
-            if not entry_take_profit_hit(entry, tick):
-                continue
-
-            exit_price = entry.exit_price(tick)
-            pips_gained = abs(exit_price - entry.entry_price) / strategy.pip_size
-
-            logger.info(
-                "Counter TP (%s): L%s/R%s, +%.1f pips",
-                entry.direction.value.upper(),
+        if blocked_newer:
+            logger.warning(
+                "Grid close-order violation: closing TP-hit L%d/R%d while newer "
+                "entries remain open or are not at TP; cycle_id=%d, blocked_newer=[%s]",
                 entry.layer_number,
                 entry.retracement_count,
-                pips_gained,
-            )
-            layer.close_slot(highest.index)
-            cycle.counter_close_count += 1
-            events.append(
-                close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"Counter TP ({entry.direction.value.upper()}) | "
-                        f"L{entry.layer_number}/R{entry.retracement_count}, "
-                        f"entry={entry.entry_price:.3f}, "
-                        f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
-                    ),
-                    close_reason="counter_tp",
-                    actual_tp_pips=pips_gained,
-                    validation_status="pass",
-                    cycle=cycle,
-                )
+                cycle.cycle_id,
+                ", ".join(blocked_newer),
             )
 
-            if layer.layer_number > 1:
-                _close_layer_initial_if_ready(
-                    strategy,
-                    tick,
-                    cycle,
-                    layer,
-                    events,
-                    close_entry=close_entry,
-                )
-                if not layer.has_open_entries():
-                    cycle.grid.layers.remove(layer)
+        if _is_layer_initial_slot(layer, slot, entry):
+            _close_layer_initial_slot(
+                strategy,
+                tick,
+                cycle,
+                layer,
+                slot,
+                events,
+                close_entry=close_entry,
+            )
+            if layer.layer_number > 1 and not layer.has_present_entries():
+                cycle.grid.layers.remove(layer)
+            continue
 
-            closed_this_pass = True
-            break
+        _close_counter_slot(
+            strategy,
+            tick,
+            cycle,
+            layer,
+            slot,
+            events,
+            close_entry=close_entry,
+        )
 
-        if not closed_this_pass:
-            return events
+        if layer.layer_number > 1:
+            _close_layer_initial_if_ready(
+                strategy,
+                tick,
+                cycle,
+                layer,
+                events,
+                close_entry=close_entry,
+            )
+            if not layer.has_present_entries():
+                cycle.grid.layers.remove(layer)
+
+
+def _next_tp_close_candidate(
+    cycle: SnowballCycle,
+    tick: Tick,
+) -> tuple[Layer, Slot, list[str]] | None:
+    """Return the newest TP-hit non-head slot, even if newer slots are not hit."""
+    head = cycle.initial_entry
+    head_entry_id = head.entry_id if head is not None else None
+    blocked_newer: list[str] = []
+
+    for layer in reversed(list(cycle.grid.layers)):
+        occupied = sorted(layer.occupied_slots(), key=lambda s: s.index, reverse=True)
+        for slot in occupied:
+            entry = slot.entry
+            if entry is None:
+                continue
+            if entry.entry_id == head_entry_id:
+                continue
+
+            if _is_layer_initial_slot(layer, slot, entry) and len(occupied) != 1:
+                if entry_take_profit_hit(entry, tick):
+                    logger.warning(
+                        "Layer initial TP reached before its layer counters closed; "
+                        "waiting for counters: cycle_id=%d, L%d/R%d",
+                        cycle.cycle_id,
+                        entry.layer_number,
+                        entry.retracement_count,
+                    )
+                blocked_newer.append(_format_grid_entry(entry))
+                continue
+
+            if entry_take_profit_hit(entry, tick):
+                return layer, slot, blocked_newer
+
+            blocked_newer.append(_format_grid_entry(entry))
+
+    return None
+
+
+def _close_counter_slot(
+    strategy: CounterFlowStrategy,
+    tick: Tick,
+    cycle: SnowballCycle,
+    layer: Layer,
+    slot: Slot,
+    events: list[StrategyEvent],
+    *,
+    close_entry: Callable[..., StrategyEvent],
+) -> None:
+    entry = slot.entry
+    if entry is None:
+        return
+
+    exit_price = entry.exit_price(tick)
+    pips_gained = abs(exit_price - entry.entry_price) / strategy.pip_size
+
+    logger.info(
+        "Counter TP (%s): L%s/R%s, +%.1f pips",
+        entry.direction.value.upper(),
+        entry.layer_number,
+        entry.retracement_count,
+        pips_gained,
+    )
+    layer.close_slot(slot.index)
+    cycle.counter_close_count += 1
+    events.append(
+        close_entry(
+            tick,
+            entry,
+            description=(
+                f"Counter TP ({entry.direction.value.upper()}) | "
+                f"L{entry.layer_number}/R{entry.retracement_count}, "
+                f"entry={entry.entry_price:.3f}, "
+                f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
+            ),
+            close_reason="counter_tp",
+            actual_tp_pips=pips_gained,
+            validation_status="pass",
+            cycle=cycle,
+        )
+    )
 
 
 def _close_layer_initial_if_ready(
@@ -123,6 +200,31 @@ def _close_layer_initial_if_ready(
     if r0_entry is None or not entry_take_profit_hit(r0_entry, tick):
         return
 
+    _close_layer_initial_slot(
+        strategy,
+        tick,
+        cycle,
+        layer,
+        remaining[0],
+        events,
+        close_entry=close_entry,
+    )
+
+
+def _close_layer_initial_slot(
+    strategy: CounterFlowStrategy,
+    tick: Tick,
+    cycle: SnowballCycle,
+    layer: Layer,
+    slot: Slot,
+    events: list[StrategyEvent],
+    *,
+    close_entry: Callable[..., StrategyEvent],
+) -> None:
+    r0_entry = slot.entry
+    if r0_entry is None:
+        return
+
     r0_exit = r0_entry.exit_price(tick)
     r0_pips = abs(r0_exit - r0_entry.entry_price) / strategy.pip_size
     logger.info(
@@ -131,7 +233,7 @@ def _close_layer_initial_if_ready(
         layer.layer_number,
         r0_pips,
     )
-    layer.close_slot(0, refillable=False)
+    layer.close_slot(slot.index, refillable=False)
     events.append(
         close_entry(
             tick,
@@ -146,6 +248,17 @@ def _close_layer_initial_if_ready(
             validation_status="pass",
             cycle=cycle,
         )
+    )
+
+
+def _is_layer_initial_slot(layer: Layer, slot: Slot, entry: Entry) -> bool:
+    return layer.layer_number > 1 and slot.index == 0 and entry.is_layer_initial
+
+
+def _format_grid_entry(entry: Entry) -> str:
+    return (
+        f"L{entry.layer_number}/R{entry.retracement_count}"
+        f"(entry={entry.entry_price:.5f},tp={entry.close_price:.5f})"
     )
 
 

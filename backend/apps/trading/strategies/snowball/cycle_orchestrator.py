@@ -119,15 +119,35 @@ def process_active_cycles(
         if allow_new_positions:
             events.extend(strategy._process_stop_loss_rebuilds(ss, tick, cycle))
 
+        order_checked_without_new_mutations = False
         if allow_new_positions and not counter_close_events:
-            max_iterations = max(1, strategy.config.f_max * (strategy.config.r_max + 1))
-            for _ in range(max_iterations):
-                add_events = strategy._process_cycle_counter_adds(ss, tick, cycle)
-                if not add_events:
-                    break
-                events.extend(add_events)
+            strategy._validate_grid_ordering(cycle)
+            if strategy._grid_order_violation and strategy.config.grid_order_validation_enabled:
+                return CycleProcessingResult(
+                    events=events,
+                    stop_reason=f"Grid ordering violation: {strategy._grid_order_violation}",
+                    is_error=True,
+                )
+            if strategy._grid_order_violation:
+                logger.warning(
+                    "Skipping Snowball counter adds while grid ordering is violated: %s",
+                    strategy._grid_order_violation,
+                )
+                strategy._grid_order_violation = None
+                order_checked_without_new_mutations = True
+            else:
+                max_iterations = max(1, strategy.config.f_max * (strategy.config.r_max + 1))
+                opened_new_position = False
+                for _ in range(max_iterations):
+                    add_events = strategy._process_cycle_counter_adds(ss, tick, cycle)
+                    if not add_events:
+                        break
+                    opened_new_position = True
+                    events.extend(add_events)
+                order_checked_without_new_mutations = not opened_new_position
 
-        strategy._validate_grid_ordering(cycle)
+        if not order_checked_without_new_mutations:
+            strategy._validate_grid_ordering(cycle)
         if strategy._grid_order_violation and strategy.config.grid_order_validation_enabled:
             return CycleProcessingResult(
                 events=events,
@@ -135,10 +155,6 @@ def process_active_cycles(
                 is_error=True,
             )
         if strategy._grid_order_violation:
-            logger.error(
-                "Grid ordering violation ignored because grid_order_validation_enabled=false: %s",
-                strategy._grid_order_violation,
-            )
             strategy._grid_order_violation = None
 
         _refresh_cycle_status(cycle)
