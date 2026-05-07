@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+import logging
 from typing import Any
 
 from apps.trading.dataclasses.tick import Tick
@@ -29,6 +30,7 @@ from apps.trading.strategies.snowball.models import (
     Layer,
     SnowballCycle,
     SnowballStrategyState,
+    StopLossClosedEntry,
 )
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
@@ -937,12 +939,13 @@ class TestGridOrderingValidation:
         assert result.is_error is True
         assert "Grid ordering violation" in (result.stop_reason or "")
 
-    def test_violation_does_not_fail_task_when_validation_disabled(self):
+    def test_violation_warns_and_does_not_fail_task_when_validation_disabled(self, caplog):
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
             grid_order_validation_enabled=False,
         )
+        s.configure_runtime(account_currency="JPY", hedging_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=3, direction=Direction.LONG)
         layer = Layer.create(1, 7, 1000, 3)
@@ -981,11 +984,480 @@ class TestGridOrderingValidation:
         ss.cycles.append(cycle)
 
         state = DummyState(strategy_state=ss.to_dict())
-        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.10", "160.12"), state=state)
+        with caplog.at_level(
+            logging.WARNING,
+            logger="apps.trading.strategies.snowball.strategy",
+        ):
+            result = s.on_tick(
+                tick=_tick(T0 + timedelta(minutes=1), "160.10", "160.12"),
+                state=state,
+            )
 
         assert result.should_stop is False
         assert result.is_error is False
         assert result.stop_reason == ""
+        assert any(
+            "Grid ordering violation ignored" in record.getMessage() for record in caplog.records
+        )
+
+    def test_cycle_tp_uses_dynamic_head_after_front_slot_removed(self):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=3, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).ever_closed = True
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.500"),
+                close_price=Decimal("160.000"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.02", "160.04"), state=state)
+
+        closes = _close_events(result)
+        assert len(closes) == 1
+        assert closes[0].entry_id == 2
+        assert closes[0].close_reason == "tp"
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        old_cycle = persisted.find_cycle(3)
+        assert old_cycle is not None
+        assert old_cycle.completed is True
+
+    def test_tp_hit_counter_closes_when_newer_slot_is_not_hit(self, caplog):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=4, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.700"),
+                close_price=Decimal("159.800"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.600"),
+                close_price=Decimal("160.200"),
+                units=3000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=2,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        with caplog.at_level(logging.WARNING):
+            result = s.on_tick(
+                tick=_tick(T0 + timedelta(minutes=1), "159.85", "159.87"),
+                state=state,
+            )
+
+        assert result.should_stop is False
+        closes = _close_events(result)
+        assert [event.entry_id for event in closes] == [2]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(4)
+        assert persisted_cycle is not None
+        persisted_layer = persisted_cycle.grid.layers[0]
+        assert persisted_layer.slot_at(1).entry is None
+        assert persisted_layer.slot_at(2).entry is not None
+        assert any("Grid close-order violation" in record.getMessage() for record in caplog.records)
+
+    def test_lower_counter_closes_on_next_tick_after_higher_counter_closed(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=7, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.700"),
+                close_price=Decimal("160.400"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.600"),
+                close_price=Decimal("160.200"),
+                units=3000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=2,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        first = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.25", "160.27"), state=state)
+        assert [event.entry_id for event in _close_events(first)] == [3]
+
+        second = s.on_tick(tick=_tick(T0 + timedelta(minutes=2), "160.45", "160.47"), state=state)
+        assert [event.entry_id for event in _close_events(second)] == [2]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(7)
+        assert persisted_cycle is not None
+        assert persisted_cycle.grid.layers[0].slot_at(0).entry is not None
+        assert persisted_cycle.grid.layers[0].slot_at(1).entry is None
+        assert persisted_cycle.grid.layers[0].slot_at(2).entry is None
+        assert persisted_cycle.completed is False
+
+    def test_cycle_head_tp_does_not_close_while_live_counter_remains(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=8, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.700"),
+                close_price=Decimal("160.800"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.55", "160.57"), state=state)
+
+        assert _close_events(result) == []
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(8)
+        assert persisted_cycle is not None
+        assert persisted_cycle.completed is False
+        assert len(persisted_cycle.grid.all_entries()) == 2
+
+    def test_grid_violation_skips_new_counter_adds_until_order_recovers(self, caplog):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        s.configure_runtime(account_currency="JPY", hedging_enabled=False)
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=9, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.100"),
+                close_price=Decimal("160.400"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        with caplog.at_level(logging.WARNING):
+            result = s.on_tick(
+                tick=_tick(T0 + timedelta(minutes=1), "159.50", "159.52"),
+                state=state,
+            )
+
+        assert result.should_stop is False
+        assert _open_events(result) == []
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(9)
+        assert persisted_cycle is not None
+        assert persisted_cycle.grid.layers[0].slot_at(2).entry is None
+        assert any(
+            "Skipping Snowball counter adds while grid ordering is violated" in record.getMessage()
+            for record in caplog.records
+        )
+
+    def test_out_of_order_layer_closes_preserve_layer_until_present_slots_clear(self):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=5, direction=Direction.LONG)
+        l1 = Layer.create(1, 7, 1000, 3)
+        l1.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        l2 = Layer.create(2, 7, 1000, 3)
+        l2.slot_at(0).fill(
+            Entry(
+                entry_id=2,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.400"),
+                close_price=Decimal("160.000"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=2,
+                retracement_count=0,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        l2.slot_at(1).fill(
+            Entry(
+                entry_id=3,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.200"),
+                close_price=Decimal("159.800"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        l2.slot_at(2).fill(
+            Entry(
+                entry_id=4,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.000"),
+                close_price=Decimal("160.200"),
+                units=3000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=2,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(l1)
+        cycle.add_layer(l2)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        first = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "159.85", "159.87"), state=state)
+        assert [event.entry_id for event in _close_events(first)] == [3]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(5)
+        assert persisted_cycle is not None
+        assert len(persisted_cycle.grid.layers) == 2
+
+        second = s.on_tick(tick=_tick(T0 + timedelta(minutes=2), "160.25", "160.27"), state=state)
+        assert [event.entry_id for event in _close_events(second)] == [4, 2]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(5)
+        assert persisted_cycle is not None
+        assert [layer.layer_number for layer in persisted_cycle.grid.layers] == [1]
+
+    def test_layer_initial_close_keeps_layer_with_pending_rebuild(self):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=6, direction=Direction.LONG)
+        l1 = Layer.create(1, 7, 1000, 3)
+        l1.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        l2 = Layer.create(2, 7, 1000, 3)
+        l2.slot_at(0).fill(
+            Entry(
+                entry_id=2,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("159.400"),
+                close_price=Decimal("159.800"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=2,
+                retracement_count=0,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        l2.slot_at(1).pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("159.200"),
+            close_price=Decimal("159.700"),
+            units=2000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=2,
+            retracement_count=1,
+            step=2,
+            root_entry_id=1,
+            parent_entry_id=1,
+            cycle_id=6,
+        )
+        cycle.add_layer(l1)
+        cycle.add_layer(l2)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "159.85", "159.87"), state=state)
+
+        assert [event.entry_id for event in _close_events(result)] == [2]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        persisted_cycle = persisted.find_cycle(6)
+        assert persisted_cycle is not None
+        assert [layer.layer_number for layer in persisted_cycle.grid.layers] == [1, 2]
+        persisted_l2 = persisted_cycle.grid.layers[1]
+        assert persisted_l2.slot_at(1).pending_rebuild is not None
 
     def test_same_tick_counter_add_skips_rebuilt_slot_with_synthetic_entry_price(self):
         s = _strategy()

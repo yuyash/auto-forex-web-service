@@ -348,6 +348,14 @@ class PositionGrid:
             entries.extend(layer.all_entries())
         return entries
 
+    def slot_for_entry(self, entry_id: int) -> tuple[Layer, Slot] | None:
+        """Return the layer/slot containing an entry ID."""
+        for layer in self.layers:
+            for slot in layer.slots:
+                if slot.entry is not None and slot.entry.entry_id == entry_id:
+                    return layer, slot
+        return None
+
     def head_entry(self) -> Entry | None:
         """Return the oldest surviving position (cycle head).
 
