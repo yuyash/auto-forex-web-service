@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 TASK_COORDINATION_STATUS_FIELD: Final = "status"
+TASK_COORDINATION_STOP_MODE_FIELD: Final = "stop_mode"
 
 
 class TaskCoordinationStatus:

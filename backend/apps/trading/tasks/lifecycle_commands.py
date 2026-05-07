@@ -213,7 +213,10 @@ class TaskLifecycleCommands:
             )
 
         self._signal_redis_stop(
-            task_id=task_id, task_name=task_name, execution_id=task.execution_id
+            task_id=task_id,
+            task_name=task_name,
+            execution_id=task.execution_id,
+            stop_mode=stop_plan.effective_mode,
         )
         # Fall back to execution_id for older rows that pre-date the
         # celery_task_id field and may still have it set to NULL.
@@ -515,9 +518,10 @@ class TaskLifecycleCommands:
         task_id: UUID,
         task_name: str,
         execution_id: object,
+        stop_mode: StopMode,
     ) -> None:
         try:
-            self.adapters.signal_stop(task_id, task_name, execution_id)
+            self.adapters.signal_stop(task_id, task_name, execution_id, stop_mode)
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:STOP] Redis signal failed (non-fatal) - task_id=%s, error=%s",

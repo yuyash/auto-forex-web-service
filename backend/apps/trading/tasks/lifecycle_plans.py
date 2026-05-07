@@ -70,14 +70,10 @@ def build_stop_command_plan(
     else:
         next_status = TaskStatus.STOPPING
 
-    extra_updates: dict[str, object] = {}
-    if effective_mode == StopMode.GRACEFUL_CLOSE:
-        extra_updates["sell_on_stop"] = True
-
     return StopCommandPlan(
         effective_mode=effective_mode,
         next_status=next_status,
-        extra_updates=extra_updates,
+        extra_updates={},
         escalation_log_message=escalation_log_message,
     )
 

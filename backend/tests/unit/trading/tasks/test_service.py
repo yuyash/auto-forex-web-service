@@ -659,7 +659,7 @@ class TestStopTask:
     @patch("redis.Redis")
     @patch("apps.trading.tasks.service.BacktestTask")
     @patch("apps.trading.tasks.service.TradingTask")
-    def test_stop_trading_graceful_close_sets_sell_on_stop(
+    def test_stop_trading_graceful_close_keeps_task_default_sell_on_stop(
         self, mock_tt, mock_bt, mock_redis_cls, mock_app, mock_stop
     ):
         from apps.trading.tasks.service import TaskService
@@ -673,7 +673,7 @@ class TestStopTask:
         mock_redis_cls.from_url.return_value = MagicMock()
 
         assert TaskService().stop_task(task_id, mode="graceful_close") is True
-        assert task.sell_on_stop is True
+        assert task.sell_on_stop is False
         mock_app.control.revoke.assert_not_called()
         mock_stop.apply_async.assert_called_once_with(
             args=[task_id, "graceful_close"],

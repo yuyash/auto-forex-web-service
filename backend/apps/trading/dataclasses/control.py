@@ -14,7 +14,9 @@ class TaskControl:
 
     Attributes:
         should_stop: Flag indicating the task should stop
-        should_pause: Flag indicating the task should pause"""
+        should_pause: Flag indicating the task should pause
+        stop_mode: Requested stop mode, when supplied by the lifecycle command"""
 
     should_stop: bool = False
     should_pause: bool = False
+    stop_mode: str | None = None

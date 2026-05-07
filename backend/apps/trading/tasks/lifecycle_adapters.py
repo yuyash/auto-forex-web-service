@@ -10,6 +10,7 @@ from uuid import UUID
 from apps.trading.enums import StopMode
 from apps.trading.tasks.lifecycle_coordination import (
     TASK_COORDINATION_STATUS_FIELD,
+    TASK_COORDINATION_STOP_MODE_FIELD,
     TaskCoordinationStatus,
     build_task_coordination_key,
     build_task_execution_instance_key,
@@ -21,7 +22,7 @@ class LifecycleCommandAdapters:
     """External side effects used by lifecycle commands."""
 
     inspect_workers: Callable[[], dict[str, object] | None]
-    signal_stop: Callable[[UUID, str, object], None]
+    signal_stop: Callable[[UUID, str, object, StopMode], None]
     signal_pause: Callable[[UUID, str, object], None]
     revoke_execution: Callable[[object], None]
     dispatch_stop: Callable[[UUID, bool, StopMode], None]
@@ -47,7 +48,12 @@ def _default_inspect_workers() -> dict[str, object] | None:
     return current_app.control.inspect(timeout=3.0).active()
 
 
-def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) -> None:
+def _default_signal_stop(
+    task_id: UUID,
+    task_name: str,
+    execution_id: object,
+    stop_mode: StopMode,
+) -> None:
     import redis
     from django.conf import settings
 
@@ -61,8 +67,10 @@ def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) ->
     )
     redis_client.hset(
         redis_key,
-        TASK_COORDINATION_STATUS_FIELD,
-        TaskCoordinationStatus.STOPPING,
+        mapping={
+            TASK_COORDINATION_STATUS_FIELD: TaskCoordinationStatus.STOPPING,
+            TASK_COORDINATION_STOP_MODE_FIELD: stop_mode.value,
+        },
     )
     redis_client.expire(redis_key, 3600)
     redis_client.close()

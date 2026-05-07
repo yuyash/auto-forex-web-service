@@ -55,6 +55,7 @@ interface StopOptionsDialogProps {
   // cannot drain (for example, backtests tied to a finite tick stream may
   // still support it, but some task types must not offer the option).
   drainAvailable?: boolean;
+  initialOption?: StopOption;
 }
 
 export function StopOptionsDialog({
@@ -66,6 +67,7 @@ export function StopOptionsDialog({
   title,
   taskType,
   drainAvailable = true,
+  initialOption,
 }: StopOptionsDialogProps) {
   const { t } = useTranslation(['common']);
   const [selectedOption, setSelectedOption] = useState<StopOption | null>(null);
@@ -75,8 +77,9 @@ export function StopOptionsDialog({
   const [drainDurationInput, setDrainDurationInput] = useState<string>(
     String(DEFAULT_DRAIN_DURATION_MINUTES)
   );
+  const effectiveSelectedOption = selectedOption ?? initialOption ?? null;
   const drainDurationInvalid =
-    selectedOption === 'drain' &&
+    effectiveSelectedOption === 'drain' &&
     (!Number.isFinite(drainDurationMinutes) || drainDurationMinutes < 1);
 
   const resolvedTitle =
@@ -88,12 +91,12 @@ export function StopOptionsDialog({
         : t('common:stopOptions.title'));
 
   const handleConfirm = () => {
-    if (!selectedOption) return;
-    if (selectedOption === 'drain') {
+    if (!effectiveSelectedOption) return;
+    if (effectiveSelectedOption === 'drain') {
       if (drainDurationInvalid) return;
-      onConfirm({ option: selectedOption, drainDurationMinutes });
+      onConfirm({ option: effectiveSelectedOption, drainDurationMinutes });
     } else {
-      onConfirm({ option: selectedOption });
+      onConfirm({ option: effectiveSelectedOption });
     }
   };
 
@@ -118,13 +121,15 @@ export function StopOptionsDialog({
         </Typography>
         <List sx={{ bgcolor: 'background.paper' }}>
           <ListItemButton
-            selected={selectedOption === 'graceful'}
+            selected={effectiveSelectedOption === 'graceful'}
             onClick={() => setSelectedOption('graceful')}
             disabled={isLoading}
             sx={{
               border: 1,
               borderColor:
-                selectedOption === 'graceful' ? 'primary.main' : 'divider',
+                effectiveSelectedOption === 'graceful'
+                  ? 'primary.main'
+                  : 'divider',
               borderRadius: 1,
               mb: 1,
             }}
@@ -138,13 +143,15 @@ export function StopOptionsDialog({
             />
           </ListItemButton>
           <ListItemButton
-            selected={selectedOption === 'graceful_close'}
+            selected={effectiveSelectedOption === 'graceful_close'}
             onClick={() => setSelectedOption('graceful_close')}
             disabled={isLoading}
             sx={{
               border: 1,
               borderColor:
-                selectedOption === 'graceful_close' ? 'error.main' : 'divider',
+                effectiveSelectedOption === 'graceful_close'
+                  ? 'error.main'
+                  : 'divider',
               borderRadius: 1,
               mb: 1,
             }}
@@ -159,13 +166,15 @@ export function StopOptionsDialog({
           </ListItemButton>
           {drainAvailable && (
             <ListItemButton
-              selected={selectedOption === 'drain'}
+              selected={effectiveSelectedOption === 'drain'}
               onClick={() => setSelectedOption('drain')}
               disabled={isLoading}
               sx={{
                 border: 1,
                 borderColor:
-                  selectedOption === 'drain' ? 'warning.main' : 'divider',
+                  effectiveSelectedOption === 'drain'
+                    ? 'warning.main'
+                    : 'divider',
                 borderRadius: 1,
               }}
             >
@@ -179,7 +188,7 @@ export function StopOptionsDialog({
             </ListItemButton>
           )}
         </List>
-        {selectedOption === 'drain' && (
+        {effectiveSelectedOption === 'drain' && (
           <Box sx={{ mt: 2 }}>
             <TextField
               fullWidth
@@ -213,7 +222,7 @@ export function StopOptionsDialog({
             />
           </Box>
         )}
-        {selectedOption === 'graceful_close' && (
+        {effectiveSelectedOption === 'graceful_close' && (
           <Box
             sx={{
               mt: 2,
@@ -237,7 +246,9 @@ export function StopOptionsDialog({
           onClick={handleConfirm}
           variant="contained"
           color="error"
-          disabled={!selectedOption || isLoading || drainDurationInvalid}
+          disabled={
+            !effectiveSelectedOption || isLoading || drainDurationInvalid
+          }
           startIcon={isLoading ? <CircularProgress size={16} /> : <StopIcon />}
         >
           {isLoading

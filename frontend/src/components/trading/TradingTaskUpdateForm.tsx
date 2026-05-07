@@ -39,6 +39,7 @@ const tradingTaskUpdateSchema = z.object({
     .max(500, 'Description must be less than 500 characters')
     .optional(),
   config_id: z.string().min(1, 'Configuration is required'),
+  sell_on_stop: z.boolean().optional().default(false),
   hedging_enabled: z.boolean().optional(),
   api_retry_max_attempts: z.coerce
     .number({ message: 'Must be a positive integer' })
@@ -195,6 +196,7 @@ export default function TradingTaskUpdateForm({
           name: data.name,
           description: data.description,
           config: data.config_id,
+          sell_on_stop: data.sell_on_stop ?? false,
           hedging_enabled:
             accountHedgingEnabled === false || !strategySupportsHedging
               ? false
@@ -232,6 +234,7 @@ export default function TradingTaskUpdateForm({
           config: 'Configuration',
           name: 'Task name',
           description: 'Description',
+          sell_on_stop: 'Sell on stop',
           hedging_enabled: 'Hedging',
           api_retry_max_attempts: 'OANDA retry attempts',
           api_retry_backoff_base_seconds: 'Retry backoff base',
@@ -419,6 +422,32 @@ export default function TradingTaskUpdateForm({
           </Grid>
         </>
       ) : null}
+
+      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+        {t('common:labels.sellOnStop')}
+      </Typography>
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="sell_on_stop"
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={field.value ?? false}
+                    onChange={(event) => field.onChange(event.target.checked)}
+                  />
+                }
+                label={t('common:labels.sellOnStop')}
+              />
+            )}
+          />
+          <Typography variant="caption" color="text.secondary" display="block">
+            {t('trading:form.sellOnStopDescription')}
+          </Typography>
+        </Grid>
+      </Grid>
 
       <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
         {t('trading:form.advancedSettings', 'Advanced settings')}

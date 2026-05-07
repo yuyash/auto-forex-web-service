@@ -102,6 +102,7 @@
     "dryRunDescription": "When enabled, orders are simulated locally and never sent to OANDA. Useful for testing strategies with real market data without risking actual funds.",
     "dryRunModeEnabled": "Dry Run Mode Enabled",
     "dryRunWarning": "Orders will be simulated locally. No real orders will be placed on OANDA.",
+    "sellOnStopDescription": "When enabled, stop dialogs default to Close All Positions. Deployment and pause flows keep positions open.",
     "hedgingEnabled": "Enable Hedging",
     "hedgingDescription": "When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.",
     "advancedSettings": "Advanced settings",

@@ -36,7 +36,7 @@ def test_stop_plan_keeps_drain_worker_running() -> None:
     assert plan.should_dispatch_stop_task is False
 
 
-def test_stop_plan_sets_sell_on_stop_for_graceful_close() -> None:
+def test_stop_plan_keeps_graceful_close_as_per_request_mode() -> None:
     plan = build_stop_command_plan(
         current_status=TaskStatus.RUNNING,
         requested_mode=StopMode.GRACEFUL_CLOSE,
@@ -44,7 +44,7 @@ def test_stop_plan_sets_sell_on_stop_for_graceful_close() -> None:
 
     assert plan.effective_mode == StopMode.GRACEFUL_CLOSE
     assert plan.next_status == TaskStatus.STOPPING
-    assert plan.extra_updates == {"sell_on_stop": True}
+    assert plan.extra_updates == {}
 
 
 def test_resume_plan_rotates_and_clears_failed_task() -> None:

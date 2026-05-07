@@ -490,7 +490,7 @@ def stop_backtest_task(self: Any, task_id: UUID, mode: str = "graceful") -> None
       to STOPPED by cancelling the tick publisher and, if needed, the
       executor.  ``graceful_close`` closes every open position at the last
       tick price before finalising (handled by the executor when it sees
-      ``sell_on_stop=True``).
+      the per-request stop mode).
     * ``drain`` — do *not* cancel the publisher or revoke the executor.
       The executor is already in DRAINING state (set by the service layer)
       and will close positions at break-even until they are all closed,

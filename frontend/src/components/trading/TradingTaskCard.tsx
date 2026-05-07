@@ -32,6 +32,10 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
 import { useToast } from '../common';
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import { useTradingTask } from '../../hooks/useTradingTasks';
@@ -77,6 +81,7 @@ export default function TradingTaskCard({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const prevTaskRef = useRef<TradingTask>(task);
@@ -242,6 +247,40 @@ export default function TradingTaskCard({
     } catch (error) {
       logger.error('Failed to stop trading task', {
         taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setOptimisticStatus(null);
+      const errorMessage = formatTaskActionError(error, 'Failed to stop task');
+      showError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStopConfirm = async ({
+    option,
+    drainDurationMinutes,
+  }: {
+    option: StopOption;
+    drainDurationMinutes?: number;
+  }) => {
+    setIsLoading(true);
+    setOptimisticStatus(
+      option === 'drain' ? TaskStatus.DRAINING : TaskStatus.STOPPING
+    );
+    try {
+      await stopTask.mutate({
+        id: String(task.id),
+        mode: option,
+        ...(drainDurationMinutes !== undefined ? { drainDurationMinutes } : {}),
+      });
+      setOptimisticStatus(null);
+      setStopDialogOpen(false);
+      showSuccess(t('trading:toast.stoppedSuccessfully'));
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to stop trading task', {
+        taskId: task.id,
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
@@ -486,7 +525,7 @@ export default function TradingTaskCard({
             status={displayStatus}
             taskType="trading"
             onStart={(id) => requestConfirm('start', String(id))}
-            onStop={(id) => requestConfirm('stop', String(id))}
+            onStop={() => setStopDialogOpen(true)}
             onResume={(id) => requestConfirm('resume', String(id))}
             onRestart={(id) => requestConfirm('restart', String(id))}
             onDelete={handleDelete}
@@ -603,6 +642,15 @@ export default function TradingTaskCard({
         onConfirm={handleDeleteConfirm}
         isLoading={isDeleting}
         hasExecutionHistory={true}
+      />
+      <StopOptionsDialog
+        open={stopDialogOpen}
+        taskName={task.name}
+        taskType="trading"
+        initialOption={task.sell_on_stop ? 'graceful_close' : 'graceful'}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={handleStopConfirm}
+        isLoading={stopTask.isLoading || isLoading}
       />
       {pendingAction && (
         <TaskActionConfirmDialog

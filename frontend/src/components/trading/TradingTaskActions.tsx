@@ -242,6 +242,7 @@ export default function TradingTaskActions({
         open={stopDialogOpen}
         taskName={task.name}
         taskType="trading"
+        initialOption={task.sell_on_stop ? 'graceful_close' : 'graceful'}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}

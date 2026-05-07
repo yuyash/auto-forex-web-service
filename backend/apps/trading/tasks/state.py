@@ -20,6 +20,7 @@ from apps.trading.dataclasses import TaskControl
 from apps.trading.enums import TaskStatus
 from apps.trading.tasks.lifecycle_coordination import (
     TASK_COORDINATION_STATUS_FIELD,
+    TASK_COORDINATION_STOP_MODE_FIELD,
     TaskCoordinationStatus,
     build_task_coordination_key,
 )
@@ -78,6 +79,7 @@ class StateManager:
         self._last_stop_check = 0.0
         self._cached_should_stop = False
         self._cached_should_pause = False
+        self._cached_stop_mode: str | None = None
         self._last_db_stop_check = 0.0
         self._cached_should_stop_db = False
         self._cached_should_pause_db = False
@@ -191,15 +193,23 @@ class StateManager:
             return TaskControl(
                 should_stop=self._cached_should_stop,
                 should_pause=self._cached_should_pause,
+                stop_mode=self._cached_stop_mode,
             )
 
         should_stop_redis = False
         should_pause_redis = False
+        stop_mode_redis: str | None = None
         redis_available = True
         try:
             redis_status = self.redis.hget(self.redis_key, TASK_COORDINATION_STATUS_FIELD)
             should_stop_redis = redis_status == TaskCoordinationStatus.STOPPING
             should_pause_redis = redis_status == TaskCoordinationStatus.PAUSING
+            if should_stop_redis:
+                raw_stop_mode = self.redis.hget(
+                    self.redis_key,
+                    TASK_COORDINATION_STOP_MODE_FIELD,
+                )
+                stop_mode_redis = str(raw_stop_mode) if raw_stop_mode else None
         except Exception:
             redis_available = False
 
@@ -214,11 +224,13 @@ class StateManager:
 
         self._cached_should_stop = should_stop_redis or self._cached_should_stop_db
         self._cached_should_pause = should_pause_redis or self._cached_should_pause_db
+        self._cached_stop_mode = stop_mode_redis if should_stop_redis else None
         self._last_stop_check = now
 
         return TaskControl(
             should_stop=self._cached_should_stop,
             should_pause=self._cached_should_pause,
+            stop_mode=self._cached_stop_mode,
         )
 
     def _check_db_control(self) -> tuple[bool, bool]:
