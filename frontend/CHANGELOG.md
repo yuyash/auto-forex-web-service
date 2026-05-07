@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.67.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.5...frontend-v1.67.0) (2026-05-07)
+
+
+### Features
+
+* **trading:** paginate and filter strategy cycle list server-side ([#687](https://github.com/yuyash/auto-forex-web-service/issues/687)) ([6b466d2](https://github.com/yuyash/auto-forex-web-service/commit/6b466d2e502c77902247c965e00e0fa53de358fc))
+
 ## [1.66.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.4...frontend-v1.66.5) (2026-05-07)
 
 
