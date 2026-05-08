@@ -25,6 +25,7 @@ from apps.market.models import OandaAccounts, TickData
 from apps.market.services.broker_order_guard import BrokerOrderGuard, BrokerOrderGuardError
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
+from apps.market.services.oanda_clients import OandaAccountClient, OandaContextFactory
 from apps.market.services.oanda_dry_run import OandaDryRunSimulator
 from apps.market.services import oanda_parsing
 from apps.market.services.oanda_transport import OandaOrderTransport
@@ -105,6 +106,8 @@ class OandaService:
         self.order_guard = BrokerOrderGuard()
         self.response_parser = oanda_parsing.OandaResponseParser()
         self._account_resource_cache: dict[str, Any] | None = None
+        self.context_factory = OandaContextFactory(v20_module=v20, settings_module=settings)
+        self.account_client = OandaAccountClient(self)
 
         self._dry_run_simulator = OandaDryRunSimulator(account)
         # Backward-compatible attribute used by older tests and debug tools.
@@ -114,24 +117,15 @@ class OandaService:
         # In dry-run mode without an account, we skip all API calls
         if account is not None:
             rest_hostname = str(account.api_hostname)
-            stream_hostname = self._to_stream_hostname(rest_hostname)
+            stream_hostname = self.context_factory.stream_hostname(rest_hostname)
 
-            self.api = v20.Context(
-                hostname=rest_hostname,
-                token=account.get_api_token(),
-                poll_timeout=10,
-            )
+            self.api = self.context_factory.create_rest_context(account)
 
             # v20 Context uses a single hostname for both REST and streaming.
             # OANDA streams live on a different hostname (stream-*) than REST (api-*).
             # If we use the REST host for pricing.stream, OANDA returns 404.
             self.stream_hostname = stream_hostname
-            self.stream_api = v20.Context(
-                hostname=stream_hostname,
-                token=account.get_api_token(),
-                stream_timeout=int(getattr(settings, "OANDA_STREAM_TIMEOUT", 30)),
-                poll_timeout=10,
-            )
+            self.stream_api = self.context_factory.create_stream_context(account)
 
             self.compliance_manager = ComplianceService(account)
 
@@ -155,14 +149,7 @@ class OandaService:
 
     @staticmethod
     def _to_stream_hostname(hostname: str) -> str:
-        host = (hostname or "").strip()
-        if not host:
-            return host
-        if host.startswith("stream-"):
-            return host
-        if host.startswith("api-"):
-            return "stream-" + host[len("api-") :]
-        return host
+        return OandaContextFactory.stream_hostname(hostname)
 
     @staticmethod
     def _make_jsonable(value: Any) -> Any:
@@ -190,40 +177,7 @@ class OandaService:
         This is used to expose broker flags/parameters (e.g. `hedgingEnabled`) and
         to avoid repeated network calls by caching within this service instance.
         """
-        assert self.api is not None, "API client not initialized"
-        assert self.account is not None, "Account not initialized"
-
-        if not refresh and self._account_resource_cache is not None:
-            return self._account_resource_cache
-
-        try:
-            response = self.api.account.get(self.account.account_id)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch account resource: status {response.status}")
-
-            body = getattr(response, "body", {})
-            if hasattr(body, "get"):
-                account_data = body.get("account")
-            else:
-                account_data = getattr(body, "account", None)
-
-            account_resource = self._account_object_to_dict(account_data)
-            self._account_resource_cache = account_resource
-            return account_resource
-        except OandaAPIError:
-            raise
-        except Exception as e:
-            account_id = self.account.account_id if self.account else "unknown"
-            logger.error(
-                "Error fetching account resource for %s: %s",
-                account_id,
-                str(e),
-                exc_info=True,
-            )
-            raise OandaAPIError(
-                "Error fetching account resource",
-                internal_detail=str(e),
-            ) from e
+        return self.account_client.get_resource(refresh=refresh)
 
     def cancel_order(self, order: Order) -> CancelledOrder:
         assert self.api is not None, "API client not initialized"

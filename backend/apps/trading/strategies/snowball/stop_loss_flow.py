@@ -5,12 +5,16 @@ from __future__ import annotations
 from decimal import Decimal
 from logging import getLogger
 from collections.abc import Callable
-from typing import Protocol
+from typing import Protocol, cast
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
-from apps.trading.strategies.snowball.calculators import SnowballCalculator, round_to_step
+from apps.trading.strategies.snowball.calculators import (
+    SnowballCalculator,
+    SnowballFormulaCalculator,
+    round_to_step,
+)
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.events import entry_rebuild_event
@@ -35,13 +39,13 @@ logger = getLogger(__name__)
 class StopLossFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
-    calculator: SnowballCalculator
+    calculator: SnowballFormulaCalculator
 
 
-def _calculator(strategy: StopLossFlowStrategy) -> SnowballCalculator:
+def _calculator(strategy: StopLossFlowStrategy) -> SnowballFormulaCalculator:
     calculator = getattr(strategy, "calculator", None)
-    if isinstance(calculator, SnowballCalculator):
-        return calculator
+    if calculator is not None:
+        return cast(SnowballFormulaCalculator, calculator)
     return SnowballCalculator(strategy.config)
 
 

@@ -8,10 +8,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+
+
+class SnowballFormulaCalculator(Protocol):
+    """Interface required by Snowball strategy flow collaborators."""
+
+    def counter_interval_pips(self, k: int) -> Decimal:
+        """Return the pip interval before the *k*-th add."""
+        ...
+
+    def stop_loss_pips(self, k: int) -> Decimal:
+        """Return the stop-loss distance for the *k*-th slot."""
+        ...
+
+    def rebuild_take_profit_pips(self, k: int) -> Decimal:
+        """Return the rebuilt-position take-profit distance for the *k*-th slot."""
+        ...
+
+    def counter_tp_pips(self, k: int) -> Decimal:
+        """Return the take-profit pips for the *k*-th counter step."""
+        ...
 
 
 def round_to_step(value: Decimal, step: Decimal) -> Decimal:

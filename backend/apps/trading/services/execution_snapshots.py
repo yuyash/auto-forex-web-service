@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from decimal import Decimal
 from typing import Any
 
@@ -136,7 +135,7 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
         execution_id=execution_id,
         defaults={
             "completed_at": getattr(task, "completed_at", None),
-            "summary": _make_json_safe(asdict(summary)),
+            "summary": _make_json_safe(summary.to_dict()),
             "metrics": _make_json_safe(metrics),
             **config_defaults,
         },

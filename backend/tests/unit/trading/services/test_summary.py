@@ -6,11 +6,14 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import BacktestTask, StrategyConfiguration, TaskExecutionSnapshot
 from apps.trading.models.positions import Position
 from apps.trading.models.state import ExecutionState
+from apps.trading.models.trades import Trade
 from apps.trading.services.summary import compute_cached_task_summary, compute_task_summary
 
 
@@ -134,6 +137,66 @@ def test_non_net_summary_keeps_closed_position_pnl_as_authoritative():
     )
 
     assert summary.pnl.realized == Decimal("85000")
+
+
+@pytest.mark.django_db
+def test_task_summary_has_serializer_ready_dto_payload():
+    task = _make_task(strategy_type="snowball")
+    execution_id = uuid4()
+    _create_state(
+        task=task,
+        execution_id=execution_id,
+        realized_account=Decimal("5"),
+        realized_quote=Decimal("5"),
+    )
+
+    summary = compute_task_summary(
+        task_type=TaskType.BACKTEST,
+        task_id=str(task.pk),
+        execution_id=execution_id,
+    )
+    payload = summary.to_dict()
+
+    assert payload["pnl"] == {"realized": Decimal("0"), "unrealized": Decimal("0")}
+    assert payload["execution"]["ticks_processed"] == 10
+
+
+@pytest.mark.django_db
+def test_task_summary_query_count_stays_bounded_for_overview_api():
+    task = _make_task(strategy_type="snowball")
+    execution_id = uuid4()
+    _create_closed_position(
+        task=task,
+        execution_id=execution_id,
+        quote_pnl=Decimal("10"),
+    )
+    _create_state(
+        task=task,
+        execution_id=execution_id,
+        realized_account=Decimal("10"),
+        realized_quote=Decimal("10"),
+    )
+    Trade.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=execution_id,
+        timestamp=datetime(2026, 1, 1, 12, 1, tzinfo=UTC),
+        direction=Direction.LONG,
+        units=1000,
+        instrument=task.instrument,
+        price=Decimal("150.01"),
+        execution_method="close_position",
+    )
+
+    with CaptureQueriesContext(connection) as queries:
+        summary = compute_task_summary(
+            task_type=TaskType.BACKTEST,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+        )
+
+    assert summary.counts.total_trades == 1
+    assert len(queries) <= 9
 
 
 @pytest.mark.django_db

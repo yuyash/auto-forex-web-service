@@ -31,12 +31,17 @@ from apps.trading.services.runtime_metrics import (
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.diagnostics import ExecutionDiagnostics
 from apps.trading.tasks.drain import TaskDrainCoordinator, record_final_stop_metrics
+from apps.trading.tasks.execution_dtos import LiveTickDeliveryState
+from apps.trading.tasks.execution_collaborators import (
+    ExecutionEventDispatcher,
+    ExecutionStateRepository,
+    ExecutionTickLoop,
+)
 from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
 from apps.trading.tasks.event_processor import TaskEventProcessor
-from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import (
     EventReplayExecutor,
     classify_replay_event,
@@ -153,6 +158,9 @@ class TaskExecutor:
             instrument=self.instrument,
         )
         self.event_processor = TaskEventProcessor(self)
+        self._event_dispatcher = ExecutionEventDispatcher(self)
+        self._state_repository = ExecutionStateRepository(self)
+        self._tick_loop = ExecutionTickLoop(self)
 
         from apps.trading.services.metrics_aggregator import MetricsAggregator
 
@@ -345,7 +353,7 @@ class TaskExecutor:
         Args:
             events: List of TradingEvent instances that were saved
         """
-        self.event_processor.process(state, events, replaying=replaying)
+        self._event_dispatcher.process(state, events, replaying=replaying)
 
     def load_state(self) -> ExecutionState:
         """Load execution state from ExecutionState model.
@@ -353,63 +361,11 @@ class TaskExecutor:
         Returns:
             ExecutionState: Current execution state
         """
-        state, _ = self._load_state_with_metadata()
-        return state
+        return self._state_repository.load()
 
     def _load_state_with_metadata(self) -> tuple[ExecutionState, bool]:
         """Load state and indicate whether this execution is a resume."""
-        self.task.refresh_from_db()
-
-        try:
-            state = ExecutionState.objects.get(
-                task_type=self.task_type.value,
-                task_id=self.task.pk,
-                execution_id=self.task.execution_id,
-            )
-            logger.info(
-                "Existing ExecutionState found (resume) - task_id=%s, "
-                "execution_id=%s, balance=%s, ticks=%d",
-                self.task.pk,
-                self.task.execution_id,
-                state.current_balance,
-                state.ticks_processed,
-            )
-            return state, True
-        except ExecutionState.DoesNotExist:
-            pass
-
-        # Log why we are creating a fresh state — this is the path that
-        # causes the "state reset" symptom when it fires unexpectedly
-        # during what should have been a resume.
-        existing_count = ExecutionState.objects.filter(
-            task_type=self.task_type.value,
-            task_id=self.task.pk,
-        ).count()
-        logger.info(
-            "No ExecutionState for current execution_id — creating fresh state. "
-            "task_id=%s, execution_id=%s, task_type=%s, "
-            "other_execution_states_for_task=%d",
-            self.task.pk,
-            self.task.execution_id,
-            self.task_type.value,
-            existing_count,
-        )
-
-        from apps.trading.models import BacktestTask
-
-        initial_timestamp = self.task.start_time if isinstance(self.task, BacktestTask) else None
-
-        state = ExecutionState.objects.create(
-            task_type=self.task_type.value,
-            task_id=self.task.pk,
-            execution_id=self.task.execution_id,
-            strategy_state={},
-            current_balance=self.initial_balance,
-            ticks_processed=0,
-            last_tick_timestamp=initial_timestamp,
-            resume_cursor_timestamp=initial_timestamp,
-        )
-        return state, False
+        return self._state_repository.load_with_metadata()
 
     def save_state(self, state: ExecutionState) -> None:
         """Save execution state to ExecutionState model.
@@ -417,15 +373,7 @@ class TaskExecutor:
         Args:
             state: Execution state to save
         """
-        # Log what we're saving
-        logger.debug(
-            f"Saving state: task_id={state.task_id}, "
-            f"ticks_processed={state.ticks_processed}, "
-            f"last_tick_timestamp={state.last_tick_timestamp}, "
-            f"current_balance={state.current_balance}"
-        )
-
-        self.state_store.save(state)
+        self._state_repository.save(state)
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""
@@ -437,13 +385,7 @@ class TaskExecutor:
         Args:
             events: List of events to save
         """
-        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "")
-        return persist_strategy_events(
-            events=events,
-            context=self.event_context,
-            execution_id=self.task.execution_id,
-            strategy_type=strategy_type,
-        )
+        return self._event_dispatcher.persist(events)
 
     def execute(self) -> None:
         """Execute the task."""
@@ -571,37 +513,7 @@ class TaskExecutor:
 
     def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
         """Run batch/tick processing loop."""
-        logger.info("Starting tick processing loop")
-        self._flush_task_logs()
-
-        for tick_batch in self.data_source:
-            if self._should_stop_before_batch(loop):
-                break
-
-            if not tick_batch:
-                should_stop = self._handle_empty_batch(loop)
-                self._flush_task_logs()
-                if should_stop:
-                    break
-                continue
-
-            loop.no_tick_batches = 0
-            self._process_tick_batch(loop, tick_batch)
-            loop.batch_count += 1
-            self._persist_batch_progress(loop)
-            self._after_batch_processed(loop)
-            self._flush_task_logs()
-
-            if loop.stopped_early:
-                break
-
-        logger.info(
-            "Exited tick processing loop - task_id=%s, stopped_early=%s, ticks_processed=%d",
-            self.task.pk,
-            loop.stopped_early,
-            loop.state.ticks_processed,
-        )
-        self._flush_task_logs()
+        self._tick_loop.run(loop)
 
     def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
         """Check external stop signal before processing a batch."""
@@ -1074,24 +986,19 @@ class TaskExecutor:
         max_age_seconds: int,
         message: str,
     ) -> None:
-        strategy_state = (
-            dict(loop.state.strategy_state) if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        strategy_state["live_tick_delivery"] = {
-            "status": status,
-            "tick_timestamp": tick_ts.isoformat() if tick_ts else None,
-            "observed_at": observed_at.isoformat(),
-            "age_seconds": round(age_seconds, 3) if age_seconds is not None else None,
-            "max_age_seconds": max_age_seconds,
-            "message": message,
-        }
-        loop.state.strategy_state = strategy_state
+        LiveTickDeliveryState.from_observation(
+            status=status,
+            tick_ts=tick_ts,
+            observed_at=observed_at,
+            age_seconds=age_seconds,
+            max_age_seconds=max_age_seconds,
+            message=message,
+        ).apply_to(loop.state)
 
     @staticmethod
     def _current_live_tick_delivery_state(state: ExecutionState) -> dict[str, object] | None:
-        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-        delivery = strategy_state.get("live_tick_delivery")
-        return dict(delivery) if isinstance(delivery, dict) else None
+        delivery = LiveTickDeliveryState.from_state(state)
+        return delivery.to_dict() if delivery is not None else None
 
     @staticmethod
     def _merge_live_tick_delivery_state(

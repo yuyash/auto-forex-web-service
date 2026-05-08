@@ -5,12 +5,15 @@ from __future__ import annotations
 from decimal import Decimal
 from logging import getLogger
 from collections.abc import Callable
-from typing import Protocol
+from typing import Protocol, cast
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
-from apps.trading.strategies.snowball.calculators import SnowballCalculator
+from apps.trading.strategies.snowball.calculators import (
+    SnowballCalculator,
+    SnowballFormulaCalculator,
+)
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.events import entry_open_event
 from apps.trading.strategies.snowball.grid_policy import preceding_entry_bound
@@ -29,13 +32,13 @@ logger = getLogger(__name__)
 class CounterFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
-    calculator: SnowballCalculator
+    calculator: SnowballFormulaCalculator
 
 
-def _calculator(strategy: CounterFlowStrategy) -> SnowballCalculator:
+def _calculator(strategy: CounterFlowStrategy) -> SnowballFormulaCalculator:
     calculator = getattr(strategy, "calculator", None)
-    if isinstance(calculator, SnowballCalculator):
-        return calculator
+    if calculator is not None:
+        return cast(SnowballFormulaCalculator, calculator)
     return SnowballCalculator(strategy.config)
 
 
@@ -485,7 +488,7 @@ def _open_counter_entry(
             include_ref=layer_ref,
         )
     else:
-        tp = SnowballCalculator(cfg).counter_tp_pips(slot.index)
+        tp = _calculator(strategy).counter_tp_pips(slot.index)
         if direction == Direction.LONG:
             close_price = new_price + tp * strategy.pip_size
         else:
