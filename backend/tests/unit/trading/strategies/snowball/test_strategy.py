@@ -21,11 +21,7 @@ from apps.trading.strategies.snowball.models import (
     Slot,
     StopLossClosedEntry,
 )
-from apps.trading.strategies.snowball.pricing import (
-    layer_initial_close_price,
-    rebuild_take_profit_price,
-    sync_weighted_average_counter_take_profits,
-)
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.strategies.snowball.reconciliation import reconcile_broker_positions
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
@@ -114,7 +110,7 @@ class TestSnowballLayerInitialPricing:
         return layer
 
     def test_long_layer_initial_uses_fixed_tp_when_previous_tp_is_farther(self):
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=Decimal("141.299"),
             prev_layer=self._previous_layer(pending=True),
             direction=Direction.LONG,
@@ -126,7 +122,7 @@ class TestSnowballLayerInitialPricing:
         assert formula == "141.299 + 15 * 0.01"
 
     def test_long_layer_initial_clamps_to_previous_tp_when_fixed_tp_crosses_it(self):
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=Decimal("157.800"),
             prev_layer=self._previous_layer(close_price=Decimal("157.8686666667")),
             direction=Direction.LONG,
@@ -138,7 +134,7 @@ class TestSnowballLayerInitialPricing:
         assert formula == "min(157.800 + 15 * 0.01, 157.86867)"
 
     def test_short_layer_initial_uses_fixed_tp_when_previous_tp_is_farther(self):
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=Decimal("157.800"),
             prev_layer=self._previous_layer(
                 direction=Direction.SHORT,
@@ -154,7 +150,7 @@ class TestSnowballLayerInitialPricing:
         assert formula == "157.800 - 15 * 0.01"
 
     def test_short_layer_initial_clamps_to_previous_tp_when_fixed_tp_crosses_it(self):
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=Decimal("157.800"),
             prev_layer=self._previous_layer(
                 direction=Direction.SHORT,
@@ -699,7 +695,7 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        tp = rebuild_take_profit_price(
+        tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(),
             entry_price=Decimal("154.70"),
             pip_size=s.pip_size,
@@ -726,13 +722,13 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        long_tp = rebuild_take_profit_price(
+        long_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(direction=Direction.LONG),
             entry_price=Decimal("154.70"),
             pip_size=s.pip_size,
             config=s.config,
         )
-        short_tp = rebuild_take_profit_price(
+        short_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(direction=Direction.SHORT),
             entry_price=Decimal("154.70"),
             pip_size=s.pip_size,
@@ -752,7 +748,7 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        short_tp = rebuild_take_profit_price(
+        short_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(
                 direction=Direction.SHORT,
                 stop_loss_loss_pips=Decimal("30.1"),
@@ -774,7 +770,7 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        long_tp = rebuild_take_profit_price(
+        long_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(
                 direction=Direction.LONG,
                 stop_loss_loss_pips=Decimal("10"),
@@ -884,7 +880,7 @@ class TestSnowballPricingHelpers:
             )
         )
 
-        close_price = sync_weighted_average_counter_take_profits(layer)
+        close_price = SNOWBALL_PRICING.sync_weighted_average_counter_take_profits(layer)
 
         assert close_price == Decimal("149.600")
         assert layer.slot_at(0).entry.close_price == Decimal("150.50")

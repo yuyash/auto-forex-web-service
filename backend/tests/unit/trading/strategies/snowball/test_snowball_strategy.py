@@ -22,7 +22,6 @@ from apps.trading.events import (
     GenericStrategyEvent,
     OpenPositionEvent,
 )
-from apps.trading.strategies.snowball import protection as snowball_protection_module
 from apps.trading.strategies.snowball import strategy as snowball_strategy_module
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
@@ -1109,8 +1108,11 @@ class TestShrinkMode:
         layers[0]["slots"][1]["entry"] = counter_entry
 
         ratios = iter([Decimal("75"), Decimal("40")])
-        monkeypatch.setattr(snowball_strategy_module, "margin_ratio", lambda **_: next(ratios))
-        monkeypatch.setattr(snowball_protection_module, "margin_ratio", lambda **_: Decimal("40"))
+        monkeypatch.setattr(
+            snowball_strategy_module.SNOWBALL_PROTECTION,
+            "margin_ratio",
+            lambda **_: next(ratios),
+        )
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         closes = _close_events(result)
         assert len(closes) >= 1
@@ -1213,8 +1215,11 @@ class TestShrinkMode:
 
         state = DummyState(strategy_state=ss.to_dict(), current_balance=Decimal("100"))
         ratios = iter([Decimal("75"), Decimal("40")])
-        monkeypatch.setattr(snowball_strategy_module, "margin_ratio", lambda **_: next(ratios))
-        monkeypatch.setattr(snowball_protection_module, "margin_ratio", lambda **_: Decimal("40"))
+        monkeypatch.setattr(
+            snowball_strategy_module.SNOWBALL_PROTECTION,
+            "margin_ratio",
+            lambda **_: next(ratios),
+        )
 
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "145.00", "145.02"), state=state)
 
@@ -1243,7 +1248,7 @@ class TestLockMode:
         state.ticks_processed += 1
 
         monkeypatch.setattr(
-            snowball_strategy_module,
+            snowball_strategy_module.SNOWBALL_PROTECTION,
             "margin_ratio",
             lambda **_: Decimal("90"),
         )
@@ -1262,7 +1267,7 @@ class TestLockMode:
         state.ticks_processed += 1
 
         monkeypatch.setattr(
-            snowball_strategy_module,
+            snowball_strategy_module.SNOWBALL_PROTECTION,
             "margin_ratio",
             lambda **_: Decimal("90"),
         )
@@ -1279,7 +1284,7 @@ class TestLockMode:
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         state.ticks_processed += 1
         monkeypatch.setattr(
-            snowball_strategy_module,
+            snowball_strategy_module.SNOWBALL_PROTECTION,
             "margin_ratio",
             lambda **_: Decimal("90"),
         )
@@ -1311,7 +1316,7 @@ class TestEmergencyStop:
         state.ticks_processed += 1
 
         monkeypatch.setattr(
-            snowball_strategy_module,
+            snowball_strategy_module.SNOWBALL_PROTECTION,
             "margin_ratio",
             lambda **_: Decimal("96"),
         )

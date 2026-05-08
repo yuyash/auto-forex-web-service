@@ -3,6 +3,13 @@
 from decimal import Decimal
 
 from apps.trading.utils import (
+    AccountCurrency,
+    Instrument,
+    Money,
+    PipSize,
+    Price,
+    TradeSide,
+    Units,
     is_quote_jpy,
     pip_size_for_instrument,
     quote_currency,
@@ -86,3 +93,38 @@ class TestQuoteToAccountRate:
         """Empty account currency falls back to heuristic."""
         rate = quote_to_account_rate("EUR_USD", Decimal("1.1"), "")
         assert rate == Decimal("1")
+
+
+class TestTradingValueObjects:
+    """Test object-oriented trading value helpers."""
+
+    def test_instrument_exposes_pip_value_object(self):
+        instrument = Instrument("USD_JPY")
+
+        assert instrument.pip == PipSize(Decimal("0.01"))
+        assert instrument.pip_size == Decimal("0.01")
+
+    def test_account_currency_normalizes_and_matches_codes(self):
+        currency = AccountCurrency(" usd ")
+
+        assert currency.code == "USD"
+        assert currency.matches("usd")
+
+    def test_units_infer_side_and_absolute_size(self):
+        units = Units.coerce("-1000")
+
+        assert units.absolute == 1000
+        assert units.side == TradeSide.SHORT
+        assert TradeSide.from_units(1000) == TradeSide.LONG
+
+    def test_price_distance_uses_decimal_arithmetic(self):
+        entry = Price.coerce("150.000")
+        exit_price = Price.coerce("150.125")
+
+        assert entry.distance_to(exit_price) == Decimal("0.125")
+
+    def test_money_formats_with_currency_value_object(self):
+        money = Money.coerce("123.456", "jpy")
+
+        assert money.currency == AccountCurrency("JPY")
+        assert money.format(places=2) == "123.46"

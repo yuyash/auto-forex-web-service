@@ -10,6 +10,7 @@ import v20
 from django.utils import timezone
 
 from apps.market.models import OandaAccounts, OandaApiHealthStatus
+from apps.market.services.oanda_retry import OandaApiRequestExecutor
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,7 @@ class OandaHealthCheckService:
 
     def __init__(self, account: OandaAccounts):
         self.account = account
+        self.request_executor = OandaApiRequestExecutor()
 
     def check(self) -> OandaApiHealthStatus:
         checked_at = timezone.now()
@@ -41,7 +43,12 @@ class OandaHealthCheckService:
                 token=self.account.get_api_token(),
                 poll_timeout=10,
             )
-            response = api.account.get(self.account.account_id)
+            response = self.request_executor.request(
+                api.account.get,
+                self.account.account_id,
+                label="OANDA health check",
+                failure_message="OANDA health check failed",
+            )
             http_status = int(getattr(response, "status", 0) or 0) or None
 
             if http_status == 200:

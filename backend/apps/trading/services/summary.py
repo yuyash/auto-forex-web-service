@@ -20,6 +20,7 @@ from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, Wh
 
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.utils import AccountCurrency, Instrument
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,15 @@ class TickInfo:
     bid: Decimal | None
     ask: Decimal | None
     mid: Decimal | None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready tick data."""
+        return {
+            "timestamp": self.timestamp,
+            "bid": self.bid,
+            "ask": self.ask,
+            "mid": self.mid,
+        }
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,17 @@ class TickDeliveryInfo:
     max_age_seconds: int | None
     message: str | None
 
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready delivery diagnostics."""
+        return {
+            "status": self.status,
+            "tick_timestamp": self.tick_timestamp,
+            "observed_at": self.observed_at,
+            "age_seconds": self.age_seconds,
+            "max_age_seconds": self.max_age_seconds,
+            "message": self.message,
+        }
+
 
 @dataclass(frozen=True)
 class PnlInfo:
@@ -50,6 +71,13 @@ class PnlInfo:
 
     realized: Decimal
     unrealized: Decimal
+
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready PnL data."""
+        return {
+            "realized": self.realized,
+            "unrealized": self.unrealized,
+        }
 
 
 @dataclass(frozen=True)
@@ -63,6 +91,18 @@ class CountsInfo:
     open_short_units: int
     winning_trades: int
     losing_trades: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready count data."""
+        return {
+            "total_trades": self.total_trades,
+            "open_positions": self.open_positions,
+            "closed_positions": self.closed_positions,
+            "open_long_units": self.open_long_units,
+            "open_short_units": self.open_short_units,
+            "winning_trades": self.winning_trades,
+            "losing_trades": self.losing_trades,
+        }
 
 
 @dataclass(frozen=True)
@@ -83,6 +123,26 @@ class ExecutionInfo:
     reconciled_at: str | None
     tick_delivery: TickDeliveryInfo | None
 
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready execution data."""
+        return {
+            "current_balance": self.current_balance,
+            "ticks_processed": self.ticks_processed,
+            "account_currency": self.account_currency,
+            "current_balance_display": self.current_balance_display,
+            "display_currency": self.display_currency,
+            "resume_cursor_timestamp": self.resume_cursor_timestamp,
+            "margin_ratio": self.margin_ratio,
+            "current_atr": self.current_atr,
+            "recovery_status": self.recovery_status,
+            "recovery_warnings": self.recovery_warnings,
+            "recovery_blockers": self.recovery_blockers,
+            "reconciled_at": self.reconciled_at,
+            "tick_delivery": (
+                self.tick_delivery.to_dict() if self.tick_delivery is not None else None
+            ),
+        }
+
 
 @dataclass(frozen=True)
 class TaskInfo:
@@ -95,6 +155,17 @@ class TaskInfo:
     stop_reason: str | None
     progress: int
 
+    def to_dict(self) -> dict[str, object]:
+        """Return serializer-ready task data."""
+        return {
+            "status": self.status,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "error_message": self.error_message,
+            "stop_reason": self.stop_reason,
+            "progress": self.progress,
+        }
+
 
 @dataclass(frozen=True)
 class TaskSummary:
@@ -106,6 +177,119 @@ class TaskSummary:
     execution: ExecutionInfo
     tick: TickInfo
     task: TaskInfo
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a serializer-ready task summary payload."""
+        return {
+            "timestamp": self.timestamp,
+            "pnl": self.pnl.to_dict(),
+            "counts": self.counts.to_dict(),
+            "execution": self.execution.to_dict(),
+            "tick": self.tick.to_dict(),
+            "task": self.task.to_dict(),
+        }
+
+
+class TaskSummaryResponseService:
+    """Build task summary response payloads for API views."""
+
+    def __init__(self, *, read_model: "TaskSummaryReadModel | None" = None) -> None:
+        """Initialize with an injectable read-model collaborator."""
+        self.read_model = read_model or TASK_SUMMARY_READ_MODEL
+
+    def build(
+        self,
+        *,
+        task,
+        task_type: str,
+        execution_id=None,
+    ) -> dict[str, object]:
+        """Return a serializer-ready summary for a task."""
+        summary = self.read_model.compute_cached(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+        )
+        if hasattr(summary, "to_dict"):
+            return summary.to_dict()
+
+        import dataclasses
+
+        return dataclasses.asdict(summary)
+
+
+class TaskSummaryReadModel:
+    """Build and cache dashboard task summary read models."""
+
+    def compute(
+        self,
+        *,
+        task_type: str,
+        task_id: str,
+        execution_id=None,
+    ) -> TaskSummary:
+        """Compute an uncached summary for a task execution."""
+        return compute_task_summary(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+
+    def compute_cached(
+        self,
+        *,
+        task_type: str,
+        task_id: str,
+        execution_id=None,
+    ) -> TaskSummary:
+        """Compute a cached task summary keyed by task/state freshness."""
+        from apps.trading.services.execution_snapshots import get_summary_snapshot
+
+        task_obj = _get_task(task_type, task_id)
+        persisted_snapshot = get_summary_snapshot(
+            task=task_obj,
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=str(execution_id) if execution_id is not None else None,
+        )
+        if persisted_snapshot is not None and not _uses_runtime_pnl_metrics(task_obj):
+            return persisted_snapshot
+
+        state = _get_state(task_type, task_id, execution_id)
+        snapshot_cache_key = _build_task_summary_snapshot_cache_key(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            task_obj=task_obj,
+        )
+        if snapshot_cache_key:
+            cached_snapshot = cache.get(snapshot_cache_key)
+            if isinstance(cached_snapshot, TaskSummary):
+                return cached_snapshot
+
+        cache_key = _build_task_summary_cache_key(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            task_obj=task_obj,
+            state=state,
+        )
+        cached = cache.get(cache_key)
+        if isinstance(cached, TaskSummary):
+            return cached
+
+        summary = self.compute(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+        cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
+        if snapshot_cache_key:
+            cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
+        return summary
+
+
+TASK_SUMMARY_READ_MODEL = TaskSummaryReadModel()
 
 
 def compute_task_summary(
@@ -334,21 +518,22 @@ def compute_task_summary(
             account_currency = getattr(account, "currency", None)
 
     if task_obj and task_type == "backtest":
-        instrument = getattr(task_obj, "instrument", "")
-        quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
+        instrument = Instrument(getattr(task_obj, "instrument", ""))
+        quote_ccy = instrument.quote_currency
+        account = AccountCurrency(account_currency or "")
         if (
-            account_currency
+            account.is_known
             and quote_ccy
-            and account_currency.upper() != quote_ccy
+            and not account.matches(quote_ccy)
             and current_balance is not None
             and tick_mid is not None
             and tick_mid > 0
         ):
             display_currency = quote_ccy
             current_balance_display = current_balance * tick_mid
-        elif account_currency and quote_ccy and account_currency.upper() == quote_ccy:
+        elif account.is_known and quote_ccy and account.matches(quote_ccy):
             # Account currency matches quote currency — no conversion needed
-            display_currency = account_currency.upper()
+            display_currency = account.code
             current_balance_display = current_balance
 
     return TaskSummary(
@@ -401,50 +586,11 @@ def compute_cached_task_summary(
     execution_id=None,
 ) -> TaskSummary:
     """Compute a cached task summary keyed by task/state freshness."""
-    from apps.trading.services.execution_snapshots import get_summary_snapshot
-
-    task_obj = _get_task(task_type, task_id)
-    persisted_snapshot = get_summary_snapshot(
-        task=task_obj,
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=str(execution_id) if execution_id is not None else None,
-    )
-    if persisted_snapshot is not None and not _uses_runtime_pnl_metrics(task_obj):
-        return persisted_snapshot
-
-    state = _get_state(task_type, task_id, execution_id)
-    snapshot_cache_key = _build_task_summary_snapshot_cache_key(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
-        task_obj=task_obj,
-    )
-    if snapshot_cache_key:
-        cached_snapshot = cache.get(snapshot_cache_key)
-        if isinstance(cached_snapshot, TaskSummary):
-            return cached_snapshot
-
-    cache_key = _build_task_summary_cache_key(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
-        task_obj=task_obj,
-        state=state,
-    )
-    cached = cache.get(cache_key)
-    if isinstance(cached, TaskSummary):
-        return cached
-
-    summary = compute_task_summary(
+    return TASK_SUMMARY_READ_MODEL.compute_cached(
         task_type=task_type,
         task_id=task_id,
         execution_id=execution_id,
     )
-    cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
-    if snapshot_cache_key:
-        cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
-    return summary
 
 
 def _get_task(task_type: str, task_id: str):
@@ -453,11 +599,15 @@ def _get_task(task_type: str, task_id: str):
         if task_type == "backtest":
             from apps.trading.models.backtest import BacktestTask
 
-            return BacktestTask.objects.filter(pk=task_id).first()
+            return BacktestTask.objects.select_related("config").filter(pk=task_id).first()
         else:
             from apps.trading.models.trading import TradingTask
 
-            return TradingTask.objects.filter(pk=task_id).first()
+            return (
+                TradingTask.objects.select_related("config", "oanda_account")
+                .filter(pk=task_id)
+                .first()
+            )
     except Exception:
         return None
 

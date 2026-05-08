@@ -12,7 +12,7 @@ from apps.market.models import (
 )
 from apps.market.services.accounts import (
     OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES,
-    build_oanda_account_snapshot_state_filter,
+    oanda_account_snapshot_service,
 )
 
 
@@ -28,7 +28,7 @@ class OandaAccountSnapshotStateFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         value = self.value()
         if value in OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES:
-            return queryset.filter(build_oanda_account_snapshot_state_filter(value))
+            return queryset.filter(oanda_account_snapshot_service.build_state_filter(value))
         return queryset
 
 

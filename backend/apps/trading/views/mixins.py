@@ -350,9 +350,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
     )
     def summary(self, request: Request, pk: str | None = None) -> Response:
         """Retrieve comprehensive task summary."""
-        from dataclasses import asdict
-
-        from apps.trading.services.summary import compute_cached_task_summary
+        from apps.trading.services.summary import TaskSummaryResponseService
 
         task = self.get_object()  # type: ignore[attr-defined]
         query = SummaryQueryParams.from_request(
@@ -360,13 +358,13 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
             default_execution_id=task.execution_id,
         )
 
-        result = compute_cached_task_summary(
+        result = TaskSummaryResponseService().build(
+            task=task,
             task_type=self.task_type_label,
-            task_id=str(task.pk),
             execution_id=query.execution_id,
         )
 
-        serializer = TaskSummarySerializer(asdict(result))
+        serializer = TaskSummarySerializer(result)
         return Response(serializer.data)
 
     @extend_schema(

@@ -35,28 +35,23 @@ from apps.trading.events import (
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
-from apps.trading.strategies.snowball.accounting import update_account_metrics
-from apps.trading.strategies.snowball.calculators import counter_interval_pips
+from apps.trading.strategies.snowball.calculators import SnowballCalculator
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.counter_flow import (
-    entry_take_profit_hit,
-    format_counter_add_description,
-    process_cycle_counter_adds,
-    process_cycle_counter_closes,
+    CounterPriceService,
+    CounterTakeProfitPolicy,
+    SnowballCounterAddDescription,
+    SnowballCounterAddProcessor,
+    SnowballCounterCloseProcessor,
 )
-from apps.trading.strategies.snowball.cycle_orchestrator import (
-    process_active_cycles,
-    reseed_missing_directions,
-)
-from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
 from apps.trading.strategies.snowball.entry_lifecycle import close_entry
-from apps.trading.strategies.snowball.events import (
-    entry_open_event,
-)
+from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.execution_binding import (
     apply_event_execution_result as apply_snowball_execution_result,
 )
 from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
-from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -72,31 +67,44 @@ from apps.trading.strategies.snowball.parameters import (
     parse_config,
     validate_parameters,
 )
-from apps.trading.strategies.snowball.pricing import layer_initial_close_price
-from apps.trading.strategies.snowball.protection import (
-    handle_emergency,
-    handle_lock,
-    handle_lock_release,
-    handle_shrink,
-    margin_ratio,
-)
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
+from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.strategies.snowball.stop_loss_flow import (
-    assign_auto_stop_loss,
-    assign_configured_stop_loss,
-    assign_rebuild_stop_loss,
-    assign_stop_loss,
-    is_stop_loss_temporarily_protected,
-    process_stop_loss_closes,
-    process_stop_loss_rebuilds,
+    StopLossAssigner,
+    StopLossCloseProcessor,
+    StopLossProtectionPolicy,
+    StopLossRebuildProcessor,
 )
+from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
 
 logger: Logger = getLogger(__name__)
+__all__ = ["SNOWBALL_PROTECTION", "SnowballStrategy"]
 
 
-def _optional_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    return int(value)
+class SnowballResumeParameterCompatibility:
+    """Validate Snowball resume compatibility between parameter sets."""
+
+    def validate(
+        self,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        """Reject resume attempts that shrink the persisted grid."""
+        previous_r_max = self._optional_int(previous_params.get("r_max"))
+        current_r_max = self._optional_int(current_params.get("r_max"))
+        if previous_r_max is None or current_r_max is None:
+            return
+        if current_r_max < previous_r_max:
+            raise ValueError(
+                "Cannot resume Snowball after decreasing r_max. "
+                "Restart the task to apply a smaller grid."
+            )
+
+    def _optional_int(self, value: Any) -> int | None:
+        if value is None:
+            return None
+        return int(value)
 
 
 @register_strategy(
@@ -120,9 +128,29 @@ class SnowballStrategy(Strategy):
         config: SnowballStrategyConfig,
     ) -> None:
         super().__init__(instrument, pip_size, config)
+        self.calculator = SnowballCalculator(config)
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
+        self.decision_engine = SnowballDecisionEngine(
+            invariant_validator=SnowballInvariantValidator(config=config),
+        )
+        self.tick_pipeline = SnowballTickPipeline()
+        self.counter_price_service = CounterPriceService()
+        self.counter_take_profit_policy = CounterTakeProfitPolicy()
+        self.counter_close_processor = SnowballCounterCloseProcessor(
+            take_profit_policy=self.counter_take_profit_policy,
+        )
+        self.counter_add_processor = SnowballCounterAddProcessor(
+            price_service=self.counter_price_service,
+        )
+        self.counter_add_description = SnowballCounterAddDescription()
+        self.stop_loss_assigner = StopLossAssigner()
+        self.stop_loss_protection_policy = StopLossProtectionPolicy()
+        self.stop_loss_close_processor = StopLossCloseProcessor(
+            protection_policy=self.stop_loss_protection_policy,
+        )
+        self.stop_loss_rebuild_processor = StopLossRebuildProcessor()
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -259,15 +287,10 @@ class SnowballStrategy(Strategy):
         previous_params: dict[str, Any],
         current_params: dict[str, Any],
     ) -> None:
-        previous_r_max = _optional_int(previous_params.get("r_max"))
-        current_r_max = _optional_int(current_params.get("r_max"))
-        if previous_r_max is None or current_r_max is None:
-            return
-        if current_r_max < previous_r_max:
-            raise ValueError(
-                "Cannot resume Snowball after decreasing r_max. "
-                "Restart the task to apply a smaller grid."
-            )
+        SnowballResumeParameterCompatibility().validate(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
 
     def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
         super().configure_runtime(
@@ -344,7 +367,7 @@ class SnowballStrategy(Strategy):
         if cfg.stop_loss_enabled:
             self._assign_configured_stop_loss(entry, 1)
 
-        evt = entry_open_event(
+        evt = SNOWBALL_EVENTS.entry_open_event(
             entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
@@ -524,15 +547,13 @@ class SnowballStrategy(Strategy):
     # Per-cycle tick processing
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _entry_side_price(direction: Direction, tick: Tick) -> Decimal:
+    def _entry_side_price(self, direction: Direction, tick: Tick) -> Decimal:
         """Return the executable entry-side price for a direction."""
-        return tick.ask if direction == Direction.LONG else tick.bid
+        return self.counter_price_service.entry_side_price(direction, tick)
 
-    @staticmethod
-    def _exit_side_price(direction: Direction, tick: Tick) -> Decimal:
+    def _exit_side_price(self, direction: Direction, tick: Tick) -> Decimal:
         """Return the executable exit-side price for a direction."""
-        return tick.bid if direction == Direction.LONG else tick.ask
+        return self.counter_price_service.exit_side_price(direction, tick)
 
     def _process_cycle_tp(
         self,
@@ -677,7 +698,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_closes(
+        return self.counter_close_processor.process(
             self,
             ss,
             tick,
@@ -685,9 +706,8 @@ class SnowballStrategy(Strategy):
             close_entry=self._close_entry,
         )
 
-    @staticmethod
-    def _entry_take_profit_hit(entry: Entry, tick: Tick) -> bool:
-        return entry_take_profit_hit(entry, tick)
+    def _entry_take_profit_hit(self, entry: Entry, tick: Tick) -> bool:
+        return self.counter_take_profit_policy.hit(entry, tick)
 
     def _process_cycle_counter_adds(
         self,
@@ -695,7 +715,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_adds(
+        return self.counter_add_processor.process(
             self,
             ss,
             tick,
@@ -704,8 +724,8 @@ class SnowballStrategy(Strategy):
             assign_configured_stop_loss=self._assign_configured_stop_loss,
         )
 
-    @staticmethod
     def _format_counter_add_description(
+        self,
         *,
         direction: Direction,
         layer: Layer,
@@ -715,7 +735,7 @@ class SnowballStrategy(Strategy):
         close_price: Decimal,
         stop_loss_price: Decimal | None,
     ) -> str:
-        return format_counter_add_description(
+        return self.counter_add_description.format(
             direction=direction,
             layer=layer,
             slot=slot,
@@ -842,7 +862,7 @@ class SnowballStrategy(Strategy):
         # TP together to absorb the slippage.
         layer_entry.entry_price = price
 
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=price,
             prev_layer=prev_layer,
             direction=direction,
@@ -878,7 +898,7 @@ class SnowballStrategy(Strategy):
             close_price,
         )
 
-        evt = entry_open_event(
+        evt = SNOWBALL_EVENTS.entry_open_event(
             layer_entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
@@ -933,7 +953,7 @@ class SnowballStrategy(Strategy):
         # Interval that the gate uses for "the next slot past ``highest``":
         # ``counter_interval_pips(k)`` is 1-based, k == highest.index + 1
         # advances into the next retracement slot.
-        interval = counter_interval_pips(highest.index + 1, self.config)
+        interval = self.calculator.counter_interval_pips(highest.index + 1)
         offset = interval * self.pip_size
         if direction == Direction.LONG:
             return ref_price - offset
@@ -948,31 +968,35 @@ class SnowballStrategy(Strategy):
         entry: Entry,
         sl_pips: Decimal,
     ) -> None:
-        assign_stop_loss(self, entry, sl_pips)
+        self.stop_loss_assigner.assign(self, entry, sl_pips)
 
     def _assign_auto_stop_loss(
         self,
         entry: Entry,
         next_interval_pips: Decimal,
     ) -> None:
-        assign_auto_stop_loss(self, entry, next_interval_pips)
+        self.stop_loss_assigner.assign_auto(self, entry, next_interval_pips)
 
     def _assign_configured_stop_loss(
         self,
         entry: Entry,
         slot_number: int,
     ) -> None:
-        assign_configured_stop_loss(self, entry, slot_number)
+        self.stop_loss_assigner.assign_configured(self, entry, slot_number)
 
     def _assign_rebuild_stop_loss(
         self,
         entry: Entry,
         pending: StopLossClosedEntry,
     ) -> None:
-        assign_rebuild_stop_loss(self, entry, pending)
+        self.stop_loss_assigner.assign_rebuild(self, entry, pending)
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
-        return is_stop_loss_temporarily_protected(self.config, layer, entry)
+        return self.stop_loss_protection_policy.temporarily_protected(
+            self.config,
+            layer,
+            entry,
+        )
 
     def _process_stop_loss_closes(
         self,
@@ -980,7 +1004,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_stop_loss_closes(
+        return self.stop_loss_close_processor.process(
             self,
             ss,
             tick,
@@ -994,7 +1018,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_stop_loss_rebuilds(self, ss, tick, cycle)
+        return self.stop_loss_rebuild_processor.process(self, ss, tick, cycle)
 
     # ------------------------------------------------------------------
     # Core tick processing
@@ -1002,123 +1026,7 @@ class SnowballStrategy(Strategy):
 
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a single tick."""
-        self._grid_order_violation = None
-        self._close_order_violation = None
-        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
-        ss.last_bid = tick.bid
-        ss.last_ask = tick.ask
-        ss.last_mid = tick.mid
-
-        events: list[StrategyEvent] = []
-        ratio = update_account_metrics(
-            state=state,
-            ss=ss,
-            tick=tick,
-            instrument=self.instrument,
-            account_currency=self.account_currency,
-            margin_ratio_func=margin_ratio,
-        )
-
-        # --- Emergency ---
-        emergency = handle_emergency(strategy=self, ss=ss, tick=tick, ratio=ratio)
-        if emergency is not None:
-            emergency_events, stop_reason = emergency
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(
-                state=state,
-                events=emergency_events,
-                should_stop=True,
-                stop_reason=stop_reason,
-                is_error=True,
-            )
-
-        # --- Lock enter ---
-        lock_events = handle_lock(strategy=self, ss=ss, tick=tick, ratio=ratio)
-        if lock_events is not None:
-            events.extend(lock_events)
-        allow_new_positions = lock_events is None and ss.protection_level != ProtectionLevel.LOCKED
-
-        # --- Lock release ---
-        if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
-            release_events = handle_lock_release(
-                strategy=self,
-                close_entry=self._close_entry,
-                ss=ss,
-                tick=tick,
-                ratio=ratio,
-            )
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=release_events)
-
-        # --- Shrink ---
-        shrink_events = None
-        if lock_events is None:
-            shrink_events = handle_shrink(
-                strategy=self,
-                close_entry=self._close_entry,
-                state=state,
-                ss=ss,
-                tick=tick,
-                ratio=ratio,
-            )
-        if shrink_events is not None:
-            events.extend(shrink_events.events)
-            if shrink_events.close_order_violation:
-                self._close_order_violation = shrink_events.close_order_violation
-            state.strategy_state = ss.to_dict()
-            if shrink_events.close_order_violation:
-                return StrategyResult(
-                    state=state,
-                    events=events,
-                    should_stop=True,
-                    stop_reason=f"Close order violation: {shrink_events.close_order_violation}",
-                    is_error=True,
-                )
-            return StrategyResult(state=state, events=events)
-
-        # Back to normal
-        if lock_events is None and ss.protection_level != ProtectionLevel.NORMAL:
-            ss.protection_level = ProtectionLevel.NORMAL
-
-        # --- Initialisation ---
-        if not ss.initialised:
-            init_events, _ = self._create_cycle(ss, tick, Direction.LONG)
-            events.extend(init_events)
-            if self._hedging_enabled:
-                short_events, _ = self._create_cycle(ss, tick, Direction.SHORT)
-                events.extend(short_events)
-            ss.initialised = True
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=events)
-
-        cycle_result = process_active_cycles(
-            self,
-            ss,
-            tick,
-            allow_new_positions=allow_new_positions,
-        )
-        events.extend(cycle_result.events)
-        if cycle_result.stop_reason:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(
-                state=state,
-                events=events,
-                should_stop=True,
-                stop_reason=cycle_result.stop_reason,
-                is_error=cycle_result.is_error,
-            )
-
-        events.extend(
-            reseed_missing_directions(
-                self,
-                ss,
-                tick,
-                allow_new_positions=allow_new_positions,
-            )
-        )
-
-        state.strategy_state = ss.to_dict()
-        return StrategyResult(state=state, events=events)
+        return self.tick_pipeline.run(strategy=self, tick=tick, state=state)
 
     # ------------------------------------------------------------------
     # State serialisation

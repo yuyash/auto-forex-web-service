@@ -1,9 +1,238 @@
 """Shared utilities for the trading app."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 
 # JPY-quoted pairs use pip_size 0.01; all others use 0.0001
 _JPY_QUOTE_CURRENCIES = {"JPY", "HUF"}
+
+
+@dataclass(frozen=True, slots=True)
+class AccountCurrency:
+    """ISO currency code value object for account-denominated values."""
+
+    code: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "code", str(self.code or "").strip().upper())
+
+    @property
+    def is_known(self) -> bool:
+        """Return whether a non-empty currency code is available."""
+        return bool(self.code)
+
+    def matches(self, other: "AccountCurrency | str") -> bool:
+        """Return whether another currency represents the same code."""
+        other_code = other.code if isinstance(other, AccountCurrency) else str(other or "")
+        return self.code == other_code.strip().upper()
+
+
+@dataclass(frozen=True, slots=True)
+class PipSize:
+    """Decimal pip-size value object."""
+
+    value: Decimal
+
+    @classmethod
+    def for_instrument(cls, instrument: "Instrument | str") -> "PipSize":
+        """Return the pip-size convention for an instrument."""
+        instrument_obj = (
+            instrument if isinstance(instrument, Instrument) else Instrument(instrument)
+        )
+        if instrument_obj.is_high_value_quote:
+            return cls(Decimal("0.01"))
+        return cls(Decimal("0.0001"))
+
+
+@dataclass(frozen=True, slots=True)
+class Price:
+    """Decimal price value object with small arithmetic helpers."""
+
+    value: Decimal
+
+    @classmethod
+    def coerce(cls, value: Decimal | float | int | str) -> "Price":
+        """Build a price from any Decimal-compatible primitive."""
+        return cls(Decimal(str(value)))
+
+    def distance_to(self, other: "Price") -> Decimal:
+        """Return signed price distance to another price."""
+        return other.value - self.value
+
+
+@dataclass(frozen=True, slots=True)
+class Units:
+    """Trade units value object."""
+
+    value: int
+
+    @classmethod
+    def coerce(cls, value: Decimal | float | int | str) -> "Units":
+        """Build integer units from a primitive value."""
+        return cls(int(Decimal(str(value))))
+
+    @property
+    def absolute(self) -> int:
+        """Return absolute unit size."""
+        return abs(self.value)
+
+    @property
+    def side(self) -> "TradeSide":
+        """Infer the trade side from the sign of units."""
+        return TradeSide.LONG if self.value >= 0 else TradeSide.SHORT
+
+
+class TradeSide(StrEnum):
+    """Trading side value object compatible with existing string fields."""
+
+    LONG = "long"
+    SHORT = "short"
+
+    @classmethod
+    def from_units(cls, units: Units | Decimal | float | int | str) -> "TradeSide":
+        """Infer trade side from signed units."""
+        unit_value = units.value if isinstance(units, Units) else int(Decimal(str(units)))
+        return cls.LONG if unit_value >= 0 else cls.SHORT
+
+    @property
+    def sign(self) -> int:
+        """Return the unit sign for this side."""
+        return 1 if self is TradeSide.LONG else -1
+
+
+@dataclass(frozen=True, slots=True)
+class Money:
+    """Money value object with amount and account currency."""
+
+    amount: Decimal
+    currency: AccountCurrency = AccountCurrency()
+
+    @classmethod
+    def coerce(
+        cls,
+        amount: Decimal | float | int | str,
+        currency: AccountCurrency | str = "",
+    ) -> "Money":
+        """Build a money object from primitive amount/currency values."""
+        currency_obj = (
+            currency if isinstance(currency, AccountCurrency) else AccountCurrency(currency)
+        )
+        return cls(amount=Decimal(str(amount)), currency=currency_obj)
+
+    def format(self, *, places: int = 2) -> str:
+        """Format the amount for human-readable logs."""
+        return MoneyFormatter(places=places).format(self.amount)
+
+
+@dataclass(frozen=True, slots=True)
+class Instrument:
+    """Forex instrument value object with pip and currency helpers."""
+
+    name: str
+
+    @property
+    def pip(self) -> PipSize:
+        """Return the pip-size value object for this instrument."""
+        return PipSize.for_instrument(self)
+
+    @property
+    def quote_currency(self) -> str:
+        """Extract the quote currency from an OANDA instrument name."""
+        return self.name.split("_")[-1].upper() if "_" in self.name else ""
+
+    @property
+    def is_high_value_quote(self) -> bool:
+        """Return whether this quote currency uses the wider pip convention."""
+        return self.quote_currency in _JPY_QUOTE_CURRENCIES
+
+    @property
+    def pip_size(self) -> Decimal:
+        """Return the pip size for this instrument."""
+        return self.pip.value
+
+    def quote_to_account_rate(
+        self,
+        mid_price: Decimal,
+        account_currency: AccountCurrency | str = "",
+    ) -> Decimal:
+        """Return the multiplier to convert quote-currency PnL to account currency."""
+        quote = self.quote_currency
+        account = (
+            account_currency
+            if isinstance(account_currency, AccountCurrency)
+            else AccountCurrency(account_currency)
+        )
+
+        # If the account currency is the same as the quote currency, no conversion.
+        if account.is_known and quote and account.matches(quote):
+            return Decimal("1")
+
+        # If the account currency is the same as the base currency, convert from
+        # quote to base.
+        if self.is_high_value_quote:
+            if mid_price <= 0:
+                return Decimal("1")
+            return Decimal("1") / mid_price
+        return Decimal("1")
+
+
+@dataclass(frozen=True, slots=True)
+class MoneyFormatter:
+    """Format Decimal-compatible money values for stable logs."""
+
+    places: int = 2
+
+    def format(self, value: Decimal | float | int | None) -> str:
+        """Format a monetary amount for human-readable logging."""
+        if value is None:
+            return "None"
+        if not isinstance(value, Decimal):
+            value = Decimal(str(value))
+        quant = Decimal(1).scaleb(-self.places)  # e.g. Decimal("0.01") when places=2
+        try:
+            return str(value.quantize(quant))
+        except Exception:  # pragma: no cover - defensive fallback
+            return str(value)
+
+
+@dataclass(frozen=True, slots=True)
+class TradingValueFactory:
+    """Factory for trading value objects and compatibility calculations."""
+
+    def instrument(self, name: str) -> Instrument:
+        """Build an instrument value object."""
+        return Instrument(name)
+
+    def pip_size_for_instrument(self, instrument: str) -> Decimal:
+        """Derive pip size from an instrument name."""
+        return self.instrument(instrument).pip_size
+
+    def is_quote_jpy(self, instrument: str) -> bool:
+        """Return whether an instrument uses a high-value quote convention."""
+        return self.instrument(instrument).is_high_value_quote
+
+    def quote_currency(self, instrument: str) -> str:
+        """Extract the quote currency from an instrument name."""
+        return self.instrument(instrument).quote_currency
+
+    def quote_to_account_rate(
+        self,
+        instrument: str,
+        mid_price: Decimal,
+        account_currency: str = "",
+    ) -> Decimal:
+        """Return the multiplier to convert quote-currency PnL."""
+        return self.instrument(instrument).quote_to_account_rate(mid_price, account_currency)
+
+    def format_money(self, value: Decimal | float | int | None, *, places: int = 2) -> str:
+        """Format a monetary amount for logs."""
+        return MoneyFormatter(places=places).format(value)
+
+
+TRADING_VALUES = TradingValueFactory()
 
 
 def pip_size_for_instrument(instrument: str) -> Decimal:
@@ -13,10 +242,7 @@ def pip_size_for_instrument(instrument: str) -> Decimal:
     - JPY (and HUF) quoted pairs: 0.01
     - All other pairs: 0.0001
     """
-    quote = instrument.split("_")[-1].upper() if "_" in instrument else ""
-    if quote in _JPY_QUOTE_CURRENCIES:
-        return Decimal("0.01")
-    return Decimal("0.0001")
+    return TRADING_VALUES.pip_size_for_instrument(instrument)
 
 
 def is_quote_jpy(instrument: str) -> bool:
@@ -28,8 +254,7 @@ def is_quote_jpy(instrument: str) -> bool:
     USD_JPY) we need to divide by the current mid price to convert back
     to account currency.
     """
-    quote = instrument.split("_")[-1].upper() if "_" in instrument else ""
-    return quote in _JPY_QUOTE_CURRENCIES
+    return TRADING_VALUES.is_quote_jpy(instrument)
 
 
 def quote_currency(instrument: str) -> str:
@@ -37,7 +262,7 @@ def quote_currency(instrument: str) -> str:
 
     Example: ``"USD_JPY"`` → ``"JPY"``, ``"EUR_USD"`` → ``"USD"``
     """
-    return instrument.split("_")[-1].upper() if "_" in instrument else ""
+    return TRADING_VALUES.quote_currency(instrument)
 
 
 def quote_to_account_rate(
@@ -56,19 +281,7 @@ def quote_to_account_rate(
     Cross-currency pairs (e.g. EUR_GBP on a USD account) would need an
     additional FX rate, but that is out of scope for now.
     """
-    quote = instrument.split("_")[-1].upper() if "_" in instrument else ""
-
-    # If the account currency is the same as the quote currency, no conversion.
-    if account_currency and quote and account_currency.upper() == quote:
-        return Decimal("1")
-
-    # If the account currency is the same as the base currency, convert from
-    # quote to base.
-    if is_quote_jpy(instrument):
-        if mid_price <= 0:
-            return Decimal("1")
-        return Decimal("1") / mid_price
-    return Decimal("1")
+    return TRADING_VALUES.quote_to_account_rate(instrument, mid_price, account_currency)
 
 
 def format_money(value: Decimal | float | int | None, *, places: int = 2) -> str:
@@ -79,12 +292,4 @@ def format_money(value: Decimal | float | int | None, *, places: int = 2) -> str
     arithmetic. ``None`` is rendered as the literal string ``"None"`` so
     log output remains stable for callers that pass optional balances.
     """
-    if value is None:
-        return "None"
-    if not isinstance(value, Decimal):
-        value = Decimal(str(value))
-    quant = Decimal(1).scaleb(-places)  # e.g. Decimal("0.01") when places=2
-    try:
-        return str(value.quantize(quant))
-    except Exception:  # pragma: no cover - defensive fallback
-        return str(value)
+    return TRADING_VALUES.format_money(value, places=places)

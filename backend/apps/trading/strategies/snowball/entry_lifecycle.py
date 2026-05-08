@@ -8,7 +8,7 @@ from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.events import ClosePositionEvent
-from apps.trading.strategies.snowball.events import entry_close_event
+from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.models import Entry, SnowballCycle
 from apps.trading.utils import format_money
 
@@ -33,7 +33,7 @@ def close_entry(
     cycle: SnowballCycle | None = None,
 ) -> ClosePositionEvent:
     """Create a close event and update slot/cycle realised P/L accounting."""
-    event = entry_close_event(
+    event = SNOWBALL_EVENTS.entry_close_event(
         entry,
         tick,
         instrument=strategy.instrument,

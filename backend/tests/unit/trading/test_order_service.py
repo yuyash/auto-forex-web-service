@@ -44,7 +44,10 @@ class TestOrderServiceInit:
         assert service.task is task
         assert service.dry_run is False
         assert service.task_type == TaskType.TRADING
-        mock_oanda_svc.assert_called_once_with(account=account, dry_run=False)
+        mock_oanda_svc.assert_called_once()
+        assert mock_oanda_svc.call_args.kwargs["account"] is account
+        assert mock_oanda_svc.call_args.kwargs["dry_run"] is False
+        assert mock_oanda_svc.call_args.kwargs["retry_policy"] is not None
 
     @patch("apps.trading.order.OandaService")
     def test_init_dry_run(self, mock_oanda_svc):
@@ -58,7 +61,10 @@ class TestOrderServiceInit:
         assert service.account is None
         assert service.dry_run is True
         assert service.task_type == TaskType.BACKTEST
-        mock_oanda_svc.assert_called_once_with(account=None, dry_run=True)
+        mock_oanda_svc.assert_called_once()
+        assert mock_oanda_svc.call_args.kwargs["account"] is None
+        assert mock_oanda_svc.call_args.kwargs["dry_run"] is True
+        assert mock_oanda_svc.call_args.kwargs["retry_policy"] is not None
 
     @patch("apps.trading.order.OandaService")
     def test_task_type_detection_backtest(self, mock_oanda_svc):

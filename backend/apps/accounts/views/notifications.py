@@ -12,7 +12,6 @@ from rest_framework.views import APIView
 
 from apps.common.querying import (
     OrderingConfig,
-    apply_queryset_ordering,
     invalid_query_param,
     parse_datetime_param,
 )
@@ -109,10 +108,9 @@ class UserNotificationListView(APIView):
                 queryset = queryset.filter(timestamp__gte=timestamp_from)
             if timestamp_to:
                 queryset = queryset.filter(timestamp__lte=timestamp_to)
-            queryset = apply_queryset_ordering(
+            queryset = NOTIFICATION_ORDERING.apply_to_queryset(
                 queryset,
                 request.query_params.get("ordering"),
-                NOTIFICATION_ORDERING,
             )
 
             paginator = self.pagination_class()

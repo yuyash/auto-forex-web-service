@@ -21,10 +21,14 @@ from apps.market.services.oanda import (
 from apps.market.services.oanda import (
     Position as OandaPosition,
 )
+from apps.market.services.oanda_retry import OandaRetryPolicy
+from apps.trading.broker_gateway import BrokerGateway, OandaBrokerGateway
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
-from apps.trading.models.orders import OrderStatus, OrderType
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.models.orders import OrderType
+from apps.trading.order_client_ids import TradingOrderClientIdFactory
+from apps.trading.order_repositories import OrderRepository, PositionRepository
+from apps.trading.utils import AccountCurrency, Instrument, Units
 
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
@@ -61,8 +65,17 @@ class OrderService:
         self.account = account
         self.task = task
         self.dry_run = dry_run
-        self.oanda_service = OandaService(account=account, dry_run=dry_run)
+        broker_service = OandaService(
+            account=account,
+            dry_run=dry_run,
+            retry_policy=OandaRetryPolicy.from_task(task),
+        )
+        self.broker_gateway: BrokerGateway = OandaBrokerGateway(broker_service)
+        # Backward-compatible attribute for callers that still refer to the
+        # old OANDA service member.
+        self.oanda_service = self.broker_gateway
         self.execution_id = getattr(task, "execution_id", None)
+        self.client_order_ids = TradingOrderClientIdFactory()
 
         # execution_id is required for all Position/Order/Trade records
         if not self.execution_id:
@@ -79,6 +92,20 @@ class OrderService:
                 self.task_type = TaskType.TRADING
         else:
             self.task_type = TaskType.TRADING
+
+        self.order_repository = OrderRepository(
+            task_type=self.task_type,
+            task_id=task.id,
+            execution_id=self.execution_id,
+            dry_run=dry_run,
+            order_model=Order,
+        )
+        self.position_repository = PositionRepository(
+            task_type=self.task_type,
+            task_id=task.id,
+            execution_id=self.execution_id,
+            position_model=Position,
+        )
 
         account_id = account.account_id if account else "DRY-RUN"
         logger.info(
@@ -132,11 +159,12 @@ class OrderService:
             # Open short position
             short_pos, order = service.open_position("USD_JPY", 5000, Direction.SHORT)
         """
-        if units <= 0:
+        requested_units = Units.coerce(units)
+        if requested_units.value <= 0:
             raise OrderServiceError("Units must be positive")
 
-        # Convert to signed units based on direction
-        signed_units = units if direction == Direction.LONG else -units
+        side_sign = 1 if direction == Direction.LONG else -1
+        signed_units = requested_units.absolute * side_sign
 
         return self._execute_market_order(
             instrument=instrument,
@@ -281,10 +309,9 @@ class OrderService:
                 realized_delta = (oanda_order.price or Decimal("0")) - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                conv = quote_to_account_rate(
-                    position.instrument,
+                conv = Instrument(position.instrument).quote_to_account_rate(
                     oanda_order.price or position.entry_price,
-                    account_currency=self.account.currency if self.account else "",
+                    AccountCurrency(self.account.currency if self.account else ""),
                 )
                 realized_delta = realized_delta * Decimal(original_units) * conv
             else:
@@ -294,10 +321,9 @@ class OrderService:
                 realized_delta = close_price - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                conv = quote_to_account_rate(
-                    position.instrument,
+                conv = Instrument(position.instrument).quote_to_account_rate(
                     close_price or position.entry_price,
-                    account_currency=self.account.currency if self.account else "",
+                    AccountCurrency(self.account.currency if self.account else ""),
                 )
                 realized_delta = realized_delta * close_units_decimal * conv
 
@@ -327,7 +353,7 @@ class OrderService:
             return position, realized_delta, order
 
         except Exception as e:
-            error_msg = f"Failed to close position: {str(e)}"
+            error_msg = "Failed to close position"
             logger.error(
                 "Failed to close position %s: %s",
                 position.id,
@@ -337,22 +363,15 @@ class OrderService:
             # Record the rejected order so the failure is visible in the UI
             close_units = units if units is not None else abs(position.units)
             try:
-                rejected_order = Order.objects.create(
-                    task_type=self.task_type,
-                    task_id=self.task.id,
-                    execution_id=self.execution_id,
+                self.order_repository.create_rejected_market(
                     instrument=position.instrument,
-                    order_type=OrderType.MARKET,
                     direction=Direction(position.direction),
                     units=close_units,
+                    public_error_message=error_msg,
                     requested_price=override_price,
                     oanda_trade_id=position.oanda_trade_id,
-                    status=OrderStatus.PENDING,
-                    is_dry_run=self.dry_run,
                     position=position,
                 )
-                rejected_order.mark_rejected(error_msg)
-                rejected_order.save()
             except Exception:
                 logger.warning(
                     "Failed to persist rejected order record for closing position %s",
@@ -394,12 +413,26 @@ class OrderService:
             OrderServiceError: If order execution fails
         """
         try:
+            instrument_obj = Instrument(instrument)
+            units_obj = Units.coerce(units)
             # Create market order request
             request = MarketOrderRequest(
-                instrument=instrument,
-                units=Decimal(str(units)),
+                instrument=instrument_obj.name,
+                units=Decimal(str(units_obj.value)),
                 take_profit=take_profit,
                 stop_loss=stop_loss,
+                client_order_id=self.client_order_ids.open_position_id(
+                    task_id=self.task.id,
+                    execution_id=self.execution_id,
+                    instrument=instrument_obj.name,
+                    units=units_obj.value,
+                    direction=direction,
+                    layer_index=layer_index,
+                    retracement_count=retracement_count,
+                    tick_timestamp=tick_timestamp,
+                    planned_exit_price=planned_exit_price,
+                    stop_loss=stop_loss,
+                ),
             )
 
             # Execute via OANDA service
@@ -413,9 +446,9 @@ class OrderService:
                 tick_timestamp=tick_timestamp,
             )
             position = self._create_or_update_position(
-                instrument=instrument,
+                instrument=instrument_obj.name,
                 direction=direction,
-                units=abs(units),
+                units=units_obj.absolute,
                 entry_price=oanda_order.price or Decimal("0"),
                 entry_time=entry_time,
                 layer_index=layer_index,
@@ -428,10 +461,10 @@ class OrderService:
 
             # Create order record linked to the position
             order = self._create_order_record(
-                instrument=instrument,
+                instrument=instrument_obj.name,
                 order_type=OrderType.MARKET,
                 direction=direction,
-                units=units,
+                units=units_obj.value,
                 oanda_order=oanda_order,
                 requested_price=override_price,
                 stop_loss=stop_loss,
@@ -445,8 +478,8 @@ class OrderService:
             logger.info(
                 "Market order executed: %s %s %s @ %s (order=%s, position=%s, dry_run=%s)",
                 direction,
-                abs(units),
-                instrument,
+                units_obj.absolute,
+                instrument_obj.name,
                 oanda_order.price,
                 order.id,
                 position.id,
@@ -456,7 +489,7 @@ class OrderService:
             return position, order
 
         except Exception as e:
-            error_msg = f"Failed to execute market order: {str(e)}"
+            error_msg = "Failed to execute market order"
             logger.error(
                 "Failed to execute market order: %s %s %s - %s",
                 direction,
@@ -467,21 +500,14 @@ class OrderService:
             )
             # Record the rejected order so the failure is visible in the UI
             try:
-                rejected_order = Order.objects.create(
-                    task_type=self.task_type,
-                    task_id=self.task.id,
-                    execution_id=self.execution_id,
+                self.order_repository.create_rejected_market(
                     instrument=instrument,
-                    order_type=OrderType.MARKET,
                     direction=direction,
                     units=units,
+                    public_error_message=error_msg,
                     requested_price=override_price,
                     stop_loss=stop_loss,
-                    status=OrderStatus.PENDING,
-                    is_dry_run=self.dry_run,
                 )
-                rejected_order.mark_rejected(error_msg)
-                rejected_order.save()
             except Exception:
                 logger.warning(
                     "Failed to persist rejected order record for %s %s %s",
@@ -508,30 +534,23 @@ class OrderService:
         retracement_count: int | None = None,
     ) -> Order:
         """Create order database record."""
-        order = Order.objects.create(
-            task_type=self.task_type,
-            task_id=self.task.id,
-            execution_id=self.execution_id,
-            broker_order_id=oanda_order.order_id,
-            oanda_trade_id=oanda_trade_id,
+        return self.order_repository.create_filled(
             instrument=instrument,
             order_type=order_type,
             direction=direction,
             units=units,
-            requested_price=requested_price,
-            fill_price=oanda_order.price,
-            status=OrderStatus.FILLED,
+            oanda_order=oanda_order,
             filled_at=self._order_execution_time(
                 oanda_order=oanda_order,
                 tick_timestamp=tick_timestamp,
             ),
+            requested_price=requested_price,
             stop_loss=stop_loss,
-            is_dry_run=self.dry_run,
+            oanda_trade_id=oanda_trade_id,
             position=position,
             layer_index=layer_index,
             retracement_count=retracement_count,
         )
-        return order
 
     def _order_execution_time(
         self,
@@ -570,80 +589,19 @@ class OrderService:
         planned_exit_price_formula: str | None = None,
     ) -> Position:
         """Create new position or update existing one."""
-        if merge_with_existing:
-            # Check for existing open position
-            existing_position = (
-                Position.objects.filter(
-                    task_type=self.task_type,
-                    task_id=self.task.id,
-                    execution_id=self.execution_id,
-                    instrument=instrument,
-                    direction=direction,
-                    is_open=True,
-                )
-                .order_by("-entry_time")
-                .first()
-            )
-
-            if existing_position:
-                # Update existing position (weighted average)
-                total_units = existing_position.units + units
-                new_avg_price = (
-                    (existing_position.entry_price * existing_position.units)
-                    + (entry_price * units)
-                ) / total_units
-
-                existing_position.units = total_units
-                existing_position.entry_price = new_avg_price
-                if layer_index is not None:
-                    existing_position.layer_index = layer_index
-                if oanda_trade_id is not None:
-                    existing_position.oanda_trade_id = oanda_trade_id
-                if retracement_count is not None:
-                    existing_position.retracement_count = retracement_count
-                if planned_exit_price is not None:
-                    existing_position.planned_exit_price = planned_exit_price
-                if planned_exit_price_formula is not None:
-                    existing_position.planned_exit_price_formula = planned_exit_price_formula
-                existing_position.execution_id = self.execution_id
-                existing_position.save()
-
-                logger.debug(
-                    "Updated existing position %s: %s units @ %s",
-                    existing_position.id,
-                    total_units,
-                    new_avg_price,
-                )
-
-                return existing_position
-
-        # Create new position
-        position = Position.objects.create(
-            task_type=self.task_type,
-            task_id=self.task.id,
-            execution_id=self.execution_id,
+        return self.position_repository.create_or_update(
             instrument=instrument,
             direction=direction,
             units=units,
             entry_price=entry_price,
             entry_time=entry_time,
-            is_open=True,
             layer_index=layer_index,
+            merge_with_existing=merge_with_existing,
             oanda_trade_id=oanda_trade_id,
             retracement_count=retracement_count,
             planned_exit_price=planned_exit_price,
             planned_exit_price_formula=planned_exit_price_formula,
         )
-
-        logger.debug(
-            "Created new position %s: %s %s units @ %s",
-            position.id,
-            direction,
-            units,
-            entry_price,
-        )
-
-        return position
 
     def _position_to_oanda_position(self, position: Position) -> OandaPosition:
         """Convert database Position to OANDA Position."""
@@ -675,17 +633,7 @@ class OrderService:
         Returns:
             List of open positions
         """
-        queryset = Position.objects.filter(
-            task_type=self.task_type,
-            task_id=self.task.id,
-            execution_id=self.execution_id,
-            is_open=True,
-        )
-
-        if instrument:
-            queryset = queryset.filter(instrument=instrument)
-
-        return list(queryset.order_by("-entry_time"))
+        return self.position_repository.open_positions(instrument=instrument)
 
     def get_order_history(self, instrument: str | None = None, limit: int = 100) -> list[Order]:
         """
@@ -698,13 +646,4 @@ class OrderService:
         Returns:
             List of orders
         """
-        queryset = Order.objects.filter(
-            task_type=self.task_type,
-            task_id=self.task.id,
-            execution_id=self.execution_id,
-        )
-
-        if instrument:
-            queryset = queryset.filter(instrument=instrument)
-
-        return list(queryset.order_by("-submitted_at")[:limit])
+        return self.order_repository.history(instrument=instrument, limit=limit)

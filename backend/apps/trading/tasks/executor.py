@@ -7,7 +7,7 @@ strategies, manages state, and handles lifecycle events.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
@@ -31,12 +31,26 @@ from apps.trading.services.runtime_metrics import (
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.diagnostics import ExecutionDiagnostics
 from apps.trading.tasks.drain import TaskDrainCoordinator, record_final_stop_metrics
+from apps.trading.tasks.execution_collaborators import (
+    ExecutionEventDispatcher,
+    ExecutionStateRepository,
+    ExecutionTickLoop,
+)
+from apps.trading.tasks.execution_tick_processing import (
+    BacktestGapGuard,
+    BacktestIdleTickPolicy,
+    ExecutionTickProcessor,
+    LiveTickDeliveryGuard,
+    LiveTickDeliveryStateRepository,
+    RuntimeMetricsRecorder,
+    TradingIdleTickPolicy,
+)
 from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
+from apps.trading.tasks.broker_read_outage import BrokerReadOutageCoordinator
 from apps.trading.tasks.event_processor import TaskEventProcessor
-from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import (
     EventReplayExecutor,
     classify_replay_event,
@@ -56,13 +70,6 @@ from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money
 
 logger: Logger = getLogger(name=__name__)
-
-LIVE_TICK_LATENCY_METRIC_KEYS = frozenset(
-    {
-        "oanda_tick_publish_latency_seconds",
-        "trading_tick_receive_latency_seconds",
-    }
-)
 
 # Backward-compatible export for tests patching this symbol.
 EventHandler = _EventHandlerCompat
@@ -153,6 +160,9 @@ class TaskExecutor:
             instrument=self.instrument,
         )
         self.event_processor = TaskEventProcessor(self)
+        self._event_dispatcher = ExecutionEventDispatcher(self)
+        self._state_repository = ExecutionStateRepository(self)
+        self._tick_loop = ExecutionTickLoop(self)
 
         from apps.trading.services.metrics_aggregator import MetricsAggregator
 
@@ -162,6 +172,19 @@ class TaskExecutor:
             execution_id=str(task.execution_id) if task.execution_id else None,
         )
         self._runtime_metrics = self._create_runtime_metrics_tracker()
+        self._live_tick_delivery_state_repository = LiveTickDeliveryStateRepository()
+        self._live_tick_delivery_guard = LiveTickDeliveryGuard(self)
+        self._backtest_gap_guard = BacktestGapGuard(self)
+        self._backtest_idle_policy = BacktestIdleTickPolicy(self)
+        self._trading_idle_tick_policy = TradingIdleTickPolicy(self)
+        self._runtime_metric_recorder = RuntimeMetricsRecorder(self)
+        self._tick_processor = ExecutionTickProcessor(self)
+        self._broker_read_outage = BrokerReadOutageCoordinator(
+            task=task,
+            task_type=self.task_type,
+            state_manager=state_manager,
+            logger=logger,
+        )
 
         # --- Debug: memory profiling ---
         debug_opts = getattr(task, "debug_options", None) or {}
@@ -196,8 +219,12 @@ class TaskExecutor:
             # The DB-stored balance may be stale (default 0).
             try:
                 from apps.market.services.oanda import OandaService
+                from apps.market.services.oanda_retry import OandaRetryPolicy
 
-                client = OandaService(self.task.oanda_account)
+                client = OandaService(
+                    self.task.oanda_account,
+                    retry_policy=OandaRetryPolicy.from_task(self.task),
+                )
                 details = client.get_account_details()
                 return details.balance
             except Exception as e:
@@ -345,7 +372,7 @@ class TaskExecutor:
         Args:
             events: List of TradingEvent instances that were saved
         """
-        self.event_processor.process(state, events, replaying=replaying)
+        self._event_dispatcher.process(state, events, replaying=replaying)
 
     def load_state(self) -> ExecutionState:
         """Load execution state from ExecutionState model.
@@ -353,63 +380,11 @@ class TaskExecutor:
         Returns:
             ExecutionState: Current execution state
         """
-        state, _ = self._load_state_with_metadata()
-        return state
+        return self._state_repository.load()
 
     def _load_state_with_metadata(self) -> tuple[ExecutionState, bool]:
         """Load state and indicate whether this execution is a resume."""
-        self.task.refresh_from_db()
-
-        try:
-            state = ExecutionState.objects.get(
-                task_type=self.task_type.value,
-                task_id=self.task.pk,
-                execution_id=self.task.execution_id,
-            )
-            logger.info(
-                "Existing ExecutionState found (resume) - task_id=%s, "
-                "execution_id=%s, balance=%s, ticks=%d",
-                self.task.pk,
-                self.task.execution_id,
-                state.current_balance,
-                state.ticks_processed,
-            )
-            return state, True
-        except ExecutionState.DoesNotExist:
-            pass
-
-        # Log why we are creating a fresh state — this is the path that
-        # causes the "state reset" symptom when it fires unexpectedly
-        # during what should have been a resume.
-        existing_count = ExecutionState.objects.filter(
-            task_type=self.task_type.value,
-            task_id=self.task.pk,
-        ).count()
-        logger.info(
-            "No ExecutionState for current execution_id — creating fresh state. "
-            "task_id=%s, execution_id=%s, task_type=%s, "
-            "other_execution_states_for_task=%d",
-            self.task.pk,
-            self.task.execution_id,
-            self.task_type.value,
-            existing_count,
-        )
-
-        from apps.trading.models import BacktestTask
-
-        initial_timestamp = self.task.start_time if isinstance(self.task, BacktestTask) else None
-
-        state = ExecutionState.objects.create(
-            task_type=self.task_type.value,
-            task_id=self.task.pk,
-            execution_id=self.task.execution_id,
-            strategy_state={},
-            current_balance=self.initial_balance,
-            ticks_processed=0,
-            last_tick_timestamp=initial_timestamp,
-            resume_cursor_timestamp=initial_timestamp,
-        )
-        return state, False
+        return self._state_repository.load_with_metadata()
 
     def save_state(self, state: ExecutionState) -> None:
         """Save execution state to ExecutionState model.
@@ -417,15 +392,7 @@ class TaskExecutor:
         Args:
             state: Execution state to save
         """
-        # Log what we're saving
-        logger.debug(
-            f"Saving state: task_id={state.task_id}, "
-            f"ticks_processed={state.ticks_processed}, "
-            f"last_tick_timestamp={state.last_tick_timestamp}, "
-            f"current_balance={state.current_balance}"
-        )
-
-        self.state_store.save(state)
+        self._state_repository.save(state)
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""
@@ -437,13 +404,7 @@ class TaskExecutor:
         Args:
             events: List of events to save
         """
-        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "")
-        return persist_strategy_events(
-            events=events,
-            context=self.event_context,
-            execution_id=self.task.execution_id,
-            strategy_type=strategy_type,
-        )
+        return self._event_dispatcher.persist(events)
 
     def execute(self) -> None:
         """Execute the task."""
@@ -571,37 +532,7 @@ class TaskExecutor:
 
     def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
         """Run batch/tick processing loop."""
-        logger.info("Starting tick processing loop")
-        self._flush_task_logs()
-
-        for tick_batch in self.data_source:
-            if self._should_stop_before_batch(loop):
-                break
-
-            if not tick_batch:
-                should_stop = self._handle_empty_batch(loop)
-                self._flush_task_logs()
-                if should_stop:
-                    break
-                continue
-
-            loop.no_tick_batches = 0
-            self._process_tick_batch(loop, tick_batch)
-            loop.batch_count += 1
-            self._persist_batch_progress(loop)
-            self._after_batch_processed(loop)
-            self._flush_task_logs()
-
-            if loop.stopped_early:
-                break
-
-        logger.info(
-            "Exited tick processing loop - task_id=%s, stopped_early=%s, ticks_processed=%d",
-            self.task.pk,
-            loop.stopped_early,
-            loop.state.ticks_processed,
-        )
-        self._flush_task_logs()
+        self._tick_loop.run(loop)
 
     def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
         """Check external stop signal before processing a batch."""
@@ -820,126 +751,7 @@ class TaskExecutor:
 
     def _process_single_tick(self, loop: ExecutionLoopState, tick) -> bool:
         """Process one tick; return True when execution should stop."""
-        tick_ts = self._coerce_tick_timestamp(tick.timestamp)
-        if self._handle_live_tick_delivery(loop=loop, tick=tick, tick_ts=tick_ts):
-            return True
-
-        # Skip ticks already processed in a previous run (resume scenario).
-        # last_tick_timestamp is persisted after each tick, so any tick at or
-        # before that timestamp has already been fully handled.
-        # However, we still feed skipped ticks into the runtime metrics tracker
-        # so that rolling calculations (ATR, candle history) are warmed up
-        # before the first "real" tick after resume.
-        # Runtime gap detection (backtest only): abort the run if the tick
-        # stream jumps forward by more than MARKET_BACKTEST_MAX_TICK_GAP_HOURS
-        # and the gap is not explained by a forex weekend close.  Historically
-        # this symptom was caused by Redis pub/sub silently dropping messages
-        # when the subscriber lagged; we now deliver ticks via Redis Streams
-        # (reliable), but this guard remains as defence-in-depth so silent
-        # data loss can never go unnoticed.
-        if self.task_type == TaskType.BACKTEST and loop.last_delivered_tick_timestamp is not None:
-            delivered_ts = tick_ts
-            if delivered_ts is not None and self._is_suspicious_tick_gap(
-                loop.last_delivered_tick_timestamp,
-                delivered_ts,
-                max_gap_hours=self._max_backtest_tick_gap_hours(),
-            ):
-                gap = delivered_ts - loop.last_delivered_tick_timestamp
-                # Log the task/execution identifiers and the gap endpoints
-                # in a structured, grep-friendly form.  When paired with
-                # the publisher's [PUBLISHER:BATCH] and subscriber's
-                # [SUBSCRIBER:BATCH] logs (both emit simulated-time
-                # window first/last ts with wall-clock), this is enough
-                # to answer "which batch did we skip?" directly from the
-                # log stream.
-                msg = (
-                    "[EXECUTOR:TICK_GAP] Suspicious tick gap detected in backtest stream - "
-                    f"task_id={self.task.pk}, "
-                    f"execution_id={self.task.execution_id}, "
-                    f"previous_ts={loop.last_delivered_tick_timestamp.isoformat()}, "
-                    f"current_ts={delivered_ts.isoformat()}, "
-                    f"gap_seconds={gap.total_seconds():.0f}, "
-                    f"gap_hours={gap.total_seconds() / 3600:.2f}, "
-                    f"ticks_processed={loop.state.ticks_processed}. "
-                    "Aborting to prevent a corrupted backtest result. "
-                    "Cross-reference [PUBLISHER:BATCH] / [SUBSCRIBER:BATCH] "
-                    "log lines covering this simulated-time window to see "
-                    "who dropped the batch."
-                )
-                logger.error(msg)
-                loop.stopped_early = True
-                loop.stop_reason = f"tick_gap:{gap.total_seconds():.0f}s"
-                loop.is_error = True
-                return True
-
-        resume_ts = loop.resume_last_tick_timestamp
-        if resume_ts is not None:
-            if tick_ts is not None and tick_ts <= resume_ts:
-                # Warm up metrics tracker with skipped ticks
-                self._runtime_metrics._record_tick(
-                    timestamp=tick_ts,
-                    mid=Decimal(str(tick.mid)),
-                )
-                loop.last_delivered_tick_timestamp = tick_ts
-                return False
-
-        # Market-aware idle for backtests: use the replayed tick clock to
-        # decide whether we are inside the pre-close window or still inside
-        # the post-open resume-delay window. When IDLE, we keep advancing
-        # metrics and tick counters so the replay clock marches forward,
-        # but skip the strategy ``on_tick`` call so no new entries are
-        # opened and existing positions are unaffected by strategy logic.
-        if self.task_type == TaskType.BACKTEST:
-            loop.last_delivered_tick_timestamp = tick_ts
-            # Throttle the market-idle re-evaluation to once per minute of
-            # replayed time to avoid a DB refresh on every tick.
-            last_eval = loop.last_market_idle_eval_at
-            if (
-                last_eval is None
-                or (tick_ts - last_eval) >= timedelta(seconds=60)
-                or self.task.status == TaskStatus.IDLE
-            ):
-                self._evaluate_market_idle(loop)
-                loop.last_market_idle_eval_at = tick_ts
-            if self.task.status == TaskStatus.IDLE:
-                loop.state.ticks_processed += 1
-                loop.state.last_tick_timestamp = tick_ts
-                loop.state.resume_cursor_timestamp = tick_ts
-                loop.state.last_tick_price = tick.mid
-                loop.state.last_tick_bid = tick.bid
-                loop.state.last_tick_ask = tick.ask
-                self._update_common_metrics(loop.state, tick)
-                self._buffer_tick_metrics(loop.state, tick)
-                return False
-
-        live_tick_delivery = self._current_live_tick_delivery_state(loop.state)
-        result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)
-        loop.state = result.state
-        if live_tick_delivery is not None:
-            self._merge_live_tick_delivery_state(loop.state, live_tick_delivery)
-        events: List[TradingEvent] = self.save_events(result.events)
-
-        if self.task_type == TaskType.TRADING and events:
-            # Persist exact strategy state at event emission time.
-            self.save_state(loop.state)
-
-        if events:
-            self.handle_events(loop.state, events)
-
-        if result.should_stop:
-            logger.warning(
-                "Strategy requested stop: %s — ticks_processed=%d",
-                result.stop_reason,
-                loop.state.ticks_processed,
-            )
-            self._record_processed_tick(loop, tick)
-            loop.stopped_early = True
-            loop.stop_reason = result.stop_reason
-            loop.is_error = result.is_error
-            return True
-
-        self._record_processed_tick(loop, tick)
-        return False
+        return self._tick_processor.process(loop=loop, tick=tick)
 
     def _handle_live_tick_delivery(
         self,
@@ -949,119 +761,11 @@ class TaskExecutor:
         tick_ts: datetime,
     ) -> bool:
         """Record live tick delivery and stop before strategy code on stale ticks."""
-        if self.task_type != TaskType.TRADING:
-            return False
-
-        now = datetime.now(UTC)
-        age_seconds = max(0.0, (now - tick_ts).total_seconds())
-        max_age_seconds = self._max_live_tick_age_seconds()
-        stale_guard_enabled = self._live_tick_stale_guard_enabled()
-        if not stale_guard_enabled:
-            self._write_live_tick_delivery_state(
-                loop=loop,
-                status="disabled",
-                tick_ts=tick_ts,
-                observed_at=now,
-                age_seconds=age_seconds,
-                max_age_seconds=max_age_seconds,
-                message="Live tick stale guard is disabled for this task.",
-            )
-            if self._should_log_live_tick_status(loop=loop, now=now):
-                logger.info(
-                    "[EXECUTOR:LIVE_TICK_DELIVERY] task_id=%s execution_id=%s "
-                    "status=disabled tick_ts=%s observed_at=%s age_seconds=%.3f "
-                    "max_age_seconds=%d ticks_processed=%d bid=%s ask=%s mid=%s",
-                    self.task.pk,
-                    self.task.execution_id,
-                    tick_ts.isoformat(),
-                    now.isoformat(),
-                    age_seconds,
-                    max_age_seconds,
-                    loop.state.ticks_processed,
-                    getattr(tick, "bid", None),
-                    getattr(tick, "ask", None),
-                    getattr(tick, "mid", None),
-                )
-                loop.last_live_tick_status_log_at = now
-            return False
-
-        if age_seconds > max_age_seconds:
-            self._write_live_tick_delivery_state(
-                loop=loop,
-                status="stale",
-                tick_ts=tick_ts,
-                observed_at=now,
-                age_seconds=age_seconds,
-                max_age_seconds=max_age_seconds,
-                message=(
-                    "Live tick is stale; stopped before strategy/order processing. "
-                    f"age_seconds={age_seconds:.3f}, max_age_seconds={max_age_seconds}, "
-                    f"tick_timestamp={tick_ts.isoformat()}"
-                ),
-            )
-            logger.error(
-                "[EXECUTOR:LIVE_TICK_STALE] task_id=%s execution_id=%s "
-                "tick_ts=%s observed_at=%s age_seconds=%.3f max_age_seconds=%d "
-                "ticks_processed=%d bid=%s ask=%s mid=%s. "
-                "Stopping before strategy/order processing.",
-                self.task.pk,
-                self.task.execution_id,
-                tick_ts.isoformat(),
-                now.isoformat(),
-                age_seconds,
-                max_age_seconds,
-                loop.state.ticks_processed,
-                getattr(tick, "bid", None),
-                getattr(tick, "ask", None),
-                getattr(tick, "mid", None),
-            )
-            loop.last_live_tick_status_log_at = now
-            loop.stopped_early = True
-            loop.stop_reason = (
-                "live_tick_stale:"
-                f"age={age_seconds:.3f}s,max={max_age_seconds}s,tick_ts={tick_ts.isoformat()}"
-            )
-            loop.is_error = True
-            latency_metrics = self._maybe_update_live_tick_latency_metrics(
-                loop=loop,
-                tick=tick,
-                tick_ts=tick_ts,
-                observed_at=now,
-            )
-            if latency_metrics:
-                self._buffer_live_tick_latency_metrics(
-                    observed_at=now,
-                    latency_metrics=latency_metrics,
-                )
-            return True
-
-        self._write_live_tick_delivery_state(
+        return self._live_tick_delivery_guard.handle(
             loop=loop,
-            status="ok",
+            tick=tick,
             tick_ts=tick_ts,
-            observed_at=now,
-            age_seconds=age_seconds,
-            max_age_seconds=max_age_seconds,
-            message="Live tick delivery is current.",
         )
-        if self._should_log_live_tick_status(loop=loop, now=now):
-            logger.info(
-                "[EXECUTOR:LIVE_TICK_DELIVERY] task_id=%s execution_id=%s "
-                "status=ok tick_ts=%s observed_at=%s age_seconds=%.3f "
-                "max_age_seconds=%d ticks_processed=%d bid=%s ask=%s mid=%s",
-                self.task.pk,
-                self.task.execution_id,
-                tick_ts.isoformat(),
-                now.isoformat(),
-                age_seconds,
-                max_age_seconds,
-                loop.state.ticks_processed,
-                getattr(tick, "bid", None),
-                getattr(tick, "ask", None),
-                getattr(tick, "mid", None),
-            )
-            loop.last_live_tick_status_log_at = now
-        return False
 
     def _write_live_tick_delivery_state(
         self,
@@ -1074,35 +778,25 @@ class TaskExecutor:
         max_age_seconds: int,
         message: str,
     ) -> None:
-        strategy_state = (
-            dict(loop.state.strategy_state) if isinstance(loop.state.strategy_state, dict) else {}
+        self._live_tick_delivery_state_repository.write(
+            loop=loop,
+            status=status,
+            tick_ts=tick_ts,
+            observed_at=observed_at,
+            age_seconds=age_seconds,
+            max_age_seconds=max_age_seconds,
+            message=message,
         )
-        strategy_state["live_tick_delivery"] = {
-            "status": status,
-            "tick_timestamp": tick_ts.isoformat() if tick_ts else None,
-            "observed_at": observed_at.isoformat(),
-            "age_seconds": round(age_seconds, 3) if age_seconds is not None else None,
-            "max_age_seconds": max_age_seconds,
-            "message": message,
-        }
-        loop.state.strategy_state = strategy_state
 
-    @staticmethod
-    def _current_live_tick_delivery_state(state: ExecutionState) -> dict[str, object] | None:
-        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-        delivery = strategy_state.get("live_tick_delivery")
-        return dict(delivery) if isinstance(delivery, dict) else None
+    def _current_live_tick_delivery_state(self, state: ExecutionState) -> dict[str, object] | None:
+        return self._live_tick_delivery_state_repository.current(state)
 
-    @staticmethod
     def _merge_live_tick_delivery_state(
+        self,
         state: ExecutionState,
         delivery: dict[str, object],
     ) -> None:
-        strategy_state = (
-            dict(state.strategy_state) if isinstance(state.strategy_state, dict) else {}
-        )
-        strategy_state["live_tick_delivery"] = delivery
-        state.strategy_state = strategy_state
+        self._live_tick_delivery_state_repository.merge(state, delivery)
 
     def _should_log_live_tick_status(self, *, loop: ExecutionLoopState, now: datetime) -> bool:
         interval_seconds = self._live_tick_status_log_interval_seconds()
@@ -1120,55 +814,12 @@ class TaskExecutor:
         observed_at: datetime,
     ) -> dict[str, float] | None:
         """Store sampled live tick latency metrics in strategy_state.metrics."""
-        if self.task_type != TaskType.TRADING:
-            return None
-
-        interval_seconds = self._live_tick_latency_metric_interval_seconds()
-        if interval_seconds <= 0:
-            return None
-
-        last = loop.last_live_tick_latency_metric_at
-        if last is not None and (observed_at - last).total_seconds() < interval_seconds:
-            return None
-
-        receive_latency_seconds = max(0.0, (observed_at - tick_ts).total_seconds())
-        publisher_latency = self._coerce_latency_metric(
-            getattr(tick, "oanda_tick_publish_latency_seconds", None)
+        return self._runtime_metric_recorder.maybe_update_live_tick_latency_metrics(
+            loop=loop,
+            tick=tick,
+            tick_ts=tick_ts,
+            observed_at=observed_at,
         )
-        latency_metrics = {
-            "trading_tick_receive_latency_seconds": round(receive_latency_seconds, 6)
-        }
-        if publisher_latency is not None:
-            latency_metrics["oanda_tick_publish_latency_seconds"] = round(publisher_latency, 6)
-
-        strategy_state = (
-            dict(loop.state.strategy_state) if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        metrics = (
-            dict(strategy_state.get("metrics", {}))
-            if isinstance(strategy_state.get("metrics"), dict)
-            else {}
-        )
-        metrics.update(latency_metrics)
-        strategy_state["metrics"] = metrics
-        loop.state.strategy_state = strategy_state
-        loop.last_live_tick_latency_metric_at = observed_at
-
-        logger.info(
-            "[EXECUTOR:TICK_LATENCY_METRIC] task_id=%s execution_id=%s "
-            "tick_ts=%s observed_at=%s oanda_tick_publish_latency_seconds=%s "
-            "trading_tick_receive_latency_seconds=%.6f interval_seconds=%d "
-            "ticks_processed=%d",
-            self.task.pk,
-            self.task.execution_id,
-            tick_ts.isoformat(),
-            observed_at.isoformat(),
-            f"{publisher_latency:.6f}" if publisher_latency is not None else "n/a",
-            receive_latency_seconds,
-            interval_seconds,
-            loop.state.ticks_processed,
-        )
-        return latency_metrics
 
     @staticmethod
     def _coerce_latency_metric(value: object) -> float | None:
@@ -1252,28 +903,15 @@ class TaskExecutor:
         The regular weekend close (Fri 21:00 → Sun 21:00 UTC) is always
         considered acceptable.
         """
-        from datetime import timedelta
-
         from django.conf import settings as _settings
-
-        if current <= previous:
-            return False
 
         if max_gap_hours is None:
             max_gap_hours = int(getattr(_settings, "MARKET_BACKTEST_MAX_TICK_GAP_HOURS", 120))
-        gap = current - previous
-        if gap <= timedelta(hours=max_gap_hours):
-            return False
-
-        # Forex weekend close: last tick on Fri evening ≥20:00 UTC and
-        # current on Sunday evening or Monday morning UTC.  Allow up to
-        # ~3 days total to cover holidays that extend the closure.
-        lt_weekday = previous.weekday()
-        if lt_weekday == 4 and previous.hour >= 20:
-            if gap < timedelta(days=3, hours=12):
-                return False
-
-        return True
+        return BacktestGapGuard.is_suspicious(
+            previous,
+            current,
+            max_gap_hours=max_gap_hours,
+        )
 
     def _refresh_open_positions_cache(self) -> None:
         """Refresh cached open positions used by common metric calculation."""
@@ -1296,27 +934,7 @@ class TaskExecutor:
 
     def _update_common_metrics(self, state: ExecutionState, tick) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
-        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
-        existing_metrics = (
-            dict(strategy_state.get("metrics", {}))
-            if isinstance(strategy_state.get("metrics"), dict)
-            else {}
-        )
-        try:
-            current_balance = Decimal(str(state.current_balance))
-        except (InvalidOperation, TypeError, ValueError):
-            current_balance = Decimal("0")
-        common_metrics = self._runtime_metrics.build_metrics(
-            timestamp=self._coerce_tick_timestamp(tick.timestamp),
-            bid=Decimal(str(tick.bid)),
-            ask=Decimal(str(tick.ask)),
-            mid=Decimal(str(tick.mid)),
-            current_balance=current_balance,
-            ticks_processed=state.ticks_processed,
-        )
-        existing_metrics.update(common_metrics)
-        strategy_state["metrics"] = existing_metrics
-        state.strategy_state = strategy_state
+        self._runtime_metric_recorder.update_common_metrics(state, tick)
 
     def _replay_unprocessed_events(self, state: ExecutionState) -> None:
         """Replay pending events that were persisted before a crash."""
@@ -1366,18 +984,7 @@ class TaskExecutor:
 
     def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
         """Record strategy metrics into the minute-level aggregator."""
-        metrics = (state.strategy_state or {}).get("metrics", {})
-        if not metrics:
-            return
-        if self.task_type == TaskType.TRADING:
-            metrics = {
-                key: value
-                for key, value in metrics.items()
-                if key not in LIVE_TICK_LATENCY_METRIC_KEYS
-            }
-            if not metrics:
-                return
-        self._metrics_aggregator.record(self._coerce_tick_timestamp(tick.timestamp), metrics)
+        self._runtime_metric_recorder.buffer_tick_metrics(state, tick)
 
     def _buffer_live_tick_latency_metrics(
         self,
@@ -1386,34 +993,14 @@ class TaskExecutor:
         latency_metrics: dict[str, float],
     ) -> None:
         """Record live latency metrics by wall-clock observation time."""
-        if not latency_metrics:
-            return
-        self._metrics_aggregator.record(observed_at, latency_metrics)
+        self._runtime_metric_recorder.buffer_live_tick_latency_metrics(
+            observed_at=observed_at,
+            latency_metrics=latency_metrics,
+        )
 
     def _record_processed_tick(self, loop: ExecutionLoopState, tick) -> None:
         """Persist tick progress and metrics after strategy processing."""
-        tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
-        loop.state.ticks_processed += 1
-        loop.state.last_tick_timestamp = tick_timestamp
-        loop.state.resume_cursor_timestamp = tick_timestamp
-        loop.state.last_tick_price = tick.mid
-        loop.state.last_tick_bid = tick.bid
-        loop.state.last_tick_ask = tick.ask
-        loop.last_delivered_tick_timestamp = tick_timestamp
-        self._update_common_metrics(loop.state, tick)
-        observed_at = datetime.now(UTC)
-        latency_metrics = self._maybe_update_live_tick_latency_metrics(
-            loop=loop,
-            tick=tick,
-            tick_ts=tick_timestamp,
-            observed_at=observed_at,
-        )
-        self._buffer_tick_metrics(loop.state, tick)
-        if latency_metrics:
-            self._buffer_live_tick_latency_metrics(
-                observed_at=observed_at,
-                latency_metrics=latency_metrics,
-            )
+        self._runtime_metric_recorder.record_processed_tick(loop, tick)
 
     def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
         """Persist state/metrics and emit periodic telemetry."""
@@ -1695,13 +1282,21 @@ class TradingExecutor(TaskExecutor):
     def _assert_runtime_broker_sync(self, *, state: ExecutionState) -> None:
         """Fail fast when broker exposure drifts during a live execution."""
         trading_task = cast(TradingTask, self.task)
-        from apps.trading.services.reconciliation import TradingResumeReconciler, TradingSafetyError
+        from apps.trading.services.reconciliation import (
+            BrokerReadUnavailableError,
+            TradingResumeReconciler,
+            TradingSafetyError,
+        )
 
         reconciler = TradingResumeReconciler(
             task=trading_task,
             state=state,
         )
-        report = reconciler.detect_runtime_drift()
+        try:
+            report = reconciler.detect_runtime_drift()
+        except BrokerReadUnavailableError as exc:
+            self._broker_read_outage.park(state=state, reason=str(exc))
+            return
         if not report.has_blockers:
             return
 

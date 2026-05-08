@@ -15,7 +15,6 @@ from apps.common.querying import (
     OrderingConfig,
     invalid_query_param,
     parse_datetime_param,
-    sort_records,
 )
 from apps.market.models import OandaAccounts
 from apps.market.serializers import PositionSerializer
@@ -352,10 +351,9 @@ class PositionView(APIView):
             range_from=range_from,
             range_to=range_to,
         )
-        all_positions = sort_records(
+        all_positions = MARKET_POSITION_ORDERING.sort_records(
             all_positions,
             request.query_params.get("ordering"),
-            MARKET_POSITION_ORDERING,
         )
 
         logger.info(

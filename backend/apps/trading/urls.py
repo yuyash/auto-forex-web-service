@@ -14,6 +14,7 @@ from apps.trading.views.configs import (
     StrategyConfigTasksView,
     StrategyConfigView,
 )
+from apps.trading.views.operations import TradingOperationsMetricsView
 from apps.trading.views.recovery import RecoveryAttemptListView
 from apps.trading.views.strategies import StrategyDefaultsView, StrategyView
 from apps.trading.views.stream import TaskEventStreamView
@@ -35,6 +36,11 @@ urlpatterns = [
         name="task_event_stream",
     ),
     path("recovery-attempts/", RecoveryAttemptListView.as_view(), name="recovery_attempts"),
+    path(
+        "operations/metrics/",
+        TradingOperationsMetricsView.as_view(),
+        name="operations_metrics",
+    ),
     # Strategy endpoints
     path("strategies/", StrategyView.as_view(), name="strategy_list"),
     path(

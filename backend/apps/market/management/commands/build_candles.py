@@ -12,7 +12,7 @@ from django.utils import timezone
 from apps.market.models import TickData
 from apps.market.services.candles import (
     CANDLE_GRANULARITY_SECONDS,
-    backfill_market_candles,
+    market_candle_service,
 )
 
 
@@ -68,7 +68,7 @@ class Command(BaseCommand):
             raise CommandError("since must be earlier than until.")
 
         for granularity in granularities:
-            stats = backfill_market_candles(
+            stats = market_candle_service.backfill(
                 instrument=instrument,
                 granularity=granularity,
                 since=since,
