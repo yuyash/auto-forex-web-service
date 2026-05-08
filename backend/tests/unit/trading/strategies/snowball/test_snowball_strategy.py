@@ -599,6 +599,218 @@ class TestCounterAdds:
         assert len(events) == 1
         assert isinstance(events[0], OpenPositionEvent)
 
+    def test_layer_initial_snaps_to_prev_layer_highest_plus_next_interval_short(self):
+        """L2/R0 must snap to the position the next R slot would have had.
+
+        For a SHORT cycle with manual_intervals=[30, 30, ...] and L1/R5
+        at 101.210 as the highest present slot, the next retracement
+        (index 6) would sit at 101.370 (last manual interval is 16, but
+        counter_interval_pips falls back to the tail entry ``16`` past
+        the end of the array).  When the gate fires at a tick ahead of
+        that anchor the new L2/R0 must be planted at 101.370, not at
+        the market price.
+        """
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16", "16"],
+            n_pips_head="30",
+            n_pips_tail="16",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+            m_pips="50",
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
+
+        layer1 = Layer.create(1, 5, 1000, 3)
+        # Fill all slots R0…R5 so the layer is exhausted and promotion
+        # is required on the next adverse move.
+        anchor_prices = [
+            ("100.000", 0),
+            ("100.300", 1),
+            ("100.600", 2),
+            ("100.850", 3),
+            ("101.050", 4),
+            ("101.210", 5),
+        ]
+        for idx, (price, index) in enumerate(anchor_prices, start=1):
+            layer1.slot_at(index).fill(
+                Entry(
+                    entry_id=idx,
+                    step=index + 1,
+                    direction=Direction.SHORT,
+                    entry_price=Decimal(price),
+                    close_price=Decimal("100.000"),
+                    units=1000,
+                    opened_at=T0 - timedelta(minutes=60 - idx),
+                    role="initial" if index == 0 else "counter",
+                    layer_number=1,
+                    retracement_count=index,
+                    root_entry_id=1,
+                    parent_entry_id=1 if index > 0 else None,
+                )
+            )
+        cycle.add_layer(layer1)
+        ss.cycles.append(cycle)
+
+        # Market has moved past the expected L2/R0 anchor (101.370).  The
+        # planned entry must still snap to 101.370, regardless of where
+        # the live tick is.
+        tick = _tick(T0 + timedelta(minutes=1), "101.420", "101.422")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        open_event = events[0]
+        assert isinstance(open_event, OpenPositionEvent)
+        assert open_event.layer_number == 2
+        assert open_event.retracement_count == 0
+        # For SHORT the entry is tick.bid-side; snapped anchor = 101.210 + 16 pips.
+        assert open_event.price == Decimal("101.370")
+        # TP = anchor - m_pips * pip_size (SHORT) = 101.370 - 0.50 = 100.870
+        assert open_event.planned_exit_price == Decimal("100.870")
+
+    def test_layer_initial_snaps_to_prev_layer_highest_minus_next_interval_long(self):
+        """Mirror of the SHORT snap test for LONG cycles."""
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16", "16"],
+            n_pips_head="30",
+            n_pips_tail="16",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+            m_pips="50",
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+
+        layer1 = Layer.create(1, 5, 1000, 3)
+        anchor_prices = [
+            ("101.210", 0),
+            ("100.910", 1),
+            ("100.610", 2),
+            ("100.360", 3),
+            ("100.160", 4),
+            ("100.000", 5),
+        ]
+        for idx, (price, index) in enumerate(anchor_prices, start=1):
+            layer1.slot_at(index).fill(
+                Entry(
+                    entry_id=idx,
+                    step=index + 1,
+                    direction=Direction.LONG,
+                    entry_price=Decimal(price),
+                    close_price=Decimal("102.000"),
+                    units=1000,
+                    opened_at=T0 - timedelta(minutes=60 - idx),
+                    role="initial" if index == 0 else "counter",
+                    layer_number=1,
+                    retracement_count=index,
+                    root_entry_id=1,
+                    parent_entry_id=1 if index > 0 else None,
+                )
+            )
+        cycle.add_layer(layer1)
+        ss.cycles.append(cycle)
+
+        # Market has overshot the expected L2/R0 anchor (99.840).  Snap
+        # is still honoured.
+        tick = _tick(T0 + timedelta(minutes=1), "99.790", "99.792")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        open_event = events[0]
+        assert isinstance(open_event, OpenPositionEvent)
+        assert open_event.layer_number == 2
+        assert open_event.retracement_count == 0
+        # anchor = 100.000 - 16 pips = 99.840
+        assert open_event.price == Decimal("99.840")
+        # TP = anchor + m_pips = 99.840 + 0.50 = 100.340
+        assert open_event.planned_exit_price == Decimal("100.340")
+
+    def test_layer_initial_snap_uses_pending_rebuild_anchor(self):
+        """If the prev layer's highest slot is pending rebuild (no live entry),
+        the snap must still anchor off its stored entry price rather than the
+        live tick."""
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16", "16"],
+            n_pips_head="30",
+            n_pips_tail="16",
+            f_max=5,
+            r_max=5,
+            refill_up_to=3,
+            pip_size="0.01",
+            m_pips="50",
+            stop_loss_enabled=True,
+            rebuild_enabled=True,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
+
+        layer1 = Layer.create(1, 5, 1000, 3)
+        # R0 live, R1..R5 all pending rebuild at their original entry prices.
+        # ``highest_present_slot`` returns R5 because it is present.
+        layer1.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("100.000"),
+                close_price=Decimal("99.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        pending_prices = [
+            ("100.300", 1),
+            ("100.600", 2),
+            ("100.850", 3),
+            ("101.050", 4),
+            ("101.210", 5),
+        ]
+        for price, index in pending_prices:
+            slot = layer1.slot_at(index)
+            assert slot is not None
+            slot.pending_rebuild = StopLossClosedEntry(
+                entry_price=Decimal(price),
+                close_price=Decimal("100.000"),
+                units=1000,
+                direction=Direction.SHORT,
+                role="counter",
+                layer_number=1,
+                retracement_count=index,
+                step=index + 1,
+                root_entry_id=1,
+                parent_entry_id=1,
+                cycle_id=1,
+                position_id="pending",
+                stop_loss_price=None,
+                stop_loss_loss_pips=Decimal("0"),
+            )
+        cycle.add_layer(layer1)
+        ss.cycles.append(cycle)
+
+        tick = _tick(T0 + timedelta(minutes=1), "101.500", "101.502")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        open_event = events[0]
+        assert isinstance(open_event, OpenPositionEvent)
+        assert open_event.layer_number == 2
+        # anchor = 101.210 + 16 pips = 101.370 regardless of current tick
+        assert open_event.price == Decimal("101.370")
+
 
 # ==================================================================
 # 3. Counter TP closes
