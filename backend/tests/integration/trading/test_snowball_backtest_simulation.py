@@ -224,20 +224,25 @@ class TestSnowballBacktestSimulation:
         assert occupied == 2  # R0 (initial) + 1 counter entry
         assert len(cycle["grid"]["layers"]) == 2
         assert state.current_balance > task.initial_balance
+        # L2/R0 is snapped onto the prev-layer grid (at R1 - next_interval).
+        # The tick that triggers L2 promotion is already more than one
+        # counter interval past that anchor, so L2/R1 also opens the
+        # same tick.  That is five open positions: L1/R0, L1/R1, L2/R0,
+        # L2/R1, and the SHORT cycle's re-entry after its initial TP.
         assert (
             Position.objects.filter(
                 task_id=task.pk,
                 execution_id=task.execution_id,
                 is_open=True,
             ).count()
-            == 4
+            == 5
         )
         assert (
             Trade.objects.filter(
                 task_id=task.pk,
                 execution_id=task.execution_id,
             ).count()
-            == 8
+            == 9
         )
         assert event_summary == [
             ("strategy_started", None, None),
@@ -247,6 +252,7 @@ class TestSnowballBacktestSimulation:
             ("open_position", "snowball_counter", 2),
             ("close_position", None, 2),
             ("open_position", "snowball_layer_initial", 0),
+            ("open_position", "snowball_counter", 1),
             ("close_position", None, 0),
             ("open_position", "snowball_initial", 0),
             ("strategy_stopped", None, None),

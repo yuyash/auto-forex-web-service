@@ -36,6 +36,7 @@ from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.accounting import update_account_metrics
+from apps.trading.strategies.snowball.calculators import counter_interval_pips
 from apps.trading.strategies.snowball.counter_flow import (
     entry_take_profit_hit,
     format_counter_add_description,
@@ -767,7 +768,21 @@ class SnowballStrategy(Strategy):
         layer = Layer.create(new_layer_number, cfg.r_max, new_base_units, cfg.refill_up_to)
         cycle.add_layer(layer)
 
-        price = tick.ask if direction == Direction.LONG else tick.bid
+        # The new layer's R0 is placed at the position where the previous
+        # layer's *next* retracement slot would have been: anchor = highest
+        # present slot's entry price, offset by the next-slot interval in
+        # the adverse direction.  This snaps L_new/R0 onto the grid rather
+        # than accepting whatever market price happened to trigger the
+        # layer-interval gate — so the resulting grid stays monotonic and
+        # interval-consistent across layers.  If the live market has moved
+        # further adverse than the anchor the broker will fill past it and
+        # ``sync_entry_fill_price`` will shift entry/SL/TP by the delta.
+        market_price = tick.ask if direction == Direction.LONG else tick.bid
+        price = self._layer_initial_anchor_price(
+            prev_layer=prev_layer,
+            direction=direction,
+            market_price=market_price,
+        )
 
         # Guard: the new layer's entry must not violate the monotonic
         # grid ordering.  For LONG grids, entries are descending so the
@@ -820,6 +835,12 @@ class SnowballStrategy(Strategy):
             root_entry_id=head_entry_id,
             parent_entry_id=head_entry_id,
         )
+        # ``Entry.open`` seeds entry_price from the live tick; override with
+        # the grid-snapped anchor so the planned price matches where the
+        # layer-interval gate said it should sit.  If the broker fills at
+        # a different price, ``sync_entry_fill_price`` will shift entry/SL/
+        # TP together to absorb the slippage.
+        layer_entry.entry_price = price
 
         close_price, formula = layer_initial_close_price(
             new_price=price,
@@ -877,6 +898,46 @@ class SnowballStrategy(Strategy):
         slot0.fill(layer_entry)
 
         return [evt]
+
+    def _layer_initial_anchor_price(
+        self,
+        *,
+        prev_layer: Layer,
+        direction: Direction,
+        market_price: Decimal,
+    ) -> Decimal:
+        """Return the planned entry price for the next layer's R0.
+
+        The anchor is the previous layer's highest present slot (live
+        entry or pending rebuild) offset by ``counter_interval_pips`` for
+        the would-be next retracement.  This lines up the new layer's R0
+        with the position where the prev layer's next R slot would have
+        opened, so grids stay monotonic and interval-consistent across
+        layers.
+
+        If the previous layer has no present slot (no entry and no pending
+        rebuild), fall back to the current market price — there is no
+        anchor to snap to.
+        """
+        highest = prev_layer.highest_present_slot()
+        if highest is None:
+            return market_price
+
+        if highest.entry is not None:
+            ref_price = highest.entry.entry_price
+        elif highest.pending_rebuild is not None:
+            ref_price = highest.pending_rebuild.entry_price
+        else:
+            return market_price
+
+        # Interval that the gate uses for "the next slot past ``highest``":
+        # ``counter_interval_pips(k)`` is 1-based, k == highest.index + 1
+        # advances into the next retracement slot.
+        interval = counter_interval_pips(highest.index + 1, self.config)
+        offset = interval * self.pip_size
+        if direction == Direction.LONG:
+            return ref_price - offset
+        return ref_price + offset
 
     # ------------------------------------------------------------------
     # Stop-loss protection
