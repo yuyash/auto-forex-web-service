@@ -70,13 +70,10 @@ from apps.trading.strategies.snowball.parameters import (
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.strategies.snowball.stop_loss_flow import (
-    assign_auto_stop_loss,
-    assign_configured_stop_loss,
-    assign_rebuild_stop_loss,
-    assign_stop_loss,
-    is_stop_loss_temporarily_protected,
-    process_stop_loss_closes,
-    process_stop_loss_rebuilds,
+    StopLossAssigner,
+    StopLossCloseProcessor,
+    StopLossProtectionPolicy,
+    StopLossRebuildProcessor,
 )
 from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
 
@@ -148,6 +145,12 @@ class SnowballStrategy(Strategy):
             price_service=self.counter_price_service,
         )
         self.counter_add_description = SnowballCounterAddDescription()
+        self.stop_loss_assigner = StopLossAssigner()
+        self.stop_loss_protection_policy = StopLossProtectionPolicy()
+        self.stop_loss_close_processor = StopLossCloseProcessor(
+            protection_policy=self.stop_loss_protection_policy,
+        )
+        self.stop_loss_rebuild_processor = StopLossRebuildProcessor()
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -965,31 +968,35 @@ class SnowballStrategy(Strategy):
         entry: Entry,
         sl_pips: Decimal,
     ) -> None:
-        assign_stop_loss(self, entry, sl_pips)
+        self.stop_loss_assigner.assign(self, entry, sl_pips)
 
     def _assign_auto_stop_loss(
         self,
         entry: Entry,
         next_interval_pips: Decimal,
     ) -> None:
-        assign_auto_stop_loss(self, entry, next_interval_pips)
+        self.stop_loss_assigner.assign_auto(self, entry, next_interval_pips)
 
     def _assign_configured_stop_loss(
         self,
         entry: Entry,
         slot_number: int,
     ) -> None:
-        assign_configured_stop_loss(self, entry, slot_number)
+        self.stop_loss_assigner.assign_configured(self, entry, slot_number)
 
     def _assign_rebuild_stop_loss(
         self,
         entry: Entry,
         pending: StopLossClosedEntry,
     ) -> None:
-        assign_rebuild_stop_loss(self, entry, pending)
+        self.stop_loss_assigner.assign_rebuild(self, entry, pending)
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
-        return is_stop_loss_temporarily_protected(self.config, layer, entry)
+        return self.stop_loss_protection_policy.temporarily_protected(
+            self.config,
+            layer,
+            entry,
+        )
 
     def _process_stop_loss_closes(
         self,
@@ -997,7 +1004,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_stop_loss_closes(
+        return self.stop_loss_close_processor.process(
             self,
             ss,
             tick,
@@ -1011,7 +1018,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_stop_loss_rebuilds(self, ss, tick, cycle)
+        return self.stop_loss_rebuild_processor.process(self, ss, tick, cycle)
 
     # ------------------------------------------------------------------
     # Core tick processing

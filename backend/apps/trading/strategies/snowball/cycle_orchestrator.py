@@ -10,6 +10,10 @@ from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+from apps.trading.strategies.snowball.decision_trace import (
+    SnowballDecisionTrace,
+    SnowballDecisionTraceRecorder,
+)
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.models import SnowballCycle, SnowballStrategyState
 
@@ -113,9 +117,11 @@ class SnowballActiveCycleProcessor:
         self,
         *,
         status_refresher: SnowballCycleStatusRefresher | None = None,
+        decision_trace_recorder: SnowballDecisionTraceRecorder | None = None,
         logger_: Logger | None = None,
     ) -> None:
         self.status_refresher = status_refresher or SnowballCycleStatusRefresher()
+        self.decision_trace_recorder = decision_trace_recorder or SnowballDecisionTraceRecorder()
         self.logger = logger_ or logger
 
     def process(
@@ -128,6 +134,7 @@ class SnowballActiveCycleProcessor:
     ) -> CycleProcessingResult:
         """Process every active Snowball cycle for the current tick."""
         events: list[StrategyEvent] = []
+        trace = self.decision_trace_recorder.start_tick(tick=tick)
         for cycle in list(ss.active_cycles()):
             result = self._process_cycle(
                 strategy=strategy,
@@ -135,15 +142,18 @@ class SnowballActiveCycleProcessor:
                 tick=tick,
                 cycle=cycle,
                 allow_new_positions=allow_new_positions,
+                trace=trace,
             )
             events.extend(result.events)
             if result.stop_reason:
+                self.decision_trace_recorder.persist(ss=ss, trace=trace)
                 return CycleProcessingResult(
                     events=events,
                     stop_reason=result.stop_reason,
                     is_error=result.is_error,
                 )
 
+        self.decision_trace_recorder.persist(ss=ss, trace=trace)
         return CycleProcessingResult(events=events)
 
     def _process_cycle(
@@ -154,40 +164,99 @@ class SnowballActiveCycleProcessor:
         tick: Tick,
         cycle: SnowballCycle,
         allow_new_positions: bool,
+        trace: SnowballDecisionTrace,
     ) -> CycleProcessingResult:
         events: list[StrategyEvent] = []
         if cycle.grid.is_empty() and cycle.grid.has_pending_rebuilds():
             cycle.status = CycleStatus.PENDING
             if allow_new_positions:
-                events.extend(strategy._process_stop_loss_rebuilds(ss, tick, cycle))
+                rebuild_events = strategy._process_stop_loss_rebuilds(ss, tick, cycle)
+                trace.record_events(
+                    phase="pending_rebuild",
+                    cycle=cycle,
+                    events=rebuild_events,
+                    no_event_reason="pending_rebuild_trigger_not_hit",
+                )
+                events.extend(rebuild_events)
+            else:
+                trace.record(
+                    phase="pending_rebuild",
+                    outcome="skipped",
+                    reason="new_positions_not_allowed",
+                    cycle=cycle,
+                )
             if cycle.grid.is_empty():
                 strategy._validate_grid_ordering(cycle)
+                trace.record(
+                    phase="cycle",
+                    outcome="skipped",
+                    reason="pending_rebuilds_remain_without_live_entries",
+                    cycle=cycle,
+                )
                 return CycleProcessingResult(events=events)
             cycle.status = CycleStatus.ACTIVE
 
         counter_close_events = strategy._process_cycle_counter_closes(ss, tick, cycle)
+        trace.record_events(
+            phase="counter_close",
+            cycle=cycle,
+            events=counter_close_events,
+            no_event_reason="no_counter_take_profit_hit",
+        )
         events.extend(counter_close_events)
 
-        events.extend(
-            strategy._process_cycle_tp(
-                ss,
-                tick,
-                cycle,
-                allow_reentry=allow_new_positions,
-            )
+        cycle_tp_events = strategy._process_cycle_tp(
+            ss,
+            tick,
+            cycle,
+            allow_reentry=allow_new_positions,
         )
+        trace.record_events(
+            phase="cycle_take_profit",
+            cycle=cycle,
+            events=cycle_tp_events,
+            no_event_reason="cycle_head_take_profit_not_hit",
+        )
+        events.extend(cycle_tp_events)
 
         if strategy._close_order_violation:
+            trace.record(
+                phase="close_order",
+                outcome="stop",
+                reason="close_order_violation",
+                cycle=cycle,
+            )
             return CycleProcessingResult(
                 events=events,
                 stop_reason=f"Close order violation: {strategy._close_order_violation}",
                 is_error=True,
             )
 
-        events.extend(strategy._process_stop_loss_closes(ss, tick, cycle))
+        stop_loss_events = strategy._process_stop_loss_closes(ss, tick, cycle)
+        trace.record_events(
+            phase="stop_loss_close",
+            cycle=cycle,
+            events=stop_loss_events,
+            no_event_reason="no_stop_loss_hit",
+        )
+        events.extend(stop_loss_events)
 
         if allow_new_positions:
-            events.extend(strategy._process_stop_loss_rebuilds(ss, tick, cycle))
+            rebuild_events = strategy._process_stop_loss_rebuilds(ss, tick, cycle)
+            trace.record_events(
+                phase="stop_loss_rebuild",
+                cycle=cycle,
+                events=rebuild_events,
+                no_event_reason="no_rebuild_trigger_hit",
+            )
+            events.extend(rebuild_events)
+        else:
+            trace.record(
+                phase="stop_loss_rebuild",
+                outcome="skipped",
+                reason="new_positions_not_allowed",
+                cycle=cycle,
+            )
 
         order_checked_without_new_mutations = False
         if allow_new_positions and not counter_close_events:
@@ -203,6 +272,12 @@ class SnowballActiveCycleProcessor:
                     "Skipping Snowball counter adds while grid ordering is violated: %s",
                     strategy._grid_order_violation,
                 )
+                trace.record(
+                    phase="counter_add",
+                    outcome="skipped",
+                    reason="grid_ordering_violation",
+                    cycle=cycle,
+                )
                 strategy._grid_order_violation = None
                 order_checked_without_new_mutations = True
             else:
@@ -213,12 +288,38 @@ class SnowballActiveCycleProcessor:
                     if not add_events:
                         break
                     opened_new_position = True
+                    trace.record_events(
+                        phase="counter_add",
+                        cycle=cycle,
+                        events=add_events,
+                        no_event_reason="counter_add_threshold_not_met",
+                    )
                     events.extend(add_events)
+                if not opened_new_position:
+                    trace.record(
+                        phase="counter_add",
+                        outcome="skipped",
+                        reason="counter_add_threshold_not_met",
+                        cycle=cycle,
+                    )
                 order_checked_without_new_mutations = not opened_new_position
+        elif not allow_new_positions:
+            trace.record(
+                phase="counter_add",
+                outcome="skipped",
+                reason="new_positions_not_allowed",
+                cycle=cycle,
+            )
 
         if not order_checked_without_new_mutations:
             strategy._validate_grid_ordering(cycle)
         if strategy._grid_order_violation and strategy.config.grid_order_validation_enabled:
+            trace.record(
+                phase="grid_order",
+                outcome="stop",
+                reason="grid_ordering_violation",
+                cycle=cycle,
+            )
             return CycleProcessingResult(
                 events=events,
                 stop_reason=f"Grid ordering violation: {strategy._grid_order_violation}",

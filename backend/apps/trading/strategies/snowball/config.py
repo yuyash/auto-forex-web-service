@@ -27,6 +27,29 @@ class GridConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class CounterIntervalConfig:
+    """Counter-entry interval progression settings."""
+
+    head: Decimal
+    tail: Decimal
+    flat_steps: int
+    gamma: Decimal
+    mode: str
+    manual_intervals: list[Decimal]
+
+
+@dataclass(frozen=True, slots=True)
+class CounterTakeProfitConfig:
+    """Counter-entry take-profit policy settings."""
+
+    mode: str
+    pips: Decimal
+    step_amount: Decimal
+    multiplier: Decimal
+    round_step_pips: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class StopLossConfig:
     enabled: bool
     mode: str
@@ -60,6 +83,19 @@ class RebuildConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RebuildPolicyConfig:
+    """High-level rebuild and reseed policy settings."""
+
+    enabled: bool
+    complete_cycle_when_empty: bool
+    reseed_on_all_pending: bool
+    reseed_on_grid_exhausted: bool
+    price_adjustment_enabled: bool
+    entry_price_buffer_pips: Decimal
+    exit_price_buffer_pips: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class ProtectionConfig:
     shrink_enabled: bool
     m_th: Decimal
@@ -69,6 +105,21 @@ class ProtectionConfig:
     cooldown_sec: int
     emergency_enabled: bool
     emergency_threshold: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class RiskLimitConfig:
+    """Risk and margin-protection thresholds."""
+
+    shrink_enabled: bool
+    margin_shrink_threshold: Decimal
+    margin_shrink_target: Decimal
+    lock_enabled: bool
+    lock_threshold: Decimal
+    cooldown_sec: int
+    emergency_enabled: bool
+    emergency_threshold: Decimal
+    stop_loss_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +246,27 @@ class SnowballStrategyConfig:
         )
 
     @property
+    def intervals(self) -> CounterIntervalConfig:
+        return CounterIntervalConfig(
+            head=self.n_pips_head,
+            tail=self.n_pips_tail,
+            flat_steps=self.n_pips_flat_steps,
+            gamma=self.n_pips_gamma,
+            mode=self.interval_mode,
+            manual_intervals=self.manual_intervals,
+        )
+
+    @property
+    def take_profit(self) -> CounterTakeProfitConfig:
+        return CounterTakeProfitConfig(
+            mode=self.counter_tp_mode,
+            pips=self.counter_tp_pips,
+            step_amount=self.counter_tp_step_amount,
+            multiplier=self.counter_tp_multiplier,
+            round_step_pips=self.round_step_pips,
+        )
+
+    @property
     def stop_loss(self) -> StopLossConfig:
         return StopLossConfig(
             enabled=self.stop_loss_enabled,
@@ -230,6 +302,18 @@ class SnowballStrategyConfig:
         )
 
     @property
+    def rebuild_policy(self) -> RebuildPolicyConfig:
+        return RebuildPolicyConfig(
+            enabled=self.rebuild_enabled,
+            complete_cycle_when_empty=self.complete_cycle_when_empty,
+            reseed_on_all_pending=self.reseed_on_all_pending,
+            reseed_on_grid_exhausted=self.reseed_on_grid_exhausted,
+            price_adjustment_enabled=self.rebuild_price_adjustment_enabled,
+            entry_price_buffer_pips=self.rebuild_entry_price_buffer_pips,
+            exit_price_buffer_pips=self.rebuild_exit_price_buffer_pips,
+        )
+
+    @property
     def protection(self) -> ProtectionConfig:
         return ProtectionConfig(
             shrink_enabled=self.shrink_enabled,
@@ -240,6 +324,20 @@ class SnowballStrategyConfig:
             cooldown_sec=self.cooldown_sec,
             emergency_enabled=self.emergency_enabled,
             emergency_threshold=self.emergency_threshold,
+        )
+
+    @property
+    def risk_limits(self) -> RiskLimitConfig:
+        return RiskLimitConfig(
+            shrink_enabled=self.shrink_enabled,
+            margin_shrink_threshold=self.m_th,
+            margin_shrink_target=self.m1_th,
+            lock_enabled=self.lock_enabled,
+            lock_threshold=self.n_th,
+            cooldown_sec=self.cooldown_sec,
+            emergency_enabled=self.emergency_enabled,
+            emergency_threshold=self.emergency_threshold,
+            stop_loss_enabled=self.stop_loss_enabled,
         )
 
     @staticmethod

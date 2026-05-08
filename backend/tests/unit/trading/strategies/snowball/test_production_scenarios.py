@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from decimal import Decimal
 
 from apps.trading.strategies.snowball.models import SnowballStrategyState
@@ -60,3 +61,15 @@ class TestSnowballProductionScenarios:
         persisted = SnowballStrategyState.from_strategy_state(scenario.snowball_state.to_dict())
         assert scenario.strategy._grid_order_violation is None
         assert persisted.initialised is True
+
+    def test_oanda_response_replay_runs_ticks_and_consumes_mocked_responses(self):
+        replay = SnowballProductionScenarioFactory().oanda_response_replay()
+
+        result = replay.replay()
+
+        assert [response.status for response in result.consumed_oanda_responses] == [401, 200]
+        assert len(result.strategy_results) == 2
+        assert all(not item.should_stop for item in result.strategy_results)
+        metrics = result.strategy_results[-1].state.strategy_state["metrics"]
+        trace = json.loads(metrics["snowball_decision_trace"])
+        assert trace["records"]

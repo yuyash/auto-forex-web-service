@@ -80,6 +80,35 @@ class TestSnowballStrategyConfig:
         assert cfg.r_max == 5
         assert len(cfg.manual_intervals) == 5
 
+    def test_value_object_views_expose_focused_policy_groups(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "interval_mode": "manual",
+                "manual_intervals": ["10", "11", "12", "13", "14"],
+                "r_max": 5,
+                "counter_tp_mode": "fixed",
+                "counter_tp_pips": "21",
+                "stop_loss_enabled": True,
+                "rebuild_enabled": True,
+                "reseed_on_all_pending": True,
+                "rebuild_entry_price_buffer_pips": "0.2",
+                "rebuild_exit_price_buffer_pips": "0.3",
+                "shrink_enabled": False,
+                "lock_enabled": True,
+                "n_th": "85",
+            }
+        )
+
+        assert cfg.intervals.mode == "manual"
+        assert cfg.intervals.manual_intervals[-1] == Decimal("14")
+        assert cfg.take_profit.mode == "fixed"
+        assert cfg.take_profit.pips == Decimal("21")
+        assert cfg.rebuild_policy.reseed_on_all_pending is True
+        assert cfg.rebuild_policy.entry_price_buffer_pips == Decimal("0.2")
+        assert cfg.rebuild_policy.exit_price_buffer_pips == Decimal("0.3")
+        assert cfg.risk_limits.lock_enabled is True
+        assert cfg.risk_limits.stop_loss_enabled is True
+
     def test_from_dict_parses_string_booleans(self):
         cfg = SnowballStrategyConfig.from_dict(
             {

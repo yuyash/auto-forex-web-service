@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
@@ -47,6 +48,82 @@ class SnowballRebuildScenario:
     snowball_state: SnowballStrategyState
     cycle: SnowballCycle
     tick: Tick
+
+
+@dataclass(frozen=True, slots=True)
+class SnowballReplayOandaResponse:
+    """Mocked OANDA response captured beside a production tick."""
+
+    label: str
+    status: int
+    body: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a compact replay response payload."""
+        return {
+            "label": self.label,
+            "status": self.status,
+            "body": self.body,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SnowballIncidentReplayStep:
+    """One tick plus any mocked broker responses observed around it."""
+
+    tick: Tick
+    oanda_responses: tuple[SnowballReplayOandaResponse, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SnowballIncidentReplayResult:
+    """Result of replaying a production incident fixture."""
+
+    strategy_results: tuple[StrategyResult, ...]
+    consumed_oanda_responses: tuple[SnowballReplayOandaResponse, ...]
+
+
+class SnowballMockOandaResponseFeed:
+    """Consume mocked OANDA responses while a replay walks through ticks."""
+
+    def __init__(self) -> None:
+        self.consumed: list[SnowballReplayOandaResponse] = []
+
+    def consume(self, response: SnowballReplayOandaResponse) -> SnowballReplayOandaResponse:
+        """Record and return one mocked OANDA response."""
+        self.consumed.append(response)
+        return response
+
+    def consumed_statuses(self) -> list[int]:
+        """Return consumed response statuses in replay order."""
+        return [response.status for response in self.consumed]
+
+
+@dataclass(frozen=True, slots=True)
+class SnowballIncidentReplayFixture:
+    """Replay a production tick sequence and its mocked OANDA responses."""
+
+    name: str
+    strategy: SnowballStrategy
+    state: SnowballScenarioState
+    steps: tuple[SnowballIncidentReplayStep, ...]
+    response_feed: SnowballMockOandaResponseFeed = field(
+        default_factory=SnowballMockOandaResponseFeed
+    )
+
+    def replay(self) -> SnowballIncidentReplayResult:
+        """Run all fixture ticks and consume mocked OANDA responses in order."""
+        results: list[StrategyResult] = []
+        for step in self.steps:
+            for response in step.oanda_responses:
+                self.response_feed.consume(response)
+            result = self.strategy.on_tick(tick=step.tick, state=self.state)
+            self.state.strategy_state = result.state.strategy_state
+            results.append(result)
+        return SnowballIncidentReplayResult(
+            strategy_results=tuple(results),
+            consumed_oanda_responses=tuple(self.response_feed.consumed),
+        )
 
 
 class SnowballProductionScenarioFactory:
@@ -207,6 +284,39 @@ class SnowballProductionScenarioFactory:
             ),
             cycle=cycle,
             tick=self.tick(self.base_time.replace(hour=9), "131.167", "131.177"),
+        )
+
+    def oanda_response_replay(self) -> SnowballIncidentReplayFixture:
+        """Fixture that replays ticks beside retry/recovery-shaped OANDA responses."""
+        strategy = self.strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        strategy.configure_runtime(account_currency="JPY", hedging_enabled=False)
+        state = SnowballScenarioState()
+        return SnowballIncidentReplayFixture(
+            name="pending-orders-401-recovered",
+            strategy=strategy,
+            state=state,
+            steps=(
+                SnowballIncidentReplayStep(
+                    tick=self.tick(self.base_time, "150.000", "150.020"),
+                    oanda_responses=(
+                        SnowballReplayOandaResponse(
+                            label="Fetch pending orders",
+                            status=401,
+                            body={"errorMessage": "temporary unauthorized"},
+                        ),
+                    ),
+                ),
+                SnowballIncidentReplayStep(
+                    tick=self.tick(self.base_time + timedelta(minutes=1), "149.960", "149.980"),
+                    oanda_responses=(
+                        SnowballReplayOandaResponse(
+                            label="Fetch pending orders",
+                            status=200,
+                            body={"orders": []},
+                        ),
+                    ),
+                ),
+            ),
         )
 
     def strategy(self, **overrides: Any) -> SnowballStrategy:
