@@ -41,6 +41,28 @@ class SnowballTickStrategy(CycleOrchestratorStrategy, ProtectionStrategy, Protoc
     def _close_entry(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
+@dataclass(frozen=True, slots=True)
+class SnowballExecutionStateBoundary:
+    """Typed adapter around ExecutionState.strategy_state."""
+
+    state: Any
+
+    def load(self) -> SnowballStrategyState:
+        """Convert raw persisted state into the Snowball domain model."""
+        return SnowballStrategyState.from_strategy_state(self.raw_strategy_state())
+
+    def persist(self, snowball_state: SnowballStrategyState) -> None:
+        """Write the Snowball domain model back to the execution state."""
+        self.state.strategy_state = snowball_state.to_dict()
+
+    def raw_strategy_state(self) -> dict[str, Any]:
+        """Return the raw strategy_state dict, tolerating malformed persisted values."""
+        raw = getattr(self.state, "strategy_state", {})
+        if isinstance(raw, dict):
+            return raw
+        return {}
+
+
 @dataclass
 class SnowballTickContext:
     """Mutable execution context shared by Snowball tick phases."""
@@ -48,6 +70,7 @@ class SnowballTickContext:
     strategy: SnowballTickStrategy
     state: Any
     tick: Tick
+    state_boundary: SnowballExecutionStateBoundary
     snowball_state: SnowballStrategyState
     events: list[StrategyEvent] = field(default_factory=list)
     ratio: Decimal = Decimal("0")
@@ -71,7 +94,7 @@ class SnowballTickStateSerializer:
 
     def persist(self, context: SnowballTickContext) -> None:
         """Write the Snowball state dictionary to the execution state."""
-        context.state.strategy_state = context.snowball_state.to_dict()
+        context.state_boundary.persist(context.snowball_state)
 
     def result(
         self,
@@ -390,7 +413,8 @@ class SnowballTickPipeline:
         tick: Tick,
         state: Any,
     ) -> SnowballTickContext:
-        snowball_state = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        state_boundary = SnowballExecutionStateBoundary(state=state)
+        snowball_state = state_boundary.load()
         snowball_state.last_bid = tick.bid
         snowball_state.last_ask = tick.ask
         snowball_state.last_mid = tick.mid
@@ -398,5 +422,6 @@ class SnowballTickPipeline:
             strategy=strategy,
             state=state,
             tick=tick,
+            state_boundary=state_boundary,
             snowball_state=snowball_state,
         )

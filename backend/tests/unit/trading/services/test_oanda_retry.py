@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from apps.market.services.oanda import OandaAPIError
 from apps.market.services.oanda_retry import (
     OandaRetryClassifier,
@@ -12,6 +14,34 @@ from apps.market.services.oanda_retry import (
     OandaRetryService,
     OandaRetryTelemetry,
 )
+
+
+class InMemoryCache:
+    """Minimal cache backend for retry metric tests."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, int] = {}
+
+    def add(self, key: str, value: int, timeout: int | None = None) -> bool:
+        _ = timeout
+        if key in self.values:
+            return False
+        self.values[key] = value
+        return True
+
+    def incr(self, key: str) -> int:
+        self.values[key] = self.values.get(key, 0) + 1
+        return self.values[key]
+
+    def get(self, key: str, default: int = 0) -> int:
+        return self.values.get(key, default)
+
+    def set(self, key: str, value: int, timeout: int | None = None) -> None:
+        _ = timeout
+        self.values[key] = value
+
+    def delete(self, key: str) -> None:
+        self.values.pop(key, None)
 
 
 class OandaRetryCallable:
@@ -29,6 +59,7 @@ class OandaRetryCallable:
         raise OandaAPIError(self.error_message)
 
 
+@pytest.mark.django_db
 class TestOandaRetryService:
     """Verify OANDA retry policy behavior."""
 
@@ -130,3 +161,26 @@ class TestOandaRetryService:
         assert result == "orders"
         assert snapshot.retry_scheduled == 2
         assert snapshot.recovered == 1
+
+    def test_persists_retry_counters_over_time(self) -> None:
+        namespace = f"test:oanda-retry:{uuid4()}"
+        recorder = OandaRetryMetricRecorder(
+            cache_backend=InMemoryCache(),
+            key_prefix=namespace,
+        )
+        recorder.reset()
+
+        recorder.record_retry_scheduled(label="Fetch pending orders")
+        recorder.record_recovered(label="Fetch pending orders", attempts_used=3)
+
+        cold_recorder = OandaRetryMetricRecorder(
+            cache_backend=InMemoryCache(),
+            key_prefix=namespace,
+        )
+        snapshot = cold_recorder.snapshot()
+
+        assert snapshot.retry_scheduled == 1
+        assert snapshot.recovered == 1
+        assert snapshot.terminal == 0
+        assert snapshot.exhausted == 0
+        cold_recorder.reset()

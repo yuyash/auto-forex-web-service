@@ -9,13 +9,17 @@ from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, NoReturn, TypeVar
 
+from django.core.exceptions import AppRegistryNotReady
 from django.core.cache import cache
+from django.db import DatabaseError
+from django.db.models import Count
 
 from apps.market.services.oanda_types import OandaAPIError
 
 logger: Logger = getLogger(name=__name__)
 
 _T = TypeVar("_T")
+OANDA_RETRY_COUNTER_NAMES = ("retry_scheduled", "recovered", "terminal", "exhausted")
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,10 +192,78 @@ class OandaRetryMetricSnapshot:
         }
 
 
-class OandaRetryMetricRecorder:
-    """Persist lightweight OANDA retry counters in the configured cache."""
+class OandaRetryMetricRepository:
+    """Persist OANDA retry lifecycle events for historical inspection."""
 
-    counter_names = ("retry_scheduled", "recovered", "terminal", "exhausted")
+    def __init__(
+        self,
+        *,
+        namespace: str = "oanda_retry_metrics",
+        model: Any = None,
+        logger_: Logger | None = None,
+    ) -> None:
+        self.namespace = namespace
+        self._model = model
+        self.logger = logger_ or logger
+
+    def record(
+        self,
+        *,
+        event_name: str,
+        label: str,
+        attempts_used: int | None = None,
+    ) -> None:
+        """Persist a single retry lifecycle event."""
+        self.model.objects.create(
+            namespace=self.namespace,
+            event_name=event_name,
+            label=label[:255],
+            attempts_used=attempts_used,
+        )
+
+    def snapshot(self) -> OandaRetryMetricSnapshot:
+        """Aggregate persisted retry events for this namespace."""
+        values = dict.fromkeys(OANDA_RETRY_COUNTER_NAMES, 0)
+        rows = (
+            self.model.objects.filter(namespace=self.namespace)
+            .values("event_name")
+            .annotate(count=Count("id"))
+        )
+        for row in rows:
+            event_name = row["event_name"]
+            if event_name in values:
+                values[event_name] = row["count"]
+        return OandaRetryMetricSnapshot(**values)
+
+    def reset(self) -> None:
+        """Delete persisted retry events for this namespace."""
+        self.model.objects.filter(namespace=self.namespace).delete()
+
+    @property
+    def model(self) -> Any:
+        """Return the retry metric model, importing lazily to avoid startup cycles."""
+        if self._model is not None:
+            return self._model
+        from apps.market.models import OandaRetryMetric
+
+        self._model = OandaRetryMetric
+        return self._model
+
+
+class OandaRetryMetricPersistenceErrorPolicy:
+    """Classify persistence errors that should fall back to cache-only metrics."""
+
+    def is_skippable(self, exc: Exception) -> bool:
+        """Return True when retry metric persistence is unavailable by environment."""
+        if isinstance(exc, AppRegistryNotReady | DatabaseError):
+            return True
+        return isinstance(exc, RuntimeError) and "Database access not allowed" in str(exc)
+
+
+class OandaRetryMetricRecorder:
+    """Persist lightweight OANDA retry counters in cache and the database."""
+
+    counter_names = OANDA_RETRY_COUNTER_NAMES
 
     def __init__(
         self,
@@ -199,45 +271,60 @@ class OandaRetryMetricRecorder:
         cache_backend: Any = None,
         key_prefix: str = "oanda_retry_metrics",
         timeout: int | None = None,
+        repository: OandaRetryMetricRepository | None = None,
+        persistence_error_policy: OandaRetryMetricPersistenceErrorPolicy | None = None,
     ) -> None:
         self.cache = cache_backend or cache
         self.key_prefix = key_prefix
         self.timeout = timeout
+        self.repository = repository or OandaRetryMetricRepository(namespace=key_prefix)
+        self.persistence_error_policy = (
+            persistence_error_policy or OandaRetryMetricPersistenceErrorPolicy()
+        )
 
     def record_retry_scheduled(self, *, label: str) -> None:
         """Increment the scheduled retry counter."""
-        _ = label
-        self._increment("retry_scheduled")
+        self._increment("retry_scheduled", label=label)
 
     def record_recovered(self, *, label: str, attempts_used: int) -> None:
         """Increment the successful recovery counter."""
-        _ = (label, attempts_used)
-        self._increment("recovered")
+        self._increment("recovered", label=label, attempts_used=attempts_used)
 
     def record_terminal(self, *, label: str) -> None:
         """Increment the non-retryable failure counter."""
-        _ = label
-        self._increment("terminal")
+        self._increment("terminal", label=label)
 
     def record_exhausted(self, *, label: str) -> None:
         """Increment the retry exhaustion counter."""
-        _ = label
-        self._increment("exhausted")
+        self._increment("exhausted", label=label)
 
     def snapshot(self) -> OandaRetryMetricSnapshot:
         """Return all retry counters."""
-        values = {
+        cache_values = {
             name: self._coerce_int(self.cache.get(self._key(name), 0))
             for name in self.counter_names
         }
-        return OandaRetryMetricSnapshot(**values)
+        cache_snapshot = OandaRetryMetricSnapshot(**cache_values)
+        repository_snapshot = self._repository_snapshot()
+        if repository_snapshot is None:
+            return cache_snapshot
+        if any(repository_snapshot.to_dict().values()):
+            return repository_snapshot
+        return cache_snapshot
 
     def reset(self) -> None:
-        """Clear counters from the cache."""
+        """Clear counters from the cache and database."""
         for name in self.counter_names:
             self.cache.delete(self._key(name))
+        self._reset_repository()
 
-    def _increment(self, name: str) -> None:
+    def _increment(
+        self,
+        name: str,
+        *,
+        label: str,
+        attempts_used: int | None = None,
+    ) -> None:
         key = self._key(name)
         try:
             self.cache.add(key, 0, timeout=self.timeout)
@@ -245,6 +332,52 @@ class OandaRetryMetricRecorder:
         except Exception:  # pylint: disable=broad-exception-caught
             current = self._coerce_int(self.cache.get(key, 0))
             self.cache.set(key, current + 1, timeout=self.timeout)
+        self._record_repository_event(
+            event_name=name,
+            label=label,
+            attempts_used=attempts_used,
+        )
+
+    def _repository_snapshot(self) -> OandaRetryMetricSnapshot | None:
+        try:
+            return self.repository.snapshot()
+        except (AppRegistryNotReady, DatabaseError, RuntimeError) as exc:
+            self._skip_or_raise_repository_error(operation="snapshot", exc=exc)
+            return None
+
+    def _record_repository_event(
+        self,
+        *,
+        event_name: str,
+        label: str,
+        attempts_used: int | None,
+    ) -> None:
+        try:
+            self.repository.record(
+                event_name=event_name,
+                label=label,
+                attempts_used=attempts_used,
+            )
+        except (AppRegistryNotReady, DatabaseError, RuntimeError) as exc:
+            self._skip_or_raise_repository_error(operation="record", exc=exc)
+
+    def _reset_repository(self) -> None:
+        try:
+            self.repository.reset()
+        except (AppRegistryNotReady, DatabaseError, RuntimeError) as exc:
+            self._skip_or_raise_repository_error(operation="reset", exc=exc)
+
+    def _skip_or_raise_repository_error(self, *, operation: str, exc: Exception) -> None:
+        if not self.persistence_error_policy.is_skippable(exc):
+            raise exc
+        self._log_repository_skip(operation, exc)
+
+    def _log_repository_skip(self, operation: str, exc: Exception) -> None:
+        self.repository.logger.debug(
+            "Skipping persistent OANDA retry metric %s: %s",
+            operation,
+            exc,
+        )
 
     def _key(self, name: str) -> str:
         return f"{self.key_prefix}:{name}"

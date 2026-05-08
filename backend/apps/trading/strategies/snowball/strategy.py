@@ -36,11 +36,13 @@ from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import SnowballCalculator
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.counter_flow import (
-    entry_take_profit_hit,
-    format_counter_add_description,
-    process_cycle_counter_adds,
-    process_cycle_counter_closes,
+    CounterPriceService,
+    CounterTakeProfitPolicy,
+    SnowballCounterAddDescription,
+    SnowballCounterAddProcessor,
+    SnowballCounterCloseProcessor,
 )
 from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
 from apps.trading.strategies.snowball.entry_lifecycle import close_entry
@@ -49,7 +51,6 @@ from apps.trading.strategies.snowball.execution_binding import (
     apply_event_execution_result as apply_snowball_execution_result,
 )
 from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
-from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -138,6 +139,15 @@ class SnowballStrategy(Strategy):
             invariant_validator=SnowballInvariantValidator(config=config),
         )
         self.tick_pipeline = SnowballTickPipeline()
+        self.counter_price_service = CounterPriceService()
+        self.counter_take_profit_policy = CounterTakeProfitPolicy()
+        self.counter_close_processor = SnowballCounterCloseProcessor(
+            take_profit_policy=self.counter_take_profit_policy,
+        )
+        self.counter_add_processor = SnowballCounterAddProcessor(
+            price_service=self.counter_price_service,
+        )
+        self.counter_add_description = SnowballCounterAddDescription()
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -534,15 +544,13 @@ class SnowballStrategy(Strategy):
     # Per-cycle tick processing
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _entry_side_price(direction: Direction, tick: Tick) -> Decimal:
+    def _entry_side_price(self, direction: Direction, tick: Tick) -> Decimal:
         """Return the executable entry-side price for a direction."""
-        return tick.ask if direction == Direction.LONG else tick.bid
+        return self.counter_price_service.entry_side_price(direction, tick)
 
-    @staticmethod
-    def _exit_side_price(direction: Direction, tick: Tick) -> Decimal:
+    def _exit_side_price(self, direction: Direction, tick: Tick) -> Decimal:
         """Return the executable exit-side price for a direction."""
-        return tick.bid if direction == Direction.LONG else tick.ask
+        return self.counter_price_service.exit_side_price(direction, tick)
 
     def _process_cycle_tp(
         self,
@@ -687,7 +695,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_closes(
+        return self.counter_close_processor.process(
             self,
             ss,
             tick,
@@ -695,9 +703,8 @@ class SnowballStrategy(Strategy):
             close_entry=self._close_entry,
         )
 
-    @staticmethod
-    def _entry_take_profit_hit(entry: Entry, tick: Tick) -> bool:
-        return entry_take_profit_hit(entry, tick)
+    def _entry_take_profit_hit(self, entry: Entry, tick: Tick) -> bool:
+        return self.counter_take_profit_policy.hit(entry, tick)
 
     def _process_cycle_counter_adds(
         self,
@@ -705,7 +712,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_adds(
+        return self.counter_add_processor.process(
             self,
             ss,
             tick,
@@ -714,8 +721,8 @@ class SnowballStrategy(Strategy):
             assign_configured_stop_loss=self._assign_configured_stop_loss,
         )
 
-    @staticmethod
     def _format_counter_add_description(
+        self,
         *,
         direction: Direction,
         layer: Layer,
@@ -725,7 +732,7 @@ class SnowballStrategy(Strategy):
         close_price: Decimal,
         stop_loss_price: Decimal | None,
     ) -> str:
-        return format_counter_add_description(
+        return self.counter_add_description.format(
             direction=direction,
             layer=layer,
             slot=slot,
