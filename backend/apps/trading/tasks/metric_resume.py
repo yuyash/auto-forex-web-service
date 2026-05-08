@@ -11,7 +11,7 @@ from django.db.models import Case, F, Sum, Value, When
 from apps.trading.models import ExecutionMetricAggregate
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument
 
 
 class MetricResumeExecutor(Protocol):
@@ -184,10 +184,9 @@ class RuntimeMetricResumeCoordinator:
             getattr(executor.task, "oanda_account", None), "currency", ""
         )
         last_mid = to_decimal_metric(state.last_tick_price)
-        return quote_to_account_rate(
-            executor.instrument,
+        return Instrument(executor.instrument).quote_to_account_rate(
             last_mid if last_mid > 0 else Decimal("1"),
-            str(account_currency or ""),
+            AccountCurrency(str(account_currency or "")),
         )
 
 

@@ -153,8 +153,127 @@ ORDER_ORDERING = OrderingConfig(
 )
 
 
+class TaskActivityValueParser:
+    """Parse loosely typed task-activity payload values."""
+
+    def decimal_or_none(self, value) -> Decimal | None:
+        """Convert optional values to Decimal without leaking parser errors."""
+        if value in (None, ""):
+            return None
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+
+class PositionSortQuery:
+    """Add dashboard sort annotations for task positions."""
+
+    def apply(self, queryset):
+        """Annotate positions with computed close reason, PnL, and pips fields."""
+        protection_reason = (
+            Trade.objects.filter(
+                position_id=OuterRef("pk"),
+                execution_method__in=PROTECTION_CLOSE_METHODS,
+            )
+            .order_by("timestamp", "sequence_number")
+            .values("execution_method")[:1]
+        )
+        protection_description_exists = Trade.objects.filter(
+            position_id=OuterRef("pk"),
+            description__startswith="[PROTECTION]",
+        )
+        decimal_field = DecimalField(max_digits=24, decimal_places=10)
+        long_realized_pnl = ExpressionWrapper(
+            (F("exit_price") - F("entry_price")) * Abs(F("units")),
+            output_field=decimal_field,
+        )
+        short_realized_pnl = ExpressionWrapper(
+            (F("entry_price") - F("exit_price")) * Abs(F("units")),
+            output_field=decimal_field,
+        )
+        long_pips = ExpressionWrapper(
+            F("exit_price") - F("entry_price"),
+            output_field=decimal_field,
+        )
+        short_pips = ExpressionWrapper(
+            F("entry_price") - F("exit_price"),
+            output_field=decimal_field,
+        )
+        return queryset.annotate(
+            _protection_reason=Subquery(protection_reason, output_field=CharField()),
+            _has_protection_description=Exists(protection_description_exists),
+            _close_reason=Case(
+                When(is_open=True, then=Value("", output_field=CharField())),
+                When(_protection_reason__isnull=False, then=F("_protection_reason")),
+                When(_has_protection_description=True, then=Value("shrink")),
+                default=Value("normal"),
+                output_field=CharField(),
+            ),
+            _realized_pnl=Case(
+                When(
+                    is_open=False,
+                    direction="long",
+                    exit_price__isnull=False,
+                    then=long_realized_pnl,
+                ),
+                When(
+                    is_open=False,
+                    direction="short",
+                    exit_price__isnull=False,
+                    then=short_realized_pnl,
+                ),
+                default=Value(None, output_field=decimal_field),
+                output_field=decimal_field,
+            ),
+            _pnl=Case(
+                When(is_open=True, then=F("unrealized_pnl")),
+                When(
+                    is_open=False,
+                    direction="long",
+                    exit_price__isnull=False,
+                    then=long_realized_pnl,
+                ),
+                When(
+                    is_open=False,
+                    direction="short",
+                    exit_price__isnull=False,
+                    then=short_realized_pnl,
+                ),
+                default=Value(None, output_field=decimal_field),
+                output_field=decimal_field,
+            ),
+            _pips=Case(
+                When(
+                    is_open=False,
+                    direction="long",
+                    exit_price__isnull=False,
+                    then=long_pips,
+                ),
+                When(
+                    is_open=False,
+                    direction="short",
+                    exit_price__isnull=False,
+                    then=short_pips,
+                ),
+                default=F("unrealized_pnl"),
+                output_field=decimal_field,
+            ),
+        )
+
+
 class TaskActivityQueryService:
     """Build querysets and rows for task activity endpoints."""
+
+    def __init__(
+        self,
+        *,
+        value_parser: TaskActivityValueParser | None = None,
+        position_sort_query: PositionSortQuery | None = None,
+    ) -> None:
+        """Initialize object collaborators for task activity queries."""
+        self.value_parser = value_parser or TaskActivityValueParser()
+        self.position_sort_query = position_sort_query or PositionSortQuery()
 
     def logs_queryset(self, *, request: Request, task, task_type_label: str):
         query = LogsQueryParams.from_request(
@@ -389,8 +508,7 @@ class TaskActivityQueryService:
                 snapshots[str(order_id)] = context
         return snapshots
 
-    @staticmethod
-    def positions_queryset(*, request: Request, task, task_type_label: str):
+    def positions_queryset(self, *, request: Request, task, task_type_label: str):
         query = PositionQuery.from_request(
             request,
             default_execution_id=task.execution_id,
@@ -424,12 +542,12 @@ class TaskActivityQueryService:
                 _id_str=Cast("id", output_field=models.CharField())
             ).filter(_id_str__istartswith=query.position_id)
 
-        queryset = _with_position_sort_annotations(queryset)
+        queryset = self.position_sort_query.apply(queryset)
         queryset = POSITION_ORDERING.apply_to_queryset(queryset, query.ordering)
         return queryset, query
 
-    @staticmethod
     def _normalize_trade_rows(
+        self,
         rows,
         close_snapshots_by_order_id: dict[str, dict] | None = None,
     ) -> list[dict]:
@@ -451,8 +569,8 @@ class TaskActivityQueryService:
                     else None
                 )
                 if snapshot:
-                    snapshot_entry = _decimal_or_none(snapshot.get("entry_price"))
-                    snapshot_exit = _decimal_or_none(snapshot.get("exit_price"))
+                    snapshot_entry = self.value_parser.decimal_or_none(snapshot.get("entry_price"))
+                    snapshot_exit = self.value_parser.decimal_or_none(snapshot.get("exit_price"))
                     if snapshot_entry is not None:
                         trade["entry_price"] = snapshot_entry
                     if snapshot_exit is not None:
@@ -473,104 +591,3 @@ class TaskActivityQueryService:
                 trade.pop("entry_price", None)
             normalized.append(trade)
         return normalized
-
-
-def _decimal_or_none(value) -> Decimal | None:
-    if value in (None, ""):
-        return None
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-
-
-def _with_position_sort_annotations(queryset):
-    protection_reason = (
-        Trade.objects.filter(
-            position_id=OuterRef("pk"),
-            execution_method__in=PROTECTION_CLOSE_METHODS,
-        )
-        .order_by("timestamp", "sequence_number")
-        .values("execution_method")[:1]
-    )
-    protection_description_exists = Trade.objects.filter(
-        position_id=OuterRef("pk"),
-        description__startswith="[PROTECTION]",
-    )
-    decimal_field = DecimalField(max_digits=24, decimal_places=10)
-    long_realized_pnl = ExpressionWrapper(
-        (F("exit_price") - F("entry_price")) * Abs(F("units")),
-        output_field=decimal_field,
-    )
-    short_realized_pnl = ExpressionWrapper(
-        (F("entry_price") - F("exit_price")) * Abs(F("units")),
-        output_field=decimal_field,
-    )
-    long_pips = ExpressionWrapper(
-        F("exit_price") - F("entry_price"),
-        output_field=decimal_field,
-    )
-    short_pips = ExpressionWrapper(
-        F("entry_price") - F("exit_price"),
-        output_field=decimal_field,
-    )
-    return queryset.annotate(
-        _protection_reason=Subquery(protection_reason, output_field=CharField()),
-        _has_protection_description=Exists(protection_description_exists),
-        _close_reason=Case(
-            When(is_open=True, then=Value("", output_field=CharField())),
-            When(_protection_reason__isnull=False, then=F("_protection_reason")),
-            When(_has_protection_description=True, then=Value("shrink")),
-            default=Value("normal"),
-            output_field=CharField(),
-        ),
-        _realized_pnl=Case(
-            When(
-                is_open=False,
-                direction="long",
-                exit_price__isnull=False,
-                then=long_realized_pnl,
-            ),
-            When(
-                is_open=False,
-                direction="short",
-                exit_price__isnull=False,
-                then=short_realized_pnl,
-            ),
-            default=Value(None, output_field=decimal_field),
-            output_field=decimal_field,
-        ),
-        _pnl=Case(
-            When(is_open=True, then=F("unrealized_pnl")),
-            When(
-                is_open=False,
-                direction="long",
-                exit_price__isnull=False,
-                then=long_realized_pnl,
-            ),
-            When(
-                is_open=False,
-                direction="short",
-                exit_price__isnull=False,
-                then=short_realized_pnl,
-            ),
-            default=Value(None, output_field=decimal_field),
-            output_field=decimal_field,
-        ),
-        _pips=Case(
-            When(
-                is_open=False,
-                direction="long",
-                exit_price__isnull=False,
-                then=long_pips,
-            ),
-            When(
-                is_open=False,
-                direction="short",
-                exit_price__isnull=False,
-                then=short_pips,
-            ),
-            default=F("unrealized_pnl"),
-            output_field=decimal_field,
-        ),
-    )

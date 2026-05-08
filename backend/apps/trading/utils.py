@@ -198,6 +198,43 @@ class MoneyFormatter:
             return str(value)
 
 
+@dataclass(frozen=True, slots=True)
+class TradingValueFactory:
+    """Factory for trading value objects and compatibility calculations."""
+
+    def instrument(self, name: str) -> Instrument:
+        """Build an instrument value object."""
+        return Instrument(name)
+
+    def pip_size_for_instrument(self, instrument: str) -> Decimal:
+        """Derive pip size from an instrument name."""
+        return self.instrument(instrument).pip_size
+
+    def is_quote_jpy(self, instrument: str) -> bool:
+        """Return whether an instrument uses a high-value quote convention."""
+        return self.instrument(instrument).is_high_value_quote
+
+    def quote_currency(self, instrument: str) -> str:
+        """Extract the quote currency from an instrument name."""
+        return self.instrument(instrument).quote_currency
+
+    def quote_to_account_rate(
+        self,
+        instrument: str,
+        mid_price: Decimal,
+        account_currency: str = "",
+    ) -> Decimal:
+        """Return the multiplier to convert quote-currency PnL."""
+        return self.instrument(instrument).quote_to_account_rate(mid_price, account_currency)
+
+    def format_money(self, value: Decimal | float | int | None, *, places: int = 2) -> str:
+        """Format a monetary amount for logs."""
+        return MoneyFormatter(places=places).format(value)
+
+
+TRADING_VALUES = TradingValueFactory()
+
+
 def pip_size_for_instrument(instrument: str) -> Decimal:
     """Derive pip size from instrument name.
 
@@ -205,7 +242,7 @@ def pip_size_for_instrument(instrument: str) -> Decimal:
     - JPY (and HUF) quoted pairs: 0.01
     - All other pairs: 0.0001
     """
-    return Instrument(instrument).pip_size
+    return TRADING_VALUES.pip_size_for_instrument(instrument)
 
 
 def is_quote_jpy(instrument: str) -> bool:
@@ -217,7 +254,7 @@ def is_quote_jpy(instrument: str) -> bool:
     USD_JPY) we need to divide by the current mid price to convert back
     to account currency.
     """
-    return Instrument(instrument).is_high_value_quote
+    return TRADING_VALUES.is_quote_jpy(instrument)
 
 
 def quote_currency(instrument: str) -> str:
@@ -225,7 +262,7 @@ def quote_currency(instrument: str) -> str:
 
     Example: ``"USD_JPY"`` → ``"JPY"``, ``"EUR_USD"`` → ``"USD"``
     """
-    return Instrument(instrument).quote_currency
+    return TRADING_VALUES.quote_currency(instrument)
 
 
 def quote_to_account_rate(
@@ -244,7 +281,7 @@ def quote_to_account_rate(
     Cross-currency pairs (e.g. EUR_GBP on a USD account) would need an
     additional FX rate, but that is out of scope for now.
     """
-    return Instrument(instrument).quote_to_account_rate(mid_price, account_currency)
+    return TRADING_VALUES.quote_to_account_rate(instrument, mid_price, account_currency)
 
 
 def format_money(value: Decimal | float | int | None, *, places: int = 2) -> str:
@@ -255,4 +292,4 @@ def format_money(value: Decimal | float | int | None, *, places: int = 2) -> str
     arithmetic. ``None`` is rendered as the literal string ``"None"`` so
     log output remains stable for callers that pass optional balances.
     """
-    return MoneyFormatter(places=places).format(value)
+    return TRADING_VALUES.format_money(value, places=places)

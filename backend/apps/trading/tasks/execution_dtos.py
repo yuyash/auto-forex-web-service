@@ -51,10 +51,10 @@ class LiveTickDeliveryState:
         raw = cast(dict[str, Any], delivery)
         return cls(
             status=str(raw.get("status") or ""),
-            tick_timestamp=_optional_str(raw.get("tick_timestamp")),
+            tick_timestamp=cls._optional_str(raw.get("tick_timestamp")),
             observed_at=str(raw.get("observed_at") or ""),
-            age_seconds=_optional_float(raw.get("age_seconds")),
-            max_age_seconds=_optional_int(raw.get("max_age_seconds")) or 0,
+            age_seconds=cls._optional_float(raw.get("age_seconds")),
+            max_age_seconds=cls._optional_int(raw.get("max_age_seconds")) or 0,
             message=str(raw.get("message") or ""),
         )
 
@@ -76,32 +76,32 @@ class LiveTickDeliveryState:
         strategy_state["live_tick_delivery"] = self.to_dict()
         state.strategy_state = strategy_state
 
+    @staticmethod
+    def _optional_str(value: object) -> str | None:
+        if value in (None, ""):
+            return None
+        return str(value)
 
-def _optional_str(value: object) -> str | None:
-    if value in (None, ""):
-        return None
-    return str(value)
+    @staticmethod
+    def _optional_float(value: object) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            if isinstance(value, (int, float)):
+                return float(value)
+            return float(str(value))
+        except (TypeError, ValueError):
+            return None
 
-
-def _optional_float(value: object) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        if isinstance(value, (int, float)):
-            return float(value)
-        return float(str(value))
-    except (TypeError, ValueError):
-        return None
-
-
-def _optional_int(value: object) -> int | None:
-    if value in (None, ""):
-        return None
-    try:
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            return int(value)
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None
+    @staticmethod
+    def _optional_int(value: object) -> int | None:
+        if value in (None, ""):
+            return None
+        try:
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float):
+                return int(value)
+            return int(str(value))
+        except (TypeError, ValueError):
+            return None

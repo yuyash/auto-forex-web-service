@@ -13,7 +13,7 @@ from apps.trading.events import (
     StrategyEvent,
 )
 from apps.trading.strategies.snowball.models import Entry
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument
 
 
 def apply_entry_metadata(
@@ -105,7 +105,10 @@ def entry_close_event(
     validation_status: str = "",
 ) -> ClosePositionEvent:
     exit_px = entry.exit_price(tick)
-    conv = quote_to_account_rate(instrument, tick.mid, account_currency)
+    conv = Instrument(instrument).quote_to_account_rate(
+        tick.mid,
+        AccountCurrency(account_currency),
+    )
     pnl = (exit_px - entry.entry_price) * Decimal(str(entry.units)) * conv
     if entry.is_short:
         pnl = -pnl

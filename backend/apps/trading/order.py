@@ -21,10 +21,11 @@ from apps.market.services.oanda import (
 from apps.market.services.oanda import (
     Position as OandaPosition,
 )
+from apps.trading.broker_gateway import BrokerGateway, OandaBrokerGateway
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
 from apps.trading.models.orders import OrderStatus, OrderType
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument, Units
 
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
@@ -61,7 +62,11 @@ class OrderService:
         self.account = account
         self.task = task
         self.dry_run = dry_run
-        self.oanda_service = OandaService(account=account, dry_run=dry_run)
+        broker_service = OandaService(account=account, dry_run=dry_run)
+        self.broker_gateway: BrokerGateway = OandaBrokerGateway(broker_service)
+        # Backward-compatible attribute for callers that still refer to the
+        # old OANDA service member.
+        self.oanda_service = self.broker_gateway
         self.execution_id = getattr(task, "execution_id", None)
 
         # execution_id is required for all Position/Order/Trade records
@@ -132,11 +137,12 @@ class OrderService:
             # Open short position
             short_pos, order = service.open_position("USD_JPY", 5000, Direction.SHORT)
         """
-        if units <= 0:
+        requested_units = Units.coerce(units)
+        if requested_units.value <= 0:
             raise OrderServiceError("Units must be positive")
 
-        # Convert to signed units based on direction
-        signed_units = units if direction == Direction.LONG else -units
+        side_sign = 1 if direction == Direction.LONG else -1
+        signed_units = requested_units.absolute * side_sign
 
         return self._execute_market_order(
             instrument=instrument,
@@ -281,10 +287,9 @@ class OrderService:
                 realized_delta = (oanda_order.price or Decimal("0")) - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                conv = quote_to_account_rate(
-                    position.instrument,
+                conv = Instrument(position.instrument).quote_to_account_rate(
                     oanda_order.price or position.entry_price,
-                    account_currency=self.account.currency if self.account else "",
+                    AccountCurrency(self.account.currency if self.account else ""),
                 )
                 realized_delta = realized_delta * Decimal(original_units) * conv
             else:
@@ -294,10 +299,9 @@ class OrderService:
                 realized_delta = close_price - position.entry_price
                 if position.direction == Direction.SHORT:
                     realized_delta = -realized_delta
-                conv = quote_to_account_rate(
-                    position.instrument,
+                conv = Instrument(position.instrument).quote_to_account_rate(
                     close_price or position.entry_price,
-                    account_currency=self.account.currency if self.account else "",
+                    AccountCurrency(self.account.currency if self.account else ""),
                 )
                 realized_delta = realized_delta * close_units_decimal * conv
 
@@ -394,10 +398,12 @@ class OrderService:
             OrderServiceError: If order execution fails
         """
         try:
+            instrument_obj = Instrument(instrument)
+            units_obj = Units.coerce(units)
             # Create market order request
             request = MarketOrderRequest(
-                instrument=instrument,
-                units=Decimal(str(units)),
+                instrument=instrument_obj.name,
+                units=Decimal(str(units_obj.value)),
                 take_profit=take_profit,
                 stop_loss=stop_loss,
             )
@@ -413,9 +419,9 @@ class OrderService:
                 tick_timestamp=tick_timestamp,
             )
             position = self._create_or_update_position(
-                instrument=instrument,
+                instrument=instrument_obj.name,
                 direction=direction,
-                units=abs(units),
+                units=units_obj.absolute,
                 entry_price=oanda_order.price or Decimal("0"),
                 entry_time=entry_time,
                 layer_index=layer_index,
@@ -428,10 +434,10 @@ class OrderService:
 
             # Create order record linked to the position
             order = self._create_order_record(
-                instrument=instrument,
+                instrument=instrument_obj.name,
                 order_type=OrderType.MARKET,
                 direction=direction,
-                units=units,
+                units=units_obj.value,
                 oanda_order=oanda_order,
                 requested_price=override_price,
                 stop_loss=stop_loss,
@@ -445,8 +451,8 @@ class OrderService:
             logger.info(
                 "Market order executed: %s %s %s @ %s (order=%s, position=%s, dry_run=%s)",
                 direction,
-                abs(units),
-                instrument,
+                units_obj.absolute,
+                instrument_obj.name,
                 oanda_order.price,
                 order.id,
                 position.id,

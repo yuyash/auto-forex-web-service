@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from apps.trading.models.positions import Position
-from apps.trading.utils import quote_currency, quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument
 
 
 @dataclass(slots=True)
@@ -132,7 +132,8 @@ class RuntimeMetricsTracker:
         """Update rolling state for a tick and return common metrics."""
         self._record_tick(timestamp=timestamp, mid=mid)
 
-        conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
+        instrument = Instrument(self.instrument)
+        conv = instrument.quote_to_account_rate(mid, AccountCurrency(self.account_currency))
 
         # Unrealized PnL from cached open positions (quote currency),
         # marked to executable close prices.
@@ -185,7 +186,7 @@ class RuntimeMetricsTracker:
             "win_rate": str(win_rate),
             "ticks_processed": str(ticks_processed),
             "pnl_currency": str(self.account_currency or "").upper(),
-            "quote_currency": quote_currency(self.instrument),
+            "quote_currency": instrument.quote_currency,
         }
 
         atr_cache: dict[int, Decimal] = {}

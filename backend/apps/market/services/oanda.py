@@ -25,7 +25,15 @@ from apps.market.models import OandaAccounts, TickData
 from apps.market.services.broker_order_guard import BrokerOrderGuard, BrokerOrderGuardError
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
-from apps.market.services.oanda_clients import OandaAccountClient, OandaContextFactory
+from apps.market.services.oanda_clients import (
+    OandaAccountClient,
+    OandaContextFactory,
+    OandaOrderClient,
+    OandaPositionClient,
+    OandaPricingStreamClient,
+    OandaTradeClient,
+    OandaTransactionClient,
+)
 from apps.market.services.oanda_dry_run import OandaDryRunSimulator
 from apps.market.services import oanda_parsing
 from apps.market.services.oanda_transport import OandaOrderTransport
@@ -108,6 +116,11 @@ class OandaService:
         self._account_resource_cache: dict[str, Any] | None = None
         self.context_factory = OandaContextFactory(v20_module=v20, settings_module=settings)
         self.account_client = OandaAccountClient(self)
+        self.order_client = OandaOrderClient(self)
+        self.trade_client = OandaTradeClient(self)
+        self.position_client = OandaPositionClient(self)
+        self.transaction_client = OandaTransactionClient(self)
+        self.pricing_stream_client = OandaPricingStreamClient(self)
 
         self._dry_run_simulator = OandaDryRunSimulator(account)
         # Backward-compatible attribute used by older tests and debug tools.
@@ -180,6 +193,9 @@ class OandaService:
         return self.account_client.get_resource(refresh=refresh)
 
     def cancel_order(self, order: Order) -> CancelledOrder:
+        return self.order_client.cancel_order(order)
+
+    def _cancel_order_impl(self, order: Order) -> CancelledOrder:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
 
@@ -238,6 +254,9 @@ class OandaService:
             ) from e
 
     def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
+        return self.trade_client.close_trade(trade=trade, units=units)
+
+    def _close_trade_impl(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
 
@@ -292,6 +311,18 @@ class OandaService:
             ) from e
 
     def close_position(
+        self,
+        position: Position,
+        units: Decimal | None = None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        return self.position_client.close_position(
+            position=position,
+            units=units,
+            override_price=override_price,
+        )
+
+    def _close_position_impl(
         self,
         position: Position,
         units: Decimal | None = None,
@@ -410,6 +441,9 @@ class OandaService:
         )
 
     def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
+        return self.order_client.create_limit_order(request)
+
+    def _create_limit_order_impl(self, request: LimitOrderRequest) -> LimitOrder:
         assert self.account is not None, "Account not initialized"
 
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
@@ -483,6 +517,16 @@ class OandaService:
         )
 
     def create_market_order(
+        self,
+        request: MarketOrderRequest,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        return self.order_client.create_market_order(
+            request,
+            override_price=override_price,
+        )
+
+    def _create_market_order_impl(
         self,
         request: MarketOrderRequest,
         override_price: Decimal | None = None,
@@ -608,6 +652,9 @@ class OandaService:
         raise OandaAPIError(f"Market order rejected: {reject_reason_str}")
 
     def create_stop_order(self, request: StopOrderRequest) -> StopOrder:
+        return self.order_client.create_stop_order(request)
+
+    def _create_stop_order_impl(self, request: StopOrderRequest) -> StopOrder:
         assert self.account is not None, "Account not initialized"
 
         direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
@@ -681,6 +728,9 @@ class OandaService:
         )
 
     def create_oco_order(self, request: OcoOrderRequest) -> OcoOrder:
+        return self.order_client.create_oco_order(request)
+
+    def _create_oco_order_impl(self, request: OcoOrderRequest) -> OcoOrder:
         limit_result = self.create_limit_order(
             LimitOrderRequest(
                 instrument=request.instrument,
@@ -711,6 +761,9 @@ class OandaService:
         )
 
     def get_account_details(self) -> AccountDetails:
+        return self.account_client.get_details()
+
+    def _get_account_details_impl(self) -> AccountDetails:
         """
         Fetch account details from OANDA API.
 
@@ -758,6 +811,9 @@ class OandaService:
             ) from e
 
     def get_account_hedging_enabled(self) -> bool:
+        return self.account_client.get_hedging_enabled()
+
+    def _get_account_hedging_enabled_impl(self) -> bool:
         """Return whether the OANDA account has hedging enabled.
 
         OANDA v20 exposes this as the boolean field `hedgingEnabled` on the
@@ -789,11 +845,17 @@ class OandaService:
             ) from e
 
     def get_account_position_mode(self) -> str:
+        return self.account_client.get_position_mode()
+
+    def _get_account_position_mode_impl(self) -> str:
         """Return `hedging` or `netting` based on the account configuration."""
 
         return "hedging" if self.get_account_hedging_enabled() else "netting"
 
     def get_open_positions(self, instrument: str | None = None) -> list[Position]:
+        return self.position_client.get_open_positions(instrument=instrument)
+
+    def _get_open_positions_impl(self, instrument: str | None = None) -> list[Position]:
         """
         Fetch open positions from OANDA API.
 
@@ -860,6 +922,19 @@ class OandaService:
             ) from e
 
     def get_trades(
+        self,
+        instrument: str | None = None,
+        *,
+        state: str = "OPEN",
+        count: int = 500,
+    ) -> list[OpenTrade]:
+        return self.trade_client.get_trades(
+            instrument=instrument,
+            state=state,
+            count=count,
+        )
+
+    def _get_trades_impl(
         self,
         instrument: str | None = None,
         *,
@@ -951,9 +1026,15 @@ class OandaService:
             ) from e
 
     def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
+        return self.trade_client.get_open_trades(instrument=instrument)
+
+    def _get_open_trades_impl(self, instrument: str | None = None) -> list[OpenTrade]:
         return self.get_trades(instrument=instrument, state="OPEN")
 
     def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
+        return self.order_client.get_pending_orders(instrument=instrument)
+
+    def _get_pending_orders_impl(self, instrument: str | None = None) -> list[PendingOrder]:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
 
@@ -985,6 +1066,15 @@ class OandaService:
             ) from e
 
     def get_order_history(
+        self, instrument: str | None = None, count: int = 50, state: str = "ALL"
+    ) -> list[Order]:
+        return self.order_client.get_order_history(
+            instrument=instrument,
+            count=count,
+            state=state,
+        )
+
+    def _get_order_history_impl(
         self, instrument: str | None = None, count: int = 50, state: str = "ALL"
     ) -> list[Order]:
         assert self.api is not None, "API client not initialized"
@@ -1019,6 +1109,9 @@ class OandaService:
             ) from e
 
     def get_order(self, order_id: str) -> Order:
+        return self.order_client.get_order(order_id)
+
+    def _get_order_impl(self, order_id: str) -> Order:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
 
@@ -1043,6 +1136,20 @@ class OandaService:
             ) from e
 
     def get_transaction_history(
+        self,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        page_size: int = 100,
+        transaction_type: str | None = None,
+    ) -> list[Transaction]:
+        return self.transaction_client.get_transaction_history(
+            from_time=from_time,
+            to_time=to_time,
+            page_size=page_size,
+            transaction_type=transaction_type,
+        )
+
+    def _get_transaction_history_impl(
         self,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
@@ -1118,6 +1225,19 @@ class OandaService:
             ) from e
 
     def stream_pricing_ticks(
+        self,
+        instruments: list[str] | str,
+        *,
+        snapshot: bool = True,
+        include_heartbeats: bool = False,
+    ) -> Iterator[TickData]:
+        return self.pricing_stream_client.stream_pricing_ticks(
+            instruments,
+            snapshot=snapshot,
+            include_heartbeats=include_heartbeats,
+        )
+
+    def _stream_pricing_ticks_impl(
         self,
         instruments: list[str] | str,
         *,

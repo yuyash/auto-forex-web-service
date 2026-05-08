@@ -143,6 +143,18 @@ class SnowballCalculator:
         return round_to_step(base, step)
 
 
+@dataclass(frozen=True, slots=True)
+class SnowballCalculatorProvider:
+    """Resolve formula calculators for Snowball flow collaborators."""
+
+    def for_strategy(self, strategy: object) -> SnowballFormulaCalculator:
+        """Return an explicit strategy calculator or build one from config."""
+        calculator = getattr(strategy, "calculator", None)
+        if calculator is not None:
+            return calculator
+        return SnowballCalculator(getattr(strategy, "config"))
+
+
 def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     """Return the pip interval before the *k*-th add (1-based).
 

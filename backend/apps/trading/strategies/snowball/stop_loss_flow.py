@@ -5,13 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 from logging import getLogger
 from collections.abc import Callable
-from typing import Protocol, cast
+from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
 from apps.trading.strategies.snowball.calculators import (
-    SnowballCalculator,
+    SnowballCalculatorProvider,
     SnowballFormulaCalculator,
     round_to_step,
 )
@@ -40,13 +40,6 @@ class StopLossFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
     calculator: SnowballFormulaCalculator
-
-
-def _calculator(strategy: StopLossFlowStrategy) -> SnowballFormulaCalculator:
-    calculator = getattr(strategy, "calculator", None)
-    if calculator is not None:
-        return cast(SnowballFormulaCalculator, calculator)
-    return SnowballCalculator(strategy.config)
 
 
 def assign_stop_loss(
@@ -110,12 +103,14 @@ def assign_configured_stop_loss(
 ) -> None:
     """Assign stop-loss using the configured mode for a 1-based slot number."""
     if strategy.config.stop_loss_mode == "auto":
-        next_interval = _calculator(strategy).counter_interval_pips(slot_number)
+        next_interval = (
+            SnowballCalculatorProvider().for_strategy(strategy).counter_interval_pips(slot_number)
+        )
         if next_interval > 0:
             assign_auto_stop_loss(strategy, entry, next_interval)
         return
 
-    sl_pips = _calculator(strategy).stop_loss_pips(slot_number)
+    sl_pips = SnowballCalculatorProvider().for_strategy(strategy).stop_loss_pips(slot_number)
     if sl_pips > 0:
         assign_stop_loss(strategy, entry, sl_pips)
 

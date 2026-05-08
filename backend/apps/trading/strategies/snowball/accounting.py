@@ -9,7 +9,7 @@ from apps.trading.dataclasses.tick import Tick
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.models import SnowballStrategyState
 from apps.trading.strategies.snowball.protection import margin_ratio
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument
 
 
 def update_account_metrics(
@@ -26,7 +26,10 @@ def update_account_metrics(
         ss.account_balance = Decimal(str(state.current_balance))
 
     unrealized = Decimal("0")
-    conversion_rate = quote_to_account_rate(instrument, tick.mid, account_currency)
+    conversion_rate = Instrument(instrument).quote_to_account_rate(
+        tick.mid,
+        AccountCurrency(account_currency),
+    )
     for entry in ss.all_entries():
         if entry.is_long:
             unrealized += (

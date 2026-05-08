@@ -17,7 +17,7 @@ from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.events import entry_open_event
 from apps.trading.strategies.snowball.models import Entry, SnowballCycle, SnowballStrategyState
-from apps.trading.utils import format_money, quote_to_account_rate
+from apps.trading.utils import AccountCurrency, Instrument, format_money
 
 logger = getLogger(__name__)
 
@@ -56,7 +56,7 @@ def margin_ratio(
     mid = ss.last_mid or Decimal("0")
     if mid <= 0:
         return Decimal("0")
-    conv = quote_to_account_rate(instrument, mid, account_currency)
+    conv = Instrument(instrument).quote_to_account_rate(mid, AccountCurrency(account_currency))
     required = mid * Decimal(str(total_units)) * Decimal("0.04") * conv
     return (required / nav) * Decimal("100")
 

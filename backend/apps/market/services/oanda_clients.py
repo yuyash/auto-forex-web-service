@@ -94,3 +94,160 @@ class OandaAccountClient:
                 "Error fetching account resource",
                 internal_detail=str(e),
             ) from e
+
+    def get_details(self):
+        """Fetch normalized account details."""
+        return self.service._get_account_details_impl()
+
+    def get_hedging_enabled(self) -> bool:
+        """Return whether account hedging mode is enabled."""
+        return self.service._get_account_hedging_enabled_impl()
+
+    def get_position_mode(self) -> str:
+        """Return the account's position mode."""
+        return self.service._get_account_position_mode_impl()
+
+
+class OandaOrderClient:
+    """Order submission and lookup client."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService instance."""
+        self.service = service
+
+    def cancel_order(self, order: Any):
+        """Cancel an existing broker order."""
+        return self.service._cancel_order_impl(order)
+
+    def create_limit_order(self, request: Any):
+        """Create a pending limit order."""
+        return self.service._create_limit_order_impl(request)
+
+    def create_market_order(self, request: Any, override_price: Any = None):
+        """Create a market order."""
+        return self.service._create_market_order_impl(request, override_price=override_price)
+
+    def create_stop_order(self, request: Any):
+        """Create a pending stop order."""
+        return self.service._create_stop_order_impl(request)
+
+    def create_oco_order(self, request: Any):
+        """Create an OCO order from limit and stop legs."""
+        return self.service._create_oco_order_impl(request)
+
+    def get_pending_orders(self, instrument: str | None = None):
+        """Fetch pending broker orders."""
+        return self.service._get_pending_orders_impl(instrument=instrument)
+
+    def get_order_history(
+        self,
+        instrument: str | None = None,
+        count: int = 50,
+        state: str = "ALL",
+    ):
+        """Fetch broker order history."""
+        return self.service._get_order_history_impl(
+            instrument=instrument,
+            count=count,
+            state=state,
+        )
+
+    def get_order(self, order_id: str):
+        """Fetch one broker order by id."""
+        return self.service._get_order_impl(order_id)
+
+
+class OandaTradeClient:
+    """Trade close and history client."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService instance."""
+        self.service = service
+
+    def close_trade(self, trade: Any, units: Any = None):
+        """Close an individual broker trade."""
+        return self.service._close_trade_impl(trade=trade, units=units)
+
+    def get_trades(
+        self,
+        instrument: str | None = None,
+        *,
+        state: str = "OPEN",
+        count: int = 500,
+    ):
+        """Fetch broker trades by state."""
+        return self.service._get_trades_impl(
+            instrument=instrument,
+            state=state,
+            count=count,
+        )
+
+    def get_open_trades(self, instrument: str | None = None):
+        """Fetch currently open broker trades."""
+        return self.service._get_open_trades_impl(instrument=instrument)
+
+
+class OandaPositionClient:
+    """Position close and lookup client."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService instance."""
+        self.service = service
+
+    def close_position(self, position: Any, units: Any = None, override_price: Any = None):
+        """Close a broker position by instrument exposure."""
+        return self.service._close_position_impl(
+            position=position,
+            units=units,
+            override_price=override_price,
+        )
+
+    def get_open_positions(self, instrument: str | None = None):
+        """Fetch open broker positions."""
+        return self.service._get_open_positions_impl(instrument=instrument)
+
+
+class OandaTransactionClient:
+    """Transaction-history client."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService instance."""
+        self.service = service
+
+    def get_transaction_history(
+        self,
+        *,
+        from_time: Any = None,
+        to_time: Any = None,
+        page_size: int = 100,
+        transaction_type: str | None = None,
+    ):
+        """Fetch account transaction history."""
+        return self.service._get_transaction_history_impl(
+            from_time=from_time,
+            to_time=to_time,
+            page_size=page_size,
+            transaction_type=transaction_type,
+        )
+
+
+class OandaPricingStreamClient:
+    """Pricing stream client."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService instance."""
+        self.service = service
+
+    def stream_pricing_ticks(
+        self,
+        instruments: list[str] | str,
+        *,
+        snapshot: bool = True,
+        include_heartbeats: bool = False,
+    ):
+        """Stream pricing ticks from OANDA."""
+        return self.service._stream_pricing_ticks_impl(
+            instruments,
+            snapshot=snapshot,
+            include_heartbeats=include_heartbeats,
+        )

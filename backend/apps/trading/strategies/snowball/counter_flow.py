@@ -5,13 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 from logging import getLogger
 from collections.abc import Callable
-from typing import Protocol, cast
+from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
 from apps.trading.strategies.snowball.calculators import (
-    SnowballCalculator,
+    SnowballCalculatorProvider,
     SnowballFormulaCalculator,
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
@@ -33,13 +33,6 @@ class CounterFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
     calculator: SnowballFormulaCalculator
-
-
-def _calculator(strategy: CounterFlowStrategy) -> SnowballFormulaCalculator:
-    calculator = getattr(strategy, "calculator", None)
-    if calculator is not None:
-        return cast(SnowballFormulaCalculator, calculator)
-    return SnowballCalculator(strategy.config)
 
 
 def process_cycle_counter_closes(
@@ -403,14 +396,18 @@ def _new_layer_interval_hit(
             return True
         cumulative_interval = Decimal("0")
         for k in range(1, highest.index + 2):
-            cumulative_interval += _calculator(strategy).counter_interval_pips(k)
+            cumulative_interval += (
+                SnowballCalculatorProvider().for_strategy(strategy).counter_interval_pips(k)
+            )
         current_entry_price = _entry_side_price(direction, tick)
         adverse = _adverse_pips(direction, r0_ref_price, current_entry_price, strategy.pip_size)
         return adverse >= cumulative_interval
 
     current_entry_price = _entry_side_price(direction, tick)
     adverse = _adverse_pips(direction, ref_price, current_entry_price, strategy.pip_size)
-    interval = _calculator(strategy).counter_interval_pips(highest.index + 1)
+    interval = (
+        SnowballCalculatorProvider().for_strategy(strategy).counter_interval_pips(highest.index + 1)
+    )
     return adverse >= interval
 
 
@@ -438,7 +435,9 @@ def _counter_slot_adverse_interval(
             return None
         cumulative_interval = Decimal("0")
         for k in range(1, slot.index + 1):
-            cumulative_interval += _calculator(strategy).counter_interval_pips(k)
+            cumulative_interval += (
+                SnowballCalculatorProvider().for_strategy(strategy).counter_interval_pips(k)
+            )
         adverse = _adverse_pips(direction, r0_ref_price, current_entry_price, strategy.pip_size)
         return adverse, cumulative_interval
 
@@ -449,7 +448,7 @@ def _counter_slot_adverse_interval(
     if ref_price is None:
         return None
     adverse = _adverse_pips(direction, ref_price, current_entry_price, strategy.pip_size)
-    interval = _calculator(strategy).counter_interval_pips(slot.index)
+    interval = SnowballCalculatorProvider().for_strategy(strategy).counter_interval_pips(slot.index)
     return adverse, interval
 
 
@@ -488,7 +487,7 @@ def _open_counter_entry(
             include_ref=layer_ref,
         )
     else:
-        tp = _calculator(strategy).counter_tp_pips(slot.index)
+        tp = SnowballCalculatorProvider().for_strategy(strategy).counter_tp_pips(slot.index)
         if direction == Direction.LONG:
             close_price = new_price + tp * strategy.pip_size
         else:
@@ -557,7 +556,7 @@ def _sync_step_counter_take_profits(
     for slot in layer.slots:
         if slot.index == 0 or slot.entry is None or slot.entry.is_hedge:
             continue
-        step_tp = _calculator(strategy).counter_tp_pips(slot.index)
+        step_tp = SnowballCalculatorProvider().for_strategy(strategy).counter_tp_pips(slot.index)
         if direction == Direction.LONG:
             slot.entry.close_price = slot.entry.entry_price + step_tp * strategy.pip_size
         else:
