@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, NoReturn, TypeVar
 
+from django.core.cache import cache
+
 from apps.market.services.oanda_types import OandaAPIError
 
 logger: Logger = getLogger(name=__name__)
@@ -167,11 +169,105 @@ class OandaRetryClassifier:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class OandaRetryMetricSnapshot:
+    """Current aggregate retry lifecycle counters."""
+
+    retry_scheduled: int = 0
+    recovered: int = 0
+    terminal: int = 0
+    exhausted: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        """Return a JSON-serializable metric map."""
+        return {
+            "retry_scheduled": self.retry_scheduled,
+            "recovered": self.recovered,
+            "terminal": self.terminal,
+            "exhausted": self.exhausted,
+        }
+
+
+class OandaRetryMetricRecorder:
+    """Persist lightweight OANDA retry counters in the configured cache."""
+
+    counter_names = ("retry_scheduled", "recovered", "terminal", "exhausted")
+
+    def __init__(
+        self,
+        *,
+        cache_backend: Any = None,
+        key_prefix: str = "oanda_retry_metrics",
+        timeout: int | None = None,
+    ) -> None:
+        self.cache = cache_backend or cache
+        self.key_prefix = key_prefix
+        self.timeout = timeout
+
+    def record_retry_scheduled(self, *, label: str) -> None:
+        """Increment the scheduled retry counter."""
+        _ = label
+        self._increment("retry_scheduled")
+
+    def record_recovered(self, *, label: str, attempts_used: int) -> None:
+        """Increment the successful recovery counter."""
+        _ = (label, attempts_used)
+        self._increment("recovered")
+
+    def record_terminal(self, *, label: str) -> None:
+        """Increment the non-retryable failure counter."""
+        _ = label
+        self._increment("terminal")
+
+    def record_exhausted(self, *, label: str) -> None:
+        """Increment the retry exhaustion counter."""
+        _ = label
+        self._increment("exhausted")
+
+    def snapshot(self) -> OandaRetryMetricSnapshot:
+        """Return all retry counters."""
+        values = {
+            name: self._coerce_int(self.cache.get(self._key(name), 0))
+            for name in self.counter_names
+        }
+        return OandaRetryMetricSnapshot(**values)
+
+    def reset(self) -> None:
+        """Clear counters from the cache."""
+        for name in self.counter_names:
+            self.cache.delete(self._key(name))
+
+    def _increment(self, name: str) -> None:
+        key = self._key(name)
+        try:
+            self.cache.add(key, 0, timeout=self.timeout)
+            self.cache.incr(key)
+        except Exception:  # pylint: disable=broad-exception-caught
+            current = self._coerce_int(self.cache.get(key, 0))
+            self.cache.set(key, current + 1, timeout=self.timeout)
+
+    def _key(self, name: str) -> str:
+        return f"{self.key_prefix}:{name}"
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+
 class OandaRetryTelemetry:
     """Emit structured logs for OANDA retry lifecycle events."""
 
-    def __init__(self, *, logger_: Logger | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        logger_: Logger | None = None,
+        recorder: OandaRetryMetricRecorder | None = None,
+    ) -> None:
         self.logger = logger_ or logger
+        self.recorder = recorder or OandaRetryMetricRecorder()
 
     def retry_scheduled(
         self,
@@ -183,6 +279,7 @@ class OandaRetryTelemetry:
         delay: float,
     ) -> None:
         """Record that a retryable failure will be retried."""
+        self.recorder.record_retry_scheduled(label=label)
         self.logger.warning(
             "[OANDA:RETRY] label=%s attempt=%d/%d delay_seconds=%.2f error=%s",
             label,
@@ -196,6 +293,7 @@ class OandaRetryTelemetry:
         """Record that a call eventually recovered."""
         if attempts_used <= 1:
             return
+        self.recorder.record_recovered(label=label, attempts_used=attempts_used)
         self.logger.info(
             "[OANDA:RETRY_RECOVERED] label=%s attempts_used=%d",
             label,
@@ -211,6 +309,7 @@ class OandaRetryTelemetry:
         exc: OandaAPIError,
     ) -> None:
         """Record a non-retryable OANDA failure."""
+        self.recorder.record_terminal(label=label)
         self.logger.error(
             "[OANDA:RETRY_TERMINAL] label=%s attempt=%d/%d error=%s",
             label,
@@ -221,6 +320,7 @@ class OandaRetryTelemetry:
 
     def exhausted(self, *, label: str, attempts: int, exc: OandaAPIError | None) -> None:
         """Record retry exhaustion."""
+        self.recorder.record_exhausted(label=label)
         self.logger.error(
             "[OANDA:RETRY_EXHAUSTED] label=%s attempts=%d error=%s",
             label,

@@ -35,7 +35,6 @@ from apps.trading.events import (
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
-from apps.trading.strategies.snowball.accounting import update_account_metrics
 from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.counter_flow import (
     entry_take_profit_hit,
@@ -43,12 +42,7 @@ from apps.trading.strategies.snowball.counter_flow import (
     process_cycle_counter_adds,
     process_cycle_counter_closes,
 )
-from apps.trading.strategies.snowball.cycle_orchestrator import (
-    process_active_cycles,
-    reseed_missing_directions,
-)
 from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
-from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.entry_lifecycle import close_entry
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.execution_binding import (
@@ -83,14 +77,36 @@ from apps.trading.strategies.snowball.stop_loss_flow import (
     process_stop_loss_closes,
     process_stop_loss_rebuilds,
 )
+from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
 
 logger: Logger = getLogger(__name__)
+__all__ = ["SNOWBALL_PROTECTION", "SnowballStrategy"]
 
 
-def _optional_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    return int(value)
+class SnowballResumeParameterCompatibility:
+    """Validate Snowball resume compatibility between parameter sets."""
+
+    def validate(
+        self,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        """Reject resume attempts that shrink the persisted grid."""
+        previous_r_max = self._optional_int(previous_params.get("r_max"))
+        current_r_max = self._optional_int(current_params.get("r_max"))
+        if previous_r_max is None or current_r_max is None:
+            return
+        if current_r_max < previous_r_max:
+            raise ValueError(
+                "Cannot resume Snowball after decreasing r_max. "
+                "Restart the task to apply a smaller grid."
+            )
+
+    def _optional_int(self, value: Any) -> int | None:
+        if value is None:
+            return None
+        return int(value)
 
 
 @register_strategy(
@@ -121,6 +137,7 @@ class SnowballStrategy(Strategy):
         self.decision_engine = SnowballDecisionEngine(
             invariant_validator=SnowballInvariantValidator(config=config),
         )
+        self.tick_pipeline = SnowballTickPipeline()
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -257,15 +274,10 @@ class SnowballStrategy(Strategy):
         previous_params: dict[str, Any],
         current_params: dict[str, Any],
     ) -> None:
-        previous_r_max = _optional_int(previous_params.get("r_max"))
-        current_r_max = _optional_int(current_params.get("r_max"))
-        if previous_r_max is None or current_r_max is None:
-            return
-        if current_r_max < previous_r_max:
-            raise ValueError(
-                "Cannot resume Snowball after decreasing r_max. "
-                "Restart the task to apply a smaller grid."
-            )
+        SnowballResumeParameterCompatibility().validate(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
 
     def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
         super().configure_runtime(
@@ -1000,152 +1012,7 @@ class SnowballStrategy(Strategy):
 
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a single tick."""
-        self._grid_order_violation = None
-        self._close_order_violation = None
-        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
-        ss.last_bid = tick.bid
-        ss.last_ask = tick.ask
-        ss.last_mid = tick.mid
-
-        events: list[StrategyEvent] = []
-        invariant_decision = self.decision_engine.invariant_decision(ss)
-        if invariant_decision.should_stop:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(
-                state=state,
-                events=events,
-                should_stop=True,
-                stop_reason=invariant_decision.stop_reason,
-                is_error=invariant_decision.is_error,
-            )
-        ratio = update_account_metrics(
-            state=state,
-            ss=ss,
-            tick=tick,
-            instrument=self.instrument,
-            account_currency=self.account_currency,
-            margin_ratio_func=SNOWBALL_PROTECTION.margin_ratio,
-        )
-
-        # --- Emergency ---
-        emergency = SNOWBALL_PROTECTION.handle_emergency(
-            strategy=self,
-            ss=ss,
-            tick=tick,
-            ratio=ratio,
-        )
-        if emergency is not None:
-            emergency_events, stop_reason = emergency
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(
-                state=state,
-                events=emergency_events,
-                should_stop=True,
-                stop_reason=stop_reason,
-                is_error=True,
-            )
-
-        # --- Lock enter ---
-        lock_events = SNOWBALL_PROTECTION.handle_lock(
-            strategy=self,
-            ss=ss,
-            tick=tick,
-            ratio=ratio,
-        )
-        if lock_events is not None:
-            events.extend(lock_events)
-        allow_new_positions = lock_events is None and ss.protection_level != ProtectionLevel.LOCKED
-
-        # --- Lock release ---
-        if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
-            release_events = SNOWBALL_PROTECTION.handle_lock_release(
-                strategy=self,
-                close_entry=self._close_entry,
-                ss=ss,
-                tick=tick,
-                ratio=ratio,
-            )
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=release_events)
-
-        # --- Shrink ---
-        shrink_events = None
-        if lock_events is None:
-            shrink_events = SNOWBALL_PROTECTION.handle_shrink(
-                strategy=self,
-                close_entry=self._close_entry,
-                state=state,
-                ss=ss,
-                tick=tick,
-                ratio=ratio,
-            )
-        if shrink_events is not None:
-            events.extend(shrink_events.events)
-            if shrink_events.close_order_violation:
-                self._close_order_violation = shrink_events.close_order_violation
-            state.strategy_state = ss.to_dict()
-            if shrink_events.close_order_violation:
-                return StrategyResult(
-                    state=state,
-                    events=events,
-                    should_stop=True,
-                    stop_reason=f"Close order violation: {shrink_events.close_order_violation}",
-                    is_error=True,
-                )
-            return StrategyResult(state=state, events=events)
-
-        # Back to normal
-        if lock_events is None and ss.protection_level != ProtectionLevel.NORMAL:
-            ss.protection_level = ProtectionLevel.NORMAL
-
-        # --- Initialisation ---
-        if not ss.initialised:
-            init_events, _ = self._create_cycle(ss, tick, Direction.LONG)
-            events.extend(init_events)
-            if self._hedging_enabled:
-                short_events, _ = self._create_cycle(ss, tick, Direction.SHORT)
-                events.extend(short_events)
-            ss.initialised = True
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=events)
-
-        cycle_result = process_active_cycles(
-            self,
-            ss,
-            tick,
-            allow_new_positions=allow_new_positions,
-        )
-        events.extend(cycle_result.events)
-        if cycle_result.stop_reason:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(
-                state=state,
-                events=events,
-                should_stop=True,
-                stop_reason=cycle_result.stop_reason,
-                is_error=cycle_result.is_error,
-            )
-
-        events.extend(
-            reseed_missing_directions(
-                self,
-                ss,
-                tick,
-                allow_new_positions=allow_new_positions,
-            )
-        )
-
-        state.strategy_state = ss.to_dict()
-        invariant_decision = self.decision_engine.invariant_decision(ss)
-        if invariant_decision.should_stop:
-            return StrategyResult(
-                state=state,
-                events=events,
-                should_stop=True,
-                stop_reason=invariant_decision.stop_reason,
-                is_error=invariant_decision.is_error,
-            )
-        return StrategyResult(state=state, events=events)
+        return self.tick_pipeline.run(strategy=self, tick=tick, state=state)
 
     # ------------------------------------------------------------------
     # State serialisation

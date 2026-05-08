@@ -1775,6 +1775,32 @@
                 }
             }
         },
+        "/api/trading/operations/metrics/": {
+            "get": {
+                "operationId": "trading_operations_metrics",
+                "description": "Get broker-read outage parking and OANDA retry counters.",
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TradingOperationsMetricsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/recovery-attempts/": {
             "get": {
                 "operationId": "trading_recovery_attempts_list",
@@ -12231,6 +12257,23 @@
                     "event_type",
                     "event_type_display",
                     "id"
+                ]
+            },
+            "TradingOperationsMetricsResponse": {
+                "type": "object",
+                "properties": {
+                    "broker_read_outage": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "oanda_retry": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "broker_read_outage",
+                    "oanda_retry"
                 ]
             },
             "TradingTask": {
