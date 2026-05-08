@@ -11,7 +11,6 @@ from rest_framework.views import APIView
 
 from apps.common.querying import (
     OrderingConfig,
-    apply_queryset_ordering,
     invalid_query_param,
     parse_datetime_param,
 )
@@ -19,13 +18,8 @@ from apps.market.models import OandaAccounts
 from apps.market.serializers import OandaAccountsSerializer
 from apps.market.services.accounts import (
     OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES,
-    apply_cached_oanda_account_snapshot,
-    build_oanda_account_snapshot_state_filter,
-    create_oanda_account,
-    delete_oanda_account,
-    enqueue_oanda_account_snapshot_refresh,
-    is_oanda_account_snapshot_stale,
-    update_oanda_account,
+    oanda_account_service,
+    oanda_account_snapshot_service,
 )
 from apps.trading.views.pagination import StandardPagination
 
@@ -208,18 +202,22 @@ class OandaAccountView(APIView):
             if snapshot_state not in OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES:
                 valid_values = ", ".join(OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES)
                 raise invalid_query_param(f"snapshot_state must be one of: {valid_values}")
-            accounts = accounts.filter(build_oanda_account_snapshot_state_filter(snapshot_state))
-        accounts = apply_queryset_ordering(
+            accounts = accounts.filter(
+                oanda_account_snapshot_service.build_state_filter(snapshot_state)
+            )
+        accounts = OANDA_ACCOUNT_ORDERING.apply_to_queryset(
             accounts,
             request.query_params.get("ordering"),
-            OANDA_ACCOUNT_ORDERING,
         )
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(accounts, request)
         serializer = self.serializer_class(page, many=True)
         response_data = list(serializer.data)
         for account, account_data in zip(page, response_data, strict=False):
-            apply_cached_oanda_account_snapshot(account=account, response_data=account_data)
+            oanda_account_snapshot_service.apply_cached_snapshot(
+                account=account,
+                response_data=account_data,
+            )
         logger.info(
             "User %s retrieved %s OANDA accounts",
             request.user.email,
@@ -241,7 +239,7 @@ class OandaAccountView(APIView):
     def post(self, request: Request) -> Response:
         serializer = self.serializer_class(data=request.data, context={"request": request})
         if serializer.is_valid():
-            account = create_oanda_account(serializer)
+            account = oanda_account_service.create(serializer)
             logger.info(
                 "User %s created OANDA account %s",
                 request.user.email,
@@ -302,7 +300,10 @@ class OandaAccountDetailView(APIView):
             )
         serializer = self.serializer_class(account)
         response_data = serializer.data
-        apply_cached_oanda_account_snapshot(account=account, response_data=response_data)
+        oanda_account_snapshot_service.apply_cached_snapshot(
+            account=account,
+            response_data=response_data,
+        )
         logger.info(
             "User %s retrieved OANDA account %s",
             request.user.email,
@@ -332,7 +333,7 @@ class OandaAccountDetailView(APIView):
             account, data=request.data, partial=True, context={"request": request}
         )
         if serializer.is_valid():
-            updated_account = update_oanda_account(serializer)
+            updated_account = oanda_account_service.update(serializer)
             logger.info(
                 "User %s updated OANDA account %s",
                 request.user.email,
@@ -383,7 +384,7 @@ class OandaAccountDetailView(APIView):
             )
             return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
         account_id_str = account.account_id
-        delete_oanda_account(account)
+        oanda_account_service.delete(account)
         logger.info(
             "User %s deleted OANDA account %s",
             request.user.email,
@@ -436,7 +437,7 @@ class OandaAccountSnapshotRefreshView(APIView):
             )
 
         try:
-            task_id = enqueue_oanda_account_snapshot_refresh(account)
+            task_id = oanda_account_snapshot_service.enqueue_refresh(account)
         except Exception:
             logger.exception(
                 "Failed to queue OANDA account snapshot refresh for account %s",
@@ -454,7 +455,7 @@ class OandaAccountSnapshotRefreshView(APIView):
                 "task_id": task_id,
                 "status": account.snapshot_refresh_status,
                 "snapshot_refreshed_at": account.snapshot_refreshed_at,
-                "snapshot_stale": is_oanda_account_snapshot_stale(account),
+                "snapshot_stale": oanda_account_snapshot_service.is_stale(account),
                 "snapshot_refresh_error": account.snapshot_refresh_error,
                 "snapshot_refresh_status_updated_at": account.snapshot_refresh_status_updated_at,
             },
@@ -493,7 +494,7 @@ class OandaAccountSnapshotRefreshStatusView(APIView):
                 "task_id": account.snapshot_refresh_task_id,
                 "status": account.snapshot_refresh_status,
                 "snapshot_refreshed_at": account.snapshot_refreshed_at,
-                "snapshot_stale": is_oanda_account_snapshot_stale(account),
+                "snapshot_stale": oanda_account_snapshot_service.is_stale(account),
                 "snapshot_refresh_error": account.snapshot_refresh_error,
                 "snapshot_refresh_status_updated_at": account.snapshot_refresh_status_updated_at,
             },

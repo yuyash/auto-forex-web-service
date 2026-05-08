@@ -16,7 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.common.querying import OrderingConfig, normalize_ordering, sort_records
+from apps.common.querying import OrderingConfig
 from apps.market.models import OandaAccounts
 from apps.market.views.account_helpers import get_user_default_account
 
@@ -232,7 +232,7 @@ class CandleDataView(APIView):
 
         from_time = request.query_params.get("from_time")
         to_time = request.query_params.get("to_time")
-        ordering = normalize_ordering(request.query_params.get("ordering"), CANDLE_ORDERING)
+        ordering = CANDLE_ORDERING.normalize(request.query_params.get("ordering"))
 
         if from_time or to_time:
             try:
@@ -303,10 +303,9 @@ class CandleDataView(APIView):
             )
 
             raw_candles = self._dispatch_fetch(api_context, params)
-            candles_data = sort_records(
+            candles_data = CANDLE_ORDERING.sort_records(
                 _parse_candles(raw_candles),
                 params.get("ordering"),
-                CANDLE_ORDERING,
             )
 
             return Response(

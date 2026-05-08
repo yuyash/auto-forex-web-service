@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.calculators import rebuild_take_profit_pips
+from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -25,7 +25,7 @@ def rebuild_take_profit_price(
     if config.rebuild_take_profit_mode == "same":
         price = pending.close_price
     else:
-        tp_pips = rebuild_take_profit_pips(pending.retracement_count + 1, config)
+        tp_pips = SnowballCalculator(config).rebuild_take_profit_pips(pending.retracement_count + 1)
         price = _take_profit_price(
             direction=pending.direction,
             entry_price=entry_price,

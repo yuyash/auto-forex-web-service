@@ -13,9 +13,7 @@ from rest_framework.views import APIView
 
 from apps.common.querying import (
     OrderingConfig,
-    apply_queryset_ordering,
     invalid_query_param,
-    normalize_ordering,
     parse_datetime_param,
 )
 from apps.market.models import TickData
@@ -125,7 +123,7 @@ class TickDataView(APIView):
 
         try:
             queryset = TickData.objects.filter(instrument=instrument)
-            ordering = normalize_ordering(request.query_params.get("ordering"), TICK_ORDERING)
+            ordering = TICK_ORDERING.normalize(request.query_params.get("ordering"))
             descending = ordering.startswith("-")
             from_dt = parse_datetime_param(from_time, field_name="from_time")
             to_dt = parse_datetime_param(to_time, field_name="to_time")
@@ -146,10 +144,9 @@ class TickDataView(APIView):
 
             # Fetch limit+1 to determine if there is a next page
             ticks = list(
-                apply_queryset_ordering(
+                TICK_ORDERING.apply_to_queryset(
                     queryset,
                     request.query_params.get("ordering"),
-                    TICK_ORDERING,
                 ).values("instrument", "timestamp", "bid", "ask", "mid")[: limit + 1]
             )
 

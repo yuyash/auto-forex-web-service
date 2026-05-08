@@ -103,6 +103,7 @@ class OandaService:
         self.max_retry_delay = 5.0  # seconds
         self.event_service = MarketEventService()
         self.order_guard = BrokerOrderGuard()
+        self.response_parser = oanda_parsing.OandaResponseParser()
         self._account_resource_cache: dict[str, Any] | None = None
 
         self._dry_run_simulator = OandaDryRunSimulator(account)
@@ -165,7 +166,7 @@ class OandaService:
 
     @staticmethod
     def _make_jsonable(value: Any) -> Any:
-        return oanda_parsing.make_jsonable(value)
+        return oanda_parsing.OANDA_RESPONSE_PARSER.make_jsonable(value)
 
     @staticmethod
     def make_jsonable(value: Any) -> Any:
@@ -173,15 +174,15 @@ class OandaService:
 
     @staticmethod
     def _response_field(response: Any, field_name: str) -> Any:
-        return oanda_parsing.response_field(response, field_name)
+        return oanda_parsing.OANDA_RESPONSE_PARSER.response_field(response, field_name)
 
     @staticmethod
     def _object_field(value: Any, field_name: str) -> Any:
-        return oanda_parsing.object_field(value, field_name)
+        return oanda_parsing.OANDA_RESPONSE_PARSER.object_field(value, field_name)
 
     @staticmethod
     def _account_object_to_dict(account_data: Any) -> dict[str, Any]:
-        return oanda_parsing.account_object_to_dict(account_data)
+        return oanda_parsing.OANDA_RESPONSE_PARSER.account_object_to_dict(account_data)
 
     def get_account_resource(self, *, refresh: bool = False) -> dict[str, Any]:
         """Fetch the raw OANDA account resource as a dict.
@@ -1291,7 +1292,7 @@ class OandaService:
 
     @staticmethod
     def _as_pending_order(order: Order) -> PendingOrder:
-        return oanda_parsing.as_pending_order(order)
+        return oanda_parsing.OANDA_RESPONSE_PARSER.as_pending_order(order)
 
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
         assert self.api is not None, "API client not initialized"
@@ -1313,7 +1314,7 @@ class OandaService:
     def _format_position(
         self, instrument: str, direction: OrderDirection, pos_data: dict[str, Any]
     ) -> Position:
-        return oanda_parsing.format_position(
+        return self.response_parser.format_position(
             instrument=instrument,
             direction=direction,
             pos_data=pos_data,
@@ -1321,16 +1322,16 @@ class OandaService:
         )
 
     def _parse_iso_datetime(self, value: Any) -> datetime | None:
-        return oanda_parsing.parse_iso_datetime(value)
+        return self.response_parser.parse_iso_datetime(value)
 
     def _parse_order(self, order: Any) -> Order:
-        return oanda_parsing.parse_order(order)
+        return self.response_parser.parse_order(order)
 
     def _parse_transaction(self, txn: dict[str, Any]) -> Transaction:
-        return oanda_parsing.parse_transaction(txn)
+        return self.response_parser.parse_transaction(txn)
 
     def _to_decimal(self, value: Any) -> Decimal | None:
-        return oanda_parsing.to_decimal(value)
+        return self.response_parser.to_decimal(value)
 
     def _validate_compliance(self, order_request: dict[str, Any]) -> None:
         # Skip compliance checks if no account (dry-run only mode)

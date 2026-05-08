@@ -14,7 +14,6 @@ from rest_framework.response import Response
 
 from apps.common.querying import (
     OrderingConfig,
-    apply_queryset_ordering,
     invalid_query_param,
     parse_datetime_param,
 )
@@ -103,10 +102,9 @@ class StrategyConfigView(generics.ListCreateAPIView):
             queryset = queryset.filter(updated_at__gte=updated_from)
         if updated_to:
             queryset = queryset.filter(updated_at__lte=updated_to)
-        return apply_queryset_ordering(
+        return CONFIG_ORDERING.apply_to_queryset(
             queryset,
             request.query_params.get("ordering"),
-            CONFIG_ORDERING,
         )
 
     def get_serializer_class(self):

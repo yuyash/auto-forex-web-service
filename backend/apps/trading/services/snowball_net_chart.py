@@ -20,7 +20,7 @@ from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.request import Request
 
 from apps.market.models import OandaAccounts
-from apps.market.services.candles import load_market_candles
+from apps.market.services.candles import market_candle_service
 from apps.market.views.candles import (
     OandaCandleFetchError,
     _fetch_oanda_candles,
@@ -359,7 +359,7 @@ def _load_candles(
     if not instrument:
         return []
     if task_type_label == "backtest":
-        stored_candles = load_market_candles(
+        stored_candles = market_candle_service.load(
             instrument=instrument,
             granularity=granularity,
             since=since,

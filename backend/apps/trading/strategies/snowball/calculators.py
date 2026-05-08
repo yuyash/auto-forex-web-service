@@ -6,6 +6,7 @@ described in the Snowball v1.2 specification.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,104 @@ def round_to_step(value: Decimal, step: Decimal) -> Decimal:
     return (value / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step
 
 
+@dataclass(frozen=True, slots=True)
+class SnowballCalculator:
+    """Config-bound Snowball formula calculator."""
+
+    config: "SnowballStrategyConfig"
+
+    def counter_interval_pips(self, k: int) -> Decimal:
+        """Return the pip interval before the *k*-th add (1-based)."""
+        cfg = self.config
+        if cfg.interval_mode == "manual" and cfg.manual_intervals:
+            idx = min(k - 1, len(cfg.manual_intervals) - 1)
+            return round_to_step(cfg.manual_intervals[idx], cfg.round_step_pips)
+
+        head = cfg.n_pips_head
+
+        if cfg.interval_mode == "constant":
+            return round_to_step(head, cfg.round_step_pips)
+
+        tail = cfg.n_pips_tail
+        flat = cfg.n_pips_flat_steps
+        gamma = cfg.n_pips_gamma
+
+        if k <= flat:
+            return round_to_step(head, cfg.round_step_pips)
+
+        t = k - flat
+        r_decay = cfg.r_max - flat
+        if r_decay <= 0:
+            return round_to_step(tail, cfg.round_step_pips)
+
+        progress = Decimal(str(t)) / Decimal(str(r_decay))
+        curved = progress**gamma
+        interval = head - (head - tail) * curved
+        return round_to_step(max(interval, tail), cfg.round_step_pips)
+
+    def stop_loss_pips(self, k: int) -> Decimal:
+        """Return the pip distance from entry to stop-loss for the *k*-th slot."""
+        cfg = self.config
+        return _progression_pips(
+            k=k,
+            mode=cfg.stop_loss_mode,
+            head=cfg.stop_loss_pips_head,
+            tail=cfg.stop_loss_pips_tail,
+            flat_steps=cfg.stop_loss_pips_flat_steps,
+            gamma=cfg.stop_loss_pips_gamma,
+            r_max=cfg.r_max,
+            manual_values=cfg.stop_loss_manual_pips,
+            round_step=cfg.round_step_pips,
+        )
+
+    def rebuild_take_profit_pips(self, k: int) -> Decimal:
+        """Return the rebuilt-position take-profit distance for the *k*-th slot."""
+        cfg = self.config
+        return _progression_pips(
+            k=k,
+            mode=cfg.rebuild_take_profit_mode,
+            head=cfg.rebuild_take_profit_pips_head,
+            tail=cfg.rebuild_take_profit_pips_tail,
+            flat_steps=cfg.rebuild_take_profit_pips_flat_steps,
+            gamma=cfg.rebuild_take_profit_pips_gamma,
+            r_max=cfg.r_max,
+            manual_values=cfg.rebuild_take_profit_manual_pips,
+            round_step=cfg.round_step_pips,
+        )
+
+    def counter_tp_pips(self, k: int) -> Decimal:
+        """Return the take-profit pips for the *k*-th step (1-based)."""
+        cfg = self.config
+        mode = cfg.counter_tp_mode
+        base = cfg.counter_tp_pips
+        step = cfg.round_step_pips
+
+        if mode == "weighted_avg":
+            return Decimal("0")
+
+        if mode == "fixed" or k <= 1:
+            return round_to_step(base, step)
+
+        n = k - 1
+
+        if mode == "additive":
+            return round_to_step(base + cfg.counter_tp_step_amount * Decimal(str(n)), step)
+
+        if mode == "subtractive":
+            val = base - cfg.counter_tp_step_amount * Decimal(str(n))
+            return round_to_step(max(val, Decimal("0.1")), step)
+
+        if mode == "multiplicative":
+            val = base * cfg.counter_tp_multiplier ** Decimal(str(n))
+            return round_to_step(val, step)
+
+        if mode == "divisive":
+            val = base / cfg.counter_tp_multiplier ** Decimal(str(n))
+            return round_to_step(max(val, Decimal("0.1")), step)
+
+        return round_to_step(base, step)
+
+
 def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     """Return the pip interval before the *k*-th add (1-based).
 
@@ -34,34 +133,7 @@ def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
 
     Manual mode returns the user-supplied value from ``manual_intervals``.
     """
-    if cfg.interval_mode == "manual" and cfg.manual_intervals:
-        idx = min(k - 1, len(cfg.manual_intervals) - 1)
-        return round_to_step(cfg.manual_intervals[idx], cfg.round_step_pips)
-
-    head = cfg.n_pips_head
-
-    if cfg.interval_mode == "constant":
-        return round_to_step(head, cfg.round_step_pips)
-
-    tail = cfg.n_pips_tail
-    flat = cfg.n_pips_flat_steps
-    gamma = cfg.n_pips_gamma
-
-    if k <= flat:
-        return round_to_step(head, cfg.round_step_pips)
-
-    # Decay steps after flat region
-    t = k - flat  # 1-based step into decay
-    r_decay = cfg.r_max - flat  # total decay steps
-    if r_decay <= 0:
-        return round_to_step(tail, cfg.round_step_pips)
-
-    # Normalised progress 0→1
-    progress = Decimal(str(t)) / Decimal(str(r_decay))
-    # Gamma curve: progress^gamma  (gamma>1 → slow start, <1 → fast start)
-    curved = progress**gamma
-    interval = head - (head - tail) * curved
-    return round_to_step(max(interval, tail), cfg.round_step_pips)
+    return SnowballCalculator(cfg).counter_interval_pips(k)
 
 
 def _progression_pips(
@@ -124,17 +196,7 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     is handled by the strategy layer because interval-based stop-loss
     placement depends on both the next interval and the slot TP.
     """
-    return _progression_pips(
-        k=k,
-        mode=cfg.stop_loss_mode,
-        head=cfg.stop_loss_pips_head,
-        tail=cfg.stop_loss_pips_tail,
-        flat_steps=cfg.stop_loss_pips_flat_steps,
-        gamma=cfg.stop_loss_pips_gamma,
-        r_max=cfg.r_max,
-        manual_values=cfg.stop_loss_manual_pips,
-        round_step=cfg.round_step_pips,
-    )
+    return SnowballCalculator(cfg).stop_loss_pips(k)
 
 
 def rebuild_take_profit_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
@@ -144,17 +206,7 @@ def rebuild_take_profit_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     ``same`` is handled by the strategy layer because that mode reuses
     the pending rebuild snapshot's absolute TP price.
     """
-    return _progression_pips(
-        k=k,
-        mode=cfg.rebuild_take_profit_mode,
-        head=cfg.rebuild_take_profit_pips_head,
-        tail=cfg.rebuild_take_profit_pips_tail,
-        flat_steps=cfg.rebuild_take_profit_pips_flat_steps,
-        gamma=cfg.rebuild_take_profit_pips_gamma,
-        r_max=cfg.r_max,
-        manual_values=cfg.rebuild_take_profit_manual_pips,
-        round_step=cfg.round_step_pips,
-    )
+    return SnowballCalculator(cfg).rebuild_take_profit_pips(k)
 
 
 def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
@@ -168,32 +220,4 @@ def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     - divisive: base / multiplier^(k − 1), min 0.1.
     - weighted_avg: returns 0 — caller computes close price from weighted avg.
     """
-    mode = cfg.counter_tp_mode
-    base = cfg.counter_tp_pips
-    step = cfg.round_step_pips
-
-    if mode == "weighted_avg":
-        return Decimal("0")
-
-    if mode == "fixed" or k <= 1:
-        return round_to_step(base, step)
-
-    n = k - 1  # progression index (0 for step 1)
-
-    if mode == "additive":
-        return round_to_step(base + cfg.counter_tp_step_amount * Decimal(str(n)), step)
-
-    if mode == "subtractive":
-        val = base - cfg.counter_tp_step_amount * Decimal(str(n))
-        return round_to_step(max(val, Decimal("0.1")), step)
-
-    if mode == "multiplicative":
-        val = base * cfg.counter_tp_multiplier ** Decimal(str(n))
-        return round_to_step(val, step)
-
-    if mode == "divisive":
-        val = base / cfg.counter_tp_multiplier ** Decimal(str(n))
-        return round_to_step(max(val, Decimal("0.1")), step)
-
-    # Fallback
-    return round_to_step(base, step)
+    return SnowballCalculator(cfg).counter_tp_pips(k)

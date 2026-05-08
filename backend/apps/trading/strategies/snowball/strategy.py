@@ -36,7 +36,7 @@ from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.accounting import update_account_metrics
-from apps.trading.strategies.snowball.calculators import counter_interval_pips
+from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.counter_flow import (
     entry_take_profit_hit,
     format_counter_add_description,
@@ -120,6 +120,7 @@ class SnowballStrategy(Strategy):
         config: SnowballStrategyConfig,
     ) -> None:
         super().__init__(instrument, pip_size, config)
+        self.calculator = SnowballCalculator(config)
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
@@ -933,7 +934,7 @@ class SnowballStrategy(Strategy):
         # Interval that the gate uses for "the next slot past ``highest``":
         # ``counter_interval_pips(k)`` is 1-based, k == highest.index + 1
         # advances into the next retracement slot.
-        interval = counter_interval_pips(highest.index + 1, self.config)
+        interval = self.calculator.counter_interval_pips(highest.index + 1)
         offset = interval * self.pip_size
         if direction == Direction.LONG:
             return ref_price - offset

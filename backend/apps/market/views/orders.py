@@ -20,7 +20,6 @@ from apps.common.querying import (
     OrderingConfig,
     invalid_query_param,
     parse_datetime_param,
-    sort_records,
 )
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OrderSerializer
@@ -262,10 +261,9 @@ class OrderView(APIView):
             created_from=created_from,
             created_to=created_to,
         )
-        all_orders = sort_records(
+        all_orders = MARKET_ORDER_ORDERING.sort_records(
             all_orders,
             request.query_params.get("ordering"),
-            MARKET_ORDER_ORDERING,
         )
 
         # Paginate in-memory list

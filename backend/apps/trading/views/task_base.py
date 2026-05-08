@@ -17,7 +17,6 @@ from rest_framework.viewsets import ModelViewSet
 
 from apps.common.querying import (
     OrderingConfig,
-    apply_queryset_ordering,
     invalid_query_param,
     parse_datetime_param,
 )
@@ -180,7 +179,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
             if updated_to:
                 queryset = queryset.filter(updated_at__lte=updated_to)
             ordering = self.request.query_params.get("ordering")
-            return apply_queryset_ordering(queryset, ordering, TASK_ORDERING)
+            return TASK_ORDERING.apply_to_queryset(queryset, ordering)
 
         return queryset.order_by("-created_at")
 

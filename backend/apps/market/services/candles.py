@@ -51,21 +51,98 @@ class _MutableCandle:
         self.volume += volume
 
 
+class MarketCandleService:
+    """Service for normalizing, loading, aggregating, and backfilling candles."""
+
+    def normalize_granularity(self, value: Any) -> str:
+        """Normalize a supported chart granularity token."""
+        raw = str(value or "M1").strip().upper()
+        if raw in {"", "RAW", "TICK", "1"}:
+            return "M1"
+        if raw.isdigit():
+            raw = f"M{raw}"
+        if raw in {"M60", "H1"}:
+            return "H1"
+        if raw in {"M240", "H4"}:
+            return "H4"
+        if raw in CANDLE_GRANULARITY_SECONDS:
+            return raw
+        raise ValidationError("granularity must be M1, M5, M15, M30, H1, H4, or D.")
+
+    def load(
+        self,
+        *,
+        instrument: str,
+        granularity: str,
+        since: datetime,
+        until: datetime,
+    ) -> list[dict[str, Any]]:
+        """Load locally stored candles, aggregating stored M1 candles when needed."""
+        normalized = self.normalize_granularity(granularity)
+        direct = _load_candle_rows(
+            instrument=instrument,
+            granularity=normalized,
+            since=since,
+            until=until,
+        )
+        if direct or normalized == "M1":
+            return direct
+
+        m1_rows = _load_candle_rows(
+            instrument=instrument,
+            granularity="M1",
+            since=since,
+            until=until,
+        )
+        return _aggregate_serialized_candles(
+            candles=m1_rows,
+            granularity=normalized,
+        )
+
+    def backfill(
+        self,
+        *,
+        instrument: str,
+        granularity: str,
+        since: datetime,
+        until: datetime,
+        batch_size: int = DEFAULT_CANDLE_BATCH_SIZE,
+    ) -> CandleBuildStats:
+        """Build and upsert candles from TickData or stored M1 candles."""
+        normalized = self.normalize_granularity(granularity)
+        if since >= until:
+            raise ValidationError("since must be earlier than until.")
+
+        candles = (
+            _build_m1_candles_from_ticks(instrument=instrument, since=since, until=until)
+            if normalized == "M1"
+            else _build_higher_candles_from_m1(
+                instrument=instrument,
+                granularity=normalized,
+                since=since,
+                until=until,
+            )
+        )
+        _upsert_market_candles(
+            instrument=instrument,
+            granularity=normalized,
+            candles=candles,
+            source="tick_data" if normalized == "M1" else "market_candles:M1",
+            batch_size=batch_size,
+        )
+        return CandleBuildStats(
+            instrument=instrument,
+            granularity=normalized,
+            candles=len(candles),
+        )
+
+
+market_candle_service = MarketCandleService()
+
+
 def normalize_candle_granularity(value: Any) -> str:
     """Normalize a supported chart granularity token."""
-
-    raw = str(value or "M1").strip().upper()
-    if raw in {"", "RAW", "TICK", "1"}:
-        return "M1"
-    if raw.isdigit():
-        raw = f"M{raw}"
-    if raw in {"M60", "H1"}:
-        return "H1"
-    if raw in {"M240", "H4"}:
-        return "H4"
-    if raw in CANDLE_GRANULARITY_SECONDS:
-        return raw
-    raise ValidationError("granularity must be M1, M5, M15, M30, H1, H4, or D.")
+    return market_candle_service.normalize_granularity(value)
 
 
 def load_market_candles(
@@ -76,26 +153,11 @@ def load_market_candles(
     until: datetime,
 ) -> list[dict[str, Any]]:
     """Load locally stored candles, aggregating stored M1 candles when needed."""
-
-    normalized = normalize_candle_granularity(granularity)
-    direct = _load_candle_rows(
+    return market_candle_service.load(
         instrument=instrument,
-        granularity=normalized,
+        granularity=granularity,
         since=since,
         until=until,
-    )
-    if direct or normalized == "M1":
-        return direct
-
-    m1_rows = _load_candle_rows(
-        instrument=instrument,
-        granularity="M1",
-        since=since,
-        until=until,
-    )
-    return _aggregate_serialized_candles(
-        candles=m1_rows,
-        granularity=normalized,
     )
 
 
@@ -108,32 +170,12 @@ def backfill_market_candles(
     batch_size: int = DEFAULT_CANDLE_BATCH_SIZE,
 ) -> CandleBuildStats:
     """Build and upsert candles from TickData or stored M1 candles."""
-
-    normalized = normalize_candle_granularity(granularity)
-    if since >= until:
-        raise ValidationError("since must be earlier than until.")
-
-    candles = (
-        _build_m1_candles_from_ticks(instrument=instrument, since=since, until=until)
-        if normalized == "M1"
-        else _build_higher_candles_from_m1(
-            instrument=instrument,
-            granularity=normalized,
-            since=since,
-            until=until,
-        )
-    )
-    _upsert_market_candles(
+    return market_candle_service.backfill(
         instrument=instrument,
-        granularity=normalized,
-        candles=candles,
-        source="tick_data" if normalized == "M1" else "market_candles:M1",
+        granularity=granularity,
+        since=since,
+        until=until,
         batch_size=batch_size,
-    )
-    return CandleBuildStats(
-        instrument=instrument,
-        granularity=normalized,
-        candles=len(candles),
     )
 
 

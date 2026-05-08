@@ -22,7 +22,7 @@ from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Abs, Cast
 from rest_framework.request import Request
 
-from apps.common.querying import OrderingConfig, apply_queryset_ordering
+from apps.common.querying import OrderingConfig
 from apps.trading.enums import EventType, LogLevel
 from apps.trading.models import TradingEvent
 from apps.trading.models.logs import TaskLog
@@ -197,7 +197,7 @@ class TaskActivityQueryService:
             queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
         if query.execution.since:
             queryset = queryset.filter(timestamp__gt=query.execution.since)
-        return apply_queryset_ordering(queryset, query.ordering, LOG_ORDERING)
+        return LOG_ORDERING.apply_to_queryset(queryset, query.ordering)
 
     @staticmethod
     def log_components(*, request: Request, task, task_type_label: str) -> list[str]:
@@ -246,7 +246,7 @@ class TaskActivityQueryService:
             queryset = queryset.filter(created_at__gte=query.created_range.start)
         if query.created_range.end:
             queryset = queryset.filter(created_at__lte=query.created_range.end)
-        return apply_queryset_ordering(queryset, query.ordering, EVENT_ORDERING)
+        return EVENT_ORDERING.apply_to_queryset(queryset, query.ordering)
 
     @staticmethod
     def orders_queryset(*, request: Request, task, task_type_label: str):
@@ -277,7 +277,7 @@ class TaskActivityQueryService:
             queryset = queryset.filter(submitted_at__gte=query.timestamp_range.start)
         if query.timestamp_range.end:
             queryset = queryset.filter(submitted_at__lte=query.timestamp_range.end)
-        return apply_queryset_ordering(queryset, query.ordering, ORDER_ORDERING)
+        return ORDER_ORDERING.apply_to_queryset(queryset, query.ordering)
 
     def trades(
         self, *, request: Request, task, task_type_label: str
@@ -316,7 +316,7 @@ class TaskActivityQueryService:
         elif query.trade_kind == "close":
             queryset = queryset.exclude(execution_method__in=ORDER_TRADE_METHODS)
 
-        queryset = apply_queryset_ordering(queryset, query.ordering, TRADE_ORDERING)
+        queryset = TRADE_ORDERING.apply_to_queryset(queryset, query.ordering)
 
         total_count = queryset.count()
         page = query.execution.pagination.page
@@ -425,7 +425,7 @@ class TaskActivityQueryService:
             ).filter(_id_str__istartswith=query.position_id)
 
         queryset = _with_position_sort_annotations(queryset)
-        queryset = apply_queryset_ordering(queryset, query.ordering, POSITION_ORDERING)
+        queryset = POSITION_ORDERING.apply_to_queryset(queryset, query.ordering)
         return queryset, query
 
     @staticmethod
