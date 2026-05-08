@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.52.1...backend-v1.52.2) (2026-05-08)
+
+
+### Refactoring
+
+* backend oop services ([#691](https://github.com/yuyash/auto-forex-web-service/issues/691)) ([9009fef](https://github.com/yuyash/auto-forex-web-service/commit/9009fef707c6f6e1dfa2a2824970c58b39471330))
+
 ## [1.52.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.52.0...backend-v1.52.1) (2026-05-08)
 
 
