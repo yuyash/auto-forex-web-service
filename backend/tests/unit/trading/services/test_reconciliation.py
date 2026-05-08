@@ -196,7 +196,7 @@ class TestSyncAccountSnapshot:
         reconciler.oanda_service.get_account_details.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="Fetch account snapshot failed after"):
+        with pytest.raises(RuntimeError, match="non-retryable OANDA error after 1 attempt"):
             reconciler._sync_account_snapshot(report)
 
 
@@ -280,7 +280,7 @@ class TestSyncPositionsWithBroker:
         reconciler.oanda_service.get_open_trades.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="failed after .* retries"):
+        with pytest.raises(RuntimeError, match="non-retryable OANDA error after 1 attempt"):
             reconciler._sync_positions_with_broker(report)
 
     @patch("apps.trading.services.reconciliation.Position")

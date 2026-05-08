@@ -140,14 +140,25 @@ def call_with_retry(
     # without having to pass ``sleep=`` explicitly.
     sleep_fn = sleep if sleep is not None else time.sleep
 
+    attempts_used = 0
     for attempt in range(1, max_attempts + 1):
+        attempts_used = attempt
         try:
             return fn(*args, **kwargs)
         except OandaAPIError as exc:
             last_exc = exc
             if not is_retryable_oanda_error(exc):
-                logger.error("%s failed with non-retryable OANDA error: %s", label, exc)
-                break
+                logger.error(
+                    "%s failed with non-retryable OANDA error on attempt %d/%d: %s",
+                    label,
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+                raise RuntimeError(
+                    f"{label} failed with non-retryable OANDA error "
+                    f"after {attempt} attempt{'s' if attempt != 1 else ''}: {last_exc}"
+                ) from last_exc
             if attempt < max_attempts:
                 delay = policy.apply_jitter(policy.delay_for_attempt(attempt))
                 logger.warning(
@@ -168,7 +179,7 @@ def call_with_retry(
                     exc,
                 )
 
-    raise RuntimeError(f"{label} failed after {max_attempts} retries: {last_exc}") from last_exc
+    raise RuntimeError(f"{label} failed after {attempts_used} attempts: {last_exc}") from last_exc
 
 
 def is_retryable_oanda_error(exc: OandaAPIError) -> bool:

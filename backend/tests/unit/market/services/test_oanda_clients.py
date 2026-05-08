@@ -1,8 +1,13 @@
 """Unit tests for focused OANDA client collaborators."""
 
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from apps.market.models import TickData
 from apps.market.services.oanda_clients import (
     OandaAccountClient,
     OandaContextFactory,
@@ -11,6 +16,18 @@ from apps.market.services.oanda_clients import (
     OandaPricingStreamClient,
     OandaTradeClient,
     OandaTransactionClient,
+)
+from apps.market.services.oanda_types import (
+    AccountDetails,
+    LimitOrderRequest,
+    MarketOrder,
+    OcoOrder,
+    OcoOrderRequest,
+    OrderDirection,
+    OrderState,
+    OrderType,
+    Position,
+    StopOrderRequest,
 )
 
 
@@ -52,122 +69,212 @@ class TestOandaAccountClient:
         assert second == {"id": "101-001"}
         service.api.account.get.assert_called_once_with("101-001")
 
-    def test_account_facade_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
-        client = OandaAccountClient(service)
+    def test_get_details_maps_account_resource(self):
+        service = SimpleNamespace(
+            account=SimpleNamespace(account_id="101-001"),
+            get_account_resource=MagicMock(
+                return_value={
+                    "currency": "JPY",
+                    "balance": "1000.5",
+                    "unrealizedPL": "-2.5",
+                    "NAV": "998",
+                    "marginUsed": "10",
+                    "marginAvailable": "988",
+                    "positionValue": "250",
+                    "openTradeCount": 2,
+                    "openPositionCount": 1,
+                    "pendingOrderCount": 0,
+                    "lastTransactionID": "42",
+                }
+            ),
+        )
 
-        client.get_details()
-        client.get_hedging_enabled()
-        client.get_position_mode()
+        details = OandaAccountClient(service).get_details()
 
-        service._get_account_details_impl.assert_called_once_with()
-        service._get_account_hedging_enabled_impl.assert_called_once_with()
-        service._get_account_position_mode_impl.assert_called_once_with()
+        assert isinstance(details, AccountDetails)
+        assert details.account_id == "101-001"
+        assert details.currency == "JPY"
+        assert details.balance == Decimal("1000.5")
+        assert details.last_transaction_id == "42"
+
+    def test_position_mode_uses_hedging_flag(self):
+        service = SimpleNamespace(
+            account=SimpleNamespace(account_id="101-001"),
+            get_account_resource=MagicMock(return_value={"hedgingEnabled": True}),
+        )
+
+        assert OandaAccountClient(service).get_position_mode() == "hedging"
 
 
 class TestOandaOrderClient:
-    """Tests for order client delegation."""
+    """Tests for order client behavior."""
 
-    def test_order_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
-        client = OandaOrderClient(service)
-
-        client.cancel_order("order")
-        client.create_limit_order("limit")
-        client.create_market_order("market", override_price="1.1")
-        client.create_stop_order("stop")
-        client.create_oco_order("oco")
-        client.get_pending_orders(instrument="EUR_USD")
-        client.get_order_history(instrument="EUR_USD", count=10, state="FILLED")
-        client.get_order("123")
-
-        service._cancel_order_impl.assert_called_once_with("order")
-        service._create_limit_order_impl.assert_called_once_with("limit")
-        service._create_market_order_impl.assert_called_once_with(
-            "market",
-            override_price="1.1",
+    def test_create_oco_order_composes_limit_and_stop_orders(self):
+        limit_order = MagicMock(order_id="L1", create_time=datetime(2026, 1, 1, tzinfo=UTC))
+        stop_order = MagicMock(order_id="S1")
+        service = SimpleNamespace(
+            create_limit_order=MagicMock(return_value=limit_order),
+            create_stop_order=MagicMock(return_value=stop_order),
         )
-        service._create_stop_order_impl.assert_called_once_with("stop")
-        service._create_oco_order_impl.assert_called_once_with("oco")
-        service._get_pending_orders_impl.assert_called_once_with(instrument="EUR_USD")
-        service._get_order_history_impl.assert_called_once_with(
+        request = OcoOrderRequest(
+            instrument="EUR_USD",
+            units=Decimal("1000"),
+            limit_price=Decimal("1.1"),
+            stop_price=Decimal("1.0"),
+        )
+
+        order = OandaOrderClient(service).create_oco_order(request)
+
+        assert isinstance(order, OcoOrder)
+        assert order.order_id == "OCO-L1-S1"
+        assert order.limit_order is limit_order
+        assert order.stop_order is stop_order
+        service.create_limit_order.assert_called_once_with(
+            LimitOrderRequest(instrument="EUR_USD", units=Decimal("1000"), price=Decimal("1.1"))
+        )
+        service.create_stop_order.assert_called_once_with(
+            StopOrderRequest(instrument="EUR_USD", units=Decimal("1000"), price=Decimal("1.0"))
+        )
+
+    def test_get_order_history_fetches_and_parses_orders(self):
+        raw_order = {"id": "1"}
+        response = SimpleNamespace(status=200, body={"orders": [raw_order]})
+        service = SimpleNamespace(
+            api=SimpleNamespace(order=SimpleNamespace(list=MagicMock(return_value=response))),
+            account=SimpleNamespace(account_id="101-001"),
+            _parse_order=MagicMock(return_value="parsed"),
+        )
+
+        orders = OandaOrderClient(service).get_order_history(
             instrument="EUR_USD",
             count=10,
             state="FILLED",
         )
-        service._get_order_impl.assert_called_once_with("123")
+
+        assert orders == ["parsed"]
+        service.api.order.list.assert_called_once_with(
+            "101-001",
+            count=10,
+            state="FILLED",
+            instrument="EUR_USD",
+        )
+        service._parse_order.assert_called_once_with(raw_order)
 
 
 class TestOandaTradeClient:
-    """Tests for trade client delegation."""
+    """Tests for trade client behavior."""
 
-    def test_trade_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
+    def test_get_open_trades_uses_open_state(self):
+        service = SimpleNamespace()
         client = OandaTradeClient(service)
+        client.get_trades = MagicMock(return_value=["trade"])
 
-        client.close_trade(trade="trade", units="100")
-        client.get_trades(instrument="USD_JPY", state="CLOSED", count=25)
-        client.get_open_trades(instrument="USD_JPY")
-
-        service._close_trade_impl.assert_called_once_with(trade="trade", units="100")
-        service._get_trades_impl.assert_called_once_with(
-            instrument="USD_JPY",
-            state="CLOSED",
-            count=25,
-        )
-        service._get_open_trades_impl.assert_called_once_with(instrument="USD_JPY")
+        assert client.get_open_trades(instrument="USD_JPY") == ["trade"]
+        client.get_trades.assert_called_once_with(instrument="USD_JPY", state="OPEN")
 
 
 class TestOandaPositionClient:
-    """Tests for position client delegation."""
+    """Tests for position client behavior."""
 
-    def test_position_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
-        client = OandaPositionClient(service)
-
-        client.close_position(position="position", units="100", override_price="1.2")
-        client.get_open_positions(instrument="GBP_USD")
-
-        service._close_position_impl.assert_called_once_with(
-            position="position",
-            units="100",
-            override_price="1.2",
+    def test_close_position_uses_dry_run_simulator_when_enabled(self):
+        position = Position(
+            instrument="USD_JPY",
+            direction=OrderDirection.LONG,
+            units=Decimal("1000"),
+            average_price=Decimal("150"),
+            unrealized_pnl=Decimal("0"),
+            trade_ids=[],
+            account_id="dry",
         )
-        service._get_open_positions_impl.assert_called_once_with(instrument="GBP_USD")
+        expected = MarketOrder(
+            order_id="DRY",
+            instrument="USD_JPY",
+            order_type=OrderType.MARKET,
+            direction=OrderDirection.LONG,
+            units=Decimal("1000"),
+            price=Decimal("150.1"),
+            state=OrderState.FILLED,
+            time_in_force="FOK",
+            create_time=datetime(2026, 1, 1, tzinfo=UTC),
+            fill_time=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        service = SimpleNamespace(
+            dry_run=True,
+            _dry_run_simulator=SimpleNamespace(
+                simulate_position_close=MagicMock(return_value=expected)
+            ),
+        )
+
+        order = OandaPositionClient(service).close_position(
+            position,
+            units=Decimal("500"),
+            override_price=Decimal("150.1"),
+        )
+
+        assert order is expected
+        service._dry_run_simulator.simulate_position_close.assert_called_once_with(
+            position,
+            Decimal("500"),
+            override_price=Decimal("150.1"),
+        )
 
 
 class TestOandaTransactionClient:
-    """Tests for transaction client delegation."""
+    """Tests for transaction-history client behavior."""
 
-    def test_transaction_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
-        client = OandaTransactionClient(service)
-
-        client.get_transaction_history(page_size=10, transaction_type="ORDER_FILL")
-
-        service._get_transaction_history_impl.assert_called_once_with(
-            from_time=None,
-            to_time=None,
-            page_size=10,
-            transaction_type="ORDER_FILL",
+    def test_transaction_history_parses_inline_transactions(self):
+        raw_transaction = {"id": "1"}
+        response = SimpleNamespace(status=200, body={"transactions": [raw_transaction]})
+        service = SimpleNamespace(
+            api=SimpleNamespace(transaction=SimpleNamespace(list=MagicMock(return_value=response))),
+            account=SimpleNamespace(account_id="101-001"),
+            _parse_transaction=MagicMock(return_value="parsed"),
         )
+
+        transactions = OandaTransactionClient(service).get_transaction_history(page_size=10)
+
+        assert transactions == ["parsed"]
+        service.api.transaction.list.assert_called_once_with("101-001", pageSize=10)
+        service._parse_transaction.assert_called_once_with(raw_transaction)
 
 
 class TestOandaPricingStreamClient:
-    """Tests for pricing stream client delegation."""
+    """Tests for pricing stream client behavior."""
 
-    def test_stream_methods_delegate_to_service_implementation(self):
-        service = MagicMock()
-        client = OandaPricingStreamClient(service)
-
-        client.stream_pricing_ticks(
-            ["EUR_USD"],
-            snapshot=False,
-            include_heartbeats=True,
+    def test_stream_pricing_ticks_parses_dict_price_messages(self):
+        response = SimpleNamespace(
+            status=200,
+            parts=MagicMock(
+                return_value=[
+                    (
+                        "pricing.ClientPrice",
+                        {
+                            "type": "PRICE",
+                            "instrument": "EUR_USD",
+                            "time": "2026-01-01T00:00:00Z",
+                            "bids": [{"price": "1.1"}],
+                            "asks": [{"price": "1.2"}],
+                        },
+                    )
+                ]
+            ),
+        )
+        service = SimpleNamespace(
+            stream_api=SimpleNamespace(
+                pricing=SimpleNamespace(stream=MagicMock(return_value=response))
+            ),
+            account=SimpleNamespace(account_id="101-001"),
+            _parse_iso_datetime=MagicMock(return_value=datetime(2026, 1, 1, tzinfo=UTC)),
         )
 
-        service._stream_pricing_ticks_impl.assert_called_once_with(
-            ["EUR_USD"],
-            snapshot=False,
-            include_heartbeats=True,
+        ticks = list(OandaPricingStreamClient(service).stream_pricing_ticks(["EUR_USD"]))
+
+        assert len(ticks) == 1
+        assert isinstance(ticks[0], TickData)
+        assert ticks[0].instrument == "EUR_USD"
+        assert ticks[0].mid == Decimal("1.15")
+        service.stream_api.pricing.stream.assert_called_once_with(
+            "101-001",
+            snapshot=True,
+            instruments="EUR_USD",
         )

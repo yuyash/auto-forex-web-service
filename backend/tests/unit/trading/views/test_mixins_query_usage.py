@@ -92,18 +92,18 @@ def test_summary_uses_summary_query_params():
     request = _request("/api/tasks/1/summary")
 
     with (
-        patch("dataclasses.asdict", return_value={"task": {"status": "created"}}),
         patch("apps.trading.views.mixins.SummaryQueryParams.from_request") as from_request,
-        patch("apps.trading.services.summary.compute_cached_task_summary") as compute,
+        patch("apps.trading.services.summary.TaskSummaryResponseService.build") as build,
         patch("apps.trading.views.mixins.TaskSummarySerializer") as serializer_cls,
     ):
         from_request.return_value = SimpleNamespace(execution_id="exec-1")
-        compute.return_value = SimpleNamespace()
+        build.return_value = {"task": {"status": "created"}}
         serializer_cls.return_value.data = {"task": {"status": "created"}}
 
         response = view.summary(request, pk=1)
 
     from_request.assert_called_once_with(request, default_execution_id="exec-1")
+    build.assert_called_once()
     assert response.data == {"task": {"status": "created"}}
 
 

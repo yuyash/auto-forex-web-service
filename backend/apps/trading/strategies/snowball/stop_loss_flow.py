@@ -17,7 +17,7 @@ from apps.trading.strategies.snowball.calculators import (
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
-from apps.trading.strategies.snowball.events import entry_rebuild_event
+from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.grid_policy import (
     grid_tp_bounds,
     preceding_entry_bound,
@@ -31,7 +31,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballStrategyState,
     StopLossClosedEntry,
 )
-from apps.trading.strategies.snowball.pricing import rebuild_take_profit_price
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 logger = getLogger(__name__)
 
@@ -254,7 +254,7 @@ def process_stop_loss_rebuilds(
             if not _rebuild_trigger_hit(pending, tick, trigger_price):
                 continue
 
-            adjusted_close_price = rebuild_take_profit_price(
+            adjusted_close_price = SNOWBALL_PRICING.rebuild_take_profit_price(
                 pending=pending,
                 entry_price=trigger_price,
                 pip_size=strategy.pip_size,
@@ -317,7 +317,7 @@ def process_stop_loss_rebuilds(
             )
 
             events.append(
-                entry_rebuild_event(
+                SNOWBALL_EVENTS.entry_rebuild_event(
                     entry,
                     timestamp=tick.timestamp,
                     original_position_id=pending.position_id,

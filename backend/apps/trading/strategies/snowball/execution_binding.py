@@ -8,7 +8,7 @@ from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import SnowballStrategyState
-from apps.trading.strategies.snowball.pricing import sync_entry_fill_price
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 
 class ExecutionBindingStrategy(Protocol):
@@ -39,7 +39,7 @@ def apply_event_execution_result(
             for slot in layer.slots:
                 if slot.entry is not None and slot.entry.entry_id == eid:
                     slot.entry.position_id = str(position_id)
-                    sync_entry_fill_price(
+                    SNOWBALL_PRICING.sync_entry_fill_price(
                         entry=slot.entry,
                         layer=layer,
                         fill_price=binding.fill_price,
@@ -50,7 +50,7 @@ def apply_event_execution_result(
         for entry in cycle.hedge_entries:
             if entry.entry_id == eid:
                 entry.position_id = str(position_id)
-                sync_entry_fill_price(
+                SNOWBALL_PRICING.sync_entry_fill_price(
                     entry=entry,
                     layer=None,
                     fill_price=binding.fill_price,

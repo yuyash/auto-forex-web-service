@@ -15,7 +15,7 @@ from apps.trading.strategies.snowball.calculators import (
     SnowballFormulaCalculator,
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.events import entry_open_event
+from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.grid_policy import preceding_entry_bound
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -24,7 +24,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballCycle,
     SnowballStrategyState,
 )
-from apps.trading.strategies.snowball.pricing import weighted_avg_close_price
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 logger = getLogger(__name__)
 
@@ -480,7 +480,7 @@ def _open_counter_entry(
         layer_ref = None
 
     if cfg.counter_tp_mode == "weighted_avg":
-        close_price, formula = weighted_avg_close_price(
+        close_price, formula = SNOWBALL_PRICING.weighted_avg_close_price(
             layer,
             new_price=new_price,
             new_units=units,
@@ -525,7 +525,7 @@ def _open_counter_entry(
         adverse,
     )
 
-    evt = entry_open_event(
+    evt = SNOWBALL_EVENTS.entry_open_event(
         entry,
         timestamp=tick.timestamp,
         planned_exit_price_formula=formula,

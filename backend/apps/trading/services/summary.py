@@ -193,6 +193,10 @@ class TaskSummary:
 class TaskSummaryResponseService:
     """Build task summary response payloads for API views."""
 
+    def __init__(self, *, read_model: "TaskSummaryReadModel | None" = None) -> None:
+        """Initialize with an injectable read-model collaborator."""
+        self.read_model = read_model or TASK_SUMMARY_READ_MODEL
+
     def build(
         self,
         *,
@@ -201,7 +205,7 @@ class TaskSummaryResponseService:
         execution_id=None,
     ) -> dict[str, object]:
         """Return a serializer-ready summary for a task."""
-        summary = compute_cached_task_summary(
+        summary = self.read_model.compute_cached(
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=execution_id,
@@ -212,6 +216,80 @@ class TaskSummaryResponseService:
         import dataclasses
 
         return dataclasses.asdict(summary)
+
+
+class TaskSummaryReadModel:
+    """Build and cache dashboard task summary read models."""
+
+    def compute(
+        self,
+        *,
+        task_type: str,
+        task_id: str,
+        execution_id=None,
+    ) -> TaskSummary:
+        """Compute an uncached summary for a task execution."""
+        return compute_task_summary(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+
+    def compute_cached(
+        self,
+        *,
+        task_type: str,
+        task_id: str,
+        execution_id=None,
+    ) -> TaskSummary:
+        """Compute a cached task summary keyed by task/state freshness."""
+        from apps.trading.services.execution_snapshots import get_summary_snapshot
+
+        task_obj = _get_task(task_type, task_id)
+        persisted_snapshot = get_summary_snapshot(
+            task=task_obj,
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=str(execution_id) if execution_id is not None else None,
+        )
+        if persisted_snapshot is not None and not _uses_runtime_pnl_metrics(task_obj):
+            return persisted_snapshot
+
+        state = _get_state(task_type, task_id, execution_id)
+        snapshot_cache_key = _build_task_summary_snapshot_cache_key(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            task_obj=task_obj,
+        )
+        if snapshot_cache_key:
+            cached_snapshot = cache.get(snapshot_cache_key)
+            if isinstance(cached_snapshot, TaskSummary):
+                return cached_snapshot
+
+        cache_key = _build_task_summary_cache_key(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            task_obj=task_obj,
+            state=state,
+        )
+        cached = cache.get(cache_key)
+        if isinstance(cached, TaskSummary):
+            return cached
+
+        summary = self.compute(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+        cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
+        if snapshot_cache_key:
+            cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
+        return summary
+
+
+TASK_SUMMARY_READ_MODEL = TaskSummaryReadModel()
 
 
 def compute_task_summary(
@@ -508,50 +586,11 @@ def compute_cached_task_summary(
     execution_id=None,
 ) -> TaskSummary:
     """Compute a cached task summary keyed by task/state freshness."""
-    from apps.trading.services.execution_snapshots import get_summary_snapshot
-
-    task_obj = _get_task(task_type, task_id)
-    persisted_snapshot = get_summary_snapshot(
-        task=task_obj,
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=str(execution_id) if execution_id is not None else None,
-    )
-    if persisted_snapshot is not None and not _uses_runtime_pnl_metrics(task_obj):
-        return persisted_snapshot
-
-    state = _get_state(task_type, task_id, execution_id)
-    snapshot_cache_key = _build_task_summary_snapshot_cache_key(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
-        task_obj=task_obj,
-    )
-    if snapshot_cache_key:
-        cached_snapshot = cache.get(snapshot_cache_key)
-        if isinstance(cached_snapshot, TaskSummary):
-            return cached_snapshot
-
-    cache_key = _build_task_summary_cache_key(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
-        task_obj=task_obj,
-        state=state,
-    )
-    cached = cache.get(cache_key)
-    if isinstance(cached, TaskSummary):
-        return cached
-
-    summary = compute_task_summary(
+    return TASK_SUMMARY_READ_MODEL.compute_cached(
         task_type=task_type,
         task_id=task_id,
         execution_id=execution_id,
     )
-    cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
-    if snapshot_cache_key:
-        cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
-    return summary
 
 
 def _get_task(task_type: str, task_id: str):

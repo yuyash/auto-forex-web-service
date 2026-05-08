@@ -49,9 +49,7 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
 )
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.entry_lifecycle import close_entry
-from apps.trading.strategies.snowball.events import (
-    entry_open_event,
-)
+from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.execution_binding import (
     apply_event_execution_result as apply_snowball_execution_result,
 )
@@ -72,14 +70,8 @@ from apps.trading.strategies.snowball.parameters import (
     parse_config,
     validate_parameters,
 )
-from apps.trading.strategies.snowball.pricing import layer_initial_close_price
-from apps.trading.strategies.snowball.protection import (
-    handle_emergency,
-    handle_lock,
-    handle_lock_release,
-    handle_shrink,
-    margin_ratio,
-)
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
+from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.strategies.snowball.stop_loss_flow import (
     assign_auto_stop_loss,
     assign_configured_stop_loss,
@@ -345,7 +337,7 @@ class SnowballStrategy(Strategy):
         if cfg.stop_loss_enabled:
             self._assign_configured_stop_loss(entry, 1)
 
-        evt = entry_open_event(
+        evt = SNOWBALL_EVENTS.entry_open_event(
             entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
@@ -843,7 +835,7 @@ class SnowballStrategy(Strategy):
         # TP together to absorb the slippage.
         layer_entry.entry_price = price
 
-        close_price, formula = layer_initial_close_price(
+        close_price, formula = SNOWBALL_PRICING.layer_initial_close_price(
             new_price=price,
             prev_layer=prev_layer,
             direction=direction,
@@ -879,7 +871,7 @@ class SnowballStrategy(Strategy):
             close_price,
         )
 
-        evt = entry_open_event(
+        evt = SNOWBALL_EVENTS.entry_open_event(
             layer_entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
@@ -1017,11 +1009,16 @@ class SnowballStrategy(Strategy):
             tick=tick,
             instrument=self.instrument,
             account_currency=self.account_currency,
-            margin_ratio_func=margin_ratio,
+            margin_ratio_func=SNOWBALL_PROTECTION.margin_ratio,
         )
 
         # --- Emergency ---
-        emergency = handle_emergency(strategy=self, ss=ss, tick=tick, ratio=ratio)
+        emergency = SNOWBALL_PROTECTION.handle_emergency(
+            strategy=self,
+            ss=ss,
+            tick=tick,
+            ratio=ratio,
+        )
         if emergency is not None:
             emergency_events, stop_reason = emergency
             state.strategy_state = ss.to_dict()
@@ -1034,14 +1031,19 @@ class SnowballStrategy(Strategy):
             )
 
         # --- Lock enter ---
-        lock_events = handle_lock(strategy=self, ss=ss, tick=tick, ratio=ratio)
+        lock_events = SNOWBALL_PROTECTION.handle_lock(
+            strategy=self,
+            ss=ss,
+            tick=tick,
+            ratio=ratio,
+        )
         if lock_events is not None:
             events.extend(lock_events)
         allow_new_positions = lock_events is None and ss.protection_level != ProtectionLevel.LOCKED
 
         # --- Lock release ---
         if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
-            release_events = handle_lock_release(
+            release_events = SNOWBALL_PROTECTION.handle_lock_release(
                 strategy=self,
                 close_entry=self._close_entry,
                 ss=ss,
@@ -1054,7 +1056,7 @@ class SnowballStrategy(Strategy):
         # --- Shrink ---
         shrink_events = None
         if lock_events is None:
-            shrink_events = handle_shrink(
+            shrink_events = SNOWBALL_PROTECTION.handle_shrink(
                 strategy=self,
                 close_entry=self._close_entry,
                 state=state,

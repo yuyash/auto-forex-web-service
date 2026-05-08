@@ -13,7 +13,7 @@ from apps.trading.enums import TaskStatus
 from apps.trading.models import CeleryTaskStatus
 from apps.trading.services.execution_metrics import build_execution_metrics
 from apps.trading.services.execution_snapshots import get_metrics_snapshot
-from apps.trading.services.summary import compute_cached_task_summary
+from apps.trading.services.summary import TASK_SUMMARY_READ_MODEL
 
 
 EXECUTION_METRICS_CACHE_TTL_SECONDS = 60 * 60
@@ -405,7 +405,7 @@ def _build_execution_metrics_cache_key(
 def _compute_execution_metrics(
     *, task, task_type: str, task_id: str, run_id: str, fallback_mid_rate: Decimal | None = None
 ) -> dict[str, Any]:
-    summary = compute_cached_task_summary(
+    summary = TASK_SUMMARY_READ_MODEL.compute_cached(
         task_type=task_type,
         task_id=task_id,
         execution_id=run_id,
@@ -423,7 +423,7 @@ def _compute_execution_metrics(
 def _compute_progress(*, task, task_type: str, run_id: str, status: str) -> int:
     current_run_id = str(getattr(task, "execution_id", None) or "")
     if run_id == current_run_id:
-        summary = compute_cached_task_summary(
+        summary = TASK_SUMMARY_READ_MODEL.compute_cached(
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=run_id,

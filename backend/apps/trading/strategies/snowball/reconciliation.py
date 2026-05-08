@@ -10,7 +10,7 @@ from apps.trading.enums import Direction
 from apps.trading.models import Position
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import Entry, Layer, SnowballStrategyState
-from apps.trading.strategies.snowball.pricing import sync_entry_fill_price
+from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 
 class ReconciliationState(Protocol):
@@ -162,7 +162,7 @@ def _apply_position_to_entry(
 
     entry.direction = Direction(str(position.direction).lower())
     entry.units = abs(int(position.units))
-    sync_entry_fill_price(
+    SNOWBALL_PRICING.sync_entry_fill_price(
         entry=entry,
         layer=layer,
         fill_price=_strict_decimal(position.entry_price, field_name="position.entry_price"),

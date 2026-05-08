@@ -8,7 +8,7 @@ from decimal import Decimal
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.models import SnowballStrategyState
-from apps.trading.strategies.snowball.protection import margin_ratio
+from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.utils import AccountCurrency, Instrument
 
 
@@ -19,7 +19,7 @@ def update_account_metrics(
     tick: Tick,
     instrument: str,
     account_currency: str,
-    margin_ratio_func: Callable[..., Decimal] = margin_ratio,
+    margin_ratio_func: Callable[..., Decimal] = SNOWBALL_PROTECTION.margin_ratio,
 ) -> Decimal:
     """Refresh NAV and margin-ratio metrics from current tick/account state."""
     if state.current_balance:

@@ -14,9 +14,9 @@ from apps.trading.services.summary import (
     PnlInfo,
     TaskInfo,
     TaskSummary,
+    TASK_SUMMARY_READ_MODEL,
     TickDeliveryInfo,
     TickInfo,
-    compute_task_summary,
 )
 
 TERMINAL_SNAPSHOT_STATUSES = frozenset({"completed", "stopped", "failed"})
@@ -108,7 +108,7 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
         return None
     task_id = str(task.pk)
     run_id = str(execution_id)
-    summary = compute_task_summary(
+    summary = TASK_SUMMARY_READ_MODEL.compute(
         task_type=task_type,
         task_id=task_id,
         execution_id=execution_id,

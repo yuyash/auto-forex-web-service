@@ -2,13 +2,40 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import v20
 from django.conf import settings
+from v20.transaction import StopLossDetails, TakeProfitDetails
 
-from apps.market.services.oanda_types import OandaAPIError
+from apps.market.enums import MarketEventSeverity, MarketEventType
+from apps.market.models import TickData
+from apps.market.services.oanda_types import (
+    AccountDetails,
+    CancelledOrder,
+    LimitOrder,
+    LimitOrderRequest,
+    MarketOrder,
+    MarketOrderRequest,
+    OandaAPIError,
+    OcoOrder,
+    OcoOrderRequest,
+    OpenTrade,
+    Order,
+    OrderDirection,
+    OrderState,
+    OrderType,
+    PendingOrder,
+    Position,
+    StopOrder,
+    StopOrderRequest,
+    Transaction,
+)
 
 logger: Logger = getLogger(name=__name__)
 
@@ -95,17 +122,90 @@ class OandaAccountClient:
                 internal_detail=str(e),
             ) from e
 
-    def get_details(self):
-        """Fetch normalized account details."""
-        return self.service._get_account_details_impl()
+    def get_details(self) -> AccountDetails:
+        """
+        Fetch account details from OANDA API.
+
+        Returns:
+            Dictionary with account details including balance, margin, etc.
+
+        Raises:
+            OandaAPIError: If API call fails
+        """
+        service = self.service
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            account_data = service.get_account_resource()
+
+            def _read(key: str, default: Any) -> Any:
+                value = account_data.get(key, default)
+                return default if value is None else value
+
+            return AccountDetails(
+                account_id=str(service.account.account_id),
+                currency=str(_read("currency", "USD")),
+                balance=Decimal(str(_read("balance", "0"))),
+                unrealized_pl=Decimal(str(_read("unrealizedPL", "0"))),
+                nav=Decimal(str(_read("NAV", "0"))),
+                margin_used=Decimal(str(_read("marginUsed", "0"))),
+                margin_available=Decimal(str(_read("marginAvailable", "0"))),
+                position_value=Decimal(str(_read("positionValue", "0"))),
+                open_trade_count=int(_read("openTradeCount", 0) or 0),
+                open_position_count=int(_read("openPositionCount", 0) or 0),
+                pending_order_count=int(_read("pendingOrderCount", 0) or 0),
+                last_transaction_id=str(_read("lastTransactionID", "")),
+            )
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching account details for %s: %s",
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching account details",
+                internal_detail=str(e),
+            ) from e
 
     def get_hedging_enabled(self) -> bool:
-        """Return whether account hedging mode is enabled."""
-        return self.service._get_account_hedging_enabled_impl()
+        """Return whether the OANDA account has hedging enabled.
+
+        OANDA v20 exposes this as the boolean field `hedgingEnabled` on the
+        account resource. In common OANDA configurations:
+        - `True`  => hedging mode (multiple trades can exist per instrument)
+        - `False` => netting mode (positions are effectively aggregated per instrument)
+
+        Raises:
+            OandaAPIError: If the API call fails
+        """
+        service = self.service
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            account_data = service.get_account_resource()
+            return bool(account_data.get("hedgingEnabled", False))
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            account_id = service.account.account_id if service.account else "unknown"
+            logger.error(
+                "Error fetching account hedging mode for %s: %s",
+                account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching account configuration",
+                internal_detail=str(e),
+            ) from e
 
     def get_position_mode(self) -> str:
-        """Return the account's position mode."""
-        return self.service._get_account_position_mode_impl()
+        """Return `hedging` or `netting` based on the account configuration."""
+
+        return "hedging" if self.get_hedging_enabled() else "netting"
 
 
 class OandaOrderClient:
@@ -115,46 +215,461 @@ class OandaOrderClient:
         """Bind this collaborator to an initialized OandaService instance."""
         self.service = service
 
-    def cancel_order(self, order: Any):
-        """Cancel an existing broker order."""
-        return self.service._cancel_order_impl(order)
+    def cancel_order(self, order: Order) -> CancelledOrder:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
 
-    def create_limit_order(self, request: Any):
-        """Create a pending limit order."""
-        return self.service._create_limit_order_impl(request)
+        try:
+            response = service.api.order.cancel(service.account.account_id, order.order_id)
+            if response.status not in (200, 201):
+                raise OandaAPIError(
+                    f"Failed to cancel order {order.order_id}: status {response.status}"
+                )
 
-    def create_market_order(self, request: Any, override_price: Any = None):
-        """Create a market order."""
-        return self.service._create_market_order_impl(request, override_price=override_price)
+            cancel_tx = getattr(response, "orderCancelTransaction", None)
+            tx_id = getattr(cancel_tx, "id", None) if cancel_tx else None
+            cancel_time = service._parse_iso_datetime(
+                getattr(cancel_tx, "time", None) if cancel_tx else None
+            )
 
-    def create_stop_order(self, request: Any):
-        """Create a pending stop order."""
-        return self.service._create_stop_order_impl(request)
+            service.event_service.log_trading_event(
+                event_type=MarketEventType.ORDER_CANCELLED,
+                description=f"Order cancelled: {order.order_id}",
+                severity=MarketEventSeverity.INFO,
+                user=service.account.user,
+                account=service.account,
+                instrument=order.instrument,
+                details={"order_id": order.order_id, "transaction_id": tx_id},
+            )
 
-    def create_oco_order(self, request: Any):
-        """Create an OCO order from limit and stop legs."""
-        return self.service._create_oco_order_impl(request)
+            return CancelledOrder(
+                order_id=order.order_id,
+                instrument=order.instrument,
+                order_type=order.order_type,
+                direction=order.direction,
+                units=order.units,
+                price=order.price,
+                state=OrderState.CANCELLED,
+                time_in_force=order.time_in_force,
+                create_time=order.create_time,
+                fill_time=order.fill_time,
+                cancel_time=cancel_time,
+                transaction_id=str(tx_id) if tx_id is not None else None,
+            )
 
-    def get_pending_orders(self, instrument: str | None = None):
-        """Fetch pending broker orders."""
-        return self.service._get_pending_orders_impl(instrument=instrument)
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            account_id = service.account.account_id if service.account else "unknown"
+            logger.error(
+                "Error cancelling order %s for %s: %s",
+                order.order_id,
+                account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error cancelling order",
+                internal_detail=str(e),
+            ) from e
 
-    def get_order_history(
-        self,
-        instrument: str | None = None,
-        count: int = 50,
-        state: str = "ALL",
-    ):
-        """Fetch broker order history."""
-        return self.service._get_order_history_impl(
-            instrument=instrument,
-            count=count,
-            state=state,
+    def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
+        service = self.service
+        assert service.account is not None, "Account not initialized"
+
+        direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
+        abs_units = abs(request.units)
+        service._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
         )
 
-    def get_order(self, order_id: str):
-        """Fetch one broker order by id."""
-        return self.service._get_order_impl(order_id)
+        order_request = {
+            "instrument": request.instrument,
+            "units": int(request.units),
+            "order_type": OrderType.LIMIT.value,
+            "price": float(request.price),
+        }
+        service._validate_compliance(order_request)
+
+        order_data: dict[str, Any] = {
+            "instrument": request.instrument,
+            "units": str(int(request.units)),
+            "price": str(request.price),
+            "type": "LIMIT",
+            "timeInForce": "GTC",
+        }
+        if request.take_profit is not None:
+            order_data["takeProfitOnFill"] = TakeProfitDetails(
+                price=str(request.take_profit)
+            ).__dict__
+        if request.stop_loss is not None:
+            order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+
+        response = service._execute_with_retry(order_data)
+        create_tx = service._response_field(response, "orderCreateTransaction")
+        order_id_raw = service._object_field(create_tx, "id")
+        order_id = str(order_id_raw) if order_id_raw is not None else ""
+        created_time = service._parse_iso_datetime(service._object_field(create_tx, "time"))
+
+        service.event_service.log_trading_event(
+            event_type=MarketEventType.ORDER_SUBMITTED,
+            description=(
+                f"Limit order submitted: {direction.value} {abs_units} {request.instrument} "
+                f"@ {request.price}"
+            ),
+            severity=MarketEventSeverity.INFO,
+            user=service.account.user,
+            account=service.account,
+            instrument=request.instrument,
+            details={
+                "order_id": order_id,
+                "instrument": request.instrument,
+                "order_type": OrderType.LIMIT.value,
+                "direction": direction.value,
+                "units": str(abs_units),
+                "price": str(request.price),
+                "take_profit": str(request.take_profit) if request.take_profit else None,
+                "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                "status": "pending",
+            },
+        )
+
+        return LimitOrder(
+            order_id=str(order_id),
+            instrument=str(request.instrument),
+            order_type=OrderType.LIMIT,
+            direction=direction,
+            units=abs_units,
+            price=request.price,
+            state=OrderState.PENDING,
+            time_in_force="GTC",
+            create_time=created_time,
+        )
+
+    def create_market_order(
+        self,
+        request: MarketOrderRequest,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        service = self.service
+        direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
+        abs_units = abs(request.units)
+
+        # Dry-run mode: simulate order execution
+        if service.dry_run:
+            return service._dry_run_simulator.simulate_market_order(
+                request, direction, abs_units, override_price=override_price
+            )
+
+        # Require account for live trading
+        if service.account is None:
+            raise OandaAPIError("Account required for live trading")
+        service._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
+        )
+
+        order_request = {
+            "instrument": request.instrument,
+            "units": int(request.units),
+            "order_type": OrderType.MARKET.value,
+        }
+        service._validate_compliance(order_request)
+
+        order_data: dict[str, Any] = {
+            "instrument": request.instrument,
+            "units": str(int(request.units)),
+            "type": "MARKET",
+            "timeInForce": "FOK",
+        }
+        if request.take_profit is not None:
+            order_data["takeProfitOnFill"] = TakeProfitDetails(
+                price=str(request.take_profit)
+            ).__dict__
+        if request.stop_loss is not None:
+            order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+
+        response = service._execute_with_retry(order_data)
+
+        fill_tx = service._response_field(response, "orderFillTransaction")
+        create_tx = service._response_field(response, "orderCreateTransaction")
+        reject_tx = service._response_field(response, "orderRejectTransaction")
+
+        if fill_tx:
+            order_id = (
+                service._object_field(fill_tx, "id") or service._object_field(create_tx, "id") or ""
+            )
+            fill_price_raw = service._object_field(fill_tx, "price")
+            fill_price = Decimal(str(fill_price_raw)) if fill_price_raw is not None else None
+            fill_time = service._parse_iso_datetime(service._object_field(fill_tx, "time"))
+
+            # Extract OANDA trade ID from the fill transaction
+            trade_id: str | None = None
+            trade_opened = service._object_field(fill_tx, "tradeOpened")
+            if trade_opened:
+                trade_id_raw = service._object_field(trade_opened, "tradeID")
+                trade_id = str(trade_id_raw) if trade_id_raw not in (None, "") else None
+
+            service.event_service.log_trading_event(
+                event_type=MarketEventType.ORDER_SUBMITTED,
+                description=(
+                    f"Market order submitted: {direction.value} {abs_units} {request.instrument}"
+                ),
+                severity=MarketEventSeverity.INFO,
+                user=service.account.user,
+                account=service.account,
+                instrument=request.instrument,
+                details={
+                    "order_id": order_id,
+                    "instrument": request.instrument,
+                    "order_type": OrderType.MARKET.value,
+                    "direction": direction.value,
+                    "units": str(abs_units),
+                    "take_profit": str(request.take_profit) if request.take_profit else None,
+                    "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                    "status": "filled",
+                    "fill_price": str(fill_price) if fill_price is not None else None,
+                    "trade_id": trade_id,
+                },
+            )
+
+            return MarketOrder(
+                order_id=str(order_id),
+                instrument=str(request.instrument),
+                order_type=OrderType.MARKET,
+                direction=direction,
+                units=abs_units,
+                price=fill_price,
+                state=OrderState.FILLED,
+                time_in_force="FOK",
+                create_time=fill_time,
+                fill_time=fill_time,
+                trade_id=trade_id,
+            )
+
+        reject_reason = service._object_field(reject_tx, "rejectReason")
+        if not reject_reason and hasattr(response, "body") and isinstance(response.body, dict):
+            reject_reason = response.body.get("errorMessage") or response.body.get("rejectReason")
+        reject_reason_str = str(reject_reason) if reject_reason else "Unknown rejection reason"
+
+        service.event_service.log_trading_event(
+            event_type=MarketEventType.ORDER_REJECTED,
+            description=(
+                f"Market order rejected: {direction.value} {abs_units} {request.instrument}"
+            ),
+            severity=MarketEventSeverity.ERROR,
+            user=service.account.user,
+            account=service.account,
+            instrument=request.instrument,
+            details={
+                "instrument": request.instrument,
+                "order_type": OrderType.MARKET.value,
+                "direction": direction.value,
+                "units": str(abs_units),
+                "reject_reason": reject_reason_str,
+            },
+        )
+
+        raise OandaAPIError(f"Market order rejected: {reject_reason_str}")
+
+    def create_stop_order(self, request: StopOrderRequest) -> StopOrder:
+        service = self.service
+        assert service.account is not None, "Account not initialized"
+
+        direction = OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT
+        abs_units = abs(request.units)
+        service._validate_broker_order_guard(
+            instrument=request.instrument,
+            units=request.units,
+        )
+
+        order_request = {
+            "instrument": request.instrument,
+            "units": int(request.units),
+            "order_type": OrderType.STOP.value,
+            "price": float(request.price),
+        }
+        service._validate_compliance(order_request)
+
+        order_data: dict[str, Any] = {
+            "instrument": request.instrument,
+            "units": str(int(request.units)),
+            "price": str(request.price),
+            "type": "STOP",
+            "timeInForce": "GTC",
+        }
+        if request.take_profit is not None:
+            order_data["takeProfitOnFill"] = TakeProfitDetails(
+                price=str(request.take_profit)
+            ).__dict__
+        if request.stop_loss is not None:
+            order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+
+        response = service._execute_with_retry(order_data)
+        create_tx = service._response_field(response, "orderCreateTransaction")
+        order_id_raw = service._object_field(create_tx, "id")
+        order_id = str(order_id_raw) if order_id_raw is not None else ""
+        created_time = service._parse_iso_datetime(service._object_field(create_tx, "time"))
+
+        service.event_service.log_trading_event(
+            event_type=MarketEventType.ORDER_SUBMITTED,
+            description=(
+                f"Stop order submitted: {direction.value} {abs_units} {request.instrument} "
+                f"@ {request.price}"
+            ),
+            severity=MarketEventSeverity.INFO,
+            user=service.account.user,
+            account=service.account,
+            instrument=request.instrument,
+            details={
+                "order_id": order_id,
+                "instrument": request.instrument,
+                "order_type": OrderType.STOP.value,
+                "direction": direction.value,
+                "units": str(abs_units),
+                "price": str(request.price),
+                "take_profit": str(request.take_profit) if request.take_profit else None,
+                "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                "status": "pending",
+            },
+        )
+
+        return StopOrder(
+            order_id=str(order_id),
+            instrument=str(request.instrument),
+            order_type=OrderType.STOP,
+            direction=direction,
+            units=abs_units,
+            price=request.price,
+            state=OrderState.PENDING,
+            time_in_force="GTC",
+            create_time=created_time,
+        )
+
+    def create_oco_order(self, request: OcoOrderRequest) -> OcoOrder:
+        service = self.service
+        limit_result = service.create_limit_order(
+            LimitOrderRequest(
+                instrument=request.instrument,
+                units=request.units,
+                price=request.limit_price,
+            )
+        )
+        stop_result = service.create_stop_order(
+            StopOrderRequest(
+                instrument=request.instrument,
+                units=request.units,
+                price=request.stop_price,
+            )
+        )
+        oco_id = f"OCO-{limit_result.order_id}-{stop_result.order_id}"
+        return OcoOrder(
+            order_id=oco_id,
+            instrument=str(request.instrument),
+            order_type=OrderType.OCO,
+            direction=OrderDirection.LONG if request.units > 0 else OrderDirection.SHORT,
+            units=abs(request.units),
+            price=None,
+            state=OrderState.PENDING,
+            time_in_force=None,
+            create_time=limit_result.create_time,
+            limit_order=limit_result,
+            stop_order=stop_result,
+        )
+
+    def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            response = service.api.order.list_pending(service.account.account_id)
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch pending orders: status {response.status}")
+
+            orders: list[PendingOrder] = []
+            for order_data in response.body.get("orders", []):
+                if instrument and service._object_field(order_data, "instrument") != instrument:
+                    continue
+                order_obj = service._parse_order(order_data)
+                orders.append(service._as_pending_order(order_obj))
+            return orders
+
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching pending orders for %s: %s",
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching pending orders",
+                internal_detail=str(e),
+            ) from e
+
+    def get_order_history(
+        self, instrument: str | None = None, count: int = 50, state: str = "ALL"
+    ) -> list[Order]:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            kwargs: dict[str, Any] = {"count": count, "state": state}
+            if instrument:
+                kwargs["instrument"] = instrument
+
+            response = service.api.order.list(service.account.account_id, **kwargs)
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch order history: status {response.status}")
+
+            orders: list[Order] = []
+            for order_data in response.body.get("orders", []):
+                orders.append(service._parse_order(order_data))
+            return orders
+
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching order history for %s: %s",
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching order history",
+                internal_detail=str(e),
+            ) from e
+
+    def get_order(self, order_id: str) -> Order:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            response = service.api.order.get(service.account.account_id, order_id)
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch order {order_id}: status {response.status}")
+            order_data = response.body.get("order") or {}
+            return service._parse_order(order_data)
+        except OandaAPIError:
+            raise
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "OANDA API error fetching order %s for %s: %s",
+                order_id,
+                service.account.account_id,
+                str(e),
+            )
+            raise OandaAPIError(
+                "OANDA API error",
+                internal_detail=str(e),
+            ) from e
 
 
 class OandaTradeClient:
@@ -164,9 +679,60 @@ class OandaTradeClient:
         """Bind this collaborator to an initialized OandaService instance."""
         self.service = service
 
-    def close_trade(self, trade: Any, units: Any = None):
-        """Close an individual broker trade."""
-        return self.service._close_trade_impl(trade=trade, units=units)
+    def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            service._validate_broker_order_guard(
+                instrument=trade.instrument,
+                units=trade.units if units is None else units,
+            )
+            kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
+            response = service.api.trade.close(service.account.account_id, trade.trade_id, **kwargs)
+
+            if response.status not in (200, 201):
+                raise OandaAPIError(
+                    f"Failed to close trade {trade.trade_id}: status {response.status}"
+                )
+
+            fill_tx = service._response_field(response, "orderFillTransaction")
+
+            fill_time = service._parse_iso_datetime(service._object_field(fill_tx, "time"))
+            fill_price = service._to_decimal(service._object_field(fill_tx, "price"))
+            order_id_raw = service._object_field(fill_tx, "id")
+            order_id = str(order_id_raw) if order_id_raw is not None else ""
+
+            # Closing a trade is effectively a filled market order.
+            return MarketOrder(
+                order_id=order_id,
+                instrument=trade.instrument,
+                order_type=OrderType.MARKET,
+                direction=trade.direction,
+                units=trade.units if units is None else abs(units),
+                price=fill_price,
+                state=OrderState.FILLED,
+                time_in_force="FOK",
+                create_time=fill_time,
+                fill_time=fill_time,
+            )
+
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            account_id = service.account.account_id if service.account else "unknown"
+            logger.error(
+                "Error closing trade %s for %s: %s",
+                trade.trade_id,
+                account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error closing trade",
+                internal_detail=str(e),
+            ) from e
 
     def get_trades(
         self,
@@ -174,17 +740,100 @@ class OandaTradeClient:
         *,
         state: str = "OPEN",
         count: int = 500,
-    ):
-        """Fetch broker trades by state."""
-        return self.service._get_trades_impl(
-            instrument=instrument,
-            state=state,
-            count=count,
-        )
+    ) -> list[OpenTrade]:
+        """
+        Fetch trades from OANDA API.
 
-    def get_open_trades(self, instrument: str | None = None):
-        """Fetch currently open broker trades."""
-        return self.service._get_open_trades_impl(instrument=instrument)
+        Trades are individual position entries, while positions are aggregated.
+
+        Args:
+            instrument: Optional filter by instrument
+            state: Trade state filter to send to OANDA.
+            count: Maximum number of trades to request when using history.
+
+        Returns:
+            List of trade dictionaries
+
+        Raises:
+            OandaAPIError: If API call fails
+        """
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            normalized_state = state.strip().upper() if state else "OPEN"
+            if normalized_state == "OPEN":
+                response = service.api.trade.list_open(service.account.account_id)
+            else:
+                response = service.api.trade.list(
+                    service.account.account_id,
+                    state=normalized_state,
+                    count=count,
+                )
+
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch trades: status {response.status}")
+
+            trades: list[OpenTrade] = []
+            oanda_trades = response.body.get("trades", [])
+
+            for trade in oanda_trades:
+                trade_instrument = service._object_field(trade, "instrument") or ""
+
+                if instrument and trade_instrument != instrument:
+                    continue
+
+                units = Decimal(str(service._object_field(trade, "currentUnits") or "0"))
+
+                direction = OrderDirection.LONG if units > 0 else OrderDirection.SHORT
+
+                trades.append(
+                    OpenTrade(
+                        trade_id=str(service._object_field(trade, "id") or ""),
+                        instrument=str(trade_instrument),
+                        direction=direction,
+                        units=abs(units),
+                        entry_price=Decimal(str(service._object_field(trade, "price") or "0")),
+                        unrealized_pnl=Decimal(
+                            str(service._object_field(trade, "unrealizedPL") or "0")
+                        ),
+                        open_time=service._parse_iso_datetime(
+                            service._object_field(trade, "openTime")
+                        ),
+                        state=str(service._object_field(trade, "state") or ""),
+                        account_id=str(service.account.account_id),
+                        close_time=service._parse_iso_datetime(
+                            service._object_field(trade, "closeTime")
+                        ),
+                        realized_pnl=service._to_decimal(
+                            service._object_field(trade, "realizedPL")
+                        ),
+                    )
+                )
+            logger.info(
+                "Fetched %d trades from OANDA for account %s (state=%s)",
+                len(trades),
+                service.account.account_id,
+                normalized_state,
+            )
+            return trades
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching trades for %s: %s",
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching trades",
+                internal_detail=str(e),
+            ) from e
+
+    def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
+        return self.get_trades(instrument=instrument, state="OPEN")
 
 
 class OandaPositionClient:
@@ -194,17 +843,178 @@ class OandaPositionClient:
         """Bind this collaborator to an initialized OandaService instance."""
         self.service = service
 
-    def close_position(self, position: Any, units: Any = None, override_price: Any = None):
-        """Close a broker position by instrument exposure."""
-        return self.service._close_position_impl(
-            position=position,
-            units=units,
-            override_price=override_price,
-        )
+    def close_position(
+        self,
+        position: Position,
+        units: Decimal | None = None,
+        override_price: Decimal | None = None,
+    ) -> MarketOrder:
+        """
+        Close an open position for an instrument.
 
-    def get_open_positions(self, instrument: str | None = None):
-        """Fetch open broker positions."""
-        return self.service._get_open_positions_impl(instrument=instrument)
+        OANDA positions are aggregated by instrument. This uses the
+        `/v3/accounts/{accountID}/positions/{instrument}/close` endpoint under the hood.
+
+        Args:
+            position: A Position returned by get_open_positions().
+            units: Optional number of units to close (positive Decimal). If omitted, closes ALL.
+            override_price: Optional price to use for dry-run close instead of latest tick data.
+
+        Returns:
+            MarketOrder representing the closeout fill.
+        """
+        service = self.service
+        # Dry-run mode: simulate position close
+        if service.dry_run:
+            return service._dry_run_simulator.simulate_position_close(
+                position,
+                units,
+                override_price=override_price,
+            )
+
+        # Require account for live trading
+        if service.account is None:
+            raise OandaAPIError("Account required for live trading")
+        if service.api is None:
+            raise OandaAPIError("API client not initialized")
+
+        try:
+            if units is not None:
+                if units <= 0:
+                    raise ValueError("units must be positive")
+                if units > position.units:
+                    raise ValueError("units cannot exceed open position units")
+            service._validate_broker_order_guard(
+                instrument=position.instrument,
+                units=position.units if units is None else units,
+            )
+
+            if position.direction == OrderDirection.LONG:
+                kwargs: dict[str, Any] = {
+                    "longUnits": str(abs(units)) if units is not None else "ALL",
+                    "shortUnits": "NONE",
+                }
+            else:
+                kwargs = {
+                    "longUnits": "NONE",
+                    "shortUnits": str(abs(units)) if units is not None else "ALL",
+                }
+
+            response = service.api.position.close(
+                service.account.account_id,
+                position.instrument,
+                **kwargs,
+            )
+
+            if response.status not in (200, 201):
+                raise OandaAPIError(
+                    f"Failed to close position {position.instrument}: status {response.status}"
+                )
+
+            if position.direction == OrderDirection.LONG:
+                fill_tx = service._response_field(response, "longOrderFillTransaction")
+            else:
+                fill_tx = service._response_field(response, "shortOrderFillTransaction")
+
+            fill_time = service._parse_iso_datetime(service._object_field(fill_tx, "time"))
+            fill_price = service._to_decimal(service._object_field(fill_tx, "price"))
+            order_id_raw = service._object_field(fill_tx, "id")
+            order_id = str(order_id_raw) if order_id_raw is not None else ""
+
+            return MarketOrder(
+                order_id=order_id,
+                instrument=position.instrument,
+                order_type=OrderType.MARKET,
+                direction=position.direction,
+                units=position.units if units is None else abs(units),
+                price=fill_price,
+                state=OrderState.FILLED,
+                time_in_force="FOK",
+                create_time=fill_time,
+                fill_time=fill_time,
+            )
+
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error closing position %s for %s: %s",
+                position.instrument,
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error closing position",
+                internal_detail=str(e),
+            ) from e
+
+    def get_open_positions(self, instrument: str | None = None) -> list[Position]:
+        """
+        Fetch open positions from OANDA API.
+
+        Args:
+            instrument: Optional filter by instrument (e.g., 'EUR_USD')
+
+        Returns:
+            List of position dictionaries
+
+        Raises:
+            OandaAPIError: If API call fails
+        """
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            response = service.api.position.list_open(service.account.account_id)
+
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch positions: status {response.status}")
+
+            positions: list[Position] = []
+            oanda_positions = response.body.get("positions", [])
+
+            for pos in oanda_positions:
+                # OANDA returns positions with long and short sub-objects
+                pos_instrument = pos.get("instrument", "")
+
+                if instrument and pos_instrument != instrument:
+                    continue
+
+                # Process long position if exists
+                long_data = pos.get("long", {})
+                if long_data.get("units") and Decimal(str(long_data["units"])) > 0:
+                    positions.append(
+                        service._format_position(pos_instrument, OrderDirection.LONG, long_data)
+                    )
+
+                # Process short position if exists
+                short_data = pos.get("short", {})
+                if short_data.get("units") and Decimal(str(short_data["units"])) < 0:
+                    positions.append(
+                        service._format_position(pos_instrument, OrderDirection.SHORT, short_data)
+                    )
+
+            logger.info(
+                "Fetched %d open positions from OANDA for account %s",
+                len(positions),
+                service.account.account_id,
+            )
+            return positions
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Error fetching positions for %s: %s",
+                service.account.account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching positions",
+                internal_detail=str(e),
+            ) from e
 
 
 class OandaTransactionClient:
@@ -216,19 +1026,79 @@ class OandaTransactionClient:
 
     def get_transaction_history(
         self,
-        *,
-        from_time: Any = None,
-        to_time: Any = None,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
         page_size: int = 100,
         transaction_type: str | None = None,
-    ):
-        """Fetch account transaction history."""
-        return self.service._get_transaction_history_impl(
-            from_time=from_time,
-            to_time=to_time,
-            page_size=page_size,
-            transaction_type=transaction_type,
-        )
+    ) -> list[Transaction]:
+        service = self.service
+        assert service.api is not None, "API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        try:
+            kwargs: dict[str, Any] = {"pageSize": page_size}
+            if from_time:
+                kwargs["from"] = from_time.isoformat()
+            if to_time:
+                kwargs["to"] = to_time.isoformat()
+            if transaction_type:
+                kwargs["type"] = transaction_type
+
+            response = service.api.transaction.list(service.account.account_id, **kwargs)
+            if response.status != 200:
+                raise OandaAPIError(f"Failed to fetch transactions: status {response.status}")
+
+            transactions: list[Transaction] = []
+
+            body = response.body or {}
+            if isinstance(body, dict) and body.get("transactions"):
+                for txn in body.get("transactions", []):
+                    if isinstance(txn, dict):
+                        transactions.append(service._parse_transaction(txn))
+                return transactions
+
+            pages = body.get("pages", []) if isinstance(body, dict) else []
+            # Best-effort: fetch a few pages by parsing from/to transaction IDs out of URLs.
+            for page_url in pages[:5]:
+                try:
+                    parsed = urlparse(str(page_url))
+                    qs = parse_qs(parsed.query)
+                    from_list = qs.get("from")
+                    to_list = qs.get("to")
+                    from_id = from_list[0] if from_list else None
+                    to_id = to_list[0] if to_list else None
+                    if not from_id or not to_id:
+                        continue
+                    page_response = service.api.transaction.range(
+                        service.account.account_id,
+                        **{"from": str(from_id), "to": str(to_id)},
+                    )
+                    if page_response.status == 200 and isinstance(page_response.body, dict):
+                        for txn in page_response.body.get("transactions", []):
+                            if isinstance(txn, dict):
+                                transactions.append(service._parse_transaction(txn))
+                except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B112
+                    # Log parsing error but continue with next page
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning("Failed to parse transaction page: %s", exc)
+                    continue
+            return transactions
+        except OandaAPIError:
+            raise
+        except Exception as e:
+            account_id = service.account.account_id if service.account else "unknown"
+            logger.error(
+                "Error fetching transactions for %s: %s",
+                account_id,
+                str(e),
+                exc_info=True,
+            )
+            raise OandaAPIError(
+                "Error fetching transactions",
+                internal_detail=str(e),
+            ) from e
 
 
 class OandaPricingStreamClient:
@@ -244,10 +1114,126 @@ class OandaPricingStreamClient:
         *,
         snapshot: bool = True,
         include_heartbeats: bool = False,
-    ):
-        """Stream pricing ticks from OANDA."""
-        return self.service._stream_pricing_ticks_impl(
-            instruments,
+    ) -> Iterator[TickData]:
+        service = self.service
+        assert service.stream_api is not None, "Stream API client not initialized"
+        assert service.account is not None, "Account not initialized"
+
+        instruments_param = instruments if isinstance(instruments, str) else ",".join(instruments)
+
+        response = service.stream_api.pricing.stream(
+            service.account.account_id,
             snapshot=snapshot,
-            include_heartbeats=include_heartbeats,
+            instruments=instruments_param,
         )
+
+        # For non-200 responses, v20 returns a Response with a status code
+        # but no stream lines.
+        if getattr(response, "status", 200) != 200:
+            body = getattr(response, "body", None)
+            body_preview: object | None = None
+            try:
+                if isinstance(body, (dict, list)):
+                    body_preview = body
+                elif body is not None:
+                    body_preview = str(body)[:500]
+            except Exception:  # pylint: disable=broad-exception-caught
+                body_preview = None
+
+            internal_detail = (
+                f"account_id={service.account.account_id}, "
+                f"stream_hostname={service.stream_hostname or 'n/a'}, "
+                f"instruments={instruments_param}"
+                + (f", body={body_preview}" if body_preview is not None else "")
+            )
+            raise OandaAPIError(
+                f"Failed to start pricing stream: status {getattr(response, 'status', None)}",
+                internal_detail=internal_detail,
+            )
+
+        # v20 returns a Response object for streams; the stream messages are
+        # yielded via response.parts() as (type, obj) tuples.
+        parts_iter = getattr(response, "parts", None)
+        # Use parts() if available, otherwise fall back to iterating response directly
+        stream_iter = parts_iter() or [] if callable(parts_iter) else response
+
+        for part in stream_iter:
+            # v20: ("pricing.ClientPrice", ClientPrice(...)) or ("pricing.PricingHeartbeat", ...)
+            msg = None
+            msg_type = None
+            if isinstance(part, tuple) and len(part) == 2:
+                msg_type, msg = part
+            else:
+                msg = part
+
+            # Heartbeats: skip (this generator yields only price ticks).
+            if (
+                (isinstance(msg_type, str) and "Heartbeat" in msg_type)
+                or getattr(msg, "type", None) == "HEARTBEAT"
+                or (isinstance(msg, dict) and msg.get("type") == "HEARTBEAT")
+            ):
+                _ = include_heartbeats
+                continue
+
+            # Dict-style messages (older mocks).
+            if isinstance(msg, dict):
+                if msg.get("type") != "PRICE":
+                    continue
+
+                instrument = str(msg.get("instrument", ""))
+                time_value = service._parse_iso_datetime(msg.get("time"))
+                if not time_value:
+                    continue
+
+                bids = msg.get("bids") or []
+                asks = msg.get("asks") or []
+                if not bids or not asks:
+                    continue
+
+                bid = Decimal(str(bids[0].get("price")))
+                ask = Decimal(str(asks[0].get("price")))
+                mid = (bid + ask) / Decimal("2")
+                yield TickData(
+                    instrument=instrument,
+                    timestamp=time_value,
+                    bid=bid,
+                    ask=ask,
+                    mid=mid,
+                )
+                continue
+
+            # v20 ClientPrice object messages.
+            instrument = str(getattr(msg, "instrument", "") or "")
+            if not instrument:
+                continue
+
+            time_raw = getattr(msg, "time", None)
+            if isinstance(time_raw, datetime):
+                time_value = time_raw
+                if time_value.tzinfo is None:
+                    time_value = time_value.replace(tzinfo=UTC)
+            else:
+                time_value = service._parse_iso_datetime(time_raw)
+                if not time_value:
+                    continue
+
+            bids = getattr(msg, "bids", None) or []
+            asks = getattr(msg, "asks", None) or []
+            if not bids or not asks:
+                continue
+
+            bid_price = getattr(bids[0], "price", None)
+            ask_price = getattr(asks[0], "price", None)
+            if bid_price is None or ask_price is None:
+                continue
+
+            bid = Decimal(str(bid_price))
+            ask = Decimal(str(ask_price))
+            mid = (bid + ask) / Decimal("2")
+            yield TickData(
+                instrument=instrument,
+                timestamp=time_value,
+                bid=bid,
+                ask=ask,
+                mid=mid,
+            )
