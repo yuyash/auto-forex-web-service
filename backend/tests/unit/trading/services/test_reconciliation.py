@@ -17,7 +17,7 @@ from apps.trading.services.reconciliation import (
     TradingResumeReconciler,
     _safe_decimal,
 )
-from apps.trading.services.oanda_retry import is_retryable_oanda_error
+from apps.market.services.oanda_retry import OandaRetryClassifier
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -118,17 +118,18 @@ def _make_reconciler(
         reconciler.state = state
         reconciler.execution_id = getattr(task, "execution_id", None)
         reconciler.oanda_service = MagicMock()
-        from apps.trading.services.oanda_retry import OandaRetryPolicy
+        from apps.market.services.oanda_retry import OandaRetryPolicy, OandaRetryService
 
         # Use the default policy; tests override sleep globally.
         reconciler.retry_policy = OandaRetryPolicy.default()
+        reconciler.retry_service = OandaRetryService(policy=reconciler.retry_policy)
     return reconciler
 
 
 @pytest.fixture(autouse=True)
 def _no_retry_sleep(monkeypatch):
     """Eliminate retry sleep in OANDA call retry helper."""
-    monkeypatch.setattr("apps.trading.services.oanda_retry.time.sleep", lambda _: None)
+    monkeypatch.setattr("apps.market.services.oanda_retry.time.sleep", lambda _: None)
 
 
 # ── Tests for helper functions ──────────────────────────────────────
@@ -196,7 +197,7 @@ class TestSyncAccountSnapshot:
         reconciler.oanda_service.get_account_details.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="non-retryable OANDA error after 1 attempt"):
+        with pytest.raises(RuntimeError, match="Fetch account snapshot failed: fail"):
             reconciler._sync_account_snapshot(report)
 
 
@@ -204,12 +205,27 @@ class TestOandaRetryClassification:
     def test_retries_transient_status_error(self):
         from apps.market.services.oanda import OandaAPIError
 
-        assert is_retryable_oanda_error(OandaAPIError("Failed to fetch trades: status 503"))
+        classifier = OandaRetryClassifier()
 
-    def test_rejects_non_retryable_auth_error(self):
+        assert classifier.is_retryable(OandaAPIError("Failed to fetch trades: status 503"))
+
+    def test_retries_bare_unauthorized_status_error(self):
         from apps.market.services.oanda import OandaAPIError
 
-        assert not is_retryable_oanda_error(OandaAPIError("Failed to fetch trades: status 401"))
+        classifier = OandaRetryClassifier()
+
+        assert classifier.is_retryable(OandaAPIError("Failed to fetch trades: status 401"))
+
+    def test_rejects_explicit_authorization_failure(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        classifier = OandaRetryClassifier()
+        error = OandaAPIError(
+            "Failed to fetch trades: status 401",
+            internal_detail="Insufficient authorization to perform request.",
+        )
+
+        assert not classifier.is_retryable(error)
 
 
 # ── Tests for _sync_positions_with_broker ───────────────────────────
@@ -280,7 +296,10 @@ class TestSyncPositionsWithBroker:
         reconciler.oanda_service.get_open_trades.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="non-retryable OANDA error after 1 attempt"):
+        with pytest.raises(
+            RuntimeError,
+            match="Fetch open trades \\(position sync\\) failed: fail",
+        ):
             reconciler._sync_positions_with_broker(report)
 
     @patch("apps.trading.services.reconciliation.Position")

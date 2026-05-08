@@ -21,6 +21,7 @@ from apps.market.services.oanda import (
 from apps.market.services.oanda import (
     Position as OandaPosition,
 )
+from apps.market.services.oanda_retry import OandaRetryPolicy
 from apps.trading.broker_gateway import BrokerGateway, OandaBrokerGateway
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
@@ -63,7 +64,11 @@ class OrderService:
         self.account = account
         self.task = task
         self.dry_run = dry_run
-        broker_service = OandaService(account=account, dry_run=dry_run)
+        broker_service = OandaService(
+            account=account,
+            dry_run=dry_run,
+            retry_policy=OandaRetryPolicy.from_task(task),
+        )
         self.broker_gateway: BrokerGateway = OandaBrokerGateway(broker_service)
         # Backward-compatible attribute for callers that still refer to the
         # old OANDA service member.

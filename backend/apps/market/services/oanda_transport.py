@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import secrets
 import time
 from collections.abc import Callable
 from typing import Any
 
 from apps.market.enums import MarketEventSeverity, MarketEventType
+from apps.market.services.oanda_retry import OandaRetryPolicy, OandaRetryService
 
 
 class OandaOrderTransport:
@@ -20,29 +20,36 @@ class OandaOrderTransport:
         account,
         event_service,
         logger,
-        max_retries: int,
-        retry_delay: float,
-        max_retry_delay: float,
         error_class: type[Exception],
+        retry_service: OandaRetryService | None = None,
+        max_retries: int = 3,
+        retry_delay: float = 0.5,
+        max_retry_delay: float = 5.0,
         sleep_func: Callable[[float], None] = time.sleep,
-        randbelow_func: Callable[[int], int] = secrets.randbelow,
+        randbelow_func: Callable[[int], int] | None = None,
     ) -> None:
+        _ = randbelow_func
         self.api = api
         self.account = account
         self.event_service = event_service
         self.logger = logger
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.max_retry_delay = max_retry_delay
+        self.retry_service = retry_service or OandaRetryService(
+            policy=OandaRetryPolicy(
+                max_attempts=max_retries,
+                backoff_base_seconds=retry_delay,
+                backoff_max_seconds=max_retry_delay,
+            ),
+            sleep=sleep_func,
+            raise_runtime_error=False,
+        )
         self.error_class = error_class
-        self.sleep_func = sleep_func
-        self.randbelow_func = randbelow_func
 
     def execute_order(self, order_data: dict[str, Any]) -> Any:
         """Submit an order to OANDA, retrying transient failures."""
         last_error: str | None = None
 
-        for attempt in range(1, self.max_retries + 1):
+        def _submit() -> Any:
+            nonlocal last_error
             try:
                 response = self.api.order.create(self.account.account_id, order=order_data)
 
@@ -57,41 +64,45 @@ class OandaOrderTransport:
 
                 self.logger.warning(
                     "Order submission attempt %s failed: status %s%s",
-                    attempt,
+                    "retryable",
                     response.status,
                     error_details,
                 )
                 last_error = f"API returned status {response.status}{error_details}"
-
-                retryable_status = response.status == 429 or 500 <= int(response.status) <= 599
-                if not retryable_status:
-                    break
+                raise self.error_class(
+                    f"Order submission failed: status {response.status}",
+                    internal_detail=last_error,
+                )
 
             except Exception as exc:  # pylint: disable=broad-exception-caught
-                self.logger.warning("Order submission attempt %s failed: %s", attempt, exc)
+                if isinstance(exc, self.error_class):
+                    raise
+                self.logger.warning("Order submission attempt failed: %s", exc)
                 last_error = str(exc)
-                retryable_exception = isinstance(exc, (ConnectionError, TimeoutError, OSError))
-                if not retryable_exception:
-                    break
+                raise self.error_class(
+                    "Order submission failed",
+                    internal_detail=str(exc),
+                ) from exc
 
-            if attempt < self.max_retries:
-                base_delay = min(self.retry_delay * (2 ** (attempt - 1)), self.max_retry_delay)
-                jitter = (self.randbelow_func(10_000) / 10_000) * (base_delay * 0.2)
-                self.sleep_func(base_delay + jitter)
+        try:
+            return self.retry_service.call(_submit, label="Order submission")
+        except self.error_class as exc:
+            last_error = str(exc)
 
         self._log_failure(order_data, last_error)
-        error_msg = f"Order submission failed after {self.max_retries} attempts: {last_error}"
+        attempts = self.retry_service.policy.max_attempts
+        error_msg = f"Order submission failed after {attempts} attempts: {last_error}"
         raise self.error_class(error_msg)
 
     def _log_failure(self, order_data: dict[str, Any], last_error: str | None) -> None:
         self.logger.error(
             "Order submission failed after %s attempts: %s",
-            self.max_retries,
+            self.retry_service.policy.max_attempts,
             last_error,
         )
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_FAILED,
-            description=f"Order submission failed after {self.max_retries} attempts",
+            description=f"Order submission failed after {self.retry_service.policy.max_attempts} attempts",
             severity=MarketEventSeverity.ERROR,
             user=self.account.user,
             account=self.account,
@@ -99,6 +110,6 @@ class OandaOrderTransport:
             details={
                 "order_data": order_data,
                 "error": last_error,
-                "attempts": self.max_retries,
+                "attempts": self.retry_service.policy.max_attempts,
             },
         )

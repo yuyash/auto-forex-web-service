@@ -17,6 +17,7 @@ from apps.market.services.cache import (
     build_instrument_detail_cache_key,
     build_supported_instruments_cache_key,
 )
+from apps.market.services.oanda_retry import OandaApiRequestExecutor
 
 logger: Logger = getLogger(name=__name__)
 
@@ -46,6 +47,7 @@ class SupportedInstrumentsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    request_executor = OandaApiRequestExecutor()
 
     # Fallback list if OANDA API is unavailable
     FALLBACK_INSTRUMENTS = [
@@ -148,11 +150,12 @@ class SupportedInstrumentsView(APIView):
             )
 
             # Fetch account instruments
-            response = api.account.instruments(account.account_id)
-
-            if response.status != 200:
-                logger.error(f"OANDA API error: {response.status}")
-                return None
+            response = self.request_executor.request(
+                api.account.instruments,
+                account.account_id,
+                label="Fetch OANDA instruments",
+                failure_message="Failed to fetch OANDA instruments",
+            )
 
             # Extract instrument names
             instruments = []
@@ -182,6 +185,7 @@ class InstrumentDetailView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    request_executor = OandaApiRequestExecutor()
 
     @extend_schema(
         operation_id="market_instrument_detail",
@@ -296,14 +300,13 @@ class InstrumentDetailView(APIView):
     def _fetch_and_cache_instrument_detail(
         self, api: v20.Context, account: OandaAccounts, instrument: str
     ) -> dict[str, Any] | None:
-        response = api.account.instruments(
+        response = self.request_executor.request(
+            api.account.instruments,
             account.account_id,
+            label="Fetch OANDA instrument detail",
+            failure_message="Failed to fetch OANDA instrument detail",
             instruments=instrument,
         )
-
-        if response.status != 200:
-            logger.error(f"OANDA API error: {response.status}")
-            return None
 
         instruments_list = response.body.get("instruments", [])
         if not instruments_list:
@@ -349,10 +352,13 @@ class InstrumentDetailView(APIView):
     ) -> dict[str, Any] | None:
         """Fetch current pricing for spread calculation."""
         try:
-            response = api.pricing.get(account_id, instruments=instrument)
-
-            if response.status != 200:
-                return None
+            response = self.request_executor.request(
+                api.pricing.get,
+                account_id,
+                label="Fetch OANDA pricing",
+                failure_message="Failed to fetch OANDA pricing",
+                instruments=instrument,
+            )
 
             prices = response.body.get("prices", [])
             if not prices:

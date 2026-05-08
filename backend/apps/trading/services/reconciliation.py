@@ -14,11 +14,11 @@ from typing import Any, TypeVar
 from django.db.models import F
 from django.utils import timezone as dj_timezone
 
-from apps.market.services.oanda import OandaService, OrderDirection
+from apps.market.services.oanda import OandaAPIError, OandaService, OrderDirection
+from apps.market.services.oanda_retry import OandaRetryPolicy, OandaRetryService
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Position, TradingTask
 from apps.trading.models.state import ExecutionState
-from apps.trading.services.oanda_retry import OandaRetryPolicy, call_with_retry
 
 logger: Logger = getLogger(name=__name__)
 
@@ -107,12 +107,21 @@ class TradingResumeReconciler:
         task: TradingTask,
         state: ExecutionState,
         retry_policy: OandaRetryPolicy | None = None,
+        retry_service: OandaRetryService | None = None,
     ) -> None:
         self.task = task
         self.state = state
         self.execution_id = task.execution_id
-        self.oanda_service = OandaService(account=task.oanda_account, dry_run=False)
         self.retry_policy = retry_policy or OandaRetryPolicy.from_task(task)
+        self.retry_service = retry_service or OandaRetryService(
+            policy=self.retry_policy,
+            raise_runtime_error=True,
+        )
+        self.oanda_service = OandaService(
+            account=task.oanda_account,
+            dry_run=False,
+            retry_service=OandaRetryService(policy=self.retry_policy, raise_runtime_error=False),
+        )
 
     def _oanda_call(
         self,
@@ -122,13 +131,10 @@ class TradingResumeReconciler:
         **kwargs: Any,
     ) -> Any:
         """Call an OANDA service method with the task-scoped retry policy."""
-        return call_with_retry(
-            fn,
-            *args,
-            policy=self.retry_policy,
-            label=label,
-            **kwargs,
-        )
+        try:
+            return fn(*args, **kwargs)
+        except OandaAPIError as exc:
+            raise RuntimeError(f"{label} failed: {exc}") from exc
 
     def reconcile(self, *, resumed: bool) -> ReconciliationReport:
         """Run full reconciliation and return a summary report."""

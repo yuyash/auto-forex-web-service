@@ -40,6 +40,37 @@ from apps.market.services.oanda_types import (
 logger: Logger = getLogger(name=__name__)
 
 
+class OandaClientBase:
+    """Base collaborator that delegates requests through OandaService when available."""
+
+    def __init__(self, service: Any) -> None:
+        """Bind this collaborator to an initialized OandaService-like object."""
+        self.service = service
+
+    def request(
+        self,
+        fn: Any,
+        *args: Any,
+        label: str,
+        expected_status: int | tuple[int, ...] = 200,
+        failure_message: str | None = None,
+        exception_message: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        request = getattr(self.service, "_request", None)
+        if callable(request):
+            return request(
+                fn,
+                *args,
+                label=label,
+                expected_status=expected_status,
+                failure_message=failure_message,
+                exception_message=exception_message,
+                **kwargs,
+            )
+        return fn(*args, **kwargs)
+
+
 class OandaContextFactory:
     """Factory for REST and stream v20 contexts."""
 
@@ -78,12 +109,8 @@ class OandaContextFactory:
         )
 
 
-class OandaAccountClient:
+class OandaAccountClient(OandaClientBase):
     """Account-resource client with per-service response caching."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def get_resource(self, *, refresh: bool = False) -> dict[str, Any]:
         """Fetch the raw OANDA account resource as a dictionary."""
@@ -95,9 +122,13 @@ class OandaAccountClient:
             return service._account_resource_cache
 
         try:
-            response = service.api.account.get(service.account.account_id)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch account resource: status {response.status}")
+            response = self.request(
+                service.api.account.get,
+                service.account.account_id,
+                label="Fetch account resource",
+                failure_message="Failed to fetch account resource",
+                exception_message="Error fetching account resource",
+            )
 
             body = getattr(response, "body", {})
             if hasattr(body, "get"):
@@ -208,12 +239,8 @@ class OandaAccountClient:
         return "hedging" if self.get_hedging_enabled() else "netting"
 
 
-class OandaOrderClient:
+class OandaOrderClient(OandaClientBase):
     """Order submission and lookup client."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def cancel_order(self, order: Order) -> CancelledOrder:
         service = self.service
@@ -221,11 +248,15 @@ class OandaOrderClient:
         assert service.account is not None, "Account not initialized"
 
         try:
-            response = service.api.order.cancel(service.account.account_id, order.order_id)
-            if response.status not in (200, 201):
-                raise OandaAPIError(
-                    f"Failed to cancel order {order.order_id}: status {response.status}"
-                )
+            response = self.request(
+                service.api.order.cancel,
+                service.account.account_id,
+                order.order_id,
+                label="Cancel order",
+                expected_status=(200, 201),
+                failure_message=f"Failed to cancel order {order.order_id}",
+                exception_message="Error cancelling order",
+            )
 
             cancel_tx = getattr(response, "orderCancelTransaction", None)
             tx_id = getattr(cancel_tx, "id", None) if cancel_tx else None
@@ -585,9 +616,13 @@ class OandaOrderClient:
         assert service.account is not None, "Account not initialized"
 
         try:
-            response = service.api.order.list_pending(service.account.account_id)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch pending orders: status {response.status}")
+            response = self.request(
+                service.api.order.list_pending,
+                service.account.account_id,
+                label="Fetch pending orders",
+                failure_message="Failed to fetch pending orders",
+                exception_message="Error fetching pending orders",
+            )
 
             orders: list[PendingOrder] = []
             for order_data in response.body.get("orders", []):
@@ -623,9 +658,14 @@ class OandaOrderClient:
             if instrument:
                 kwargs["instrument"] = instrument
 
-            response = service.api.order.list(service.account.account_id, **kwargs)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch order history: status {response.status}")
+            response = self.request(
+                service.api.order.list,
+                service.account.account_id,
+                label="Fetch order history",
+                failure_message="Failed to fetch order history",
+                exception_message="Error fetching order history",
+                **kwargs,
+            )
 
             orders: list[Order] = []
             for order_data in response.body.get("orders", []):
@@ -652,9 +692,14 @@ class OandaOrderClient:
         assert service.account is not None, "Account not initialized"
 
         try:
-            response = service.api.order.get(service.account.account_id, order_id)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch order {order_id}: status {response.status}")
+            response = self.request(
+                service.api.order.get,
+                service.account.account_id,
+                order_id,
+                label="Fetch order",
+                failure_message=f"Failed to fetch order {order_id}",
+                exception_message="OANDA API error",
+            )
             order_data = response.body.get("order") or {}
             return service._parse_order(order_data)
         except OandaAPIError:
@@ -672,12 +717,8 @@ class OandaOrderClient:
             ) from e
 
 
-class OandaTradeClient:
+class OandaTradeClient(OandaClientBase):
     """Trade close and history client."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
         service = self.service
@@ -690,12 +731,16 @@ class OandaTradeClient:
                 units=trade.units if units is None else units,
             )
             kwargs: dict[str, Any] = {"units": str(units) if units else "ALL"}
-            response = service.api.trade.close(service.account.account_id, trade.trade_id, **kwargs)
-
-            if response.status not in (200, 201):
-                raise OandaAPIError(
-                    f"Failed to close trade {trade.trade_id}: status {response.status}"
-                )
+            response = self.request(
+                service.api.trade.close,
+                service.account.account_id,
+                trade.trade_id,
+                label="Close trade",
+                expected_status=(200, 201),
+                failure_message=f"Failed to close trade {trade.trade_id}",
+                exception_message="Error closing trade",
+                **kwargs,
+            )
 
             fill_tx = service._response_field(response, "orderFillTransaction")
 
@@ -764,16 +809,23 @@ class OandaTradeClient:
         try:
             normalized_state = state.strip().upper() if state else "OPEN"
             if normalized_state == "OPEN":
-                response = service.api.trade.list_open(service.account.account_id)
-            else:
-                response = service.api.trade.list(
+                response = self.request(
+                    service.api.trade.list_open,
                     service.account.account_id,
+                    label="Fetch trades",
+                    failure_message="Failed to fetch trades",
+                    exception_message="Error fetching trades",
+                )
+            else:
+                response = self.request(
+                    service.api.trade.list,
+                    service.account.account_id,
+                    label="Fetch trades",
+                    failure_message="Failed to fetch trades",
+                    exception_message="Error fetching trades",
                     state=normalized_state,
                     count=count,
                 )
-
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch trades: status {response.status}")
 
             trades: list[OpenTrade] = []
             oanda_trades = response.body.get("trades", [])
@@ -836,12 +888,8 @@ class OandaTradeClient:
         return self.get_trades(instrument=instrument, state="OPEN")
 
 
-class OandaPositionClient:
+class OandaPositionClient(OandaClientBase):
     """Position close and lookup client."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def close_position(
         self,
@@ -900,16 +948,16 @@ class OandaPositionClient:
                     "shortUnits": str(abs(units)) if units is not None else "ALL",
                 }
 
-            response = service.api.position.close(
+            response = self.request(
+                service.api.position.close,
                 service.account.account_id,
                 position.instrument,
+                label="Close position",
+                expected_status=(200, 201),
+                failure_message=f"Failed to close position {position.instrument}",
+                exception_message="Error closing position",
                 **kwargs,
             )
-
-            if response.status not in (200, 201):
-                raise OandaAPIError(
-                    f"Failed to close position {position.instrument}: status {response.status}"
-                )
 
             if position.direction == OrderDirection.LONG:
                 fill_tx = service._response_field(response, "longOrderFillTransaction")
@@ -967,10 +1015,13 @@ class OandaPositionClient:
         assert service.account is not None, "Account not initialized"
 
         try:
-            response = service.api.position.list_open(service.account.account_id)
-
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch positions: status {response.status}")
+            response = self.request(
+                service.api.position.list_open,
+                service.account.account_id,
+                label="Fetch positions",
+                failure_message="Failed to fetch positions",
+                exception_message="Error fetching positions",
+            )
 
             positions: list[Position] = []
             oanda_positions = response.body.get("positions", [])
@@ -1017,12 +1068,8 @@ class OandaPositionClient:
             ) from e
 
 
-class OandaTransactionClient:
+class OandaTransactionClient(OandaClientBase):
     """Transaction-history client."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def get_transaction_history(
         self,
@@ -1044,9 +1091,14 @@ class OandaTransactionClient:
             if transaction_type:
                 kwargs["type"] = transaction_type
 
-            response = service.api.transaction.list(service.account.account_id, **kwargs)
-            if response.status != 200:
-                raise OandaAPIError(f"Failed to fetch transactions: status {response.status}")
+            response = self.request(
+                service.api.transaction.list,
+                service.account.account_id,
+                label="Fetch transactions",
+                failure_message="Failed to fetch transactions",
+                exception_message="Error fetching transactions",
+                **kwargs,
+            )
 
             transactions: list[Transaction] = []
 
@@ -1069,9 +1121,14 @@ class OandaTransactionClient:
                     to_id = to_list[0] if to_list else None
                     if not from_id or not to_id:
                         continue
-                    page_response = service.api.transaction.range(
+                    range_kwargs: dict[str, Any] = {"from": str(from_id), "to": str(to_id)}
+                    page_response = self.request(
+                        service.api.transaction.range,
                         service.account.account_id,
-                        **{"from": str(from_id), "to": str(to_id)},
+                        label="Fetch transaction page",
+                        failure_message="Failed to fetch transaction page",
+                        exception_message="Error fetching transactions",
+                        **range_kwargs,
                     )
                     if page_response.status == 200 and isinstance(page_response.body, dict):
                         for txn in page_response.body.get("transactions", []):
@@ -1101,12 +1158,8 @@ class OandaTransactionClient:
             ) from e
 
 
-class OandaPricingStreamClient:
+class OandaPricingStreamClient(OandaClientBase):
     """Pricing stream client."""
-
-    def __init__(self, service: Any) -> None:
-        """Bind this collaborator to an initialized OandaService instance."""
-        self.service = service
 
     def stream_pricing_ticks(
         self,
@@ -1121,35 +1174,14 @@ class OandaPricingStreamClient:
 
         instruments_param = instruments if isinstance(instruments, str) else ",".join(instruments)
 
-        response = service.stream_api.pricing.stream(
+        response = self.request(
+            service.stream_api.pricing.stream,
             service.account.account_id,
+            label="Start pricing stream",
+            failure_message="Failed to start pricing stream",
             snapshot=snapshot,
             instruments=instruments_param,
         )
-
-        # For non-200 responses, v20 returns a Response with a status code
-        # but no stream lines.
-        if getattr(response, "status", 200) != 200:
-            body = getattr(response, "body", None)
-            body_preview: object | None = None
-            try:
-                if isinstance(body, (dict, list)):
-                    body_preview = body
-                elif body is not None:
-                    body_preview = str(body)[:500]
-            except Exception:  # pylint: disable=broad-exception-caught
-                body_preview = None
-
-            internal_detail = (
-                f"account_id={service.account.account_id}, "
-                f"stream_hostname={service.stream_hostname or 'n/a'}, "
-                f"instruments={instruments_param}"
-                + (f", body={body_preview}" if body_preview is not None else "")
-            )
-            raise OandaAPIError(
-                f"Failed to start pricing stream: status {getattr(response, 'status', None)}",
-                internal_detail=internal_detail,
-            )
 
         # v20 returns a Response object for streams; the stream messages are
         # yielded via response.parts() as (type, obj) tuples.

@@ -1,6 +1,6 @@
 """Candle data views."""
 
-import time
+import re
 from datetime import UTC, datetime
 from logging import Logger, getLogger
 from typing import Any
@@ -18,6 +18,8 @@ from rest_framework.views import APIView
 
 from apps.common.querying import OrderingConfig
 from apps.market.models import OandaAccounts
+from apps.market.services.oanda_retry import OandaApiRequestExecutor
+from apps.market.services.oanda_types import OandaAPIError
 from apps.market.views.account_helpers import get_user_default_account
 
 logger: Logger = getLogger(name=__name__)
@@ -52,6 +54,7 @@ CANDLE_ORDERING = OrderingConfig(
     default="time",
     tie_breakers=(),
 )
+OANDA_CANDLE_REQUESTS = OandaApiRequestExecutor()
 
 
 class OandaCandleFetchError(Exception):
@@ -95,30 +98,23 @@ def _fetch_oanda_candles(
     instrument: str,
     **params: Any,
 ) -> list[Any]:
-    """Single OANDA candle request with exponential-backoff retry on timeout."""
-    max_retries = int(getattr(settings, "OANDA_REST_MAX_RETRIES", 2))
-    base_delay: float = getattr(settings, "OANDA_REST_RETRY_BASE_DELAY", 1.0)
-    last_exc: V20Timeout | None = None
-
-    for attempt in range(1 + max_retries):
-        try:
-            response = api_context.instrument.candles(instrument=instrument, **params)
-            if response.status != 200:
-                raise OandaCandleFetchError(status_code=int(response.status), body=response.body)
-            return response.body.get("candles", []) if response.body else []
-        except V20Timeout as exc:
-            last_exc = exc
-            if attempt < max_retries:
-                wait = base_delay * (2**attempt)
-                logger.warning(
-                    "OANDA candle request timed out (attempt %d/%d), retrying in %.1fs",
-                    attempt + 1,
-                    1 + max_retries,
-                    wait,
-                )
-                time.sleep(wait)
-
-    raise last_exc  # type: ignore[misc]
+    """Single OANDA candle request with shared exponential retry."""
+    try:
+        response = OANDA_CANDLE_REQUESTS.request(
+            api_context.instrument.candles,
+            label="Fetch OANDA candles",
+            failure_message="Failed to fetch OANDA candles",
+            instrument=instrument,
+            **params,
+        )
+    except OandaAPIError as exc:
+        detail = " ".join(part for part in [str(exc), getattr(exc, "internal_detail", "")] if part)
+        match = re.search(
+            r"\b(?P<status>400|401|403|404|405|409|422|429|500|502|503|504)\b", detail
+        )
+        status_code = int(match.group("status")) if match else 502
+        raise OandaCandleFetchError(status_code=status_code, body=detail) from exc
+    return response.body.get("candles", []) if response.body else []
 
 
 def _parse_candle_time(raw_candle: Any) -> datetime | None:

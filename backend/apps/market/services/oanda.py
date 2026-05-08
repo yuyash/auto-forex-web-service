@@ -35,6 +35,11 @@ from apps.market.services.oanda_clients import (
 from apps.market.services.oanda_dry_run import OandaDryRunSimulator
 from apps.market.services import oanda_parsing
 from apps.market.services.oanda_transport import OandaOrderTransport
+from apps.market.services.oanda_retry import (
+    OandaApiRequestExecutor,
+    OandaRetryPolicy,
+    OandaRetryService,
+)
 from apps.market.services.oanda_types import (
     AccountDetails,
     CancelledOrder,
@@ -95,7 +100,14 @@ class OandaService:
     Supports dry-run mode for backtesting and simulation.
     """
 
-    def __init__(self, account: OandaAccounts | None = None, dry_run: bool = False):
+    def __init__(
+        self,
+        account: OandaAccounts | None = None,
+        dry_run: bool = False,
+        *,
+        retry_policy: OandaRetryPolicy | None = None,
+        retry_service: OandaRetryService | None = None,
+    ):
         """
         Initialize OANDA API client.
 
@@ -105,9 +117,18 @@ class OandaService:
         """
         self.account = account
         self.dry_run = dry_run
-        self.max_retries = 3
-        self.retry_delay = 0.5  # seconds
-        self.max_retry_delay = 5.0  # seconds
+        self.retry_policy = retry_policy or OandaRetryPolicy.short_default()
+        self.max_retries = self.retry_policy.max_attempts
+        self.retry_delay = self.retry_policy.backoff_base_seconds
+        self.max_retry_delay = self.retry_policy.backoff_max_seconds
+        self.retry_service = retry_service or OandaRetryService(
+            policy=self.retry_policy,
+            raise_runtime_error=False,
+        )
+        self.request_executor = OandaApiRequestExecutor(
+            retry_service=self.retry_service,
+            make_jsonable=self._make_jsonable,
+        )
         self.event_service = MarketEventService()
         self.order_guard = BrokerOrderGuard()
         self.response_parser = oanda_parsing.OandaResponseParser()
@@ -317,19 +338,48 @@ class OandaService:
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
+        policy = OandaRetryPolicy(
+            max_attempts=self.max_retries,
+            backoff_base_seconds=self.retry_delay,
+            backoff_max_seconds=self.max_retry_delay,
+            jitter_ratio=self.retry_policy.jitter_ratio,
+        )
         transport = OandaOrderTransport(
             api=self.api,
             account=self.account,
             event_service=self.event_service,
             logger=logger,
-            max_retries=self.max_retries,
-            retry_delay=self.retry_delay,
-            max_retry_delay=self.max_retry_delay,
+            retry_service=OandaRetryService(
+                policy=policy,
+                sleep=time.sleep,
+                raise_runtime_error=False,
+            ),
             error_class=OandaAPIError,
             sleep_func=time.sleep,
             randbelow_func=secrets.randbelow,
         )
         return transport.execute_order(order_data)
+
+    def _request(
+        self,
+        fn: Any,
+        *args: Any,
+        label: str,
+        expected_status: int | tuple[int, ...] = 200,
+        failure_message: str | None = None,
+        exception_message: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute one OANDA API request through the service retry policy."""
+        return self.request_executor.request(
+            fn,
+            *args,
+            label=label,
+            expected_status=expected_status,
+            failure_message=failure_message,
+            exception_message=exception_message,
+            **kwargs,
+        )
 
     def _format_position(
         self, instrument: str, direction: OrderDirection, pos_data: dict[str, Any]

@@ -210,8 +210,12 @@ class TaskExecutor:
             # The DB-stored balance may be stale (default 0).
             try:
                 from apps.market.services.oanda import OandaService
+                from apps.market.services.oanda_retry import OandaRetryPolicy
 
-                client = OandaService(self.task.oanda_account)
+                client = OandaService(
+                    self.task.oanda_account,
+                    retry_policy=OandaRetryPolicy.from_task(self.task),
+                )
                 details = client.get_account_details()
                 return details.balance
             except Exception as e:
