@@ -337,6 +337,10 @@ class OandaOrderClient(OandaClientBase):
             ).__dict__
         if request.stop_loss is not None:
             order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+        client_order_id = service._apply_order_client_extensions(
+            order_data,
+            request.client_order_id,
+        )
 
         response = service._execute_with_retry(order_data)
         create_tx = service._response_field(response, "orderCreateTransaction")
@@ -363,6 +367,7 @@ class OandaOrderClient(OandaClientBase):
                 "price": str(request.price),
                 "take_profit": str(request.take_profit) if request.take_profit else None,
                 "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                "client_order_id": client_order_id,
                 "status": "pending",
             },
         )
@@ -421,6 +426,10 @@ class OandaOrderClient(OandaClientBase):
             ).__dict__
         if request.stop_loss is not None:
             order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+        client_order_id = service._apply_order_client_extensions(
+            order_data,
+            request.client_order_id,
+        )
 
         response = service._execute_with_retry(order_data)
 
@@ -460,6 +469,7 @@ class OandaOrderClient(OandaClientBase):
                     "units": str(abs_units),
                     "take_profit": str(request.take_profit) if request.take_profit else None,
                     "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                    "client_order_id": client_order_id,
                     "status": "filled",
                     "fill_price": str(fill_price) if fill_price is not None else None,
                     "trade_id": trade_id,
@@ -537,6 +547,10 @@ class OandaOrderClient(OandaClientBase):
             ).__dict__
         if request.stop_loss is not None:
             order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
+        client_order_id = service._apply_order_client_extensions(
+            order_data,
+            request.client_order_id,
+        )
 
         response = service._execute_with_retry(order_data)
         create_tx = service._response_field(response, "orderCreateTransaction")
@@ -563,6 +577,7 @@ class OandaOrderClient(OandaClientBase):
                 "price": str(request.price),
                 "take_profit": str(request.take_profit) if request.take_profit else None,
                 "stop_loss": str(request.stop_loss) if request.stop_loss else None,
+                "client_order_id": client_order_id,
                 "status": "pending",
             },
         )

@@ -167,6 +167,68 @@ class OandaRetryClassifier:
         )
 
 
+class OandaRetryTelemetry:
+    """Emit structured logs for OANDA retry lifecycle events."""
+
+    def __init__(self, *, logger_: Logger | None = None) -> None:
+        self.logger = logger_ or logger
+
+    def retry_scheduled(
+        self,
+        *,
+        label: str,
+        attempt: int,
+        max_attempts: int,
+        exc: OandaAPIError,
+        delay: float,
+    ) -> None:
+        """Record that a retryable failure will be retried."""
+        self.logger.warning(
+            "[OANDA:RETRY] label=%s attempt=%d/%d delay_seconds=%.2f error=%s",
+            label,
+            attempt,
+            max_attempts,
+            delay,
+            exc,
+        )
+
+    def success_after_retry(self, *, label: str, attempts_used: int) -> None:
+        """Record that a call eventually recovered."""
+        if attempts_used <= 1:
+            return
+        self.logger.info(
+            "[OANDA:RETRY_RECOVERED] label=%s attempts_used=%d",
+            label,
+            attempts_used,
+        )
+
+    def terminal_failure(
+        self,
+        *,
+        label: str,
+        attempt: int,
+        max_attempts: int,
+        exc: OandaAPIError,
+    ) -> None:
+        """Record a non-retryable OANDA failure."""
+        self.logger.error(
+            "[OANDA:RETRY_TERMINAL] label=%s attempt=%d/%d error=%s",
+            label,
+            attempt,
+            max_attempts,
+            exc,
+        )
+
+    def exhausted(self, *, label: str, attempts: int, exc: OandaAPIError | None) -> None:
+        """Record retry exhaustion."""
+        self.logger.error(
+            "[OANDA:RETRY_EXHAUSTED] label=%s attempts=%d error=%s",
+            label,
+            attempts,
+            exc,
+        )
+
+
 class OandaRetryService:
     """Execute OANDA calls with retry policy, classification, backoff, and logging."""
 
@@ -177,11 +239,13 @@ class OandaRetryService:
         classifier: OandaRetryClassifier | None = None,
         sleep: Callable[[float], None] | None = None,
         raise_runtime_error: bool = True,
+        telemetry: OandaRetryTelemetry | None = None,
     ) -> None:
         self.policy = policy or OandaRetryPolicy.default()
         self.classifier = classifier or OandaRetryClassifier()
         self.sleep = sleep
         self.raise_runtime_error = raise_runtime_error
+        self.telemetry = telemetry or OandaRetryTelemetry()
 
     @classmethod
     def from_task(cls, task: Any, *, raise_runtime_error: bool = True) -> "OandaRetryService":
@@ -203,36 +267,31 @@ class OandaRetryService:
         for attempt in range(1, max_attempts + 1):
             attempts_used = attempt
             try:
-                return fn(*args, **kwargs)
+                result = fn(*args, **kwargs)
+                self.telemetry.success_after_retry(label=label, attempts_used=attempt)
+                return result
             except OandaAPIError as exc:
                 last_exc = exc
                 if not self.classifier.is_retryable(exc):
-                    logger.error(
-                        "%s failed with non-retryable OANDA error on attempt %d/%d: %s",
-                        label,
-                        attempt,
-                        max_attempts,
-                        exc,
+                    self.telemetry.terminal_failure(
+                        label=label,
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        exc=exc,
                     )
                     self._raise_terminal(label=label, attempt=attempt, exc=exc)
                 if attempt < max_attempts:
                     delay = self.policy.apply_jitter(self.policy.delay_for_attempt(attempt))
-                    logger.warning(
-                        "%s failed (attempt %d/%d): %s - retrying in %.2fs",
-                        label,
-                        attempt,
-                        max_attempts,
-                        exc,
-                        delay,
+                    self.telemetry.retry_scheduled(
+                        label=label,
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        exc=exc,
+                        delay=delay,
                     )
                     sleep_fn(delay)
                 else:
-                    logger.error(
-                        "%s failed after %d attempts: %s",
-                        label,
-                        max_attempts,
-                        exc,
-                    )
+                    self.telemetry.exhausted(label=label, attempts=max_attempts, exc=exc)
 
         self._raise_exhausted(label=label, attempts=attempts_used, exc=last_exc)
 

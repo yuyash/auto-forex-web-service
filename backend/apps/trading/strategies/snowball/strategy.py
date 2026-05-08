@@ -47,6 +47,7 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
     process_active_cycles,
     reseed_missing_directions,
 )
+from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.entry_lifecycle import close_entry
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
@@ -55,6 +56,7 @@ from apps.trading.strategies.snowball.execution_binding import (
 )
 from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -116,6 +118,9 @@ class SnowballStrategy(Strategy):
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
+        self.decision_engine = SnowballDecisionEngine(
+            invariant_validator=SnowballInvariantValidator(config=config),
+        )
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -1003,6 +1008,16 @@ class SnowballStrategy(Strategy):
         ss.last_mid = tick.mid
 
         events: list[StrategyEvent] = []
+        invariant_decision = self.decision_engine.invariant_decision(ss)
+        if invariant_decision.should_stop:
+            state.strategy_state = ss.to_dict()
+            return StrategyResult(
+                state=state,
+                events=events,
+                should_stop=True,
+                stop_reason=invariant_decision.stop_reason,
+                is_error=invariant_decision.is_error,
+            )
         ratio = update_account_metrics(
             state=state,
             ss=ss,
@@ -1121,6 +1136,15 @@ class SnowballStrategy(Strategy):
         )
 
         state.strategy_state = ss.to_dict()
+        invariant_decision = self.decision_engine.invariant_decision(ss)
+        if invariant_decision.should_stop:
+            return StrategyResult(
+                state=state,
+                events=events,
+                should_stop=True,
+                stop_reason=invariant_decision.stop_reason,
+                is_error=invariant_decision.is_error,
+            )
         return StrategyResult(state=state, events=events)
 
     # ------------------------------------------------------------------

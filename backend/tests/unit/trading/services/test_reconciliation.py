@@ -13,6 +13,8 @@ from django.utils import timezone as dj_timezone
 from apps.market.services.oanda import AccountDetails, OpenTrade, OrderDirection
 from apps.trading.enums import Direction
 from apps.trading.services.reconciliation import (
+    BrokerReadFailurePolicy,
+    BrokerReadUnavailableError,
     ReconciliationReport,
     TradingResumeReconciler,
     _safe_decimal,
@@ -226,6 +228,25 @@ class TestOandaRetryClassification:
         )
 
         assert not classifier.is_retryable(error)
+
+
+class TestBrokerReadFailurePolicy:
+    def test_raises_broker_read_unavailable_for_retry_exhaustion(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        policy = BrokerReadFailurePolicy()
+        error = OandaAPIError("Fetch pending orders failed after 50 attempts: status 401")
+
+        with pytest.raises(BrokerReadUnavailableError):
+            policy.raise_for(label="Fetch pending orders", exc=error)
+
+    def test_raises_runtime_error_for_terminal_oanda_failure(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        policy = BrokerReadFailurePolicy()
+
+        with pytest.raises(RuntimeError, match="Fetch pending orders failed: fail"):
+            policy.raise_for(label="Fetch pending orders", exc=OandaAPIError("fail"))
 
 
 # ── Tests for _sync_positions_with_broker ───────────────────────────

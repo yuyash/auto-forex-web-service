@@ -26,6 +26,7 @@ from apps.trading.broker_gateway import BrokerGateway, OandaBrokerGateway
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
 from apps.trading.models.orders import OrderType
+from apps.trading.order_client_ids import TradingOrderClientIdFactory
 from apps.trading.order_repositories import OrderRepository, PositionRepository
 from apps.trading.utils import AccountCurrency, Instrument, Units
 
@@ -74,6 +75,7 @@ class OrderService:
         # old OANDA service member.
         self.oanda_service = self.broker_gateway
         self.execution_id = getattr(task, "execution_id", None)
+        self.client_order_ids = TradingOrderClientIdFactory()
 
         # execution_id is required for all Position/Order/Trade records
         if not self.execution_id:
@@ -419,6 +421,18 @@ class OrderService:
                 units=Decimal(str(units_obj.value)),
                 take_profit=take_profit,
                 stop_loss=stop_loss,
+                client_order_id=self.client_order_ids.open_position_id(
+                    task_id=self.task.id,
+                    execution_id=self.execution_id,
+                    instrument=instrument_obj.name,
+                    units=units_obj.value,
+                    direction=direction,
+                    layer_index=layer_index,
+                    retracement_count=retracement_count,
+                    tick_timestamp=tick_timestamp,
+                    planned_exit_price=planned_exit_price,
+                    stop_loss=stop_loss,
+                ),
             )
 
             # Execute via OANDA service

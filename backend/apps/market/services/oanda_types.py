@@ -36,6 +36,7 @@ class MarketOrderRequest:
     units: Decimal  # signed (+ long, - short)
     take_profit: Decimal | None = None
     stop_loss: Decimal | None = None
+    client_order_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,7 @@ class LimitOrderRequest:
     price: Decimal
     take_profit: Decimal | None = None
     stop_loss: Decimal | None = None
+    client_order_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,7 @@ class StopOrderRequest:
     price: Decimal
     take_profit: Decimal | None = None
     stop_loss: Decimal | None = None
+    client_order_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

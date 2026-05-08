@@ -43,11 +43,13 @@ from apps.trading.tasks.execution_tick_processing import (
     LiveTickDeliveryGuard,
     LiveTickDeliveryStateRepository,
     RuntimeMetricsRecorder,
+    TradingIdleTickPolicy,
 )
 from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
+from apps.trading.tasks.broker_read_outage import BrokerReadOutageCoordinator
 from apps.trading.tasks.event_processor import TaskEventProcessor
 from apps.trading.tasks.event_replay import (
     EventReplayExecutor,
@@ -174,8 +176,15 @@ class TaskExecutor:
         self._live_tick_delivery_guard = LiveTickDeliveryGuard(self)
         self._backtest_gap_guard = BacktestGapGuard(self)
         self._backtest_idle_policy = BacktestIdleTickPolicy(self)
+        self._trading_idle_tick_policy = TradingIdleTickPolicy(self)
         self._runtime_metric_recorder = RuntimeMetricsRecorder(self)
         self._tick_processor = ExecutionTickProcessor(self)
+        self._broker_read_outage = BrokerReadOutageCoordinator(
+            task=task,
+            task_type=self.task_type,
+            state_manager=state_manager,
+            logger=logger,
+        )
 
         # --- Debug: memory profiling ---
         debug_opts = getattr(task, "debug_options", None) or {}
@@ -1273,13 +1282,21 @@ class TradingExecutor(TaskExecutor):
     def _assert_runtime_broker_sync(self, *, state: ExecutionState) -> None:
         """Fail fast when broker exposure drifts during a live execution."""
         trading_task = cast(TradingTask, self.task)
-        from apps.trading.services.reconciliation import TradingResumeReconciler, TradingSafetyError
+        from apps.trading.services.reconciliation import (
+            BrokerReadUnavailableError,
+            TradingResumeReconciler,
+            TradingSafetyError,
+        )
 
         reconciler = TradingResumeReconciler(
             task=trading_task,
             state=state,
         )
-        report = reconciler.detect_runtime_drift()
+        try:
+            report = reconciler.detect_runtime_drift()
+        except BrokerReadUnavailableError as exc:
+            self._broker_read_outage.park(state=state, reason=str(exc))
+            return
         if not report.has_blockers:
             return
 

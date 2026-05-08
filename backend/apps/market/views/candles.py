@@ -1,6 +1,5 @@
 """Candle data views."""
 
-import re
 from datetime import UTC, datetime
 from logging import Logger, getLogger
 from typing import Any
@@ -18,114 +17,24 @@ from rest_framework.views import APIView
 
 from apps.common.querying import OrderingConfig
 from apps.market.models import OandaAccounts
-from apps.market.services.oanda_retry import OandaApiRequestExecutor
-from apps.market.services.oanda_types import OandaAPIError
+from apps.market.services.oanda_candles import (
+    OANDA_GRANULARITY_SECONDS,
+    OandaCandleFetchError,
+    OandaCandleGateway,
+    OandaCandleHistoryService,
+    OandaCandleParser,
+)
 from apps.market.views.account_helpers import get_user_default_account
 
 logger: Logger = getLogger(name=__name__)
 
-# Granularity → seconds lookup (module-level constant).
-_GRANULARITY_SECONDS: dict[str, int] = {
-    "S5": 5,
-    "S10": 10,
-    "S15": 15,
-    "S30": 30,
-    "M1": 60,
-    "M2": 120,
-    "M4": 240,
-    "M5": 300,
-    "M10": 600,
-    "M15": 900,
-    "M30": 1800,
-    "H1": 3600,
-    "H2": 7200,
-    "H3": 10800,
-    "H4": 14400,
-    "H6": 21600,
-    "H8": 28800,
-    "H12": 43200,
-    "D": 86400,
-    "W": 604800,
-    "M": 2592000,
-}
+_GRANULARITY_SECONDS = OANDA_GRANULARITY_SECONDS
 
 CANDLE_ORDERING = OrderingConfig(
     fields={"time": "time", "timestamp": "time"},
     default="time",
     tie_breakers=(),
 )
-OANDA_CANDLE_REQUESTS = OandaApiRequestExecutor()
-
-
-class OandaCandleFetchError(Exception):
-    """Raised when OANDA candle API returns a non-success status."""
-
-    def __init__(self, status_code: int, body: Any = None):
-        super().__init__(f"OANDA candles request failed (status={status_code})")
-        self.status_code = status_code
-        self.body = body
-
-
-def _parse_candles(raw_candles: list[Any]) -> list[dict[str, Any]]:
-    """Convert raw v20 Candlestick objects into JSON-serialisable dicts."""
-    result: list[dict[str, Any]] = []
-    for candle in raw_candles:
-        if not candle.complete:
-            continue
-        mid = candle.mid
-        if not mid or not all([mid.o, mid.h, mid.l, mid.c]):
-            continue
-        try:
-            time_obj = datetime.fromisoformat(candle.time.replace("Z", "+00:00"))
-            timestamp = int(time_obj.timestamp())
-        except (ValueError, AttributeError):
-            continue
-        result.append(
-            {
-                "time": timestamp,
-                "open": float(mid.o),
-                "high": float(mid.h),
-                "low": float(mid.l),
-                "close": float(mid.c),
-                "volume": int(candle.volume),
-            }
-        )
-    return result
-
-
-def _fetch_oanda_candles(
-    api_context: v20.Context,
-    instrument: str,
-    **params: Any,
-) -> list[Any]:
-    """Single OANDA candle request with shared exponential retry."""
-    try:
-        response = OANDA_CANDLE_REQUESTS.request(
-            api_context.instrument.candles,
-            label="Fetch OANDA candles",
-            failure_message="Failed to fetch OANDA candles",
-            instrument=instrument,
-            **params,
-        )
-    except OandaAPIError as exc:
-        detail = " ".join(part for part in [str(exc), getattr(exc, "internal_detail", "")] if part)
-        match = re.search(
-            r"\b(?P<status>400|401|403|404|405|409|422|429|500|502|503|504)\b", detail
-        )
-        status_code = int(match.group("status")) if match else 502
-        raise OandaCandleFetchError(status_code=status_code, body=detail) from exc
-    return response.body.get("candles", []) if response.body else []
-
-
-def _parse_candle_time(raw_candle: Any) -> datetime | None:
-    """Parse a candle timestamp into a datetime when possible."""
-    raw_time = getattr(raw_candle, "time", None)
-    if not isinstance(raw_time, str):
-        return None
-    try:
-        return datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
-    except ValueError:
-        return None
 
 
 class CandleDataView(APIView):
@@ -133,6 +42,12 @@ class CandleDataView(APIView):
 
     permission_classes = [IsAuthenticated]
     throttle_classes: list = []
+    candle_parser = OandaCandleParser()
+    candle_history = OandaCandleHistoryService(
+        gateway=OandaCandleGateway(),
+        parser=candle_parser,
+        granularity_seconds=_GRANULARITY_SECONDS,
+    )
 
     @extend_schema(
         operation_id="market_candles",
@@ -300,7 +215,7 @@ class CandleDataView(APIView):
 
             raw_candles = self._dispatch_fetch(api_context, params)
             candles_data = CANDLE_ORDERING.sort_records(
-                _parse_candles(raw_candles),
+                self.candle_parser.parse_many(raw_candles),
                 params.get("ordering"),
             )
 
@@ -397,23 +312,13 @@ class CandleDataView(APIView):
         base: dict[str, Any],
     ) -> list[Any]:
         """Fetch candles for a from/to range, paginating if needed."""
-        try:
-            from_dt = datetime.fromisoformat(from_time.replace("Z", "+00:00"))
-            to_dt = datetime.fromisoformat(to_time.replace("Z", "+00:00"))
-        except (ValueError, AttributeError) as e:
-            logger.error("Failed to parse time range: %s", e)
-            return []
-
-        granularity_seconds = _GRANULARITY_SECONDS.get(granularity, 3600)
-        estimated = int((to_dt - from_dt).total_seconds() / granularity_seconds)
-
-        if estimated > 5000:
-            return self._fetch_candles_paginated(
-                api_context, instrument, granularity, from_dt, to_dt
-            )
-
-        return _fetch_oanda_candles(
-            api_context, instrument, fromTime=from_time, toTime=to_time, **base
+        return self.candle_history.fetch_range(
+            api_context,
+            instrument,
+            granularity,
+            from_time,
+            to_time,
+            base,
         )
 
     # ------------------------------------------------------------------
@@ -481,44 +386,13 @@ class CandleDataView(APIView):
         to_dt: datetime,
     ) -> list[Any]:
         """Fetch candles in batches when the range exceeds 5000."""
-        all_candles: list[Any] = []
-        current_from = from_dt
-        granularity_seconds = _GRANULARITY_SECONDS.get(granularity, 3600)
-
-        while current_from < to_dt:
-            current_to = datetime.fromtimestamp(
-                min(current_from.timestamp() + 5000 * granularity_seconds, to_dt.timestamp()),
-                tz=UTC,
-            )
-
-            from_str = current_from.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            to_str = current_to.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-            try:
-                batch = _fetch_oanda_candles(
-                    api_context,
-                    instrument,
-                    granularity=granularity,
-                    fromTime=from_str,
-                    toTime=to_str,
-                )
-            except OandaCandleFetchError:
-                raise
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error("Error fetching candle batch: %s", e, exc_info=True)
-                break
-
-            if not batch:
-                break
-
-            all_candles.extend(batch)
-
-            last_time = batch[-1].time
-            last_dt = datetime.fromisoformat(last_time.replace("Z", "+00:00"))
-            current_from = datetime.fromtimestamp(last_dt.timestamp() + granularity_seconds, tz=UTC)
-
-        logger.info("Pagination complete: fetched %d total candles", len(all_candles))
-        return all_candles
+        return self.candle_history.fetch_paginated(
+            api_context,
+            instrument,
+            granularity,
+            from_dt,
+            to_dt,
+        )
 
     def _fetch_count_paginated(
         self,
@@ -531,50 +405,11 @@ class CandleDataView(APIView):
         cursor_time: str | None = None,
     ) -> list[Any]:
         """Fetch candles in batches when count-based requests exceed OANDA's 5000 cap."""
-        max_batch_size = 5000
-        remaining = total_count
-        granularity_seconds = _GRANULARITY_SECONDS.get(granularity, 3600)
-        all_candles: list[Any] = []
-        next_cursor = cursor_time
-
-        while remaining > 0:
-            batch_size = min(remaining, max_batch_size)
-            params: dict[str, Any] = {
-                "granularity": granularity,
-                "count": batch_size,
-            }
-            if direction == "forward":
-                if next_cursor:
-                    params["fromTime"] = next_cursor
-            else:
-                if next_cursor:
-                    params["toTime"] = next_cursor
-
-            batch = _fetch_oanda_candles(api_context, instrument, **params)
-            if not batch:
-                break
-
-            if direction == "forward":
-                all_candles.extend(batch)
-                last_dt = _parse_candle_time(batch[-1])
-                if last_dt is None:
-                    break
-                next_cursor = datetime.fromtimestamp(
-                    last_dt.timestamp() + granularity_seconds,
-                    tz=UTC,
-                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            else:
-                all_candles = [*batch, *all_candles]
-                first_dt = _parse_candle_time(batch[0])
-                if first_dt is None:
-                    break
-                next_cursor = datetime.fromtimestamp(
-                    first_dt.timestamp() - 1,
-                    tz=UTC,
-                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-            remaining -= len(batch)
-            if len(batch) < batch_size:
-                break
-
-        return all_candles
+        return self.candle_history.fetch_count_paginated(
+            api_context,
+            instrument,
+            granularity,
+            total_count,
+            direction=direction,
+            cursor_time=cursor_time,
+        )

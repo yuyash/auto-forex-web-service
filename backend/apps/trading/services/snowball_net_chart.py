@@ -21,11 +21,10 @@ from rest_framework.request import Request
 
 from apps.market.models import OandaAccounts
 from apps.market.services.candles import market_candle_service
-from apps.market.views.candles import (
+from apps.market.services.oanda_candles import (
     OandaCandleFetchError,
-    _fetch_oanda_candles,
-    _parse_candle_time,
-    _parse_candles,
+    OandaCandleHistoryService,
+    OandaCandleParser,
 )
 from apps.trading.models.metrics import Metrics
 from apps.trading.models.positions import Position
@@ -44,6 +43,8 @@ DEFAULT_SIDE_BARS = 24 * 60
 MAX_CHART_RANGE_BARS = 14 * 24 * 60
 MAX_SIDE_BARS = 2000
 OANDA_CANDLE_MAX_BATCH = 5000
+OANDA_CANDLE_PARSER = OandaCandleParser()
+OANDA_CANDLE_HISTORY = OandaCandleHistoryService(parser=OANDA_CANDLE_PARSER)
 
 
 class OandaCandleUnavailable(APIException):
@@ -391,7 +392,7 @@ def _load_candles(
         raise OandaCandleUnavailable("Failed to fetch candles from OANDA.") from exc
     except V20Timeout as exc:
         raise OandaCandleUnavailable("OANDA candle request timed out.") from exc
-    return _parse_candles(raw_candles)
+    return OANDA_CANDLE_PARSER.parse_many(raw_candles)
 
 
 def _fetch_oanda_candles_for_window(
@@ -405,7 +406,7 @@ def _fetch_oanda_candles_for_window(
     step = granularity_seconds(granularity) or 3600
     estimated = int((until - since).total_seconds() / step) + 2
     if estimated <= OANDA_CANDLE_MAX_BATCH:
-        return _fetch_oanda_candles(
+        return OANDA_CANDLE_HISTORY.gateway.fetch(
             api_context,
             instrument,
             granularity=granularity,
@@ -423,7 +424,7 @@ def _fetch_oanda_candles_for_window(
             ),
             tz=UTC,
         )
-        batch = _fetch_oanda_candles(
+        batch = OANDA_CANDLE_HISTORY.gateway.fetch(
             api_context,
             instrument,
             granularity=granularity,
@@ -434,7 +435,7 @@ def _fetch_oanda_candles_for_window(
             break
         candles.extend(batch)
 
-        last_dt = _parse_candle_time(batch[-1])
+        last_dt = OANDA_CANDLE_PARSER.parse_time(batch[-1])
         if last_dt is None:
             break
         next_from = datetime.fromtimestamp(last_dt.timestamp() + step, tz=UTC)

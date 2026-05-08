@@ -34,7 +34,7 @@ from apps.market.services.oanda_clients import (
 )
 from apps.market.services.oanda_dry_run import OandaDryRunSimulator
 from apps.market.services import oanda_parsing
-from apps.market.services.oanda_transport import OandaOrderTransport
+from apps.market.services.oanda_transport import OandaOrderClientExtensions, OandaOrderTransport
 from apps.market.services.oanda_retry import (
     OandaApiRequestExecutor,
     OandaRetryPolicy,
@@ -131,6 +131,7 @@ class OandaService:
         )
         self.event_service = MarketEventService()
         self.order_guard = BrokerOrderGuard()
+        self.order_client_extensions = OandaOrderClientExtensions()
         self.response_parser = oanda_parsing.OandaResponseParser()
         self._account_resource_cache: dict[str, Any] | None = None
         self.context_factory = OandaContextFactory(v20_module=v20, settings_module=settings)
@@ -359,6 +360,14 @@ class OandaService:
             randbelow_func=secrets.randbelow,
         )
         return transport.execute_order(order_data)
+
+    def _apply_order_client_extensions(
+        self,
+        order_data: dict[str, Any],
+        client_order_id: str | None,
+    ) -> str | None:
+        """Attach broker client extensions used for idempotent order creation."""
+        return self.order_client_extensions.apply(order_data, client_order_id)
 
     def _request(
         self,

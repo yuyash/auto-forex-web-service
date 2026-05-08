@@ -33,6 +33,13 @@ class ExecutionTickProcessor:
         if executor._handle_live_tick_delivery(loop=loop, tick=tick, tick_ts=tick_ts):
             return True
 
+        if executor._trading_idle_tick_policy.handle_if_idle(
+            loop=loop,
+            tick=tick,
+            tick_ts=tick_ts,
+        ):
+            return False
+
         if executor._backtest_gap_guard.stop_for_gap(loop=loop, tick_ts=tick_ts):
             return True
 
@@ -328,6 +335,46 @@ class BacktestIdleTickPolicy:
         return True
 
 
+class TradingIdleTickPolicy:
+    """Consume live ticks without strategy/order processing while a task is IDLE."""
+
+    def __init__(self, executor: "TaskExecutor") -> None:
+        """Bind the policy to one executor instance."""
+        self.executor = executor
+
+    def handle_if_idle(
+        self,
+        *,
+        loop: "ExecutionLoopState",
+        tick,
+        tick_ts: datetime,
+    ) -> bool:
+        """Return true when the live tick was consumed by idle-mode handling."""
+        executor = self.executor
+        if executor.task_type != TaskType.TRADING:
+            return False
+        if executor.task.status != TaskStatus.IDLE:
+            return False
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        if not isinstance(strategy_state.get("_broker_read_unavailable"), dict):
+            executor._evaluate_market_idle(loop)
+        if executor.task.status != TaskStatus.IDLE:
+            return False
+
+        loop.last_delivered_tick_timestamp = tick_ts
+        loop.state.ticks_processed += 1
+        loop.state.last_tick_timestamp = tick_ts
+        loop.state.resume_cursor_timestamp = tick_ts
+        loop.state.last_tick_price = tick.mid
+        loop.state.last_tick_bid = tick.bid
+        loop.state.last_tick_ask = tick.ask
+        executor._update_common_metrics(loop.state, tick)
+        executor._buffer_tick_metrics(loop.state, tick)
+        return True
+
+
 class LiveTickDeliveryStateRepository:
     """Read and write live tick delivery diagnostics on ExecutionState."""
 
@@ -423,7 +470,7 @@ class RuntimeMetricsRecorder:
         loop.state.strategy_state = strategy_state
         loop.last_live_tick_latency_metric_at = observed_at
 
-        logger.info(
+        logger.debug(
             "[EXECUTOR:TICK_LATENCY_METRIC] task_id=%s execution_id=%s "
             "tick_ts=%s observed_at=%s oanda_tick_publish_latency_seconds=%s "
             "trading_tick_receive_latency_seconds=%.6f interval_seconds=%d "

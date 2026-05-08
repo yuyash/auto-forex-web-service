@@ -13,9 +13,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.market.models import OandaAccounts
-from apps.market.services.cache import (
-    build_instrument_detail_cache_key,
-    build_supported_instruments_cache_key,
+from apps.market.services.instruments import (
+    OandaAccountSelector,
+    OandaInstrumentCache,
+    OandaInstrumentCatalogService,
 )
 from apps.market.services.oanda_retry import OandaApiRequestExecutor
 
@@ -25,18 +26,26 @@ INSTRUMENTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 INSTRUMENT_DETAIL_CACHE_TTL_SECONDS = 60 * 60
 
 
-def _get_user_active_account(user_id: int | None) -> OandaAccounts | None:
-    """Return the requesting user's default active account when available."""
-    if not user_id:
-        return None
+class OandaInstrumentServiceMixin:
+    """Build instrument services with view-level injectable collaborators."""
 
-    return (
-        OandaAccounts.objects.filter(user_id=user_id, is_active=True, is_default=True).first()
-        or OandaAccounts.objects.filter(user_id=user_id, is_active=True).first()
-    )
+    request_executor = OandaApiRequestExecutor()
+
+    def _instrument_service(self) -> OandaInstrumentCatalogService:
+        """Return the service object used by instrument endpoints."""
+        return OandaInstrumentCatalogService(
+            account_selector=OandaAccountSelector(account_model=OandaAccounts),
+            instrument_cache=OandaInstrumentCache(
+                cache_backend=cache,
+                instruments_ttl_seconds=INSTRUMENTS_CACHE_TTL_SECONDS,
+                detail_ttl_seconds=INSTRUMENT_DETAIL_CACHE_TTL_SECONDS,
+            ),
+            v20_module=v20,
+            request_executor=self.request_executor,
+        )
 
 
-class SupportedInstrumentsView(APIView):
+class SupportedInstrumentsView(OandaInstrumentServiceMixin, APIView):
     """
     API endpoint for retrieving supported currency pairs/instruments.
 
@@ -47,7 +56,6 @@ class SupportedInstrumentsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    request_executor = OandaApiRequestExecutor()
 
     # Fallback list if OANDA API is unavailable
     FALLBACK_INSTRUMENTS = [
@@ -114,15 +122,13 @@ class SupportedInstrumentsView(APIView):
         )
 
     def _get_cached_instruments(self, account: OandaAccounts) -> list[str] | None:
-        cache_key = build_supported_instruments_cache_key(account.api_hostname)
-        cached = cache.get(cache_key)
-        if isinstance(cached, list) and all(isinstance(item, str) for item in cached):
-            return cached
-        return None
+        return self._instrument_service().instrument_cache.supported_instruments(account)
 
     def _set_cached_instruments(self, account: OandaAccounts, instruments: list[str]) -> None:
-        cache_key = build_supported_instruments_cache_key(account.api_hostname)
-        cache.set(cache_key, instruments, INSTRUMENTS_CACHE_TTL_SECONDS)
+        self._instrument_service().instrument_cache.set_supported_instruments(
+            account=account,
+            instruments=instruments,
+        )
 
     def _fetch_instruments_from_oanda(self, request: Request) -> list[str] | None:
         """
@@ -131,50 +137,11 @@ class SupportedInstrumentsView(APIView):
         Returns:
             List of instrument names or None if fetch fails
         """
-        try:
-            user_id = getattr(request.user, "id", None)
-            account = _get_user_active_account(user_id)
-            if not account:
-                logger.warning("No active OANDA account found for user %s", user_id)
-                return None
-
-            cached = self._get_cached_instruments(account)
-            if cached is not None:
-                return cached
-
-            # Create API context
-            api = v20.Context(
-                hostname=account.api_hostname,
-                token=account.get_api_token(),
-                poll_timeout=10,
-            )
-
-            # Fetch account instruments
-            response = self.request_executor.request(
-                api.account.instruments,
-                account.account_id,
-                label="Fetch OANDA instruments",
-                failure_message="Failed to fetch OANDA instruments",
-            )
-
-            # Extract instrument names
-            instruments = []
-            for instrument in response.body.get("instruments", []):
-                name = instrument.name
-                # Filter to forex pairs only (format: XXX_YYY)
-                if "_" in name and len(name) == 7:
-                    instruments.append(name)
-
-            sorted_instruments = sorted(instruments)
-            self._set_cached_instruments(account, sorted_instruments)
-            return sorted_instruments
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error(f"Failed to fetch instruments from OANDA: {e}")
-            return None
+        user_id = getattr(request.user, "id", None)
+        return self._instrument_service().supported_instruments_for_user(user_id)
 
 
-class InstrumentDetailView(APIView):
+class InstrumentDetailView(OandaInstrumentServiceMixin, APIView):
     """
     API endpoint for fetching detailed information about a specific currency pair.
 
@@ -185,7 +152,6 @@ class InstrumentDetailView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    request_executor = OandaApiRequestExecutor()
 
     @extend_schema(
         operation_id="market_instrument_detail",
@@ -254,141 +220,35 @@ class InstrumentDetailView(APIView):
         Returns:
             Dictionary with instrument details or None if fetch fails
         """
-        try:
-            user_id = getattr(request.user, "id", None)
-            if not user_id:
-                return None
-            account = _get_user_active_account(user_id)
-
-            if not account:
-                logger.warning("No active OANDA account found for user %s", user_id)
-                return None
-
-            cached_detail = self._get_cached_instrument_detail(account, instrument)
-
-            api = v20.Context(
-                hostname=account.api_hostname,
-                token=account.get_api_token(),
-                poll_timeout=10,
-            )
-
-            # Also fetch current pricing for spread calculation
-            pricing_data = self._fetch_current_pricing(api, account.account_id, instrument)
-
-            if cached_detail is None:
-                cached_detail = self._fetch_and_cache_instrument_detail(api, account, instrument)
-                if cached_detail is None:
-                    return None
-
-            # Build response data
-            return {
-                **cached_detail,
-                "current_pricing": pricing_data,
-            }
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error(f"Failed to fetch instrument details for {instrument}: {e}")
-            return None
+        user_id = getattr(request.user, "id", None)
+        return self._instrument_service().instrument_details_for_user(
+            user_id=user_id,
+            instrument=instrument,
+        )
 
     def _get_cached_instrument_detail(
         self, account: OandaAccounts, instrument: str
     ) -> dict[str, Any] | None:
-        cache_key = build_instrument_detail_cache_key(account.api_hostname, instrument)
-        cached = cache.get(cache_key)
-        return cached if isinstance(cached, dict) else None
+        return self._instrument_service().instrument_cache.detail(
+            account=account,
+            instrument=instrument,
+        )
 
     def _fetch_and_cache_instrument_detail(
         self, api: v20.Context, account: OandaAccounts, instrument: str
     ) -> dict[str, Any] | None:
-        response = self.request_executor.request(
-            api.account.instruments,
-            account.account_id,
-            label="Fetch OANDA instrument detail",
-            failure_message="Failed to fetch OANDA instrument detail",
-            instruments=instrument,
+        return self._instrument_service().fetch_and_cache_detail(
+            api=api,
+            account=account,
+            instrument=instrument,
         )
-
-        instruments_list = response.body.get("instruments", [])
-        if not instruments_list:
-            logger.warning(f"Instrument {instrument} not found")
-            return None
-
-        instr = instruments_list[0]
-        detail = {
-            "instrument": instr.name,
-            "display_name": instr.displayName,
-            "type": instr.type,
-            "pip_location": instr.pipLocation,
-            "pip_value": 10**instr.pipLocation,
-            "display_precision": instr.displayPrecision,
-            "trade_units_precision": instr.tradeUnitsPrecision,
-            "minimum_trade_size": str(instr.minimumTradeSize),
-            "maximum_trade_units": str(instr.maximumTradeUnits),
-            "maximum_position_size": str(instr.maximumPositionSize),
-            "maximum_order_units": str(instr.maximumOrderUnits),
-            "margin_rate": str(instr.marginRate),
-            "leverage": (
-                f"1:{int(1 / float(instr.marginRate))}" if float(instr.marginRate) > 0 else "N/A"
-            ),
-            "guaranteed_stop_loss_order_mode": str(
-                getattr(instr, "guaranteedStopLossOrderMode", "DISABLED")
-            ),
-            "tags": [tag.name for tag in getattr(instr, "tags", [])],
-            "financing": (
-                {
-                    "long_rate": str(getattr(instr.financing, "longRate", "0")),
-                    "short_rate": str(getattr(instr.financing, "shortRate", "0")),
-                }
-                if hasattr(instr, "financing") and instr.financing
-                else None
-            ),
-        }
-        cache_key = build_instrument_detail_cache_key(account.api_hostname, instrument)
-        cache.set(cache_key, detail, INSTRUMENT_DETAIL_CACHE_TTL_SECONDS)
-        return detail
 
     def _fetch_current_pricing(
         self, api: v20.Context, account_id: str, instrument: str
     ) -> dict[str, Any] | None:
         """Fetch current pricing for spread calculation."""
-        try:
-            response = self.request_executor.request(
-                api.pricing.get,
-                account_id,
-                label="Fetch OANDA pricing",
-                failure_message="Failed to fetch OANDA pricing",
-                instruments=instrument,
-            )
-
-            prices = response.body.get("prices", [])
-            if not prices:
-                return None
-
-            price = prices[0]
-
-            # Get best bid/ask
-            bids = price.bids if hasattr(price, "bids") and price.bids else []
-            asks = price.asks if hasattr(price, "asks") and price.asks else []
-
-            best_bid = float(bids[0].price) if bids else None
-            best_ask = float(asks[0].price) if asks else None
-
-            spread = None
-            spread_pips = None
-            if best_bid and best_ask:
-                spread = best_ask - best_bid
-                # Assume standard pip location for forex
-                spread_pips = spread * 10000  # Convert to pips for most pairs
-
-            return {
-                "bid": str(best_bid) if best_bid else None,
-                "ask": str(best_ask) if best_ask else None,
-                "spread": f"{spread:.5f}" if spread else None,
-                "spread_pips": f"{spread_pips:.1f}" if spread_pips else None,
-                "tradeable": price.tradeable if hasattr(price, "tradeable") else None,
-                "time": price.time if hasattr(price, "time") else None,
-            }
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning(f"Failed to fetch pricing for {instrument}: {e}")
-            return None
+        return self._instrument_service().current_pricing(
+            api=api,
+            account_id=account_id,
+            instrument=instrument,
+        )
