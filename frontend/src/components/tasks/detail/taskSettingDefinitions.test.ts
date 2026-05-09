@@ -63,4 +63,48 @@ describe('task setting definition contracts', () => {
     expect(keys.has('execution_id')).toBe(true);
     expect(keys.has('celery_task_id')).toBe(false);
   });
+
+  it('uses translated labels for overview execution, account, and API retry fields', () => {
+    const jaLabels: Record<string, string> = {
+      'common:labels.executionId': '実行ID',
+      'trading:detail.account': 'アカウント',
+      'trading:detail.accountType': 'アカウント種別',
+      'trading:form.apiRetryMaxAttempts': 'OANDA API リトライ回数',
+      'trading:form.apiRetryBaseSeconds': 'リトライ初期待機 (秒)',
+      'trading:form.apiRetryMaxSeconds': 'リトライ最大待機 (秒)',
+    };
+    const translate = (key: string, fallback?: string) =>
+      jaLabels[key] ?? fallback ?? key;
+
+    const tradingDefinitions = buildTradingTaskSettingDefinitions(
+      translate as never
+    );
+    const backtestDefinitions = buildBacktestTaskSettingDefinitions(
+      translate as never,
+      'UTC'
+    );
+    const tradingLabelByKey = Object.fromEntries(
+      tradingDefinitions.map((definition) => [definition.key, definition.label])
+    );
+    const backtestLabelByKey = Object.fromEntries(
+      backtestDefinitions.map((definition) => [
+        definition.key,
+        definition.label,
+      ])
+    );
+
+    expect(tradingLabelByKey.account_name).toBe('アカウント');
+    expect(tradingLabelByKey.account_type).toBe('アカウント種別');
+    expect(tradingLabelByKey.execution_id).toBe('実行ID');
+    expect(backtestLabelByKey.execution_id).toBe('実行ID');
+    expect(tradingLabelByKey.api_retry_max_attempts).toBe(
+      'OANDA API リトライ回数'
+    );
+    expect(tradingLabelByKey.api_retry_backoff_base_seconds).toBe(
+      'リトライ初期待機 (秒)'
+    );
+    expect(tradingLabelByKey.api_retry_backoff_max_seconds).toBe(
+      'リトライ最大待機 (秒)'
+    );
+  });
 });

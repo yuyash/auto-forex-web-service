@@ -394,6 +394,33 @@ class TestRecoverOrphanedTasks:
         )
 
     @pytest.mark.usefixtures("_mock_models")
+    def test_recovers_orphaned_idle_trading_task(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.IDLE
+        task.celery_task_id = "old-celery-id"
+
+        tt.objects.filter.return_value = _make_qs([task])
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        service_instance = MagicMock()
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="worker_ready")
+
+        assert result["trading"] == 1
+        status_filter = tt.objects.filter.call_args_list[0].kwargs["status__in"]
+        assert TaskStatus.IDLE in status_filter
+        service_instance.recover_trading_task.assert_called_once_with(
+            task,
+            expected_celery_task_id="old-celery-id",
+        )
+
+    @pytest.mark.usefixtures("_mock_models")
     def test_claimed_trading_recovery_is_skipped_not_failed(self, _mock_models):
         bt, tt, cts, tl, svc_cls = _mock_models
         from apps.trading.tasks.service import TaskConflictError

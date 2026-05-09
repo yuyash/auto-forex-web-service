@@ -249,17 +249,11 @@ export function buildTradingTaskSettingDefinitions(
     },
     {
       key: 'api_retry_backoff_base_seconds',
-      label: t(
-        'trading:form.apiRetryBackoffBaseSeconds',
-        'API retry base backoff'
-      ),
+      label: t('trading:form.apiRetryBaseSeconds', 'API retry base backoff'),
     },
     {
       key: 'api_retry_backoff_max_seconds',
-      label: t(
-        'trading:form.apiRetryBackoffMaxSeconds',
-        'API retry max backoff'
-      ),
+      label: t('trading:form.apiRetryMaxSeconds', 'API retry max backoff'),
     },
     {
       key: 'drain_duration_hours',

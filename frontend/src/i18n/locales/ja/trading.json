@@ -45,6 +45,8 @@
   },
   "detail": {
     "taskInformation": "タスク情報",
+    "account": "アカウント",
+    "accountType": "アカウント種別",
     "stopReason": "停止理由",
     "stopReasonNormal": "正常停止",
     "stopReasonCompleted": "正常完了",
