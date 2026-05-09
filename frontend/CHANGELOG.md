@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.67.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.1...frontend-v1.67.2) (2026-05-09)
+
+
+### Bug Fixes
+
+* **trading:** recover idle tasks after deploy ([#693](https://github.com/yuyash/auto-forex-web-service/issues/693)) ([2a3e87d](https://github.com/yuyash/auto-forex-web-service/commit/2a3e87d9e86698077224a0a13a1efc0db70d2fb3))
+
 ## [1.67.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.0...frontend-v1.67.1) (2026-05-08)
 
 
