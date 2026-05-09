@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -1666,12 +1667,57 @@ class TestHandleEmptyBatch:
 
         loop = ExecutionLoopState(state=MagicMock())
         loop.no_tick_batches = loop.max_no_tick_batches - 1
+        loop.market_closed_empty_batch_logged = True
 
         with patch("apps.trading.tasks.executor.is_forex_market_closed", return_value=False):
             should_stop = executor._handle_empty_batch(loop)
 
         assert should_stop is False
         assert loop.no_tick_batches == loop.max_no_tick_batches
+        assert loop.market_closed_empty_batch_logged is False
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_market_closed_empty_batch_logs_debug_once(self, mock_handler, caplog):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.execution_id = uuid4()
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+        executor._evaluate_market_idle = MagicMock()
+
+        loop = ExecutionLoopState(state=MagicMock())
+
+        with (
+            patch("apps.trading.tasks.executor.is_forex_market_closed", return_value=True),
+            caplog.at_level(logging.DEBUG, logger="apps.trading.tasks.executor"),
+        ):
+            first_should_stop = executor._handle_empty_batch(loop)
+            second_should_stop = executor._handle_empty_batch(loop)
+
+        assert first_should_stop is False
+        assert second_should_stop is False
+        assert loop.no_tick_batches == 0
+        assert loop.market_closed_empty_batch_logged is True
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "apps.trading.tasks.executor"
+            and record.message == "Market is closed, tolerating empty batches"
+        ]
+        assert len(records) == 1
+        assert records[0].levelno == logging.DEBUG
 
     @patch("apps.trading.tasks.executor.EventHandler")
     def test_backtest_stops_after_empty_batch_threshold(self, mock_handler):

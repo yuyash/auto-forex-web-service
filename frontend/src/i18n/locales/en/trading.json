@@ -45,6 +45,8 @@
   },
   "detail": {
     "taskInformation": "Task Information",
+    "account": "Account",
+    "accountType": "Account type",
     "stopReason": "Stop Reason",
     "stopReasonNormal": "Stopped normally",
     "stopReasonCompleted": "Execution completed successfully",

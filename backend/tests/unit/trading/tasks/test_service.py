@@ -279,6 +279,53 @@ class TestRecoverTradingTask:
             headers=ANY,
         )
 
+    @patch("apps.trading.tasks.service.uuid4")
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.run_trading_task")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_requeues_idle_trading_task_without_changing_run_id(
+        self,
+        mock_tt,
+        mock_run_trading_task,
+        mock_atomic,
+        mock_uuid,
+    ):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.IDLE
+        task.execution_id = uuid4()
+        task.celery_task_id = uuid4()
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.IDLE
+        locked.execution_id = task.execution_id
+        locked.celery_task_id = task.celery_task_id
+
+        new_celery_task_id = uuid4()
+        dispatch_uuid = uuid4()
+        mock_uuid.side_effect = [new_celery_task_id, dispatch_uuid]
+
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+
+        result = TaskService().recover_trading_task(task)
+
+        assert result is locked
+        assert locked.status == TaskStatus.STARTING
+        assert locked.execution_id == task.execution_id
+        assert locked.celery_task_id == new_celery_task_id
+        mock_run_trading_task.apply_async.assert_called_once_with(
+            args=[locked.pk, str(dispatch_uuid)],
+            task_id=str(new_celery_task_id),
+            queue="trading",
+            headers=ANY,
+        )
+
     @patch("apps.trading.tasks.service.transaction.atomic")
     @patch("apps.trading.tasks.service.TradingTask")
     def test_recover_requires_active_status(self, mock_tt, mock_atomic):
@@ -297,7 +344,7 @@ class TestRecoverTradingTask:
         locked.status = TaskStatus.STOPPED
         mock_tt.objects.select_for_update.return_value.get.return_value = locked
 
-        with pytest.raises(ValueError, match="STARTING/RUNNING"):
+        with pytest.raises(ValueError, match="STARTING/RUNNING/IDLE"):
             TaskService().recover_trading_task(task)
 
     @patch("apps.trading.tasks.service.transaction.atomic")

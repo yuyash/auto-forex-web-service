@@ -151,6 +151,7 @@ class ExecutionTickLoop:
                 continue
 
             loop.no_tick_batches = 0
+            loop.market_closed_empty_batch_logged = False
             executor._process_tick_batch(loop, tick_batch)
             loop.batch_count += 1
             executor._persist_batch_progress(loop)

@@ -1,9 +1,9 @@
 """Orphaned task recovery for crash recovery and periodic health checks.
 
 When the system crashes (e.g., worker killed, server power loss), tasks may
-remain in RUNNING/STARTING status in the database with no Celery worker
-actually processing them.  These "orphaned" tasks need to be detected and
-re-queued so they can resume execution.
+remain in active database states with no Celery worker actually processing
+them.  These "orphaned" tasks need to be detected and re-queued so they can
+resume execution.
 
 This module provides:
 - ``recover_orphaned_tasks``: core recovery logic (shared by startup & beat)
@@ -36,8 +36,11 @@ logger = logging.getLogger(__name__)
 TRADING_ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=1)
 BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=5)
 
-# Statuses that indicate a task *should* be actively running.
+# Statuses that indicate a task *should* be actively running. Trading IDLE is
+# worker-owned: the task loop is still alive and periodically re-evaluates the
+# market clock, so it must also be recovered after a deploy/crash.
 _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
+_ACTIVE_TRADING_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING, TaskStatus.IDLE]
 
 # Maximum number of orphaned tasks to process per recovery run to avoid
 # unbounded memory usage if many tasks are stuck.
@@ -70,7 +73,7 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     """Detect and re-queue orphaned backtest and trading tasks.
 
     A task is considered orphaned when:
-    1. Its DB status is RUNNING or STARTING, **and**
+    1. Its DB status is RUNNING or STARTING (or IDLE for trading), **and**
     2. Its ``CeleryTaskStatus.last_heartbeat_at`` is older than
        ``ORPHAN_HEARTBEAT_THRESHOLD``, **or** no ``CeleryTaskStatus`` row
        exists at all.
@@ -124,7 +127,7 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
         # --- Trading tasks (bounded queryset) ---
         orphaned_trading = list(
             TradingTask.objects.filter(
-                status__in=_ACTIVE_STATUSES,
+                status__in=_ACTIVE_TRADING_STATUSES,
             ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
         )
         trading_heartbeats = _prefetch_heartbeats(

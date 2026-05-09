@@ -104,6 +104,7 @@
   "labels": {
     "name": "名前",
     "taskId": "タスクID",
+    "executionId": "実行ID",
     "description": "説明",
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
@@ -157,7 +158,8 @@
     "error": "エラーが発生しました",
     "success": "操作が成功しました",
     "confirmDelete": "このアイテムを削除してもよろしいですか？",
-    "unsavedChanges": "保存されていない変更があります。本当に離れますか？"
+    "unsavedChanges": "保存されていない変更があります。本当に離れますか？",
+    "marketClosedTaskIdle": "マーケットクローズ中のためタスクはアイドル状態です。マーケット再開後にトレーディングを再開します。"
   },
   "cards": {
     "livePnl": "Live P&L",

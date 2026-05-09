@@ -111,6 +111,7 @@ class ExecutionLoopState:
     last_live_tick_status_log_at: datetime | None = None
     last_live_tick_latency_metric_at: datetime | None = None
     last_runtime_drift_check_at: datetime | None = None
+    market_closed_empty_batch_logged: bool = False
 
 
 class TaskExecutor:
@@ -563,12 +564,14 @@ class TaskExecutor:
     def _handle_empty_batch(self, loop: ExecutionLoopState) -> bool:
         """Handle empty tick batch; return True when loop should terminate."""
         if self.task_type == TaskType.TRADING and is_forex_market_closed():
-            if loop.no_tick_batches == 0:
-                logger.info("Market is closed, tolerating empty batches")
+            if not loop.market_closed_empty_batch_logged:
+                logger.debug("Market is closed, tolerating empty batches")
+                loop.market_closed_empty_batch_logged = True
             loop.no_tick_batches = 0
             self._evaluate_market_idle(loop)
             return False
 
+        loop.market_closed_empty_batch_logged = False
         loop.no_tick_batches += 1
         if self.task_type == TaskType.TRADING:
             # Market is open — re-evaluate whether we should be idling

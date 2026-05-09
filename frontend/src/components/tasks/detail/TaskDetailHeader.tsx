@@ -14,6 +14,7 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { TaskControlButtons } from '../../common/TaskControlButtons';
 import { StatusBadge } from '../display/StatusBadge';
 import { type TickInfo } from '../../../hooks/useTaskSummary';
@@ -158,6 +159,7 @@ export function TaskDetailHeader({
   onDelete,
 }: TaskDetailHeaderProps) {
   const { settings } = useAppSettings();
+  const { t } = useTranslation('common');
   const status = currentStatus || taskStatus;
   const actionDisabled =
     status === TaskStatus.RUNNING ||
@@ -290,8 +292,10 @@ export function TaskDetailHeader({
                   component="span"
                   sx={{ fontWeight: 600 }}
                 >
-                  Market closed — task idle, trading will resume when the market
-                  reopens.
+                  {t(
+                    'messages.marketClosedTaskIdle',
+                    'Market closed — task idle, trading will resume when the market reopens.'
+                  )}
                 </Typography>
               </Box>
             )}

@@ -415,9 +415,13 @@ class TaskService:
         with transaction.atomic():
             locked_task = TradingTask.objects.select_for_update().get(pk=task.pk)
 
-            if locked_task.status not in (TaskStatus.STARTING, TaskStatus.RUNNING):
+            if locked_task.status not in (
+                TaskStatus.STARTING,
+                TaskStatus.RUNNING,
+                TaskStatus.IDLE,
+            ):
                 raise TaskConflictError(
-                    "Orphan recovery requires task in STARTING/RUNNING state; "
+                    "Orphan recovery requires task in STARTING/RUNNING/IDLE state; "
                     f"got {locked_task.status}"
                 )
             if not locked_task.execution_id:
