@@ -4,6 +4,10 @@ import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import type { TaskExecution } from '../../../types/execution';
 import type { ConfigProperty } from '../../../types/strategy';
+import {
+  formatStrategyConfigRevisionLabel,
+  getStrategyConfigSnapshotRevision,
+} from '../../../utils/strategyConfigRevision';
 import { buildParameterLabelMap } from '../../../utils/strategySchemaLabels';
 import { StrategyParameterDialog } from './StrategyParameterDialog';
 
@@ -71,7 +75,14 @@ export function HistoricalStrategyConfigDialog({
     <StrategyParameterDialog
       open={open}
       onClose={onClose}
-      title={snapshot.name || t('common:labels.strategyConfiguration')}
+      title={
+        snapshot.name
+          ? formatStrategyConfigRevisionLabel(
+              snapshot.name,
+              getStrategyConfigSnapshotRevision(config)
+            )
+          : t('common:labels.strategyConfiguration')
+      }
       strategyType={getStrategyDisplayName(strategies, snapshot.strategyType)}
       parameters={snapshot.parameters}
       snapshotSchemaProperties={schemaProperties}

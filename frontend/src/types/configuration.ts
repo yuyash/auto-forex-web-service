@@ -6,6 +6,8 @@ export interface StrategyConfig {
   name: string;
   strategy_type: string;
   parameters: Record<string, unknown>;
+  revision: number;
+  config_hash: string;
   description: string;
   is_in_use: boolean;
   has_running_tasks: boolean;

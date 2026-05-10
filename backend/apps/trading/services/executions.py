@@ -317,6 +317,8 @@ def _serialize_execution_row(
         row["strategy_config"] = strategy_config
         row["segment_index"] = _extract_segment_index(task_config, strategy_config)
         row["config_revision_count"] = _extract_revision_count(task_config, strategy_config)
+        row["configuration_revision"] = _extract_configuration_revision(strategy_config)
+        row["configuration_hash"] = _extract_configuration_hash(strategy_config)
         row["notes"] = snapshot.get("notes", "")
 
     return row
@@ -334,6 +336,37 @@ def _extract_segment_index(task_config: Any, strategy_config: Any) -> int:
 
 def _extract_revision_count(task_config: Any, strategy_config: Any) -> int:
     return max(_revision_count(task_config), _revision_count(strategy_config))
+
+
+def _extract_configuration_revision(strategy_config: Any) -> int | None:
+    current = _current_config(strategy_config)
+    value = current.get("configuration_revision") if current else None
+    if value is None and isinstance(strategy_config, dict):
+        value = strategy_config.get("configuration_revision")
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_configuration_hash(strategy_config: Any) -> str | None:
+    current = _current_config(strategy_config)
+    value = current.get("configuration_hash") if current else None
+    if value is None and isinstance(strategy_config, dict):
+        value = strategy_config.get("configuration_hash")
+    return str(value) if value else None
+
+
+def _current_config(config: Any) -> dict[str, Any]:
+    if not isinstance(config, dict):
+        return {}
+    current = config.get("current")
+    if isinstance(current, dict):
+        return current
+    initial = config.get("initial")
+    if isinstance(initial, dict):
+        return initial
+    return config
 
 
 def _revision_count(config: Any) -> int:

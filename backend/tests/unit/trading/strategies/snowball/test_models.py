@@ -15,6 +15,7 @@ from apps.trading.strategies.snowball.models import (
     Slot,
     SnowballCycle,
     SnowballStrategyState,
+    StopLossClosedEntry,
 )
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -300,6 +301,29 @@ class TestSnowballStrategyConfig:
 
         assert cfg.rebuild_take_profit_recovery_enabled is False
         assert cfg.rebuild_take_profit_recovery_mode == "pips"
+
+
+class TestStopLossClosedEntry:
+    def test_serializes_stop_loss_exit_price_and_closed_at(self):
+        pending = StopLossClosedEntry(
+            entry_price=Decimal("144.547"),
+            close_price=Decimal("144.697"),
+            units=3000,
+            direction=Direction.LONG,
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            step=1,
+            cycle_id=1,
+            stop_loss_loss_pips=Decimal("35"),
+            stop_loss_exit_price=Decimal("144.197"),
+            closed_at=T0,
+        )
+
+        restored = StopLossClosedEntry.from_dict(pending.to_dict())
+
+        assert restored.stop_loss_exit_price == Decimal("144.197")
+        assert restored.closed_at == T0
 
 
 class TestEntry:

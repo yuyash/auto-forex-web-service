@@ -7005,6 +7005,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "config_revision": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_hash": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "strategy_type": {
                         "type": "string",
                         "readOnly": true
@@ -7223,8 +7231,10 @@
                     "action_policy",
                     "can_resume",
                     "completed_at",
+                    "config_hash",
                     "config_id",
                     "config_name",
+                    "config_revision",
                     "created_at",
                     "end_time",
                     "error_code",
@@ -7419,6 +7429,14 @@
                         "readOnly": true
                     },
                     "config_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "config_revision": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_hash": {
                         "type": "string",
                         "readOnly": true
                     },
@@ -7634,8 +7652,10 @@
                     "action_policy",
                     "can_resume",
                     "completed_at",
+                    "config_hash",
                     "config_id",
                     "config_name",
+                    "config_revision",
                     "created_at",
                     "data_source",
                     "debug_options",
@@ -10906,6 +10926,16 @@
                     "parameters": {
                         "description": "Strategy-specific configuration parameters"
                     },
+                    "revision": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Monotonic revision for runtime-affecting configuration changes"
+                    },
+                    "config_hash": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Stable hash of strategy_type and parameters for this revision"
+                    },
                     "description": {
                         "type": "string",
                         "description": "Optional description of this configuration"
@@ -10934,11 +10964,13 @@
                     }
                 },
                 "required": [
+                    "config_hash",
                     "created_at",
                     "has_running_tasks",
                     "id",
                     "is_in_use",
                     "name",
+                    "revision",
                     "strategy_type",
                     "updated_at",
                     "user_id"
@@ -10973,6 +11005,16 @@
                         "readOnly": true,
                         "description": "Optional description of this configuration"
                     },
+                    "revision": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Monotonic revision for runtime-affecting configuration changes"
+                    },
+                    "config_hash": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Stable hash of strategy_type and parameters for this revision"
+                    },
                     "is_in_use": {
                         "type": "boolean",
                         "description": "Get whether configuration is in use by active tasks.",
@@ -10997,12 +11039,14 @@
                     }
                 },
                 "required": [
+                    "config_hash",
                     "created_at",
                     "description",
                     "has_running_tasks",
                     "id",
                     "is_in_use",
                     "name",
+                    "revision",
                     "strategy_type",
                     "updated_at",
                     "user_id"
@@ -11237,6 +11281,14 @@
                     "notes": {
                         "type": "string",
                         "default": ""
+                    },
+                    "configuration_revision": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "configuration_hash": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "metrics": {
                         "$ref": "#/components/schemas/TaskExecutionMetrics"
@@ -12357,6 +12409,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "config_revision": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_hash": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "strategy_type": {
                         "type": "string",
                         "readOnly": true
@@ -12547,8 +12607,10 @@
                     "action_policy",
                     "can_resume",
                     "completed_at",
+                    "config_hash",
                     "config_id",
                     "config_name",
+                    "config_revision",
                     "created_at",
                     "error_code",
                     "error_message",
@@ -12688,6 +12750,14 @@
                         "readOnly": true
                     },
                     "config_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "config_revision": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_hash": {
                         "type": "string",
                         "readOnly": true
                     },
@@ -12871,8 +12941,10 @@
                     "api_retry_max_attempts",
                     "broker_drift_check_interval_seconds",
                     "completed_at",
+                    "config_hash",
                     "config_id",
                     "config_name",
+                    "config_revision",
                     "created_at",
                     "description",
                     "drain_duration_hours",

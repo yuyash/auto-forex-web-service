@@ -12,7 +12,8 @@ from apps.trading.serializers.strategy import (
     StrategyConfigSerializer,
     StrategyListSerializer,
 )
-from tests.integration.factories import StrategyConfigurationFactory
+from apps.trading.enums import TaskStatus
+from tests.integration.factories import BacktestTaskFactory, StrategyConfigurationFactory
 
 
 class TestStrategyConfigDetailSerializer:
@@ -131,6 +132,33 @@ class TestStrategyConfigCreateSerializer:
         updated.refresh_from_db()
         assert updated.name == "Updated"
         assert updated.description == "New"
+        assert updated.revision == 1
+
+    @pytest.mark.django_db
+    def test_update_increments_revision_for_parameter_changes(self):
+        config = StrategyConfigurationFactory(parameters={"base_units": 1000, "r_max": 5})
+        original_hash = config.config_hash
+        serializer = StrategyConfigCreateSerializer()
+
+        updated = serializer.update(
+            config,
+            {"parameters": {"base_units": 2000, "r_max": 5}},
+        )
+
+        updated.refresh_from_db()
+        assert updated.revision == 2
+        assert updated.config_hash != original_hash
+
+    @pytest.mark.django_db
+    def test_update_blocks_when_configuration_has_paused_task(self):
+        config = StrategyConfigurationFactory(parameters={"base_units": 1000, "r_max": 5})
+        BacktestTaskFactory(config=config, status=TaskStatus.PAUSED)
+        serializer = StrategyConfigCreateSerializer()
+
+        with pytest.raises(ValidationError) as exc_info:
+            serializer.update(config, {"parameters": {"base_units": 2000, "r_max": 5}})
+
+        assert "tasks using this configuration are running" in str(exc_info.value.detail["detail"])
 
     @patch("apps.trading.strategies.registry.registry")
     def test_validate_hides_internal_value_error_details(self, mock_registry):
