@@ -61,6 +61,7 @@ import {
   formatMoneyPayload,
 } from '../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BacktestTaskCardProps {
@@ -355,6 +356,10 @@ export default function BacktestTaskCard({
     realized: summary.pnl.realizedDisplayMoney,
     unrealized: summary.pnl.unrealizedDisplayMoney,
   };
+  const pnlConversionTooltip = formatCurrencyConversionContext(
+    summary.pnl.displayConversionContext,
+    { language, separators: appSettings, t, timezone }
+  );
   const formatPnl = (
     value: number,
     money?: { amount: string; currency: string } | null
@@ -525,21 +530,29 @@ export default function BacktestTaskCard({
                   >
                     {item.label}
                   </Typography>
-                  <Typography
-                    variant="body1"
-                    component="div"
-                    color={item.value >= 0 ? 'success.main' : 'error.main'}
-                    sx={{
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      overflowWrap: 'anywhere',
-                    }}
+                  <Tooltip
+                    title={pnlConversionTooltip}
+                    arrow
+                    disableHoverListener={!pnlConversionTooltip}
                   >
-                    {formatPnl(
-                      item.value,
-                      pnlDisplayMoney[item.key as keyof typeof pnlDisplayMoney]
-                    )}
-                  </Typography>
+                    <Typography
+                      variant="body1"
+                      component="div"
+                      color={item.value >= 0 ? 'success.main' : 'error.main'}
+                      sx={{
+                        fontWeight: 700,
+                        lineHeight: 1.25,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {formatPnl(
+                        item.value,
+                        pnlDisplayMoney[
+                          item.key as keyof typeof pnlDisplayMoney
+                        ]
+                      )}
+                    </Typography>
+                  </Tooltip>
                 </Box>
               </Grid>
             ))}

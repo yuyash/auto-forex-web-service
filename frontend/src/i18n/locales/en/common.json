@@ -141,6 +141,16 @@
     "strategySnapshot": "Strategy Snapshot",
     "pageSize": "Page size"
   },
+  "currencyConversion": {
+    "tooltip": "{{policy}}: {{source}} to {{target}}, rate {{rate}}, source {{rateSource}}, as of {{rateAsOf}}, path {{ratePath}}",
+    "unavailable": "Conversion unavailable for {{source}} to {{target}}",
+    "rateTimeUnavailable": "rate time unavailable",
+    "policies": {
+      "identity": "No conversion",
+      "runtime_fx_rate": "Runtime FX conversion",
+      "unavailable": "Conversion unavailable"
+    }
+  },
   "dateRange": {
     "startDate": "Start Date",
     "endDate": "End Date",

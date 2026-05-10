@@ -141,6 +141,16 @@
     "strategySnapshot": "戦略スナップショット",
     "pageSize": "ページサイズ"
   },
+  "currencyConversion": {
+    "tooltip": "{{policy}}: {{source}} から {{target}}、レート {{rate}}、取得元 {{rateSource}}、基準時刻 {{rateAsOf}}、経路 {{ratePath}}",
+    "unavailable": "{{source}} から {{target}} への換算を利用できません",
+    "rateTimeUnavailable": "レート時刻なし",
+    "policies": {
+      "identity": "換算なし",
+      "runtime_fx_rate": "実行時FX換算",
+      "unavailable": "換算不可"
+    }
+  },
   "dateRange": {
     "startDate": "開始日",
     "endDate": "終了日",

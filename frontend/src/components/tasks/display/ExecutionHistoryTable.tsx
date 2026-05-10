@@ -58,6 +58,7 @@ import {
 } from '../../../utils/strategyConfigRevision';
 import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 
 interface ExecutionHistoryTableProps {
@@ -321,23 +322,33 @@ export function ExecutionHistoryTable({
             row.metrics?.total_pnl_quote != null &&
             quoteCcy &&
             quoteCcy !== acctCcy;
+          const conversionTooltip = formatCurrencyConversionContext(
+            row.metrics?.display_conversion_context,
+            { language, separators: appSettings, t, timezone }
+          );
           const qv = hasQuote
             ? parseFloat(String(row.metrics.total_pnl_quote))
             : NaN;
           return (
             <Box>
-              <Typography
-                variant="body2"
-                color={v >= 0 ? 'success.main' : 'error.main'}
-                sx={{ whiteSpace: 'nowrap' }}
+              <Tooltip
+                title={conversionTooltip}
+                arrow
+                disableHoverListener={!conversionTooltip}
               >
-                {formatMetricMoney(
-                  row.metrics?.total_pnl_display_money ??
-                    row.metrics?.total_pnl_money,
-                  v,
-                  acctCcy
-                )}
-              </Typography>
+                <Typography
+                  variant="body2"
+                  color={v >= 0 ? 'success.main' : 'error.main'}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {formatMetricMoney(
+                    row.metrics?.total_pnl_display_money ??
+                      row.metrics?.total_pnl_money,
+                    v,
+                    acctCcy
+                  )}
+                </Typography>
+              </Tooltip>
               {hasQuote && !isNaN(qv) && (
                 <Typography
                   variant="caption"
@@ -464,7 +475,7 @@ export function ExecutionHistoryTable({
     }
 
     return baseColumns;
-  }, [formatDate, pnlCurrency, t, taskType]);
+  }, [appSettings, formatDate, language, pnlCurrency, t, taskType, timezone]);
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);
   const storageKey = `exec_history_${taskType}_v3`;

@@ -15,6 +15,7 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import type {
   StrategySnapshotCard,
@@ -31,6 +32,7 @@ import {
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import { useItemOrder } from '../../../hooks/useItemOrder';
 import { ItemOrderDialog } from '../../common/ItemOrderDialog';
+import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 
 type DetailNamespace = 'backtest' | 'trading';
 
@@ -60,6 +62,7 @@ interface ExecutionStatusItem {
   label: string;
   value: string;
   color?: TypographyProps['color'];
+  tooltip?: string;
 }
 
 const METRIC_KEYS: Array<{
@@ -86,9 +89,12 @@ export function ExecutionStatusSummary({
   isRefreshing = false,
 }: ExecutionStatusSummaryProps) {
   const { t } = useTranslation(['common', 'strategy', taskNamespace]);
+  const { user } = useAuth();
   const { separators } = useNumberFormatter();
   const snapshotCards = snapshot?.snapshot.cards;
   const accountCurrency = summary.execution.accountCurrency || pnlCurrency;
+  const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const items = useMemo(() => {
@@ -102,8 +108,10 @@ export function ExecutionStatusSummary({
         pnlCurrency,
         displayedMarginRatio,
         hiddenIds: snapshotCardIds,
+        language,
         separators,
         t,
+        timezone,
       }),
       ...extraItems,
       ...cards.map((card) =>
@@ -115,12 +123,14 @@ export function ExecutionStatusSummary({
     displayedMarginRatio,
     extraItems,
     latestMetrics,
+    language,
     pnlCurrency,
     separators,
     summary,
     snapshotCards,
     t,
     taskNamespace,
+    timezone,
   ]);
   const { orderedItems, updateOrder, resetOrder } = useItemOrder(
     `execution_status_${taskNamespace}`,
@@ -277,7 +287,7 @@ function ExecutionStatusTile({
   onDragOver: (event: DragEvent, index: number) => void;
   onDragEnd: () => void;
 }) {
-  return (
+  const tile = (
     <Box
       draggable
       onDragStart={(event) => onDragStart(event, index)}
@@ -336,6 +346,12 @@ function ExecutionStatusTile({
       </Typography>
     </Box>
   );
+  if (!item.tooltip) return tile;
+  return (
+    <Tooltip title={item.tooltip} arrow>
+      {tile}
+    </Tooltip>
+  );
 }
 
 function buildResultItems({
@@ -345,8 +361,10 @@ function buildResultItems({
   pnlCurrency,
   displayedMarginRatio,
   hiddenIds,
+  language,
   separators,
   t,
+  timezone,
 }: {
   taskNamespace: DetailNamespace;
   summary: TaskSummary;
@@ -354,10 +372,20 @@ function buildResultItems({
   pnlCurrency: string;
   displayedMarginRatio?: number | null;
   hiddenIds?: Set<string>;
+  language?: string;
   separators: NumberFormatSeparators;
   t: ReturnType<typeof useTranslation>['t'];
+  timezone: string;
 }): ExecutionStatusItem[] {
   const detailLabel = (key: string) => t(`${taskNamespace}:detail.${key}`);
+  const pnlConversionTooltip = formatCurrencyConversionContext(
+    summary.pnl.displayConversionContext,
+    { language, separators, t, timezone }
+  );
+  const balanceConversionTooltip = formatCurrencyConversionContext(
+    summary.execution.currentBalanceDisplayConversionContext,
+    { language, separators, t, timezone }
+  );
   const items: ExecutionStatusItem[] = [
     {
       id: 'realized_pnl',
@@ -370,6 +398,7 @@ function buildResultItems({
         separators
       ),
       color: summary.pnl.realized >= 0 ? 'success.main' : 'error.main',
+      tooltip: pnlConversionTooltip,
     },
     {
       id: 'unrealized_pnl',
@@ -382,8 +411,15 @@ function buildResultItems({
         separators
       ),
       color: summary.pnl.unrealized >= 0 ? 'success.main' : 'error.main',
+      tooltip: pnlConversionTooltip,
     },
-    ...buildCurrentBalanceItems(summary, pnlCurrency, detailLabel, separators),
+    ...buildCurrentBalanceItems(
+      summary,
+      pnlCurrency,
+      detailLabel,
+      separators,
+      balanceConversionTooltip
+    ),
     {
       id: 'total_trades',
       label: detailLabel('totalTradesCount'),
@@ -443,7 +479,8 @@ function buildCurrentBalanceItems(
   summary: TaskSummary,
   pnlCurrency: string,
   detailLabel: (key: string) => string,
-  separators: NumberFormatSeparators
+  separators: NumberFormatSeparators,
+  tooltip: string
 ): ExecutionStatusItem[] {
   if (summary.execution.currentBalance == null) return [];
 
@@ -478,6 +515,7 @@ function buildCurrentBalanceItems(
       id: 'current_balance',
       label: detailLabel('currentBalance'),
       value,
+      tooltip,
     },
   ];
 }

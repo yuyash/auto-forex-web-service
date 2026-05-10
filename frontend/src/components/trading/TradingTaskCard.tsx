@@ -60,6 +60,7 @@ import {
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -405,6 +406,10 @@ export default function TradingTaskCard({
     realized: taskSummary.pnl.realizedDisplayMoney,
     unrealized: taskSummary.pnl.unrealizedDisplayMoney,
   };
+  const pnlConversionTooltip = formatCurrencyConversionContext(
+    taskSummary.pnl.displayConversionContext,
+    { language, separators: appSettings, t, timezone }
+  );
   const formatPnlItem = (
     value: number,
     money?: { amount: string; currency: string } | null
@@ -582,21 +587,29 @@ export default function TradingTaskCard({
                   >
                     {item.label}
                   </Typography>
-                  <Typography
-                    variant="body1"
-                    component="div"
-                    color={item.value >= 0 ? 'success.main' : 'error.main'}
-                    sx={{
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      overflowWrap: 'anywhere',
-                    }}
+                  <Tooltip
+                    title={pnlConversionTooltip}
+                    arrow
+                    disableHoverListener={!pnlConversionTooltip}
                   >
-                    {formatPnlItem(
-                      item.value,
-                      pnlDisplayMoney[item.key as keyof typeof pnlDisplayMoney]
-                    )}
-                  </Typography>
+                    <Typography
+                      variant="body1"
+                      component="div"
+                      color={item.value >= 0 ? 'success.main' : 'error.main'}
+                      sx={{
+                        fontWeight: 700,
+                        lineHeight: 1.25,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {formatPnlItem(
+                        item.value,
+                        pnlDisplayMoney[
+                          item.key as keyof typeof pnlDisplayMoney
+                        ]
+                      )}
+                    </Typography>
+                  </Tooltip>
                 </Box>
               </Grid>
             ))}
