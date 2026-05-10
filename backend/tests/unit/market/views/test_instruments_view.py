@@ -43,6 +43,9 @@ class TestSupportedInstrumentsViewGet:
         assert response.data["source"] == "oanda"
         assert response.data["count"] == 3
         assert "EUR_USD" in response.data["instruments"]
+        assert response.data["metadata"]["USD_JPY"]["base_currency"] == "USD"
+        assert response.data["metadata"]["USD_JPY"]["quote_currency"] == "JPY"
+        assert response.data["metadata"]["USD_JPY"]["pip_size"] == "0.01"
         mock_fetch.assert_called_once_with(request)
 
     @patch.object(SupportedInstrumentsView, "_fetch_instruments_from_oanda")
@@ -58,6 +61,7 @@ class TestSupportedInstrumentsViewGet:
         assert response.status_code == http_status.HTTP_200_OK
         assert response.data["source"] == "fallback"
         assert response.data["count"] == len(SupportedInstrumentsView.FALLBACK_INSTRUMENTS)
+        assert response.data["metadata"]["EUR_USD"]["pip_size"] == "0.0001"
 
 
 class TestFetchInstrumentsFromOanda:
@@ -201,6 +205,9 @@ class TestInstrumentDetailViewGet:
         assert response.status_code == http_status.HTTP_200_OK
         assert response.data["instrument"] == "EUR_USD"
         assert response.data["source"] == "oanda"
+        assert response.data["base_currency"] == "EUR"
+        assert response.data["quote_currency"] == "USD"
+        assert response.data["pip_size"] == "0.0001"
 
     @patch.object(InstrumentDetailView, "_fetch_instrument_details")
     def test_returns_404_when_not_found(self, mock_fetch):

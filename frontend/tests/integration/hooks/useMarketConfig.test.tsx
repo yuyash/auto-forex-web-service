@@ -60,6 +60,32 @@ describe('useMarketConfig', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('exposes instrument metadata from the supported instruments response', async () => {
+    vi.mocked(marketApi.getSupportedInstruments).mockResolvedValueOnce({
+      instruments: ['USD_JPY'],
+      source: 'oanda',
+      metadata: {
+        USD_JPY: {
+          normalized_name: 'USD_JPY',
+          base_currency: 'USD',
+          quote_currency: 'JPY',
+          pip_size: '0.01',
+          is_high_value_quote: true,
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSupportedInstruments(), {
+      wrapper: createQueryHookWrapper().wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.instruments).toEqual(['USD_JPY']);
+    expect(result.current.metadata.USD_JPY.pip_size).toBe('0.01');
+    expect(result.current.usingFallback).toBe(false);
+  });
+
   it('fetches tick data ranges through react-query', async () => {
     vi.mocked(marketApi.getTickDataRange).mockResolvedValueOnce({
       instrument: 'USD_JPY',

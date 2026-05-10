@@ -3,9 +3,11 @@
 import logging
 from decimal import Decimal
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.trading.enums import TaskStatus
+from apps.trading.money import Money
 from apps.trading.models import BacktestTask, StrategyConfiguration
 from apps.trading.services.task_policy import (
     action_policy_for_task,
@@ -33,6 +35,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
+    initial_balance_money = serializers.SerializerMethodField()
+    commission_per_trade_money = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -50,9 +54,11 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "initial_balance_money",
             "account_currency",
             "display_currency",
             "commission_per_trade",
+            "commission_per_trade_money",
             "pip_size",
             "instrument",
             "hedging_enabled",
@@ -98,6 +104,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "error_code",
             "created_at",
             "updated_at",
+            "initial_balance_money",
+            "commission_per_trade_money",
             "can_resume",
             "action_policy",
         ]
@@ -118,20 +126,29 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
 
+    @extend_schema_field(MoneySerializer)
+    def get_initial_balance_money(self, obj: BacktestTask) -> dict[str, str]:
+        """Return the initial balance with its account currency."""
+        return Money.coerce(obj.initial_balance, obj.account_currency).as_dict()
+
+    @extend_schema_field(MoneySerializer)
+    def get_commission_per_trade_money(self, obj: BacktestTask) -> dict[str, str]:
+        """Return the per-trade commission with its account currency."""
+        return Money.coerce(obj.commission_per_trade, obj.account_currency).as_dict()
+
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):
     """Serializer for BacktestTask list view (summary only).
 
     Inherits all fields from BacktestTaskSerializer but drops
-    ``commission_per_trade`` and ``execution_id``, and marks everything
-    read-only.
+    commission details and ``execution_id``, and marks everything read-only.
     """
 
     class Meta(BacktestTaskSerializer.Meta):
         fields = [
             f
             for f in BacktestTaskSerializer.Meta.fields
-            if f not in {"commission_per_trade", "execution_id"}
+            if f not in {"commission_per_trade", "commission_per_trade_money", "execution_id"}
         ]
         read_only_fields = fields
 

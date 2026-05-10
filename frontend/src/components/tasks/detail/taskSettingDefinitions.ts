@@ -7,6 +7,7 @@ import {
 import {
   formatAppNumber,
   formatMoneyAmount,
+  formatMoneyPayload,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
 
@@ -59,6 +60,14 @@ function formatInitialBalance(
   separators?: NumberFormatSeparators
 ): string {
   if (value === null || value === undefined || value === '') return '-';
+  const money = source.initial_balance_money ?? task.initial_balance_money;
+  if (money && typeof money === 'object') {
+    return formatMoneyPayload(
+      money as { amount: string | number; currency: string },
+      { currencyPlacement: 'suffix' },
+      separators
+    );
+  }
   const numericValue = Number(value);
   const currency = source.account_currency ?? task.account_currency;
   if (!Number.isFinite(numericValue)) return String(value);
@@ -68,6 +77,33 @@ function formatInitialBalance(
     {
       currencyPlacement: 'suffix',
     },
+    separators
+  );
+}
+
+function formatCommissionPerTrade(
+  value: TaskSettingValue,
+  source: Record<string, unknown>,
+  task: Record<string, unknown>,
+  separators?: NumberFormatSeparators
+): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const money =
+    source.commission_per_trade_money ?? task.commission_per_trade_money;
+  if (money && typeof money === 'object') {
+    return formatMoneyPayload(
+      money as { amount: string | number; currency: string },
+      { currencyPlacement: 'suffix' },
+      separators
+    );
+  }
+  const numericValue = Number(value);
+  const currency = source.account_currency ?? task.account_currency;
+  if (!Number.isFinite(numericValue)) return String(value);
+  return formatMoneyAmount(
+    numericValue,
+    currency ? String(currency) : undefined,
+    { currencyPlacement: 'suffix' },
     separators
   );
 }
@@ -150,6 +186,8 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'commission_per_trade',
       label: t('backtest:detail.commissionPerTrade'),
+      render: (value, { source, task }) =>
+        formatCommissionPerTrade(value, source, task, options.numberSeparators),
     },
     {
       key: 'hedging_enabled',

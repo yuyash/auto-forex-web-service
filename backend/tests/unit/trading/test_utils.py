@@ -113,6 +113,15 @@ class TestTradingValueObjects:
         assert instrument.pip == PipSize(Decimal("0.01"))
         assert instrument.pip_size == Decimal("0.01")
 
+    def test_instrument_serializes_metadata(self):
+        assert Instrument("C:usd-jpy").as_metadata() == {
+            "normalized_name": "USD_JPY",
+            "base_currency": "USD",
+            "quote_currency": "JPY",
+            "pip_size": "0.01",
+            "is_high_value_quote": True,
+        }
+
     def test_account_currency_normalizes_and_matches_codes(self):
         currency = AccountCurrency(" usd ")
 

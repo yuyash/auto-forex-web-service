@@ -46,9 +46,17 @@ import { logger } from '../../utils/logger';
 import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import {
+  currencyCodeSchema,
+  optionalCurrencyCodeSchema,
+} from '../tasks/forms/currencyValidation';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
-import { useFirstTick } from '../../hooks/useMarketConfig';
+import {
+  useFirstTick,
+  useSupportedInstruments,
+} from '../../hooks/useMarketConfig';
 import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
+import { normalizeInstrumentName } from '../../utils/instruments';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -75,25 +83,6 @@ const weekdayOptions: ReadonlyArray<{
 const optionalPositiveNumberSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.coerce.number().positive().optional().nullable()
-);
-
-const currencyCodeSchema = z.preprocess(
-  (value) =>
-    String(value ?? '')
-      .trim()
-      .toUpperCase(),
-  z.string().regex(/^[A-Z]{3}$/, 'Currency must be a 3-letter code')
-);
-
-const optionalCurrencyCodeSchema = z.preprocess(
-  (value) =>
-    String(value ?? '')
-      .trim()
-      .toUpperCase(),
-  z
-    .union([z.literal(''), z.string().regex(/^[A-Z]{3}$/)])
-    .optional()
-    .default('')
 );
 
 const initialPositionSchema = z.object({
@@ -416,6 +405,21 @@ export default function BacktestTaskUpdateForm({
   } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
     enabled: watchedInitialPositionsEnabled === true,
   });
+  const { instruments: availableInstruments, metadata: instrumentMetadata } =
+    useSupportedInstruments();
+  const selectedInstrumentMetadata = watchedInstrument
+    ? instrumentMetadata[normalizeInstrumentName(watchedInstrument)]
+    : undefined;
+  const pipSizeHelperText = selectedInstrumentMetadata
+    ? t('backtest:form.pipSizeMetadataHelperText', {
+        defaultValue:
+          'Default pip size for {{instrument}} is {{pipSize}} ({{base}}/{{quote}}).',
+        instrument: selectedInstrumentMetadata.normalized_name,
+        pipSize: selectedInstrumentMetadata.pip_size,
+        base: selectedInstrumentMetadata.base_currency,
+        quote: selectedInstrumentMetadata.quote_currency,
+      })
+    : t('backtest:form.pipSizeHelperText');
   const replaySettingsChanged =
     selectedTickGranularity !== initialTickGranularity ||
     selectedTickWindowValueMode !== initialTickWindowValueMode;
@@ -640,8 +644,12 @@ export default function BacktestTaskUpdateForm({
               <InstrumentSelector
                 value={field.value}
                 onChange={field.onChange}
+                availableInstrument={availableInstruments}
                 error={errors.instrument?.message}
-                helperText={errors.instrument?.message as string}
+                helperText={
+                  (errors.instrument?.message as string) ||
+                  t('backtest:form.instrumentHelperText')
+                }
               />
             )}
           />
@@ -735,10 +743,7 @@ export default function BacktestTaskUpdateForm({
                 inputMode="decimal"
                 inputProps={{ min: 0, step: 0.00001 }}
                 error={!!errors.pip_size}
-                helperText={
-                  errors.pip_size?.message ||
-                  t('backtest:form.pipSizeHelperText')
-                }
+                helperText={errors.pip_size?.message || pipSizeHelperText}
               />
             )}
           />

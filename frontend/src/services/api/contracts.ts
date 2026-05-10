@@ -88,9 +88,11 @@ export interface BackendBacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  initial_balance_money?: BackendMoneyAmount;
   account_currency?: string;
   display_currency?: string;
   commission_per_trade: string;
+  commission_per_trade_money?: BackendMoneyAmount;
   pip_size?: string | null;
   instrument: string;
   hedging_enabled: boolean;

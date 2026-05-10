@@ -1,5 +1,9 @@
 import { api } from '../../api/apiClient';
 import type { Granularity } from '../../types/chart';
+import type {
+  InstrumentDetail,
+  InstrumentsResponse,
+} from '../../types/instrument';
 
 export interface TickDataRange {
   instrument: string;
@@ -30,10 +34,6 @@ export interface CandlesResponse {
 export interface GranularityOption {
   value: Granularity;
   label: string;
-}
-
-interface InstrumentsResponse {
-  instruments?: string[];
 }
 
 interface GranularitiesResponse {
@@ -80,6 +80,10 @@ export async function fetchFirstTick(
 export const marketApi = {
   getSupportedInstruments: () =>
     api.get<InstrumentsResponse>('/api/market/instruments/'),
+  getInstrumentDetail: (instrument: string) =>
+    api.get<InstrumentDetail>(
+      `/api/market/instruments/${encodeURIComponent(instrument)}/`
+    ),
   getSupportedGranularities: () =>
     api.get<GranularitiesResponse>('/api/market/candles/granularities/'),
   getCandles: (params: Record<string, string | number | undefined>) =>

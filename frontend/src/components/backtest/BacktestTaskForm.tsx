@@ -58,6 +58,7 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { useToast } from '../common/useToast';
 import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
 import { formatMoneyAmount } from '../../utils/numberFormat';
+import { normalizeInstrumentName } from '../../utils/instruments';
 import {
   fromTimezonePickerDate,
   formatDateTimeInTimezone,
@@ -506,6 +507,7 @@ export default function BacktestTaskForm({
   const { strategies } = useStrategies();
   const {
     instruments: availableInstruments,
+    metadata: instrumentMetadata,
     usingFallback: usingInstrumentFallback,
   } = useSupportedInstruments();
 
@@ -548,6 +550,19 @@ export default function BacktestTaskForm({
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
+  const selectedInstrumentMetadata = watchedInstrument
+    ? instrumentMetadata[normalizeInstrumentName(watchedInstrument)]
+    : undefined;
+  const pipSizeHelperText = selectedInstrumentMetadata
+    ? t('backtest:form.pipSizeMetadataHelperText', {
+        defaultValue:
+          'Default pip size for {{instrument}} is {{pipSize}} ({{base}}/{{quote}}).',
+        instrument: selectedInstrumentMetadata.normalized_name,
+        pipSize: selectedInstrumentMetadata.pip_size,
+        base: selectedInstrumentMetadata.base_currency,
+        quote: selectedInstrumentMetadata.quote_currency,
+      })
+    : t('backtest:form.pipSizeHelperTextLong');
   const {
     dataRange,
     error: dataRangeError,
@@ -1092,10 +1107,7 @@ export default function BacktestTaskForm({
                       inputMode="decimal"
                       inputProps={{ min: 0, step: 0.00001 }}
                       error={!!errors.pip_size}
-                      helperText={
-                        errors.pip_size?.message ||
-                        t('backtest:form.pipSizeHelperTextLong')
-                      }
+                      helperText={errors.pip_size?.message || pipSizeHelperText}
                     />
                   )}
                 />

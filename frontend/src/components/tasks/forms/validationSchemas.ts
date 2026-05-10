@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { DataSource } from '../../../types/common';
+import {
+  currencyCodeSchema,
+  optionalCurrencyCodeSchema,
+} from './currencyValidation';
 
 // Data source values array for Zod validation
 const dataSourceValues = [
@@ -11,25 +15,6 @@ const dataSourceValues = [
 const optionalPositiveNumberSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.coerce.number().positive().optional().nullable()
-);
-
-const currencyCodeSchema = z.preprocess(
-  (value) =>
-    String(value ?? '')
-      .trim()
-      .toUpperCase(),
-  z.string().regex(/^[A-Z]{3}$/, 'Currency must be a 3-letter code')
-);
-
-const optionalCurrencyCodeSchema = z.preprocess(
-  (value) =>
-    String(value ?? '')
-      .trim()
-      .toUpperCase(),
-  z
-    .union([z.literal(''), z.string().regex(/^[A-Z]{3}$/)])
-    .optional()
-    .default('')
 );
 
 const initialPositionSchema = z.object({

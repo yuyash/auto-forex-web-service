@@ -131,6 +131,16 @@ class Instrument:
         """Return the pip size for this instrument."""
         return self.pip.value
 
+    def as_metadata(self) -> dict[str, str | bool]:
+        """Serialize instrument currency and pip metadata for API payloads."""
+        return {
+            "normalized_name": self.normalized_name,
+            "base_currency": self.base_currency,
+            "quote_currency": self.quote_currency,
+            "pip_size": str(self.pip_size),
+            "is_high_value_quote": self.is_high_value_quote,
+        }
+
     def _currency_pair(self) -> tuple[str, str]:
         normalised = self.normalized_name
         if "_" in normalised:

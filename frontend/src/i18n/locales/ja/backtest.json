@@ -202,6 +202,7 @@
     "pipSizeOptional": "Pipサイズ（任意）",
     "pipSizeHelperText": "空欄にするとOANDAアカウントから自動取得します",
     "pipSizeHelperTextLong": "空欄にすると通貨ペアから自動導出します。一般的な値：0.0001（EUR_USD）、0.01（USD_JPY）",
+    "pipSizeMetadataHelperText": "{{instrument}} の既定Pipサイズは {{pipSize}}（{{base}}/{{quote}}）です。",
     "instrumentPlaceholder": "例：EUR_USD、USD_JPY",
     "instrumentHelperText": "バックテストする通貨ペア",
     "tickGranularity": "リプレイ粒度",

@@ -13,6 +13,7 @@ from rest_framework.test import APIRequestFactory
 
 from apps.market.models import TickData
 from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.money import Money
 from apps.trading.models import ExecutionState
 from apps.trading.serializers.backtest import (
     BacktestTaskCreateSerializer,
@@ -59,6 +60,14 @@ class TestBacktestTaskSerializer:
         assert data["status"] == task.status
         assert data["max_tick_gap_hours"] == task.max_tick_gap_hours
         assert "initial_balance" in data
+        assert (
+            data["initial_balance_money"]
+            == Money.coerce(task.initial_balance, task.account_currency).as_dict()
+        )
+        assert (
+            data["commission_per_trade_money"]
+            == Money.coerce(task.commission_per_trade, task.account_currency).as_dict()
+        )
         assert "start_time" in data
         assert "end_time" in data
         assert "created_at" in data

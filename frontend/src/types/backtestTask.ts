@@ -39,9 +39,11 @@ export interface BacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  initial_balance_money?: MoneyAmount;
   account_currency?: string;
   display_currency?: string;
   commission_per_trade: string;
+  commission_per_trade_money?: MoneyAmount;
   pip_size?: string;
   instrument: string;
   tick_granularity: string;

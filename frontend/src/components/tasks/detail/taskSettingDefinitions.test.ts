@@ -36,6 +36,9 @@ describe('task setting definition contracts', () => {
     const initialBalance = definitions.find(
       (definition) => definition.key === 'initial_balance'
     );
+    const commission = definitions.find(
+      (definition) => definition.key === 'commission_per_trade'
+    );
 
     expect(pipSize?.format?.('0.01')).toBe('0.01');
     expect(pipSize?.format?.('0.1234')).toBe('0.12');
@@ -50,6 +53,26 @@ describe('task setting definition contracts', () => {
         source: { initial_balance: '10000', account_currency: 'USD' },
       })
     ).toBe('10,000.00 $');
+    expect(
+      initialBalance?.render?.('10000', {
+        task: { account_currency: 'USD' },
+        snapshot: null,
+        source: {
+          initial_balance: '10000',
+          initial_balance_money: { amount: '10000', currency: 'JPY' },
+        },
+      })
+    ).toBe('10,000 ¥');
+    expect(
+      commission?.render?.('1.5', {
+        task: { account_currency: 'USD' },
+        snapshot: null,
+        source: {
+          commission_per_trade: '1.5',
+          commission_per_trade_money: { amount: '1.5', currency: 'EUR' },
+        },
+      })
+    ).toBe('1.50 €');
   });
 
   it('trading definitions contain user-facing lifecycle/config fields', () => {
