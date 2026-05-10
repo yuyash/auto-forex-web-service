@@ -20,7 +20,7 @@ from apps.trading.strategies.snowball.calculators import (
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
-from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY, SnowballGridPolicy
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.grid_models import Layer, Slot
@@ -353,7 +353,13 @@ class StopLossCloseProcessor:
 class StopLossRebuildPricePlanner:
     """Compute rebuild trigger and take-profit prices while preserving grid order."""
 
-    def __init__(self, *, logger_: Logger | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        grid_policy: SnowballGridPolicy | None = None,
+        logger_: Logger | None = None,
+    ) -> None:
+        self.grid_policy = grid_policy or SNOWBALL_GRID_POLICY
         self.logger = logger_ or logger
 
     def plan(
@@ -455,7 +461,7 @@ class StopLossRebuildPricePlanner:
         trigger_price: Decimal,
     ) -> Decimal:
         """Clamp rebuild entry price against preceding grid entry bounds."""
-        entry_bound = SNOWBALL_GRID_POLICY.preceding_entry_bound(cycle, layer, slot.index)
+        entry_bound = self.grid_policy.preceding_entry_bound(cycle, layer, slot.index)
         if entry_bound is None:
             return trigger_price
         if pending.direction == Direction.LONG and trigger_price > entry_bound:
@@ -512,7 +518,7 @@ class StopLossRebuildPricePlanner:
         adjusted_close_price: Decimal,
     ) -> Decimal:
         """Clamp rebuild TP against preceding occupied or pending slots."""
-        hard_bound, _soft_bound = SNOWBALL_GRID_POLICY.tp_bounds(cycle, layer, slot.index)
+        hard_bound, _soft_bound = self.grid_policy.tp_bounds(cycle, layer, slot.index)
         if hard_bound is None:
             return adjusted_close_price
         if pending.direction == Direction.LONG and adjusted_close_price > hard_bound:
@@ -530,7 +536,7 @@ class StopLossRebuildPricePlanner:
         adjusted_close_price: Decimal,
     ) -> None:
         """Extend preceding pending rebuild TPs so rebuilt grids stay monotonic."""
-        propagated = SNOWBALL_GRID_POLICY.propagate_pending_rebuild_tp(
+        propagated = self.grid_policy.propagate_pending_rebuild_tp(
             cycle, layer, slot.index, adjusted_close_price
         )
         for layer_number, slot_index, old_tp, new_tp in propagated:

@@ -20,6 +20,7 @@ __all__ = [
     "ReconciliationReport",
     "ReconciliationState",
     "SnowballBrokerReconciler",
+    "SnowballReconciliationBlockerFactory",
     "StrategyConfigLike",
 ]
 
@@ -47,8 +48,44 @@ class PositionMatch:
 
 
 @dataclass(frozen=True, slots=True)
+class SnowballReconciliationBlockerFactory:
+    """Build stable public blocker messages for Snowball reconciliation."""
+
+    def ambiguous_entry(self, *, entry: Entry, label: str) -> str:
+        """Return a blocker for entries matching multiple broker positions."""
+        return (
+            f"Snowball {self._entry_label(entry, label)} "
+            "matches multiple broker positions. Reconciliation is blocked "
+            "to avoid relinking the wrong position."
+        )
+
+    def missing_entry(self, *, entry: Entry, label: str) -> str:
+        """Return a blocker for entries with no matching broker position."""
+        return (
+            f"Snowball {self._entry_label(entry, label)} has no matching broker position. "
+            "The position may have been closed externally while the task was stopped. "
+            "Use restart to begin a fresh execution."
+        )
+
+    def unmatched_position(self, position: Position) -> str:
+        """Return a blocker for broker positions absent from strategy state."""
+        return (
+            "Snowball strategy state could not match open position "
+            f"{position.id} (layer={position.layer_index}, "
+            f"retracement={position.retracement_count})."
+        )
+
+    def _entry_label(self, entry: Entry, label: str) -> str:
+        if label == "hedge entry":
+            return f"hedge entry {entry.entry_id}"
+        return f"entry {entry.entry_id} (L{entry.layer_number}/R{entry.retracement_count})"
+
+
+@dataclass(frozen=True, slots=True)
 class SnowballBrokerReconciler:
     """Reconcile persisted Snowball entries against broker-backed positions."""
+
+    blocker_factory: SnowballReconciliationBlockerFactory = SnowballReconciliationBlockerFactory()
 
     def reconcile(
         self,
@@ -167,19 +204,11 @@ class SnowballBrokerReconciler:
         )
         matched = match.position
         if match.ambiguous:
-            report.blockers.append(
-                f"Snowball {label} {entry.entry_id} "
-                "matches multiple broker positions. Reconciliation is blocked "
-                "to avoid relinking the wrong position."
-            )
+            report.blockers.append(self.blocker_factory.ambiguous_entry(entry=entry, label=label))
             return
         if matched is None:
             report.removed_open_entries += 1
-            report.blockers.append(
-                f"Snowball {label} {entry.entry_id} has no matching broker position. "
-                "The position may have been closed externally while the task was stopped. "
-                "Use restart to begin a fresh execution."
-            )
+            report.blockers.append(self.blocker_factory.missing_entry(entry=entry, label=label))
             return
 
         self._apply_position_to_entry(
@@ -233,11 +262,7 @@ class SnowballBrokerReconciler:
         ]
         for position in unmatched_positions:
             report.synthesized_open_entries += 1
-            report.blockers.append(
-                "Snowball strategy state could not match open position "
-                f"{position.id} (layer={position.layer_index}, "
-                f"retracement={position.retracement_count})."
-            )
+            report.blockers.append(self.blocker_factory.unmatched_position(position))
 
     def _sync_account_state(
         self,

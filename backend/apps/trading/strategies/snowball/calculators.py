@@ -155,19 +155,6 @@ class SnowballCalculatorProvider:
         return SnowballCalculator(getattr(strategy, "config"))
 
 
-def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
-    """Return the pip interval before the *k*-th add (1-based).
-
-    The general formula supports:
-    - Flat region: first ``n_pips_flat_steps`` adds use ``n_pips_head``.
-    - Decay region: exponential decay from ``n_pips_head`` toward ``n_pips_tail``
-      controlled by ``n_pips_gamma``.
-
-    Manual mode returns the user-supplied value from ``manual_intervals``.
-    """
-    return SnowballCalculator(cfg).counter_interval_pips(k)
-
-
 def _progression_pips(
     *,
     k: int,
@@ -212,44 +199,3 @@ def _progression_pips(
     curved = progress**gamma
     value = head - (head - tail) * curved
     return round_to_step(max(value, tail), round_step)
-
-
-def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
-    """Return the pip distance from entry to stop-loss for the *k*-th slot.
-
-    ``k`` is 1-based: R0 uses ``k=1`` (treat the layer-initial like the
-    first add so the SL distance lines up with the interval to the next
-    slot), R1 uses ``k=2``, and so on.
-
-    The progression shape mirrors :func:`counter_interval_pips` but reads
-    its parameters from dedicated ``stop_loss_*`` config fields, so the
-    SL distance can be tuned independently of the counter-trend
-    averaging interval (e.g. a tighter SL on a wider grid).  ``auto``
-    is handled by the strategy layer because interval-based stop-loss
-    placement depends on both the next interval and the slot TP.
-    """
-    return SnowballCalculator(cfg).stop_loss_pips(k)
-
-
-def rebuild_take_profit_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
-    """Return the rebuilt-position take-profit distance for the *k*-th slot.
-
-    ``k`` is 1-based: R0 uses ``k=1``, R1 uses ``k=2``, and so on.
-    ``same`` is handled by the strategy layer because that mode reuses
-    the pending rebuild snapshot's absolute TP price.
-    """
-    return SnowballCalculator(cfg).rebuild_take_profit_pips(k)
-
-
-def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
-    """Return the take-profit pips for the *k*-th step (1-based).
-
-    Modes:
-    - fixed: same value for every step.
-    - additive: base + step_amount × (k − 1).
-    - subtractive: base − step_amount × (k − 1), min 0.1.
-    - multiplicative: base × multiplier^(k − 1).
-    - divisive: base / multiplier^(k − 1), min 0.1.
-    - weighted_avg: returns 0 — caller computes close price from weighted avg.
-    """
-    return SnowballCalculator(cfg).counter_tp_pips(k)

@@ -21,6 +21,7 @@ Close ordering:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
@@ -55,19 +56,14 @@ from apps.trading.strategies.snowball.invariants import SnowballInvariantValidat
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.grid_models import Layer, Slot
-from apps.trading.strategies.snowball.parameters import (
-    config_to_parameters,
-    default_parameters,
-    normalize_parameters,
-    parse_config,
-    validate_parameters,
-)
+from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.strategies.snowball.stop_loss_flow import (
     StopLossAssigner,
     StopLossCloseProcessor,
     StopLossProtectionPolicy,
+    StopLossRebuildPricePlanner,
     StopLossRebuildProcessor,
 )
 from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
@@ -102,6 +98,97 @@ class SnowballResumeParameterCompatibility:
         return int(value)
 
 
+@dataclass(frozen=True, slots=True)
+class SnowballRegistryFacade:
+    """Own Snowball's Strategy registry-facing adapters."""
+
+    parameter_service: Any = SNOWBALL_PARAMETER_SERVICE
+    resume_compatibility: SnowballResumeParameterCompatibility = (
+        SnowballResumeParameterCompatibility()
+    )
+
+    def parse_config(self, strategy_config: Any) -> SnowballStrategyConfig:
+        """Parse persisted strategy configuration."""
+        return self.parameter_service.parse_config(strategy_config)
+
+    def config_to_parameters(self, config: SnowballStrategyConfig) -> dict[str, Any]:
+        """Return persisted parameters for a config."""
+        return self.parameter_service.config_to_parameters(config)
+
+    def normalize_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Normalize strategy parameters."""
+        return self.parameter_service.normalize_parameters(parameters)
+
+    def default_parameters(self) -> dict[str, Any]:
+        """Return strategy defaults."""
+        return self.parameter_service.default_parameters()
+
+    def validate_parameters(
+        self,
+        *,
+        parameters: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Validate strategy parameters."""
+        self.parameter_service.validate_parameters(
+            parameters=parameters,
+            config_schema=config_schema,
+        )
+
+    def reconcile_broker_positions(
+        self,
+        *,
+        state: ExecutionState,
+        open_positions: list[Any],
+        report: Any,
+        strategy_config: Any | None = None,
+    ) -> None:
+        """Reconcile persisted Snowball state with broker positions."""
+        from apps.trading.strategies.snowball.reconciliation import SNOWBALL_RECONCILER
+
+        SNOWBALL_RECONCILER.reconcile(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+            strategy_config=strategy_config,
+        )
+
+    def build_cycle_grid_state_map(
+        self,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        """Build cycle grid visualization payloads."""
+        from apps.trading.strategies.snowball.visualization import SNOWBALL_VISUALIZATION
+
+        return SNOWBALL_VISUALIZATION.cycle_grid_state_map(strategy_state=strategy_state)
+
+    def build_cycle_status_map(
+        self,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        """Build cycle status visualization payloads."""
+        from apps.trading.strategies.snowball.visualization import SNOWBALL_VISUALIZATION
+
+        return SNOWBALL_VISUALIZATION.cycle_status_map(strategy_state=strategy_state)
+
+    def validate_resume_parameter_compatibility(
+        self,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        """Validate Snowball resume compatibility."""
+        self.resume_compatibility.validate(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
+
+
+SNOWBALL_REGISTRY_FACADE = SnowballRegistryFacade()
+
+
 @register_strategy(
     id="snowball",
     schema="trading/schemas/snowball.json",
@@ -127,6 +214,7 @@ class SnowballStrategy(Strategy):
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
+        self.grid_policy = SNOWBALL_GRID_POLICY
         self.decision_engine = SnowballDecisionEngine(
             invariant_validator=SnowballInvariantValidator(config=config),
         )
@@ -138,6 +226,7 @@ class SnowballStrategy(Strategy):
         )
         self.counter_add_processor = SnowballCounterAddProcessor(
             price_service=self.counter_price_service,
+            grid_policy=self.grid_policy,
         )
         self.counter_add_description = SnowballCounterAddDescription()
         self.entry_lifecycle = SNOWBALL_ENTRY_LIFECYCLE
@@ -146,7 +235,9 @@ class SnowballStrategy(Strategy):
         self.stop_loss_close_processor = StopLossCloseProcessor(
             protection_policy=self.stop_loss_protection_policy,
         )
-        self.stop_loss_rebuild_processor = StopLossRebuildProcessor()
+        self.stop_loss_rebuild_processor = StopLossRebuildProcessor(
+            price_planner=StopLossRebuildPricePlanner(grid_policy=self.grid_policy),
+        )
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -159,19 +250,19 @@ class SnowballStrategy(Strategy):
 
     @staticmethod
     def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-        return parse_config(strategy_config)
+        return SNOWBALL_REGISTRY_FACADE.parse_config(strategy_config)
 
     @staticmethod
     def _config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:
-        return config_to_parameters(config)
+        return SNOWBALL_REGISTRY_FACADE.config_to_parameters(config)
 
     @classmethod
     def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
-        return normalize_parameters(parameters)
+        return SNOWBALL_REGISTRY_FACADE.normalize_parameters(parameters)
 
     @classmethod
     def default_parameters(cls) -> dict[str, Any]:
-        return default_parameters()
+        return SNOWBALL_REGISTRY_FACADE.default_parameters()
 
     @classmethod
     def validate_parameters(
@@ -180,7 +271,10 @@ class SnowballStrategy(Strategy):
         parameters: dict[str, Any],
         config_schema: dict[str, Any] | None = None,
     ) -> None:
-        validate_parameters(parameters=parameters, config_schema=config_schema)
+        SNOWBALL_REGISTRY_FACADE.validate_parameters(
+            parameters=parameters,
+            config_schema=config_schema,
+        )
 
     @property
     def strategy_type(self) -> StrategyType:
@@ -241,9 +335,7 @@ class SnowballStrategy(Strategy):
         report: Any,
         strategy_config: Any | None = None,
     ) -> None:
-        from apps.trading.strategies.snowball.reconciliation import SNOWBALL_RECONCILER
-
-        SNOWBALL_RECONCILER.reconcile(
+        SNOWBALL_REGISTRY_FACADE.reconcile_broker_positions(
             state=state,
             open_positions=open_positions,
             report=report,
@@ -256,11 +348,7 @@ class SnowballStrategy(Strategy):
         *,
         strategy_state: dict[str, Any] | None,
     ) -> dict[str, dict[str, Any]]:
-        from apps.trading.strategies.snowball.visualization import (
-            build_cycle_grid_state_map,
-        )
-
-        return build_cycle_grid_state_map(strategy_state=strategy_state)
+        return SNOWBALL_REGISTRY_FACADE.build_cycle_grid_state_map(strategy_state=strategy_state)
 
     @classmethod
     def build_cycle_status_map(
@@ -268,11 +356,7 @@ class SnowballStrategy(Strategy):
         *,
         strategy_state: dict[str, Any] | None,
     ) -> dict[str, str]:
-        from apps.trading.strategies.snowball.visualization import (
-            build_cycle_status_map,
-        )
-
-        return build_cycle_status_map(strategy_state=strategy_state)
+        return SNOWBALL_REGISTRY_FACADE.build_cycle_status_map(strategy_state=strategy_state)
 
     @classmethod
     def validate_resume_parameter_compatibility(
@@ -281,7 +365,7 @@ class SnowballStrategy(Strategy):
         previous_params: dict[str, Any],
         current_params: dict[str, Any],
     ) -> None:
-        SnowballResumeParameterCompatibility().validate(
+        SNOWBALL_REGISTRY_FACADE.validate_resume_parameter_compatibility(
             previous_params=previous_params,
             current_params=current_params,
         )
@@ -523,7 +607,7 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        self._grid_order_violation = SNOWBALL_GRID_POLICY.validate_ordering(
+        self._grid_order_violation = self.grid_policy.validate_ordering(
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
         )

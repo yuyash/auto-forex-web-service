@@ -36,7 +36,7 @@ from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.grid_models import Layer
-from apps.trading.strategies.snowball.parameters import parse_config
+from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import mark_event_processed
@@ -135,7 +135,7 @@ def validate_initial_position_cycles(
             }
         )
 
-    cfg = parse_config(config)
+    cfg = SNOWBALL_PARAMETER_SERVICE.parse_config(config)
     resolved_pip_size = _resolve_pip_size(task=task, pip_size=pip_size)
 
     normalized_cycles: list[NormalizedSeedCycle] = []

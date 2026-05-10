@@ -7,7 +7,7 @@ from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle
 from apps.trading.strategies.snowball.grid_models import Layer
 
-from .test_models import _entry
+from .factories import entry as _entry
 
 
 def _cycle_with_layer(direction: Direction = Direction.LONG) -> tuple[SnowballCycle, Layer]:

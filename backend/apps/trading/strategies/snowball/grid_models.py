@@ -6,13 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
-from apps.trading.strategies.snowball.state_parsing import (
-    require,
-    require_dict,
-    require_list,
-    strict_bool,
-    strict_int,
-)
+from apps.trading.strategies.snowball.state_parsing import SNOWBALL_STATE_PARSER
 
 # ---------------------------------------------------------------------------
 # Slot
@@ -119,13 +113,17 @@ class Slot:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Slot":
-        d = require_dict(d, field_name="slot")
+        d = SNOWBALL_STATE_PARSER.require_dict(d, field_name="slot")
         raw_entry = d.get("entry")
         raw_pending = d.get("pending_rebuild")
         return Slot(
-            index=strict_int(require(d, "index"), field_name="index"),
+            index=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "index"), field_name="index"
+            ),
             entry=Entry.from_dict(raw_entry) if raw_entry else None,
-            ever_closed=strict_bool(require(d, "ever_closed"), field_name="ever_closed"),
+            ever_closed=SNOWBALL_STATE_PARSER.strict_bool(
+                SNOWBALL_STATE_PARSER.require(d, "ever_closed"), field_name="ever_closed"
+            ),
             pending_rebuild=(StopLossClosedEntry.from_dict(raw_pending) if raw_pending else None),
         )
 
@@ -272,14 +270,23 @@ class Layer:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Layer":
-        d = require_dict(d, field_name="layer")
+        d = SNOWBALL_STATE_PARSER.require_dict(d, field_name="layer")
         return Layer(
-            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
+            layer_number=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "layer_number"), field_name="layer_number"
+            ),
             slots=[
-                Slot.from_dict(s) for s in require_list(require(d, "slots"), field_name="slots")
+                Slot.from_dict(s)
+                for s in SNOWBALL_STATE_PARSER.require_list(
+                    SNOWBALL_STATE_PARSER.require(d, "slots"), field_name="slots"
+                )
             ],
-            base_units=strict_int(require(d, "base_units"), field_name="base_units"),
-            refill_up_to=strict_int(require(d, "refill_up_to"), field_name="refill_up_to"),
+            base_units=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "base_units"), field_name="base_units"
+            ),
+            refill_up_to=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "refill_up_to"), field_name="refill_up_to"
+            ),
         )
 
     @staticmethod
@@ -488,7 +495,9 @@ class PositionGrid:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "PositionGrid":
-        data = require_dict(data, field_name="grid")
-        raw_layers = require_list(require(data, "layers"), field_name="layers")
+        data = SNOWBALL_STATE_PARSER.require_dict(data, field_name="grid")
+        raw_layers = SNOWBALL_STATE_PARSER.require_list(
+            SNOWBALL_STATE_PARSER.require(data, "layers"), field_name="layers"
+        )
         layers = [Layer.from_dict(ld) for ld in raw_layers]
         return PositionGrid(layers=layers)
