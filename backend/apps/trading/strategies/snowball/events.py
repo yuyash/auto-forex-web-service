@@ -12,7 +12,7 @@ from apps.trading.events import (
     RebuildPositionEvent,
     StrategyEvent,
 )
-from apps.trading.strategies.snowball.models import Entry
+from apps.trading.strategies.snowball.entries import Entry
 from apps.trading.utils import AccountCurrency, Instrument
 
 

@@ -9,14 +9,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 
 
 class SnowballGridInvariantHarness:
@@ -221,7 +217,7 @@ class TestSnowballGridInvariantsProperty:
             pending_mask=aligned_mask,
         )
 
-        assert validate_grid_ordering(cycle) is None
+        assert SNOWBALL_GRID_POLICY.validate_ordering(cycle) is None
 
     @settings(max_examples=20, deadline=None)
     @given(is_long=st.booleans())
@@ -229,7 +225,7 @@ class TestSnowballGridInvariantsProperty:
         direction = Direction.LONG if is_long else Direction.SHORT
         cycle = SnowballGridInvariantHarness().out_of_order_cycle(direction=direction)
 
-        assert validate_grid_ordering(cycle, check_take_profit=False) is not None
+        assert SNOWBALL_GRID_POLICY.validate_ordering(cycle, check_take_profit=False) is not None
 
     @settings(max_examples=50, deadline=None)
     @given(

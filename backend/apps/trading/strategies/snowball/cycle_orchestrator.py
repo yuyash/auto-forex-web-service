@@ -15,7 +15,7 @@ from apps.trading.strategies.snowball.decision_trace import (
     SnowballDecisionTraceRecorder,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus
-from apps.trading.strategies.snowball.models import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 
 logger = getLogger(__name__)
 

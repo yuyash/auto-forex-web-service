@@ -8,13 +8,9 @@ from decimal import Decimal
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    PositionGrid,
-    SnowballCycle,
-    SnowballStrategyState,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry
+from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid
 
 
 class SnowballInvariantTestFactory:

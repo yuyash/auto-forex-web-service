@@ -11,14 +11,9 @@ from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 

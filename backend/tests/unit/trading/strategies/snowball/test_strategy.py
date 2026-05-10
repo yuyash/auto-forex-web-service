@@ -13,16 +13,11 @@ import pytest
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction, EventType, StrategyType
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    SnowballCycle,
-    SnowballStrategyState,
-    Slot,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
-from apps.trading.strategies.snowball.reconciliation import reconcile_broker_positions
+from apps.trading.strategies.snowball.reconciliation import SNOWBALL_RECONCILER
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 from apps.trading.strategies.snowball.stop_loss_flow import StopLossRebuildPricePlanner
 
@@ -1035,7 +1030,7 @@ class TestSnowballReconciliation:
             config_dict=SnowballStrategyConfig.from_dict({"counter_tp_mode": "fixed"}).to_dict()
         )
 
-        reconcile_broker_positions(
+        SNOWBALL_RECONCILER.reconcile(
             state=state,
             open_positions=[position],
             report=report,
@@ -1131,7 +1126,8 @@ class TestSnowballRebuildDisabled:
         changes.  Guards against accidental re-enable by state
         deserialization of a persisted run.
         """
-        from apps.trading.strategies.snowball.models import StopLossClosedEntry
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(
             {

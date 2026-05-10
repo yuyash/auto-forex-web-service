@@ -3,14 +3,9 @@
 from decimal import Decimal
 
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.grid_policy import (
-    grid_tp_bounds,
-    preceding_entry_bound,
-    propagate_pending_rebuild_tp,
-    upper_neighbor_tp_bound,
-    validate_grid_ordering,
-)
-from apps.trading.strategies.snowball.models import Layer, SnowballCycle
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle
+from apps.trading.strategies.snowball.grid_models import Layer
 
 from .test_models import _entry
 
@@ -29,7 +24,7 @@ def test_validate_grid_ordering_returns_none_for_monotonic_long_grid():
         _entry(entry_id=2, entry_price="149.50", close_price="150.00", retracement_count=1)
     )
 
-    assert validate_grid_ordering(cycle) is None
+    assert SNOWBALL_GRID_POLICY.validate_ordering(cycle) is None
 
 
 def test_validate_grid_ordering_reports_violation_detail():
@@ -39,7 +34,7 @@ def test_validate_grid_ordering_reports_violation_detail():
         _entry(entry_id=2, entry_price="150.10", close_price="150.60", retracement_count=1)
     )
 
-    detail = validate_grid_ordering(cycle)
+    detail = SNOWBALL_GRID_POLICY.validate_ordering(cycle)
 
     assert detail is not None
     assert "expected=descending" in detail
@@ -53,8 +48,8 @@ def test_validate_grid_ordering_can_ignore_take_profit_ordering():
         _entry(entry_id=2, entry_price="149.50", close_price="150.60", retracement_count=1)
     )
 
-    assert validate_grid_ordering(cycle) is not None
-    assert validate_grid_ordering(cycle, check_take_profit=False) is None
+    assert SNOWBALL_GRID_POLICY.validate_ordering(cycle) is not None
+    assert SNOWBALL_GRID_POLICY.validate_ordering(cycle, check_take_profit=False) is None
 
 
 def test_validate_grid_ordering_still_reports_entry_violation_when_tp_ignored():
@@ -64,7 +59,7 @@ def test_validate_grid_ordering_still_reports_entry_violation_when_tp_ignored():
         _entry(entry_id=2, entry_price="150.10", close_price="150.40", retracement_count=1)
     )
 
-    detail = validate_grid_ordering(cycle, check_take_profit=False)
+    detail = SNOWBALL_GRID_POLICY.validate_ordering(cycle, check_take_profit=False)
 
     assert detail is not None
     assert "entry_ok=False" in detail
@@ -78,9 +73,9 @@ def test_tp_and_entry_bounds_use_preceding_slots_only():
         _entry(entry_id=2, entry_price="149.50", close_price="150.00", retracement_count=1)
     )
 
-    assert grid_tp_bounds(cycle, layer, 2) == (Decimal("150.00"), None)
-    assert upper_neighbor_tp_bound(cycle, layer, 2) == Decimal("150.00")
-    assert preceding_entry_bound(cycle, layer, 2) == Decimal("149.50")
+    assert SNOWBALL_GRID_POLICY.tp_bounds(cycle, layer, 2) == (Decimal("150.00"), None)
+    assert SNOWBALL_GRID_POLICY.upper_neighbor_tp_bound(cycle, layer, 2) == Decimal("150.00")
+    assert SNOWBALL_GRID_POLICY.preceding_entry_bound(cycle, layer, 2) == Decimal("149.50")
 
 
 def test_propagate_pending_rebuild_tp_adjusts_prior_pending_slots():
@@ -88,7 +83,7 @@ def test_propagate_pending_rebuild_tp_adjusts_prior_pending_slots():
     pending = _entry(entry_id=1, entry_price="150.00", close_price="150.10")
     layer.slot_at(0).pending_rebuild = pending
 
-    adjusted = propagate_pending_rebuild_tp(cycle, layer, 1, Decimal("150.40"))
+    adjusted = SNOWBALL_GRID_POLICY.propagate_pending_rebuild_tp(cycle, layer, 1, Decimal("150.40"))
 
     assert adjusted == [(1, 0, Decimal("150.10"), Decimal("150.40"))]
     assert pending.close_price == Decimal("150.40")

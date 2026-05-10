@@ -10,7 +10,7 @@ from typing import Any, cast
 from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.tick_phases import (
     SnowballExecutionStateBoundary,
     SnowballTickContext,

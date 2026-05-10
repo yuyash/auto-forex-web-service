@@ -7,7 +7,7 @@ from typing import Protocol
 from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 

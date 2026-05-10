@@ -9,45 +9,39 @@
 
 ## [1.68.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.2...frontend-v1.68.0) (2026-05-10)
 
-
 ### Features
 
-* **backtest:** seed snowball initial positions ([#695](https://github.com/yuyash/auto-forex-web-service/issues/695)) ([e91b90c](https://github.com/yuyash/auto-forex-web-service/commit/e91b90c0a8ce985730e1ea26b89e37f5464eec74))
+- **backtest:** seed snowball initial positions ([#695](https://github.com/yuyash/auto-forex-web-service/issues/695)) ([e91b90c](https://github.com/yuyash/auto-forex-web-service/commit/e91b90c0a8ce985730e1ea26b89e37f5464eec74))
 
 ## [1.67.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.1...frontend-v1.67.2) (2026-05-09)
 
-
 ### Bug Fixes
 
-* **trading:** recover idle tasks after deploy ([#693](https://github.com/yuyash/auto-forex-web-service/issues/693)) ([2a3e87d](https://github.com/yuyash/auto-forex-web-service/commit/2a3e87d9e86698077224a0a13a1efc0db70d2fb3))
+- **trading:** recover idle tasks after deploy ([#693](https://github.com/yuyash/auto-forex-web-service/issues/693)) ([2a3e87d](https://github.com/yuyash/auto-forex-web-service/commit/2a3e87d9e86698077224a0a13a1efc0db70d2fb3))
 
 ## [1.67.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.0...frontend-v1.67.1) (2026-05-08)
 
-
 ### Refactoring
 
-* backend oop services ([#691](https://github.com/yuyash/auto-forex-web-service/issues/691)) ([9009fef](https://github.com/yuyash/auto-forex-web-service/commit/9009fef707c6f6e1dfa2a2824970c58b39471330))
+- backend oop services ([#691](https://github.com/yuyash/auto-forex-web-service/issues/691)) ([9009fef](https://github.com/yuyash/auto-forex-web-service/commit/9009fef707c6f6e1dfa2a2824970c58b39471330))
 
 ## [1.67.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.5...frontend-v1.67.0) (2026-05-07)
 
-
 ### Features
 
-* **trading:** paginate and filter strategy cycle list server-side ([#687](https://github.com/yuyash/auto-forex-web-service/issues/687)) ([6b466d2](https://github.com/yuyash/auto-forex-web-service/commit/6b466d2e502c77902247c965e00e0fa53de358fc))
+- **trading:** paginate and filter strategy cycle list server-side ([#687](https://github.com/yuyash/auto-forex-web-service/issues/687)) ([6b466d2](https://github.com/yuyash/auto-forex-web-service/commit/6b466d2e502c77902247c965e00e0fa53de358fc))
 
 ## [1.66.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.4...frontend-v1.66.5) (2026-05-07)
 
-
 ### Bug Fixes
 
-* **trading:** keep positions on deploy stop ([#685](https://github.com/yuyash/auto-forex-web-service/issues/685)) ([b7e88e2](https://github.com/yuyash/auto-forex-web-service/commit/b7e88e23e25aed8b83390be4ccea27c6df31e7b6))
+- **trading:** keep positions on deploy stop ([#685](https://github.com/yuyash/auto-forex-web-service/issues/685)) ([b7e88e2](https://github.com/yuyash/auto-forex-web-service/commit/b7e88e23e25aed8b83390be4ccea27c6df31e7b6))
 
 ## [1.66.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.3...frontend-v1.66.4) (2026-05-07)
 
-
 ### Bug Fixes
 
-* account units guards ([#681](https://github.com/yuyash/auto-forex-web-service/issues/681)) ([a371402](https://github.com/yuyash/auto-forex-web-service/commit/a3714027db19ddc4868655c15fa24e262860f471))
+- account units guards ([#681](https://github.com/yuyash/auto-forex-web-service/issues/681)) ([a371402](https://github.com/yuyash/auto-forex-web-service/commit/a3714027db19ddc4868655c15fa24e262860f471))
 
 ## [1.66.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.66.2...frontend-v1.66.3) (2026-05-06)
 

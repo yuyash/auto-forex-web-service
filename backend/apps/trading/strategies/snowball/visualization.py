@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 
 
 def build_cycle_grid_state_map(

@@ -45,21 +45,16 @@ from apps.trading.strategies.snowball.counter_flow import (
     SnowballCounterCloseProcessor,
 )
 from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
-from apps.trading.strategies.snowball.entry_lifecycle import close_entry
+from apps.trading.strategies.snowball.entry_lifecycle import SNOWBALL_ENTRY_LIFECYCLE
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.execution_binding import (
     apply_event_execution_result as apply_snowball_execution_result,
 )
-from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.parameters import (
     config_to_parameters,
     default_parameters,
@@ -145,6 +140,7 @@ class SnowballStrategy(Strategy):
             price_service=self.counter_price_service,
         )
         self.counter_add_description = SnowballCounterAddDescription()
+        self.entry_lifecycle = SNOWBALL_ENTRY_LIFECYCLE
         self.stop_loss_assigner = StopLossAssigner()
         self.stop_loss_protection_policy = StopLossProtectionPolicy()
         self.stop_loss_close_processor = StopLossCloseProcessor(
@@ -245,11 +241,9 @@ class SnowballStrategy(Strategy):
         report: Any,
         strategy_config: Any | None = None,
     ) -> None:
-        from apps.trading.strategies.snowball.reconciliation import (
-            reconcile_broker_positions,
-        )
+        from apps.trading.strategies.snowball.reconciliation import SNOWBALL_RECONCILER
 
-        reconcile_broker_positions(
+        SNOWBALL_RECONCILER.reconcile(
             state=state,
             open_positions=open_positions,
             report=report,
@@ -315,7 +309,7 @@ class SnowballStrategy(Strategy):
         margin_ratio: Decimal | None = None,
         cycle: SnowballCycle | None = None,
     ) -> ClosePositionEvent:
-        return close_entry(
+        return self.entry_lifecycle.close(
             self,
             logger,
             tick,
@@ -529,7 +523,7 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        self._grid_order_violation = validate_grid_ordering(
+        self._grid_order_violation = SNOWBALL_GRID_POLICY.validate_ordering(
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
         )

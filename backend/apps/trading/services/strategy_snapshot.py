@@ -50,7 +50,7 @@ def build_strategy_snapshot(strategy_type: str, state: dict[str, Any]) -> dict[s
 
 def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
     try:
-        from apps.trading.strategies.snowball.models import SnowballStrategyState
+        from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 
         parsed = SnowballStrategyState.from_strategy_state(state)
         active = len(parsed.active_cycles())

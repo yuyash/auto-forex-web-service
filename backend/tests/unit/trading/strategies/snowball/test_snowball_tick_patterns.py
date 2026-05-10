@@ -30,11 +30,9 @@ import pytest
 from apps.trading.enums import Direction, EventType
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
-from apps.trading.strategies.snowball.models import (
-    Layer,
-    SnowballStrategyState,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 
@@ -1055,13 +1053,9 @@ class TestSnowballRebuildTpGridClamp:
         The R3 slot is returned so callers can attach a pending rebuild
         snapshot whose close_price exercises the grid-ordering path.
         """
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            Entry,
-            Layer,
-            Slot,
-            StopLossClosedEntry,
-        )
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
+        from apps.trading.strategies.snowball.grid_models import Layer
 
         layer = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
         for idx in range(8):
@@ -1100,8 +1094,8 @@ class TestSnowballRebuildTpGridClamp:
 
     def test_upper_neighbor_tp_bound_finds_pending_above(self):
         s = _strategy(stop_loss=True)
-        from apps.trading.strategies.snowball.grid_policy import upper_neighbor_tp_bound
-        from apps.trading.strategies.snowball.models import Direction, SnowballCycle
+        from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
+        from apps.trading.enums import Direction
 
         layer = self._build_layer_with_grid(s)
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
@@ -1109,19 +1103,23 @@ class TestSnowballRebuildTpGridClamp:
 
         # R3 looks up to R2 (pending) and R0 (occupied) — the tighter of
         # the two for LONG (minimum) is R2's 130.87550.
-        assert upper_neighbor_tp_bound(cycle, layer, slot_index=3) == Decimal("130.87550")
+        assert SNOWBALL_GRID_POLICY.upper_neighbor_tp_bound(cycle, layer, slot_index=3) == Decimal(
+            "130.87550"
+        )
         # R1 only sees R0 (no R2 yet in the predecessor range).
-        assert upper_neighbor_tp_bound(cycle, layer, slot_index=1) == Decimal("131.200")
+        assert SNOWBALL_GRID_POLICY.upper_neighbor_tp_bound(cycle, layer, slot_index=1) == Decimal(
+            "131.200"
+        )
         # R0 has no predecessor at all.
-        assert upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
+        assert SNOWBALL_GRID_POLICY.upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
 
     def test_rebuild_keeps_original_tp(self):
         """A rebuild must inherit the pending TP."""
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            SnowballCycle,
-            StopLossClosedEntry,
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
+            SnowballStrategyState,
         )
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(stop_loss=True)
         layer = self._build_layer_with_grid(s)
@@ -1159,12 +1157,11 @@ class TestSnowballRebuildTpGridClamp:
         The rebuilt R3 TP is clamped to R2's TP if its inherited TP
         would cross that hard bound.
         """
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            Entry,
-            SnowballCycle,
-            StopLossClosedEntry,
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
+            SnowballStrategyState,
         )
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(stop_loss=True)
         layer = self._build_layer_with_grid(s)
@@ -1211,11 +1208,11 @@ class TestSnowballRebuildTpGridClamp:
 
     def test_rebuild_tp_retains_inherited_tp_when_within_bound(self):
         """If the inherited TP is below the upper neighbour, leave it alone."""
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            SnowballCycle,
-            StopLossClosedEntry,
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
+            SnowballStrategyState,
         )
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(stop_loss=True)
         layer = self._build_layer_with_grid(s)
@@ -1260,14 +1257,9 @@ class TestSnowballRebuildCrossLayerTpOrdering:
 
         Returns the (cycle, L1, L2, L2.R0 slot) tuple.
         """
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            Entry,
-            Layer,
-            Slot,
-            SnowballCycle,
-            StopLossClosedEntry,
-        )
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
+        from apps.trading.strategies.snowball.grid_models import Layer
 
         l1 = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
         l2 = Layer(layer_number=2, slots=[], base_units=1000, refill_up_to=3)
@@ -1310,11 +1302,11 @@ class TestSnowballRebuildCrossLayerTpOrdering:
 
     def test_cross_layer_rebuild_extends_preceding_pending_rebuild_tp(self):
         """Pending predecessors can be moved to preserve cross-layer ordering."""
-        from apps.trading.strategies.snowball.models import (
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
             SnowballStrategyState,
-            StopLossClosedEntry,
-            Direction,
         )
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(stop_loss=True)
         cycle, l1, l2 = self._build_short_cross_layer_grid(s)
@@ -1364,12 +1356,11 @@ class TestSnowballRebuildCrossLayerTpOrdering:
         the rebuild has to honour it as a hard bound — even though it
         is in a different layer.
         """
-        from apps.trading.strategies.snowball.models import (
-            Direction,
-            Entry,
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
             SnowballStrategyState,
-            StopLossClosedEntry,
         )
+        from apps.trading.strategies.snowball.entries import StopLossClosedEntry
 
         s = _strategy(stop_loss=True)
         cycle, l1, l2 = self._build_short_cross_layer_grid(s)

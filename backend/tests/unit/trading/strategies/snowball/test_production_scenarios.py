@@ -6,7 +6,7 @@ import logging
 import json
 from decimal import Decimal
 
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from tests.unit.trading.strategies.snowball.production_scenarios import (
     SnowballProductionScenarioFactory,
 )

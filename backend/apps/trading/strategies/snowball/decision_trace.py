@@ -9,7 +9,7 @@ from typing import Any
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.events import StrategyEvent
-from apps.trading.strategies.snowball.models import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 
 
 @dataclass(frozen=True, slots=True)

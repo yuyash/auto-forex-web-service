@@ -16,7 +16,8 @@ from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS, SnowballEventFactory
-from apps.trading.strategies.snowball.models import Entry, SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry
 from apps.trading.utils import AccountCurrency, Instrument, format_money
 
 logger = getLogger(__name__)

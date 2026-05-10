@@ -17,14 +17,10 @@ from apps.trading.strategies.snowball.calculators import (
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
-from apps.trading.strategies.snowball.grid_policy import preceding_entry_bound
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-)
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 logger = getLogger(__name__)
@@ -596,7 +592,7 @@ class CounterSlotSelector:
         new_price: Decimal,
     ) -> bool:
         """Return True when opening at new_price would break cross-layer order."""
-        bound = preceding_entry_bound(cycle, layer, slot.index)
+        bound = SNOWBALL_GRID_POLICY.preceding_entry_bound(cycle, layer, slot.index)
         if bound is None:
             return False
         if cycle.direction == Direction.LONG:
