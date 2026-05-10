@@ -367,6 +367,7 @@ def compute_task_summary(
             )
         )
         .aggregate(
+            closed_position_count=Count("pk"),
             realized_pnl=Sum("_pnl_value"),
             winning_trades=Sum(
                 Case(
@@ -387,6 +388,7 @@ def compute_task_summary(
     realized_pnl = realized_agg["realized_pnl"] or Decimal("0")
     winning_trades = int(realized_agg["winning_trades"] or 0)
     losing_trades = int(realized_agg["losing_trades"] or 0)
+    closed_position_count = int(realized_agg["closed_position_count"] or 0)
 
     # Unrealized PnL: sum of open positions' unrealized_pnl
     open_qs = Position.objects.filter(**base_filter, is_open=True)
@@ -410,9 +412,6 @@ def compute_task_summary(
     )
     unrealized_pnl = open_agg["unrealized_pnl"] or Decimal("0")
     open_position_count = int(open_agg["open_position_count"] or 0)
-
-    # Closed position count
-    closed_position_count = Position.objects.filter(**base_filter, is_open=False).count()
 
     # Total trade count
     trade_filter: dict = {"task_type": task_type, "task_id": task_id}

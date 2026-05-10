@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from apps.trading.money import AccountCurrency, CurrencyConversion, Money, MoneyFormatter
+from apps.trading.money import (
+    AccountCurrency as _AccountCurrency,
+    CurrencyConversion as _CurrencyConversion,
+    Money as _Money,
+    MoneyFormatter as _MoneyFormatter,
+)
 
 # JPY-quoted pairs use pip_size 0.01; all others use 0.0001
 _JPY_QUOTE_CURRENCIES = {"JPY", "HUF"}
@@ -140,14 +145,14 @@ class Instrument:
     def quote_to_account_rate(
         self,
         mid_price: Decimal,
-        account_currency: AccountCurrency | str = "",
+        account_currency: _AccountCurrency | str = "",
     ) -> Decimal:
         """Return the multiplier to convert quote-currency PnL to account currency."""
         quote = self.quote_currency
         account = (
             account_currency
-            if isinstance(account_currency, AccountCurrency)
-            else AccountCurrency(account_currency)
+            if isinstance(account_currency, _AccountCurrency)
+            else _AccountCurrency(account_currency)
         )
 
         # Legacy strategy unit tests and dry-run paths can omit account currency.
@@ -173,15 +178,15 @@ class Instrument:
     def quote_to_account_conversion(
         self,
         mid_price: Decimal,
-        account_currency: AccountCurrency | str = "",
-    ) -> CurrencyConversion:
+        account_currency: _AccountCurrency | str = "",
+    ) -> _CurrencyConversion:
         """Return a value object for quote-to-account money conversion."""
         account = (
             account_currency
-            if isinstance(account_currency, AccountCurrency)
-            else AccountCurrency(account_currency)
+            if isinstance(account_currency, _AccountCurrency)
+            else _AccountCurrency(account_currency)
         )
-        return CurrencyConversion.coerce(
+        return _CurrencyConversion.coerce(
             source_currency=self.quote_currency,
             target_currency=account.code,
             rate=self.quote_to_account_rate(mid_price, account),
@@ -224,15 +229,15 @@ class TradingValueFactory:
         quote_amount: Decimal | float | int | str,
         mid_price: Decimal,
         account_currency: str,
-    ) -> Money:
+    ) -> _Money:
         """Convert a quote-currency amount into account-currency money."""
         instrument_obj = self.instrument(instrument)
         conversion = instrument_obj.quote_to_account_conversion(mid_price, account_currency)
-        return conversion.convert(Money.coerce(quote_amount, instrument_obj.quote_currency))
+        return conversion.convert(_Money.coerce(quote_amount, instrument_obj.quote_currency))
 
     def format_money(self, value: Decimal | float | int | None, *, places: int = 2) -> str:
         """Format a monetary amount for logs."""
-        return MoneyFormatter(places=places).format(value)
+        return _MoneyFormatter(places=places).format(value)
 
 
 TRADING_VALUES = TradingValueFactory()

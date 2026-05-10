@@ -60,13 +60,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { logger } from '../utils/logger';
 import {
-  formatAppNumber,
-  type FormatAppNumberOptions,
+  formatMoneyAmount,
+  normalizeCurrencyCode,
+  type NumberFormatSeparators,
 } from '../utils/numberFormat';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useNumberFormatter } from '../hooks/useNumberFormatter';
 import type { AccountSnapshotState } from '../services/api/accounts';
 import type { AccountSnapshotRefreshStatus } from '../types/strategy';
+import { DEFAULT_ACCOUNT_CURRENCY } from '../constants/currencies';
 
 interface AccountFormData {
   account_id: string;
@@ -81,35 +83,36 @@ interface AccountFormData {
   live_tick_latency_metric_interval_seconds: string;
 }
 
-const DEFAULT_ACCOUNT_CURRENCY = 'USD';
 const DEFAULT_MAX_GROSS_UNITS = '200000';
 const DEFAULT_MAX_INITIAL_ORDER_UNITS = '10000';
 const DEFAULT_MAX_ORDER_UNITS = '10000';
 const DEFAULT_TICK_LATENCY_METRIC_INTERVAL_SECONDS = '60';
 
 const resolveCurrencyCode = (currency?: string | null) => {
-  if (!currency) return DEFAULT_ACCOUNT_CURRENCY;
-  const trimmed = currency.trim().toUpperCase();
-  return trimmed.length === 3 ? trimmed : DEFAULT_ACCOUNT_CURRENCY;
+  return normalizeCurrencyCode(currency, DEFAULT_ACCOUNT_CURRENCY);
 };
 
 const formatBalance = (
   balance: string | number | null | undefined,
   currency?: string,
-  formatNumber: (
-    value: number,
-    options?: FormatAppNumberOptions
-  ) => string = formatAppNumber
+  separators?: NumberFormatSeparators,
+  signed = false
 ) => {
   if (balance == null) return '—';
   const numericBalance =
     typeof balance === 'string' ? Number(balance) : balance;
   if (Number.isNaN(numericBalance)) return '—';
-  const currencyCode = resolveCurrencyCode(currency);
-  return `${currencyCode} ${formatNumber(numericBalance, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoneyAmount(
+    numericBalance,
+    resolveCurrencyCode(currency),
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useCurrencySymbol: false,
+      signed,
+    },
+    separators
+  );
 };
 
 interface SnapshotRefreshTaskState {
@@ -176,7 +179,7 @@ function AccountCard({
   refreshTask?: SnapshotRefreshTaskState;
 }) {
   const { t } = useTranslation(['settings', 'common']);
-  const { formatNumber } = useNumberFormatter();
+  const { formatNumber, separators } = useNumberFormatter();
   const a = account;
   const activeAccountTaskId = isAccountSnapshotRefreshActive(
     a.snapshot_refresh_status
@@ -234,7 +237,7 @@ function AccountCard({
               {t('settings:accounts.balance')}
             </Typography>
             <Typography variant="h6">
-              {formatBalance(a.balance, a.currency, formatNumber)}
+              {formatBalance(a.balance, a.currency, separators)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -242,7 +245,7 @@ function AccountCard({
               {t('settings:accounts.marginUsed')}
             </Typography>
             <Typography variant="body1">
-              {formatBalance(a.margin_used, a.currency, formatNumber)}
+              {formatBalance(a.margin_used, a.currency, separators)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -250,7 +253,7 @@ function AccountCard({
               {t('settings:accounts.marginAvailable')}
             </Typography>
             <Typography variant="body1">
-              {formatBalance(a.margin_available, a.currency, formatNumber)}
+              {formatBalance(a.margin_available, a.currency, separators)}
             </Typography>
           </Box>
           <Box mb={1}>
@@ -267,8 +270,7 @@ function AccountCard({
                 fontWeight: 500,
               }}
             >
-              {parseFloat(a.unrealized_pnl) >= 0 ? '+' : ''}
-              {formatBalance(a.unrealized_pnl, a.currency, formatNumber)}
+              {formatBalance(a.unrealized_pnl, a.currency, separators, true)}
             </Typography>
           </Box>
           <Box mb={1}>

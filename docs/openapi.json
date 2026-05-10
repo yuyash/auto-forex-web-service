@@ -1778,7 +1778,7 @@
         "/api/trading/fx/rate/": {
             "get": {
                 "operationId": "trading_fx_rate",
-                "description": "Resolve a conversion multiplier between two currencies. Direct same-currency rates do not require market data; base/quote conversions use the supplied instrument mid price.",
+                "description": "Resolve a conversion multiplier between two currencies. Direct same-currency rates do not require market data; base/quote conversions use the supplied instrument mid price first, then fall back to stored tick data and common two-leg cross rates.",
                 "parameters": [
                     {
                         "in": "query",
@@ -11672,7 +11672,19 @@
                     "current_balance_money": {
                         "$ref": "#/components/schemas/Money"
                     },
+                    "current_balance_display_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
                     "initial_balance_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
+                    "total_pnl_display_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
+                    "realized_pnl_display_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
+                    "unrealized_pnl_display_money": {
                         "$ref": "#/components/schemas/Money"
                     },
                     "quote_to_account_rate": {

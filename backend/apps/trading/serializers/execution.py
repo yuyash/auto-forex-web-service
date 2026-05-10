@@ -36,7 +36,11 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     realized_pnl_quote_money = MoneySerializer(required=False)
     unrealized_pnl_quote_money = MoneySerializer(required=False)
     current_balance_money = MoneySerializer(required=False)
+    current_balance_display_money = MoneySerializer(required=False)
     initial_balance_money = MoneySerializer(required=False)
+    total_pnl_display_money = MoneySerializer(required=False)
+    realized_pnl_display_money = MoneySerializer(required=False)
+    unrealized_pnl_display_money = MoneySerializer(required=False)
     quote_to_account_rate = serializers.DecimalField(
         max_digits=24,
         decimal_places=12,

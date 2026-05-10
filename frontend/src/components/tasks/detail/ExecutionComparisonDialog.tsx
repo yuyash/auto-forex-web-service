@@ -48,8 +48,8 @@ import {
 } from '../../../utils/strategySchemaLabels';
 import { computeAutoInterval } from '../../../utils/autoGranularity';
 import {
-  currencySymbol,
   formatAppNumber,
+  formatMoneyAmount,
   formatAppPercent,
 } from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
@@ -724,21 +724,23 @@ function ResultsComparisonPanel({
                     ) {
                       display = formatAppPercent(num, 2, true);
                     } else if (key.endsWith('_quote')) {
-                      display = `${formatAppNumber(num, {
+                      display = formatMoneyAmount(num, quoteCcy, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                         signed: true,
-                      })}${quoteCcy ? ` ${currencySymbol(quoteCcy)}` : ''}`;
+                        currencyPlacement: 'suffix',
+                      });
                     } else if (
                       key.includes('pnl') ||
                       key === 'average_win' ||
                       key === 'average_loss'
                     ) {
-                      display = `${formatAppNumber(num, {
+                      display = formatMoneyAmount(num, acctCcy, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                         signed: true,
-                      })}${acctCcy ? ` ${currencySymbol(acctCcy)}` : ''}`;
+                        currencyPlacement: 'suffix',
+                      });
                     }
                   }
                   return (

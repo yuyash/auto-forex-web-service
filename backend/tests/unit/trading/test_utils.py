@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 
+import apps.trading.utils as trading_utils
 from apps.trading.money import AccountCurrency, CurrencyConversion, Money
 from apps.trading.utils import (
     Instrument,
@@ -101,6 +102,10 @@ class TestQuoteToAccountRate:
 
 class TestTradingValueObjects:
     """Test object-oriented trading value helpers."""
+
+    def test_money_objects_are_not_reexported_from_utils_module(self):
+        assert not hasattr(trading_utils, "Money")
+        assert not hasattr(trading_utils, "AccountCurrency")
 
     def test_instrument_exposes_pip_value_object(self):
         instrument = Instrument("USD_JPY")

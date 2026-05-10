@@ -29,7 +29,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencyFractionDigits,
+  currencySymbol,
+  formatAppNumber,
+} from '../../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 
 interface PositionLifecycleDialogProps {
@@ -128,7 +132,7 @@ function quoteCurrencySymbol(instrument?: string): string {
 function quoteCurrencyDecimals(instrument?: string): number {
   if (!instrument) return 3;
   const quote = quoteCurrencyFromInstrument(instrument) ?? '';
-  return quote === 'JPY' ? 0 : 2;
+  return currencyFractionDigits(quote, 2);
 }
 
 const formatPrice = (value?: string | null, instrument?: string): string => {

@@ -1,6 +1,10 @@
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
 import type { CopyValueExtractors } from '../../../utils/tableCopyUtils';
-import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatMoneyAmount,
+} from '../../../utils/numberFormat';
 
 type PositionDirection = 'long' | 'short';
 
@@ -246,7 +250,7 @@ function formatMoney(
   currency: string | null | undefined,
   options: Parameters<typeof formatAppNumber>[1]
 ): string {
-  return `${currencyPrefix(currency)}${formatAppNumber(value, options)}`;
+  return formatMoneyAmount(value, currency, options);
 }
 
 function currencyPrefix(currency: string | null | undefined): string {

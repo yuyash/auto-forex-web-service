@@ -24,7 +24,8 @@ class FxRateView(APIView):
         description=(
             "Resolve a conversion multiplier between two currencies. Direct same-currency "
             "rates do not require market data; base/quote conversions use the supplied "
-            "instrument mid price."
+            "instrument mid price first, then fall back to stored tick data and common "
+            "two-leg cross rates."
         ),
     )
     def get(self, request: Request) -> Response:
@@ -45,7 +46,7 @@ class FxRateView(APIView):
                 {
                     "detail": (
                         "Unable to resolve FX rate from the supplied currency pair, "
-                        "instrument, and mid_price."
+                        "instrument, mid_price, or stored market data."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,

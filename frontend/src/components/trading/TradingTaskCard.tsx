@@ -53,7 +53,7 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
-import { formatAppNumber, currencySymbol } from '../../utils/numberFormat';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
@@ -378,20 +378,20 @@ export default function TradingTaskCard({
     });
   };
 
-  const quoteCurrency = currencySymbol(
+  const pnlCurrency =
     taskSummary.pnl.currency ||
-      currentTask.latest_execution?.quote_currency ||
-      quoteCurrencyFromInstrument(currentTask.instrument) ||
-      taskSummary.execution.displayCurrency ||
-      taskSummary.execution.accountCurrency ||
-      ''
-  );
+    currentTask.latest_execution?.quote_currency ||
+    quoteCurrencyFromInstrument(currentTask.instrument) ||
+    taskSummary.execution.displayCurrency ||
+    taskSummary.execution.accountCurrency ||
+    '';
   const formatPnl = (value: number): string => {
-    return `${formatAppNumber(value, {
+    return formatMoneyAmount(value, pnlCurrency, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       signed: true,
-    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
+      currencyPlacement: 'suffix',
+    });
   };
 
   const realizedPnl = taskSummary.pnl.realized;

@@ -1,9 +1,13 @@
 import type { TFunction } from 'i18next';
 import type { AccountSnapshotRefreshStatus } from '../../types/strategy';
-import { formatAppNumber } from '../../utils/numberFormat';
+import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
+import {
+  formatAppNumber,
+  formatMoneyAmount,
+  normalizeCurrencyCode,
+} from '../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
-
-const DEFAULT_CURRENCY = 'USD';
 
 export type SortOrder = 'asc' | 'desc';
 
@@ -11,16 +15,11 @@ export const toOrdering = (field: string, order: SortOrder): string =>
   order === 'desc' ? `-${field}` : field;
 
 const resolveCurrency = (currency?: string | null) => {
-  if (!currency) return DEFAULT_CURRENCY;
-  const trimmed = currency.trim().toUpperCase();
-  return trimmed.length === 3 ? trimmed : DEFAULT_CURRENCY;
+  return normalizeCurrencyCode(currency, DEFAULT_ACCOUNT_CURRENCY);
 };
 
 const resolveQuoteCurrency = (instrument?: string | null) => {
-  if (!instrument || !instrument.includes('_')) return null;
-  const [, quoteCurrency] = instrument.split('_');
-  const normalized = quoteCurrency?.trim().toUpperCase();
-  return normalized && normalized.length === 3 ? normalized : null;
+  return quoteCurrencyFromInstrument(instrument);
 };
 
 export const fmtBal = (
@@ -30,18 +29,11 @@ export const fmtBal = (
   if (value == null) return '\u2014';
   const numericValue = typeof value === 'string' ? Number(value) : value;
   if (Number.isNaN(numericValue)) return '\u2014';
-  const code = resolveCurrency(currency);
-  try {
-    return `${code} ${formatAppNumber(numericValue, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  } catch {
-    return `${code} ${formatAppNumber(numericValue, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }
+  return formatMoneyAmount(numericValue, resolveCurrency(currency), {
+    useCurrencySymbol: false,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
 export const fmtQuoteValue = (
@@ -52,11 +44,19 @@ export const fmtQuoteValue = (
   const numericValue = typeof value === 'string' ? Number(value) : value;
   if (Number.isNaN(numericValue)) return '\u2014';
   const currency = resolveQuoteCurrency(instrument);
+  if (currency) {
+    return formatMoneyAmount(numericValue, currency, {
+      useCurrencySymbol: false,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      currencyPlacement: 'suffix',
+    });
+  }
   const formatted = formatAppNumber(numericValue, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return currency ? `${formatted} ${currency}` : formatted;
+  return formatted;
 };
 
 export const fmtSignedQuoteValue = (

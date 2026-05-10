@@ -4,8 +4,11 @@ import {
   DEFAULT_APP_SETTINGS,
 } from '../../../src/hooks/useAppSettings';
 import {
+  currencyFractionDigits,
   formatAppNumber,
+  formatMoneyAmount,
   formatAppPercent,
+  normalizeCurrencyCode,
 } from '../../../src/utils/numberFormat';
 
 describe('number formatting', () => {
@@ -43,5 +46,33 @@ describe('number formatting', () => {
 
     expect(formatAppPercent(12.345, 2, true)).toBe('+12,35%');
     expect(formatAppPercent(-12.345, 2, true)).toBe('-12,35%');
+  });
+
+  it('normalizes currency codes and falls back for invalid values', () => {
+    expect(normalizeCurrencyCode(' usd ')).toBe('USD');
+    expect(normalizeCurrencyCode('US', 'JPY')).toBe('JPY');
+    expect(normalizeCurrencyCode(null, 'EUR')).toBe('EUR');
+  });
+
+  it('formats currency-aware money with symbol placement and signs', () => {
+    expect(
+      formatMoneyAmount(1234.56, 'USD', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    ).toBe('$ 1,234.56');
+    expect(
+      formatMoneyAmount(-1234.56, 'USD', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        signed: true,
+        currencyPlacement: 'suffix',
+      })
+    ).toBe('-1,234.56 $');
+  });
+
+  it('uses zero minor units for JPY-style currencies by default', () => {
+    expect(currencyFractionDigits('JPY')).toBe(0);
+    expect(formatMoneyAmount(1234.56, 'JPY')).toBe('¥ 1,235');
   });
 });

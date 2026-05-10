@@ -3,9 +3,15 @@ import type { TaskActionPolicy } from '../../types/common';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
 
+export interface BackendMoneyAmount {
+  amount: string;
+  currency: string;
+}
+
 export interface BackendExecutionMetrics {
   total_return?: string;
   total_pnl?: string;
+  realized_pnl?: string;
   unrealized_pnl?: string;
   total_pnl_quote?: string;
   realized_pnl_quote?: string;
@@ -15,8 +21,26 @@ export interface BackendExecutionMetrics {
   losing_trades?: number;
   win_rate?: string;
   pnl_currency?: string;
+  account_currency?: string;
   quote_currency?: string;
   display_currency?: string;
+  current_balance?: string;
+  initial_balance?: string;
+  current_balance_currency?: string;
+  initial_balance_currency?: string;
+  total_pnl_money?: BackendMoneyAmount;
+  realized_pnl_money?: BackendMoneyAmount;
+  unrealized_pnl_money?: BackendMoneyAmount;
+  total_pnl_quote_money?: BackendMoneyAmount;
+  realized_pnl_quote_money?: BackendMoneyAmount;
+  unrealized_pnl_quote_money?: BackendMoneyAmount;
+  total_pnl_display_money?: BackendMoneyAmount;
+  realized_pnl_display_money?: BackendMoneyAmount;
+  unrealized_pnl_display_money?: BackendMoneyAmount;
+  current_balance_money?: BackendMoneyAmount;
+  current_balance_display_money?: BackendMoneyAmount;
+  initial_balance_money?: BackendMoneyAmount;
+  quote_to_account_rate?: string;
 }
 
 export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {

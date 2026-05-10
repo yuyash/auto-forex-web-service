@@ -130,7 +130,7 @@ class ExecutionPnlConverter:
         """Return PnL values paired with their currency codes."""
         account_currency = self.account_currency(task)
         instrument = Instrument(getattr(task, "instrument", "") or "")
-        quote_currency = instrument.quote_currency or account_currency
+        quote_currency = summary.pnl.currency or instrument.quote_currency or account_currency
         total_quote_amount = summary.pnl.realized + summary.pnl.unrealized
         realized_quote = Money.coerce(summary.pnl.realized, quote_currency)
         unrealized_quote = Money.coerce(summary.pnl.unrealized, quote_currency)
@@ -225,12 +225,23 @@ class ExecutionMetricsSerializer:
     ) -> dict[str, Any]:
         """Build the API-facing metrics dict while preserving legacy keys."""
         account_currency = pnl.total_account.currency_code
-        display_currency = str(getattr(task, "display_currency", "") or "").strip().upper()
+        display_currency = (
+            str(getattr(task, "display_currency", "") or "").strip().upper()
+            or summary.execution.display_currency
+            or account_currency
+        )
         initial_balance = self.initial_balance_money(task, account_currency=account_currency)
         current_balance_amount = summary.execution.current_balance
         current_balance = Money.coerce(
             current_balance_amount if current_balance_amount is not None else Decimal("0"),
-            account_currency,
+            summary.execution.current_balance_currency or account_currency,
+        )
+        total_display = self._display_money(pnl.total_account, display_currency, task, summary)
+        realized_display = self._display_money(
+            pnl.realized_account, display_currency, task, summary
+        )
+        unrealized_display = self._display_money(
+            pnl.unrealized_account, display_currency, task, summary
         )
         metrics: dict[str, Any] = {
             "total_pnl": pnl.total_account.amount,
@@ -251,7 +262,7 @@ class ExecutionMetricsSerializer:
             "pnl_currency": account_currency,
             "account_currency": account_currency,
             "quote_currency": pnl.total_quote.currency_code,
-            "display_currency": display_currency or account_currency,
+            "display_currency": display_currency,
             "current_balance_currency": current_balance.currency_code,
             "initial_balance_currency": (
                 initial_balance.currency_code if initial_balance is not None else account_currency
@@ -265,6 +276,16 @@ class ExecutionMetricsSerializer:
             "current_balance_money": current_balance.as_dict(),
             "quote_to_account_rate": pnl.conversion_rate,
         }
+        if summary.execution.current_balance_display_money is not None:
+            metrics["current_balance_display_money"] = (
+                summary.execution.current_balance_display_money
+            )
+        if total_display is not None:
+            metrics["total_pnl_display_money"] = total_display.as_dict()
+        if realized_display is not None:
+            metrics["realized_pnl_display_money"] = realized_display.as_dict()
+        if unrealized_display is not None:
+            metrics["unrealized_pnl_display_money"] = unrealized_display.as_dict()
         if initial_balance is not None:
             metrics["initial_balance_money"] = initial_balance.as_dict()
         if total_return is not None:
@@ -280,6 +301,27 @@ class ExecutionMetricsSerializer:
             return Money.coerce(initial_balance, account_currency)
         except Exception:
             return None
+
+    def _display_money(
+        self,
+        money: Money,
+        display_currency: str,
+        task: Any,
+        summary: TaskSummary,
+    ) -> Money | None:
+        """Return money converted to display currency when possible."""
+        target = str(display_currency or "").strip().upper()
+        if not target:
+            return None
+        if money.currency.matches(target):
+            return money
+        instrument = getattr(task, "instrument", "") or ""
+        return FX_CONVERSION.convert(
+            money,
+            target_currency=target,
+            instrument=instrument,
+            mid_price=summary.tick.mid,
+        )
 
 
 class ExecutionMetricsBuilder:

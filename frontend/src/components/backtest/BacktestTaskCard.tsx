@@ -56,7 +56,7 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
-import { currencySymbol, formatAppNumber } from '../../utils/numberFormat';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -344,16 +344,16 @@ export default function BacktestTaskCard({
     summary.execution.accountCurrency ||
     currentTask.account_currency ||
     '';
-  const pnlCurrencySymbol = currencySymbol(pnlCurrency);
   const realizedPnl = summary.pnl.realized;
   const unrealizedPnl = summary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
   const formatPnl = (value: number): string =>
-    `${formatAppNumber(value, {
+    formatMoneyAmount(value, pnlCurrency, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       signed: true,
-    })}${pnlCurrencySymbol ? ` ${pnlCurrencySymbol}` : ''}`;
+      currencyPlacement: 'suffix',
+    });
   const pnlItems = [
     {
       key: 'total',

@@ -22,8 +22,8 @@ import type {
 } from '../../../types/strategyVisualization';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import {
-  currencySymbol,
   formatAppNumber,
+  formatMoneyAmount,
   formatAppPercent,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
@@ -618,17 +618,16 @@ function formatCurrency(
   signed = false,
   separators?: NumberFormatSeparators
 ): string {
-  const symbol = currencySymbol(currencyCode);
-  const formatted = formatAppNumber(
-    Math.abs(value),
+  return formatMoneyAmount(
+    value,
+    currencyCode,
     {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
+      signed,
     },
     separators
   );
-  const sign = signed ? (value >= 0 ? '+' : '-') : value < 0 ? '-' : '';
-  return symbol ? `${sign}${symbol} ${formatted}` : `${sign}${formatted}`;
 }
 
 function formatWholeNumber(

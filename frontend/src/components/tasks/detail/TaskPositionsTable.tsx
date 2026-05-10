@@ -41,7 +41,11 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
-import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatMoneyAmount,
+} from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
@@ -232,11 +236,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   };
 
   const formatSignedMoney = (value: number, currency?: string | null): string =>
-    `${formatCurrencyPrefix(currency)}${formatAppNumber(value, {
+    formatMoneyAmount(value, currency, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       signed: true,
-    })}`;
+    });
 
   // --- Shared column fragments ---
   const idCol: Column<TaskPosition> = {
