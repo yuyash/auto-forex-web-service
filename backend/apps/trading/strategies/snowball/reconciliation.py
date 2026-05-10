@@ -8,6 +8,11 @@ from typing import Any, Protocol
 
 from apps.trading.enums import Direction
 from apps.trading.models import Position
+from apps.trading.strategies.reconciliation import (
+    AccountReconciliationState,
+    ReconciliationReportBase,
+    StrategyConfigLike,
+)
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry
@@ -25,20 +30,16 @@ __all__ = [
 ]
 
 
-class ReconciliationState(Protocol):
-    strategy_state: dict[str, Any] | None
-    current_balance: Any
+class ReconciliationState(AccountReconciliationState, Protocol):
+    """Snowball state surface required for broker reconciliation."""
 
 
-class ReconciliationReport(Protocol):
+class ReconciliationReport(ReconciliationReportBase, Protocol):
+    """Mutable reconciliation report fields updated by Snowball."""
+
     removed_open_entries: int
     relinked_open_entries: int
     synthesized_open_entries: int
-    blockers: list[str]
-
-
-class StrategyConfigLike(Protocol):
-    config_dict: dict[str, Any]
 
 
 @dataclass(frozen=True)

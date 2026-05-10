@@ -6959,15 +6959,31 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
                     },
+                    "previous_balance_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
                     "current_balance": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
                     },
+                    "current_balance_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
                     "adjustment": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "adjustment_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "currency": {
+                        "type": "string",
+                        "maxLength": 3
                     },
                     "state_version": {
                         "type": "integer"
@@ -6975,9 +6991,13 @@
                 },
                 "required": [
                     "adjustment",
+                    "adjustment_currency",
+                    "currency",
                     "current_balance",
+                    "current_balance_currency",
                     "execution_id",
                     "previous_balance",
+                    "previous_balance_currency",
                     "state_version",
                     "task_id"
                 ]
@@ -11329,6 +11349,11 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
                     },
+                    "realized_pnl": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
                     "unrealized_pnl": {
                         "type": "string",
                         "format": "decimal",
@@ -11366,8 +11391,62 @@
                     "pnl_currency": {
                         "type": "string"
                     },
+                    "account_currency": {
+                        "type": "string"
+                    },
                     "quote_currency": {
                         "type": "string"
+                    },
+                    "current_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "initial_balance": {
+                        "type": "string"
+                    },
+                    "current_balance_currency": {
+                        "type": "string"
+                    },
+                    "initial_balance_currency": {
+                        "type": "string"
+                    },
+                    "total_pnl_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "realized_pnl_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "unrealized_pnl_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "total_pnl_quote_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "realized_pnl_quote_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "unrealized_pnl_quote_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "current_balance_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "initial_balance_money": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "quote_to_account_rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,12})?$"
                     }
                 }
             },

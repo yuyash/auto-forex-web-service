@@ -8,6 +8,7 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
 
     total_return = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     total_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    realized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     unrealized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     total_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     realized_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
@@ -19,7 +20,25 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     losing_trades = serializers.IntegerField(required=False)
     win_rate = serializers.DecimalField(max_digits=10, decimal_places=4, required=False)
     pnl_currency = serializers.CharField(required=False)
+    account_currency = serializers.CharField(required=False)
     quote_currency = serializers.CharField(required=False)
+    current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    initial_balance = serializers.CharField(required=False)
+    current_balance_currency = serializers.CharField(required=False)
+    initial_balance_currency = serializers.CharField(required=False)
+    total_pnl_money = serializers.DictField(required=False)
+    realized_pnl_money = serializers.DictField(required=False)
+    unrealized_pnl_money = serializers.DictField(required=False)
+    total_pnl_quote_money = serializers.DictField(required=False)
+    realized_pnl_quote_money = serializers.DictField(required=False)
+    unrealized_pnl_quote_money = serializers.DictField(required=False)
+    current_balance_money = serializers.DictField(required=False)
+    initial_balance_money = serializers.DictField(required=False)
+    quote_to_account_rate = serializers.DecimalField(
+        max_digits=24,
+        decimal_places=12,
+        required=False,
+    )
 
 
 class TaskExecutionSerializer(serializers.Serializer):

@@ -560,6 +560,10 @@ class SnowballStrategyConfig:
 
     def validate(self) -> None:
         """Raise ``ValueError`` on invalid combinations."""
+        SNOWBALL_CONFIG_VALIDATION_POLICY.validate(self)
+
+    def _validate_constraints(self) -> None:
+        """Run concrete config consistency checks."""
         if self.stop_loss_enabled and self.shrink_enabled:
             raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
         if self.preserve_highest_retracement_enabled:
@@ -681,3 +685,15 @@ class SnowballStrategyConfig:
             raise ValueError("complete_cycle_when_empty requires rebuild_enabled to be false")
         if not self.stop_loss_enabled and not self.rebuild_enabled:
             raise ValueError("rebuild_enabled=false requires stop_loss_enabled to be true")
+
+
+@dataclass(frozen=True, slots=True)
+class SnowballConfigValidationPolicy:
+    """Own public Snowball configuration validation orchestration."""
+
+    def validate(self, config: SnowballStrategyConfig) -> None:
+        """Validate one normalized Snowball config object."""
+        config._validate_constraints()
+
+
+SNOWBALL_CONFIG_VALIDATION_POLICY = SnowballConfigValidationPolicy()

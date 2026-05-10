@@ -157,8 +157,12 @@ class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
     task_id = serializers.UUIDField()
     execution_id = serializers.UUIDField()
     previous_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    previous_balance_currency = serializers.CharField(max_length=3)
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    current_balance_currency = serializers.CharField(max_length=3)
     adjustment = serializers.DecimalField(max_digits=20, decimal_places=10)
+    adjustment_currency = serializers.CharField(max_length=3)
+    currency = serializers.CharField(max_length=3)
     state_version = serializers.IntegerField()
 
 

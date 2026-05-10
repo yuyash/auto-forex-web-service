@@ -29,6 +29,12 @@ class AccountCurrency:
         other_code = other.code if isinstance(other, AccountCurrency) else str(other or "")
         return self.code == other_code.strip().upper()
 
+    def require_known(self, *, field_name: str = "currency") -> "AccountCurrency":
+        """Return self, raising when the code is empty."""
+        if not self.is_known:
+            raise ValueError(f"{field_name} must include a currency code")
+        return self
+
 
 @dataclass(frozen=True, slots=True)
 class PipSize:
@@ -122,9 +128,84 @@ class Money:
         )
         return cls(amount=Decimal(str(amount)), currency=currency_obj)
 
+    @property
+    def currency_code(self) -> str:
+        """Return the normalized currency code."""
+        return self.currency.code
+
+    def require_currency(self, *, field_name: str = "money") -> "Money":
+        """Return self, raising when the money has no currency code."""
+        self.currency.require_known(field_name=f"{field_name}.currency")
+        return self
+
+    def as_dict(self) -> dict[str, str]:
+        """Serialize as an amount/currency pair for JSON-friendly payloads."""
+        return {"amount": str(self.amount), "currency": self.currency_code}
+
+    def add(self, other: "Money") -> "Money":
+        """Add another money value with the same currency."""
+        self._require_same_currency(other)
+        return Money(amount=self.amount + other.amount, currency=self.currency)
+
+    def subtract(self, other: "Money") -> "Money":
+        """Subtract another money value with the same currency."""
+        self._require_same_currency(other)
+        return Money(amount=self.amount - other.amount, currency=self.currency)
+
+    def convert(self, *, rate: Decimal | float | int | str, target_currency: str) -> "Money":
+        """Convert money using an explicit multiplier."""
+        return Money.coerce(self.amount * Decimal(str(rate)), target_currency)
+
     def format(self, *, places: int = 2) -> str:
         """Format the amount for human-readable logs."""
         return MoneyFormatter(places=places).format(self.amount)
+
+    def _require_same_currency(self, other: "Money") -> None:
+        if not self.currency.matches(other.currency):
+            raise ValueError(
+                "Money arithmetic requires matching currencies: "
+                f"{self.currency_code or '<unknown>'} != {other.currency_code or '<unknown>'}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class CurrencyConversion:
+    """Explicit conversion rate between two currency-denominated amounts."""
+
+    source_currency: AccountCurrency
+    target_currency: AccountCurrency
+    rate: Decimal
+
+    @classmethod
+    def coerce(
+        cls,
+        *,
+        source_currency: AccountCurrency | str,
+        target_currency: AccountCurrency | str,
+        rate: Decimal | float | int | str,
+    ) -> "CurrencyConversion":
+        """Build a conversion from primitive values."""
+        source = (
+            source_currency
+            if isinstance(source_currency, AccountCurrency)
+            else AccountCurrency(source_currency)
+        )
+        target = (
+            target_currency
+            if isinstance(target_currency, AccountCurrency)
+            else AccountCurrency(target_currency)
+        )
+        return cls(source_currency=source, target_currency=target, rate=Decimal(str(rate)))
+
+    def convert(self, money: Money) -> Money:
+        """Convert a money value, validating the source currency when available."""
+        if money.currency.is_known and self.source_currency.is_known:
+            if not money.currency.matches(self.source_currency):
+                raise ValueError(
+                    "Conversion source currency does not match money currency: "
+                    f"{self.source_currency.code} != {money.currency_code}"
+                )
+        return money.convert(rate=self.rate, target_currency=self.target_currency.code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,14 +215,29 @@ class Instrument:
     name: str
 
     @property
+    def normalized_name(self) -> str:
+        """Return a normalized instrument identifier for currency parsing."""
+        raw = str(self.name or "").strip().upper()
+        if ":" in raw:
+            raw = raw.rsplit(":", 1)[-1]
+        return raw.replace("/", "_").replace("-", "_")
+
+    @property
     def pip(self) -> PipSize:
         """Return the pip-size value object for this instrument."""
         return PipSize.for_instrument(self)
 
     @property
+    def base_currency(self) -> str:
+        """Extract the base currency from common FX instrument notations."""
+        base, _quote = self._currency_pair()
+        return base
+
+    @property
     def quote_currency(self) -> str:
-        """Extract the quote currency from an OANDA instrument name."""
-        return self.name.split("_")[-1].upper() if "_" in self.name else ""
+        """Extract the quote currency from common FX instrument notations."""
+        _base, quote = self._currency_pair()
+        return quote
 
     @property
     def is_high_value_quote(self) -> bool:
@@ -152,6 +248,17 @@ class Instrument:
     def pip_size(self) -> Decimal:
         """Return the pip size for this instrument."""
         return self.pip.value
+
+    def _currency_pair(self) -> tuple[str, str]:
+        normalised = self.normalized_name
+        if "_" in normalised:
+            parts = [part for part in normalised.split("_") if part]
+            if len(parts) >= 2:
+                return parts[0], parts[-1]
+        compact = normalised.replace("_", "")
+        if len(compact) == 6 and compact.isalpha():
+            return compact[:3], compact[3:]
+        return normalised, ""
 
     def quote_to_account_rate(
         self,
@@ -166,17 +273,42 @@ class Instrument:
             else AccountCurrency(account_currency)
         )
 
+        # Legacy strategy unit tests and dry-run paths can omit account currency.
+        # Preserve the previous high-value quote fallback until every execution
+        # path supplies an explicit account currency or cross-rate provider.
+        if not account.is_known:
+            if self.is_high_value_quote and mid_price > 0:
+                return Decimal("1") / mid_price
+            return Decimal("1")
+
         # If the account currency is the same as the quote currency, no conversion.
         if account.is_known and quote and account.matches(quote):
             return Decimal("1")
 
         # If the account currency is the same as the base currency, convert from
         # quote to base.
-        if self.is_high_value_quote:
+        if account.is_known and self.base_currency and account.matches(self.base_currency):
             if mid_price <= 0:
                 return Decimal("1")
             return Decimal("1") / mid_price
         return Decimal("1")
+
+    def quote_to_account_conversion(
+        self,
+        mid_price: Decimal,
+        account_currency: AccountCurrency | str = "",
+    ) -> CurrencyConversion:
+        """Return a value object for quote-to-account money conversion."""
+        account = (
+            account_currency
+            if isinstance(account_currency, AccountCurrency)
+            else AccountCurrency(account_currency)
+        )
+        return CurrencyConversion.coerce(
+            source_currency=self.quote_currency,
+            target_currency=account.code,
+            rate=self.quote_to_account_rate(mid_price, account),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +359,19 @@ class TradingValueFactory:
         """Return the multiplier to convert quote-currency PnL."""
         return self.instrument(instrument).quote_to_account_rate(mid_price, account_currency)
 
+    def quote_to_account_money(
+        self,
+        *,
+        instrument: str,
+        quote_amount: Decimal | float | int | str,
+        mid_price: Decimal,
+        account_currency: str,
+    ) -> Money:
+        """Convert a quote-currency amount into account-currency money."""
+        instrument_obj = self.instrument(instrument)
+        conversion = instrument_obj.quote_to_account_conversion(mid_price, account_currency)
+        return conversion.convert(Money.coerce(quote_amount, instrument_obj.quote_currency))
+
     def format_money(self, value: Decimal | float | int | None, *, places: int = 2) -> str:
         """Format a monetary amount for logs."""
         return MoneyFormatter(places=places).format(value)
@@ -260,7 +405,7 @@ def is_quote_jpy(instrument: str) -> bool:
 def quote_currency(instrument: str) -> str:
     """Extract the quote currency from an instrument name.
 
-    Example: ``"USD_JPY"`` → ``"JPY"``, ``"EUR_USD"`` → ``"USD"``
+    Example: ``"USD_JPY"`` → ``"JPY"``, ``"EURUSD"`` → ``"USD"``
     """
     return TRADING_VALUES.quote_currency(instrument)
 
@@ -274,12 +419,12 @@ def quote_to_account_rate(
     PnL is already denominated in the account currency and no conversion is
     needed (returns ``1``).
 
-    Otherwise we fall back to the original heuristic:
-    * For JPY-quoted pairs (e.g. USD_JPY on a USD account): divide by mid → 1 / mid
-    * For USD-quoted pairs (e.g. EUR_USD on a USD account): already in quote=USD → 1
+    Otherwise:
+    * If the account currency is the base currency, divide by mid → 1 / mid.
+    * If neither side matches, return ``1`` until a cross-rate provider is supplied.
+    * If account currency is missing, retain the legacy high-value quote fallback.
 
-    Cross-currency pairs (e.g. EUR_GBP on a USD account) would need an
-    additional FX rate, but that is out of scope for now.
+    Cross-currency pairs (e.g. EUR_GBP on a USD account) need an additional FX rate.
     """
     return TRADING_VALUES.quote_to_account_rate(instrument, mid_price, account_currency)
 

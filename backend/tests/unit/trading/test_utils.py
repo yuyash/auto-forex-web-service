@@ -2,8 +2,11 @@
 
 from decimal import Decimal
 
+import pytest
+
 from apps.trading.utils import (
     AccountCurrency,
+    CurrencyConversion,
     Instrument,
     Money,
     PipSize,
@@ -33,8 +36,8 @@ class TestPipSizeForInstrument:
         assert pip_size_for_instrument("GBP_USD") == Decimal("0.0001")
 
     def test_no_underscore(self):
-        """Instrument without underscore returns default pip size."""
-        assert pip_size_for_instrument("EURUSD") == Decimal("0.0001")
+        """Compact FX symbols are parsed for pip convention."""
+        assert pip_size_for_instrument("USDJPY") == Decimal("0.01")
 
 
 class TestIsQuoteJpy:
@@ -50,7 +53,7 @@ class TestIsQuoteJpy:
         assert is_quote_jpy("EUR_USD") is False
 
     def test_no_underscore(self):
-        assert is_quote_jpy("USDJPY") is False
+        assert is_quote_jpy("USDJPY") is True
 
 
 class TestQuoteCurrency:
@@ -63,7 +66,10 @@ class TestQuoteCurrency:
         assert quote_currency("USD_JPY") == "JPY"
 
     def test_no_underscore(self):
-        assert quote_currency("EURUSD") == ""
+        assert quote_currency("EURUSD") == "USD"
+
+    def test_prefixed_dash_pair(self):
+        assert quote_currency("C:USD-JPY") == "JPY"
 
 
 class TestQuoteToAccountRate:
@@ -85,9 +91,9 @@ class TestQuoteToAccountRate:
         assert rate == Decimal("1")
 
     def test_non_jpy_pair_no_conversion(self):
-        """Non-JPY pair returns 1."""
+        """Base-currency accounts convert quote PnL by dividing by mid."""
         rate = quote_to_account_rate("EUR_USD", Decimal("1.1"), "EUR")
-        assert rate == Decimal("1")
+        assert rate == Decimal("1") / Decimal("1.1")
 
     def test_empty_account_currency(self):
         """Empty account currency falls back to heuristic."""
@@ -128,3 +134,32 @@ class TestTradingValueObjects:
 
         assert money.currency == AccountCurrency("JPY")
         assert money.format(places=2) == "123.46"
+
+    def test_money_arithmetic_requires_matching_currency(self):
+        total = Money.coerce("100", "usd").add(Money.coerce("25.5", "USD"))
+
+        assert total == Money.coerce("125.5", "USD")
+        with pytest.raises(ValueError, match="matching currencies"):
+            total.subtract(Money.coerce("1", "JPY"))
+
+    def test_currency_conversion_returns_target_currency_money(self):
+        conversion = CurrencyConversion.coerce(
+            source_currency="JPY",
+            target_currency="USD",
+            rate=Decimal("0.0067"),
+        )
+
+        converted = conversion.convert(Money.coerce("1000", "JPY"))
+
+        assert converted.amount == Decimal("6.7000")
+        assert converted.currency == AccountCurrency("USD")
+
+    def test_instrument_builds_quote_to_account_conversion(self):
+        conversion = Instrument("USD_JPY").quote_to_account_conversion(
+            Decimal("150"),
+            "USD",
+        )
+
+        assert conversion.source_currency == AccountCurrency("JPY")
+        assert conversion.target_currency == AccountCurrency("USD")
+        assert conversion.rate == Decimal("1") / Decimal("150")

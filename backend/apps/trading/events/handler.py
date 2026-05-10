@@ -40,6 +40,98 @@ class CycleResolutionError(Exception):
 EventDispatchFn = Callable[[StrategyEvent], EventExecutionResult]
 
 
+class PositionExecutionCache:
+    """Own in-memory position lookup state for one execution handler."""
+
+    def __init__(self, *, order_service: OrderService, instrument: str) -> None:
+        self.order_service = order_service
+        self.instrument = instrument
+        self.position_map: dict[int, Position] = {}
+        self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
+        self.position_cache: dict[str, Position] = {}
+
+    @property
+    def task_pk(self):
+        """Return the task primary key for ORM scoping."""
+        return self.order_service.task.id
+
+    @property
+    def execution_id(self):
+        """Return the current execution id for ORM scoping."""
+        return self.order_service.execution_id
+
+    def cache_position(self, layer_number: int, position: Position) -> None:
+        """Cache a position by id and by layer."""
+        pos_id = str(position.id)
+        if pos_id not in self.layer_position_ids[layer_number]:
+            self.layer_position_ids[layer_number].append(pos_id)
+        self.position_cache[pos_id] = position
+        self.position_map[layer_number] = position
+
+    def get_open_position_by_id(self, position_id: str) -> Position | None:
+        """Return a cached or persisted open position by id."""
+        cached = self.position_cache.get(position_id)
+        if cached and cached.is_open:
+            return cached
+        position = (
+            Position.objects.filter(
+                id=position_id,
+                task_type=self.order_service.task_type,
+                task_id=self.task_pk,
+                execution_id=self.execution_id,
+                is_open=True,
+            )
+            .order_by("-entry_time")
+            .first()
+        )
+        if position:
+            self.position_cache[position_id] = position
+        return position
+
+    def rehydrate_layer_positions(self, layer_number: int) -> None:
+        """Load layer positions from storage when the in-memory stack is empty."""
+        if self.layer_position_ids.get(layer_number):
+            return
+        open_positions = list(
+            Position.objects.filter(
+                task_type=self.order_service.task_type,
+                task_id=self.task_pk,
+                execution_id=self.execution_id,
+                instrument=self.instrument,
+                is_open=True,
+                layer_index=layer_number,
+            ).order_by("entry_time", "created_at")
+        )
+        if not open_positions:
+            return
+        self.layer_position_ids[layer_number] = [str(p.id) for p in open_positions]
+        for position in open_positions:
+            self.position_cache[str(position.id)] = position
+        self.position_map[layer_number] = open_positions[-1]
+
+    def prune_closed_position(self, layer_number: int, position: Position) -> None:
+        """Remove a closed position from every in-memory index."""
+        pos_id = str(position.id)
+        if position.is_open:
+            self.position_cache[pos_id] = position
+            self.position_map[layer_number] = position
+            return
+
+        self.position_cache.pop(pos_id, None)
+        ids = self.layer_position_ids.get(layer_number, [])
+        if pos_id in ids:
+            ids.remove(pos_id)
+        if not ids:
+            self.layer_position_ids.pop(layer_number, None)
+            self.position_map.pop(layer_number, None)
+            return
+        replacement = self.get_open_position_by_id(ids[-1])
+        if replacement:
+            self.position_map[layer_number] = replacement
+        else:
+            self.position_map.pop(layer_number, None)
+
+
 class EventHandler:
     """Handles strategy events by executing corresponding orders.
 
@@ -65,9 +157,13 @@ class EventHandler:
         """
         self.order_service = order_service
         self.instrument = instrument
-        self.position_map: dict[int, Position] = {}  # layer_number -> Position
-        self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
-        self._position_cache: dict[str, Position] = {}
+        self.positions = PositionExecutionCache(
+            order_service=order_service,
+            instrument=instrument,
+        )
+        self.position_map = self.positions.position_map
+        self.layer_position_ids = self.positions.layer_position_ids
+        self._position_cache = self.positions.position_cache
         self._event_dispatch: dict[str, EventDispatchFn] = {
             "open_position": self._dispatch_open_position,
             "close_position": self._dispatch_close_position,
@@ -119,50 +215,13 @@ class EventHandler:
         return self.order_service.execution_id
 
     def _cache_position(self, layer_number: int, position: Position) -> None:
-        pos_id = str(position.id)
-        if pos_id not in self.layer_position_ids[layer_number]:
-            self.layer_position_ids[layer_number].append(pos_id)
-        self._position_cache[pos_id] = position
-        self.position_map[layer_number] = position
+        self.positions.cache_position(layer_number, position)
 
     def _get_open_position_by_id(self, position_id: str) -> Position | None:
-        cached = self._position_cache.get(position_id)
-        if cached and cached.is_open:
-            return cached
-        position = (
-            Position.objects.filter(
-                id=position_id,
-                task_type=self.order_service.task_type,
-                task_id=self._task_pk,
-                execution_id=self._execution_id,
-                is_open=True,
-            )
-            .order_by("-entry_time")
-            .first()
-        )
-        if position:
-            self._position_cache[position_id] = position
-        return position
+        return self.positions.get_open_position_by_id(position_id)
 
     def _rehydrate_layer_positions(self, layer_number: int) -> None:
-        if self.layer_position_ids.get(layer_number):
-            return
-        open_positions = list(
-            Position.objects.filter(
-                task_type=self.order_service.task_type,
-                task_id=self._task_pk,
-                execution_id=self._execution_id,
-                instrument=self.instrument,
-                is_open=True,
-                layer_index=layer_number,
-            ).order_by("entry_time", "created_at")
-        )
-        if not open_positions:
-            return
-        self.layer_position_ids[layer_number] = [str(p.id) for p in open_positions]
-        for position in open_positions:
-            self._position_cache[str(position.id)] = position
-        self.position_map[layer_number] = open_positions[-1]
+        self.positions.rehydrate_layer_positions(layer_number)
 
     def _find_close_position_target(self, event: ClosePositionEvent) -> Position | None:
         # If the event carries a specific position_id, use it directly.
@@ -214,26 +273,7 @@ class EventHandler:
         return fallback
 
     def _prune_closed_position(self, layer_number: int, position: Position) -> None:
-        pos_id = str(position.id)
-        if position.is_open:
-            self._position_cache[pos_id] = position
-            self.position_map[layer_number] = position
-            return
-
-        # Remove closed position from cache to prevent unbounded memory growth
-        self._position_cache.pop(pos_id, None)
-        ids = self.layer_position_ids.get(layer_number, [])
-        if pos_id in ids:
-            ids.remove(pos_id)
-        if not ids:
-            self.layer_position_ids.pop(layer_number, None)
-            self.position_map.pop(layer_number, None)
-            return
-        replacement = self._get_open_position_by_id(ids[-1])
-        if replacement:
-            self.position_map[layer_number] = replacement
-        else:
-            self.position_map.pop(layer_number, None)
+        self.positions.prune_closed_position(layer_number, position)
 
     def _ordered_positions_for_margin_close(self) -> list[Position]:
         open_positions = list(

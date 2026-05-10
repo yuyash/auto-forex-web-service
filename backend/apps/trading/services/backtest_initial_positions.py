@@ -109,7 +109,7 @@ def _is_preview_execution(*, task_id: Any, execution_id: Any) -> bool:
     return is_initial_position_preview_state(state)
 
 
-def validate_initial_position_cycles(
+def _validate_initial_position_cycles_impl(
     *,
     task: BacktestTask | None,
     config: Any,
@@ -237,8 +237,54 @@ def validate_initial_position_cycles(
     return normalized_cycles
 
 
+class InitialPositionCycleValidator:
+    """Validate and normalize requested initial-position cycle payloads."""
+
+    def validate(
+        self,
+        *,
+        task: BacktestTask | None,
+        config: Any,
+        cycles: Any,
+        pip_size: Decimal | None = None,
+    ) -> list[NormalizedSeedCycle]:
+        """Validate and normalize the requested initial Snowball cycle payload."""
+        return _validate_initial_position_cycles_impl(
+            task=task,
+            config=config,
+            cycles=cycles,
+            pip_size=pip_size,
+        )
+
+
+INITIAL_POSITION_CYCLE_VALIDATOR = InitialPositionCycleValidator()
+
+
+def validate_initial_position_cycles(
+    *,
+    task: BacktestTask | None,
+    config: Any,
+    cycles: Any,
+    pip_size: Decimal | None = None,
+) -> list[NormalizedSeedCycle]:
+    """Validate and normalize the requested initial Snowball cycle payload."""
+    return INITIAL_POSITION_CYCLE_VALIDATOR.validate(
+        task=task,
+        config=config,
+        cycles=cycles,
+        pip_size=pip_size,
+    )
+
+
 class BacktestInitialPositionService:
     """Synchronize Snowball seed settings with preview execution records."""
+
+    def __init__(
+        self,
+        *,
+        validator: InitialPositionCycleValidator | None = None,
+    ) -> None:
+        self.validator = validator or INITIAL_POSITION_CYCLE_VALIDATOR
 
     def sync_for_task(self, task: BacktestTask) -> None:
         """Create or clear the preview execution data for a backtest task."""
@@ -249,7 +295,7 @@ class BacktestInitialPositionService:
             self.clear_preview(task)
             return
 
-        normalized_cycles = validate_initial_position_cycles(
+        normalized_cycles = self.validator.validate(
             task=task,
             config=task.config,
             cycles=task.initial_position_cycles,

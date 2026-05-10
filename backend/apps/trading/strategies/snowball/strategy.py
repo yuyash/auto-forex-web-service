@@ -54,6 +54,10 @@ from apps.trading.strategies.snowball.execution_binding import (
 from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_lifecycle import (
+    SnowballCycleFactory,
+    SnowballLayerInitialPlanner,
+)
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
@@ -228,6 +232,8 @@ class SnowballStrategy(Strategy):
             price_service=self.counter_price_service,
             grid_policy=self.grid_policy,
         )
+        self.cycle_factory = SnowballCycleFactory()
+        self.layer_initial_planner = SnowballLayerInitialPlanner()
         self.counter_add_description = SnowballCounterAddDescription()
         self.entry_lifecycle = SNOWBALL_ENTRY_LIFECYCLE
         self.stop_loss_assigner = StopLossAssigner()
@@ -417,53 +423,12 @@ class SnowballStrategy(Strategy):
         direction: Direction,
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
         """Create a new cycle with an initial entry at L0/R0."""
-        cfg = self.config
-        units = cfg.trend_lot_size * cfg.base_units
-        price = tick.ask if direction == Direction.LONG else tick.bid
-        if direction == Direction.LONG:
-            close_price = price + cfg.m_pips * self.pip_size
-            formula = f"{price} + {cfg.m_pips} * {self.pip_size}"
-        else:
-            close_price = price - cfg.m_pips * self.pip_size
-            formula = f"{price} - {cfg.m_pips} * {self.pip_size}"
-
-        entry = Entry.open(
+        return self.cycle_factory.create(
+            strategy=self,
             state=ss,
             tick=tick,
             direction=direction,
-            units=units,
-            step=1,
-            close_price=close_price,
-            role="initial",
-            layer_number=1,
-            retracement_count=0,
         )
-        entry.expected_tp_pips = cfg.m_pips
-        entry.validation_status = "pass"
-
-        # Compute stop-loss for this entry at creation time
-        if cfg.stop_loss_enabled:
-            self._assign_configured_stop_loss(entry, 1)
-
-        evt = SNOWBALL_EVENTS.entry_open_event(
-            entry,
-            timestamp=tick.timestamp,
-            planned_exit_price_formula=formula,
-            description=(
-                f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.3f}"
-                + (f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else "")
-            ),
-        )
-
-        cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
-        # L1 with R0 (initial) + R1…R(r_max) counter slots
-        layer0 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
-        slot0 = layer0.slot_at(0)
-        assert slot0 is not None  # noqa: S101
-        slot0.fill(entry)
-        cycle.add_layer(layer0)
-        ss.cycles.append(cycle)
-        return [evt], cycle
 
     def _close_and_reenter(
         self,
@@ -1017,25 +982,20 @@ class SnowballStrategy(Strategy):
         rebuild), fall back to the current market price — there is no
         anchor to snap to.
         """
-        highest = prev_layer.highest_present_slot()
-        if highest is None:
-            return market_price
-
-        if highest.entry is not None:
-            ref_price = highest.entry.entry_price
-        elif highest.pending_rebuild is not None:
-            ref_price = highest.pending_rebuild.entry_price
-        else:
-            return market_price
-
         # Interval that the gate uses for "the next slot past ``highest``":
         # ``counter_interval_pips(k)`` is 1-based, k == highest.index + 1
         # advances into the next retracement slot.
+        highest = prev_layer.highest_present_slot()
+        if highest is None:
+            return market_price
         interval = self.calculator.counter_interval_pips(highest.index + 1)
-        offset = interval * self.pip_size
-        if direction == Direction.LONG:
-            return ref_price - offset
-        return ref_price + offset
+        return self.layer_initial_planner.anchor_price(
+            prev_layer=prev_layer,
+            direction=direction,
+            market_price=market_price,
+            interval_pips=interval,
+            pip_size=self.pip_size,
+        )
 
     # ------------------------------------------------------------------
     # Stop-loss protection

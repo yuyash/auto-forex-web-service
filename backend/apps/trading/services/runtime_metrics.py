@@ -147,7 +147,11 @@ class RuntimeMetricsTracker:
                 unrealized_pnl_quote += (entry_price - ask) * units
 
         # Convert to account currency using current mid rate (same as overview tab)
-        realized_pnl = self._realized_pnl_quote * conv
+        realized_pnl = (
+            self._realized_pnl_quote * conv
+            if self._realized_pnl_quote != Decimal("0")
+            else self._realized_pnl
+        )
         unrealized_pnl = unrealized_pnl_quote * conv
         total_pnl_quote = self._realized_pnl_quote + unrealized_pnl_quote
         total_pnl = realized_pnl + unrealized_pnl
@@ -161,6 +165,8 @@ class RuntimeMetricsTracker:
             else Decimal("0")
         )
 
+        account_currency = str(self.account_currency or "").upper()
+        quote_currency = instrument.quote_currency
         metrics: dict[str, str] = {
             "margin_ratio": str(
                 self._calculate_margin_ratio(
@@ -171,12 +177,19 @@ class RuntimeMetricsTracker:
                 )
             ),
             "current_balance": str(current_balance),
-            "realized_pnl": str(self._realized_pnl),
+            "current_balance_currency": account_currency,
+            "realized_pnl": str(realized_pnl),
+            "realized_pnl_currency": account_currency,
             "realized_pnl_quote": str(self._realized_pnl_quote),
+            "realized_pnl_quote_currency": quote_currency,
             "unrealized_pnl": str(unrealized_pnl),
+            "unrealized_pnl_currency": account_currency,
             "unrealized_pnl_quote": str(unrealized_pnl_quote),
+            "unrealized_pnl_quote_currency": quote_currency,
             "total_pnl": str(total_pnl),
+            "total_pnl_currency": account_currency,
             "total_pnl_quote": str(total_pnl_quote),
+            "total_pnl_quote_currency": quote_currency,
             "total_return": str(total_return),
             "open_positions": str(len(self._open_positions)),
             "closed_positions": str(self._closed_positions),
@@ -185,8 +198,10 @@ class RuntimeMetricsTracker:
             "losing_trades": str(self._losing_trades),
             "win_rate": str(win_rate),
             "ticks_processed": str(ticks_processed),
-            "pnl_currency": str(self.account_currency or "").upper(),
-            "quote_currency": instrument.quote_currency,
+            "pnl_currency": account_currency,
+            "account_currency": account_currency,
+            "quote_currency": quote_currency,
+            "quote_to_account_rate": str(conv),
         }
 
         atr_cache: dict[int, Decimal] = {}

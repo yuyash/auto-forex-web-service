@@ -57,10 +57,16 @@ class TaskDrainCoordinator:
             duration_hours=int(getattr(task, "drain_duration_hours", 0) or 0),
             duration_minutes=self.read_drain_duration_minutes_override(loop),
         )
+        pnl_currency = str(
+            getattr(task, "account_currency", "")
+            or getattr(getattr(task, "oanda_account", None), "currency", "")
+            or ""
+        ).upper()
         candidates = [
             DrainCandidate(
                 position_id=str(position.pk),
                 current_unrealized_pnl=_decimal_or_zero(getattr(position, "unrealized_pnl", None)),
+                pnl_currency=pnl_currency,
             )
             for position in executor.order_service.get_open_positions(
                 instrument=executor.instrument

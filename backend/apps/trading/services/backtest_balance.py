@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.models import BacktestTask, ExecutionState, TaskLog
 from apps.trading.services.execution_snapshots import sync_execution_snapshot
+from apps.trading.utils import Money
 
 
 class BacktestBalanceAdjustmentError(Exception):
@@ -32,9 +33,32 @@ class BacktestBalanceAdjustmentResult:
     task_id: UUID
     execution_id: UUID
     previous_balance: Decimal
+    previous_balance_currency: str
     current_balance: Decimal
+    current_balance_currency: str
     adjustment: Decimal
+    adjustment_currency: str
     state_version: int
+
+    @property
+    def currency(self) -> str:
+        """Return the balance currency shared by every amount in this result."""
+        return self.current_balance_currency
+
+    @property
+    def previous_balance_money(self) -> Money:
+        """Return the previous balance as an amount/currency pair."""
+        return Money.coerce(self.previous_balance, self.previous_balance_currency)
+
+    @property
+    def current_balance_money(self) -> Money:
+        """Return the new current balance as an amount/currency pair."""
+        return Money.coerce(self.current_balance, self.current_balance_currency)
+
+    @property
+    def adjustment_money(self) -> Money:
+        """Return the adjustment as an amount/currency pair."""
+        return Money.coerce(self.adjustment, self.adjustment_currency)
 
 
 def set_backtest_current_balance(
@@ -87,11 +111,15 @@ def set_backtest_current_balance(
                 code="backtest_balance_state_not_found",
             ) from exc
 
-        previous_balance = Decimal(str(state.current_balance))
-        adjustment = current_balance - previous_balance
+        account_currency = str(task.account_currency or "").strip().upper()
+        previous_balance_money = Money.coerce(state.current_balance, account_currency)
+        current_balance_money = Money.coerce(current_balance, account_currency)
+        adjustment_money = current_balance_money.subtract(previous_balance_money)
+        previous_balance = previous_balance_money.amount
+        adjustment = adjustment_money.amount
         updated_at = timezone.now()
         ExecutionState.objects.filter(pk=state.pk).update(
-            current_balance=current_balance,
+            current_balance=current_balance_money.amount,
             updated_at=updated_at,
             state_version=F("state_version") + 1,
         )
@@ -109,8 +137,15 @@ def set_backtest_current_balance(
             details={
                 "event": "backtest_balance_adjusted",
                 "previous_balance": str(previous_balance),
+                "previous_balance_money": previous_balance_money.as_dict(),
                 "current_balance": str(state.current_balance),
+                "current_balance_money": Money.coerce(
+                    state.current_balance,
+                    account_currency,
+                ).as_dict(),
                 "adjustment": str(adjustment),
+                "adjustment_money": adjustment_money.as_dict(),
+                "currency": account_currency,
                 "reason": reason,
             },
         )
@@ -120,8 +155,11 @@ def set_backtest_current_balance(
             task_id=task.pk,
             execution_id=task.execution_id,
             previous_balance=previous_balance,
+            previous_balance_currency=account_currency,
             current_balance=Decimal(str(state.current_balance)),
+            current_balance_currency=account_currency,
             adjustment=adjustment,
+            adjustment_currency=account_currency,
             state_version=state.state_version,
         )
 

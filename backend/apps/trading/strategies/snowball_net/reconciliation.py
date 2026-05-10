@@ -8,21 +8,23 @@ from typing import Any, Protocol
 
 from apps.trading.enums import Direction
 from apps.trading.models import Position
+from apps.trading.strategies.reconciliation import (
+    ReconciliationReportBase,
+    StrategyConfigLike,
+    StrategyReconciliationState,
+)
 from apps.trading.strategies.snowball_net.config import SnowballNetConfig
 from apps.trading.strategies.snowball_net.state import SnowballNetState
 
 
-class ReconciliationState(Protocol):
-    strategy_state: dict[str, Any] | None
+class ReconciliationState(StrategyReconciliationState, Protocol):
+    """SnowballNet state surface required for broker reconciliation."""
 
 
-class ReconciliationReport(Protocol):
-    blockers: list[str]
+class ReconciliationReport(ReconciliationReportBase, Protocol):
+    """Mutable reconciliation report fields updated by SnowballNet."""
+
     warnings: list[str]
-
-
-class StrategyConfigLike(Protocol):
-    config_dict: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
