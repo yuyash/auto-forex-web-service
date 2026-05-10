@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.52.3...backend-v1.53.0) (2026-05-10)
+
+
+### Features
+
+* **backtest:** seed snowball initial positions ([#695](https://github.com/yuyash/auto-forex-web-service/issues/695)) ([e91b90c](https://github.com/yuyash/auto-forex-web-service/commit/e91b90c0a8ce985730e1ea26b89e37f5464eec74))
+
 ## [1.52.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.52.2...backend-v1.52.3) (2026-05-09)
 
 
