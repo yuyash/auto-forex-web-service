@@ -222,6 +222,11 @@ class BacktestTask(ExecutableTaskModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
 
+    @property
+    def effective_display_currency(self) -> str:
+        """Return the currency used for presenting backtest balances and PnL."""
+        return str(self.display_currency or self.account_currency or "").strip().upper()
+
     def validate_configuration(self) -> tuple[bool, str | None]:
         """Validate task configuration before execution."""
         if self.end_time <= self.start_time:

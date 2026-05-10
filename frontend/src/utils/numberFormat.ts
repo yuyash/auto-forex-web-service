@@ -1,5 +1,6 @@
 import { readAppSettings } from '../hooks/useAppSettings';
 import type { AppSettings } from '../hooks/useAppSettings';
+import type { MoneyAmountLike } from '../types/money';
 
 export interface FormatAppNumberOptions {
   minimumFractionDigits?: number;
@@ -11,11 +12,6 @@ export interface FormatAppNumberOptions {
 export interface FormatMoneyAmountOptions extends FormatAppNumberOptions {
   currencyPlacement?: 'prefix' | 'suffix';
   useCurrencySymbol?: boolean;
-}
-
-export interface MoneyAmountLike {
-  amount?: string | number | null;
-  currency?: string | null;
 }
 
 export type NumberFormatSeparators = Pick<

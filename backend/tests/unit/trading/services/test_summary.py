@@ -17,7 +17,7 @@ from apps.trading.models.trades import Trade
 from apps.trading.services.summary import compute_cached_task_summary, compute_task_summary
 
 
-def _make_task(*, strategy_type: str) -> BacktestTask:
+def _make_task(*, strategy_type: str, display_currency: str = "JPY") -> BacktestTask:
     user = get_user_model().objects.create_user(
         username=f"user-{uuid4()}",
         email=f"{uuid4()}@example.com",
@@ -35,6 +35,7 @@ def _make_task(*, strategy_type: str) -> BacktestTask:
         name=f"task-{uuid4()}",
         instrument="USD_JPY",
         account_currency="USD",
+        display_currency=display_currency,
         initial_balance=Decimal("10000"),
         start_time=datetime(2026, 1, 1, tzinfo=UTC),
         end_time=datetime(2026, 1, 2, tzinfo=UTC),
@@ -167,6 +168,31 @@ def test_task_summary_has_serializer_ready_dto_payload():
     assert payload["pnl"]["total_money"] == {"amount": "0", "currency": "JPY"}
     assert payload["pnl"]["total_display_money"] == {"amount": "0", "currency": "JPY"}
     assert payload["execution"]["ticks_processed"] == 10
+
+
+@pytest.mark.django_db
+def test_backtest_summary_defaults_display_currency_to_account_currency():
+    task = _make_task(strategy_type="snowball", display_currency="")
+    execution_id = uuid4()
+    _create_state(
+        task=task,
+        execution_id=execution_id,
+        realized_account=Decimal("5"),
+        realized_quote=Decimal("5"),
+    )
+
+    summary = compute_task_summary(
+        task_type=TaskType.BACKTEST,
+        task_id=str(task.pk),
+        execution_id=execution_id,
+    )
+
+    assert summary.execution.display_currency == "USD"
+    assert summary.execution.current_balance_display_money == {
+        "amount": "10005.0000000000",
+        "currency": "USD",
+    }
+    assert summary.pnl.total_display_money == {"amount": "0E-30", "currency": "USD"}
 
 
 @pytest.mark.django_db

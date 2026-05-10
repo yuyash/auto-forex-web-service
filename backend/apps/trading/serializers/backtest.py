@@ -441,6 +441,11 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         user = self.context["request"].user
         validated_data["user"] = user
+        account_currency = str(validated_data.get("account_currency") or "USD").strip().upper()
+        validated_data["account_currency"] = account_currency
+        validated_data["display_currency"] = (
+            str(validated_data.get("display_currency") or account_currency).strip().upper()
+        )
 
         # Auto-populate pip_size from instrument when not explicitly provided
         instrument = validated_data.get("instrument")
@@ -468,6 +473,26 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(error)
 
         changes = changed_field_values(instance, validated_data)
+        if "account_currency" in validated_data:
+            new_account_currency = str(validated_data["account_currency"]).strip().upper()
+            previous_display_currency = str(instance.display_currency or "").strip().upper()
+            previous_account_currency = str(instance.account_currency or "").strip().upper()
+            if "display_currency" not in validated_data and (
+                not previous_display_currency
+                or previous_display_currency == previous_account_currency
+            ):
+                validated_data["display_currency"] = new_account_currency
+                changes.update(
+                    changed_field_values(instance, {"display_currency": new_account_currency})
+                )
+        if "display_currency" in validated_data:
+            display_currency = str(validated_data["display_currency"] or "").strip().upper()
+            account_currency = (
+                str(validated_data.get("account_currency", instance.account_currency) or "")
+                .strip()
+                .upper()
+            )
+            validated_data["display_currency"] = display_currency or account_currency
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
             for field in ("tick_granularity", "tick_window_value_mode")

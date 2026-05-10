@@ -14,6 +14,8 @@ export interface TradingTask {
   account_id: string;
   account_name: string;
   account_type: 'live' | 'practice';
+  account_currency: string;
+  display_currency: string;
   name: string;
   description: string;
   status: TaskStatus;

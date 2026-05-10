@@ -49,7 +49,7 @@ describe('task setting definition contracts', () => {
         snapshot: null,
         source: { initial_balance: '10000', account_currency: 'USD' },
       })
-    ).toBe('10,000 USD');
+    ).toBe('10,000.00 $');
   });
 
   it('trading definitions contain user-facing lifecycle/config fields', () => {

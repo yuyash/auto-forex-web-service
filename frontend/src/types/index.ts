@@ -2,6 +2,7 @@
 export * from './auth';
 export * from './backtest';
 export * from './chart';
+export * from './money';
 
 // Export specific types from order to avoid conflicts with chart
 export type { OrderFilters, OrdersResponse } from './order';

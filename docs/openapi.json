@@ -12795,6 +12795,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "account_currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "name": {
                         "type": "string",
                         "description": "Human-readable name for this task",
@@ -12959,6 +12967,7 @@
                     }
                 },
                 "required": [
+                    "account_currency",
                     "account_id",
                     "account_name",
                     "account_type",
@@ -12970,6 +12979,7 @@
                     "config_name",
                     "config_revision",
                     "created_at",
+                    "display_currency",
                     "error_code",
                     "error_message",
                     "execution_id",
@@ -13139,6 +13149,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "account_currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "name": {
                         "type": "string",
                         "readOnly": true,
@@ -13290,6 +13308,7 @@
                     }
                 },
                 "required": [
+                    "account_currency",
                     "account_id",
                     "account_name",
                     "account_type",
@@ -13305,6 +13324,7 @@
                     "config_revision",
                     "created_at",
                     "description",
+                    "display_currency",
                     "drain_duration_hours",
                     "dry_run",
                     "error_code",

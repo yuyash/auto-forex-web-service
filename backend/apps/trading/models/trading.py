@@ -198,6 +198,16 @@ class TradingTask(ExecutableTaskModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
+    @property
+    def account_currency(self) -> str:
+        """Return the account base currency supplied by the linked OANDA account."""
+        return str(getattr(self.oanda_account, "currency", "") or "").strip().upper()
+
+    @property
+    def display_currency(self) -> str:
+        """Trading tasks display account values in their OANDA account currency."""
+        return self.account_currency
+
     def copy(self, new_name: str) -> "TradingTask":
         """
         Create a copy of this task with a new name.

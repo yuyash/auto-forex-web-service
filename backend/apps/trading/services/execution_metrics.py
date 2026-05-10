@@ -143,6 +143,7 @@ class ExecutionPnlConverter:
             instrument=instrument,
             account_currency=account_currency,
             mid_rate=summary.tick.mid or fallback_mid_rate,
+            as_of=_summary_tick_as_of(summary),
         )
         realized_account = realized_quote.convert(
             rate=conversion_rate.rate,
@@ -178,6 +179,7 @@ class ExecutionPnlConverter:
         instrument: Instrument,
         account_currency: str,
         mid_rate: Decimal | None,
+        as_of: datetime | None = None,
     ) -> FxRate:
         """Return quote-to-account conversion for the available market rate."""
         if instrument.name and mid_rate and mid_rate > 0:
@@ -186,6 +188,7 @@ class ExecutionPnlConverter:
                 target_currency=account_currency,
                 instrument=instrument.name,
                 mid_price=mid_rate,
+                as_of=as_of,
             )
             if rate is not None:
                 return rate
@@ -333,6 +336,7 @@ class ExecutionMetricsSerializer:
             target_currency=target,
             instrument=instrument,
             mid_price=summary.tick.mid,
+            as_of=_summary_tick_as_of(summary),
         )
         if rate is None:
             return (None, None, None)
@@ -341,6 +345,17 @@ class ExecutionMetricsSerializer:
             for money in money_values
         )
         return (total, realized, unrealized)
+
+
+def _summary_tick_as_of(summary: TaskSummary) -> datetime | None:
+    """Return the summary tick timestamp as a datetime for historical FX lookup."""
+    timestamp = summary.tick.timestamp
+    if not timestamp:
+        return None
+    try:
+        return datetime.fromisoformat(str(timestamp))
+    except ValueError:
+        return None
 
 
 class ExecutionMetricsBuilder:

@@ -1,6 +1,7 @@
 // Backtest Task types
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
+import type { MoneyAmount } from './money';
 
 export type BacktestInitialPositionStatus =
   | 'open'
@@ -22,11 +23,6 @@ export interface BacktestInitialPosition {
 export interface BacktestInitialPositionCycle {
   direction: 'long' | 'short';
   positions: BacktestInitialPosition[];
-}
-
-export interface MoneyAmount {
-  amount: string;
-  currency: string;
 }
 
 export interface BacktestTask {

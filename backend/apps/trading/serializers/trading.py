@@ -34,13 +34,14 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    account_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.CharField(read_only=True)
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
-    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -56,6 +57,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
             "name",
             "description",
             "sell_on_stop",
@@ -100,6 +103,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
             "status",
             "execution_id",
             "started_at",
@@ -150,6 +155,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    account_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.CharField(read_only=True)
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
@@ -168,6 +175,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
             "name",
             "description",
             "sell_on_stop",

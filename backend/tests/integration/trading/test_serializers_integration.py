@@ -113,6 +113,8 @@ class TestBacktestTaskCreateSerializer:
         assert task.user == user
         assert task.config == config
         assert task.name == "Test Backtest"
+        assert task.account_currency == "USD"
+        assert task.display_currency == "USD"
         assert task.max_tick_gap_hours == 120
 
     def test_create_persists_max_tick_gap_hours(self):
@@ -298,6 +300,8 @@ class TestTradingTaskSerializer:
         assert data["strategy_type"] == task.config.strategy_type
         assert data["account_id"] == task.oanda_account.pk
         assert data["account_name"] == task.oanda_account.account_id
+        assert data["account_currency"] == task.oanda_account.currency
+        assert data["display_currency"] == task.oanda_account.currency
         assert data["name"] == task.name
         assert data["status"] == task.status
         assert "has_strategy_state" in data
@@ -495,6 +499,11 @@ class TestTradingTaskSummary:
         )
 
         assert result.execution.account_currency == "JPY"
+        assert result.execution.display_currency == "JPY"
+        assert result.execution.current_balance_display_money == {
+            "amount": "3000000.0000000000",
+            "currency": "JPY",
+        }
         assert result.execution.recovery_status == "warning"
         assert result.execution.recovery_warnings == ["broker drift warning"]
         assert result.execution.resume_cursor_timestamp is not None

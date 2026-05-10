@@ -385,6 +385,8 @@ export default function TradingTaskCard({
     taskSummary.pnl.currency ||
     currentTask.latest_execution?.quote_currency ||
     quoteCurrencyFromInstrument(currentTask.instrument) ||
+    currentTask.display_currency ||
+    currentTask.account_currency ||
     taskSummary.execution.displayCurrency ||
     taskSummary.execution.accountCurrency ||
     '';

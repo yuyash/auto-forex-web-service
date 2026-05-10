@@ -1,10 +1,6 @@
 // Task Execution types
 import type { TaskStatus, TaskType } from './common';
-
-export interface ExecutionMoneyAmount {
-  amount: string;
-  currency: string;
-}
+import type { MoneyAmount } from './money';
 
 export interface ExecutionLog {
   timestamp: string;
@@ -161,9 +157,9 @@ export interface ExecutionSummary {
   total_pnl_quote?: string;
   realized_pnl_quote?: string;
   unrealized_pnl_quote?: string;
-  total_pnl_money?: ExecutionMoneyAmount;
-  total_pnl_quote_money?: ExecutionMoneyAmount;
-  total_pnl_display_money?: ExecutionMoneyAmount;
+  total_pnl_money?: MoneyAmount;
+  total_pnl_quote_money?: MoneyAmount;
+  total_pnl_display_money?: MoneyAmount;
   total_trades?: number;
   winning_trades?: number;
   losing_trades?: number;

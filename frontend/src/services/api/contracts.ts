@@ -1,12 +1,10 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
+import type { MoneyAmount } from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
 
-export interface BackendMoneyAmount {
-  amount: string;
-  currency: string;
-}
+export type BackendMoneyAmount = MoneyAmount;
 
 export interface BackendExecutionMetrics {
   total_return?: string;
@@ -135,6 +133,8 @@ export interface BackendTradingTask {
   account_id: number;
   account_name: string;
   account_type: 'live' | 'practice';
+  account_currency: string;
+  display_currency: string;
   name: string;
   description: string;
   sell_on_stop: boolean;

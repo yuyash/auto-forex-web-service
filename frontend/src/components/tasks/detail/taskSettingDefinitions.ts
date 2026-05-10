@@ -6,6 +6,7 @@ import {
 } from './taskSettingsFormat';
 import {
   formatAppNumber,
+  formatMoneyAmount,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
 
@@ -59,18 +60,16 @@ function formatInitialBalance(
 ): string {
   if (value === null || value === undefined || value === '') return '-';
   const numericValue = Number(value);
-  const formatted = Number.isFinite(numericValue)
-    ? formatAppNumber(
-        numericValue,
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2,
-        },
-        separators
-      )
-    : String(value);
   const currency = source.account_currency ?? task.account_currency;
-  return currency ? `${formatted} ${String(currency)}` : formatted;
+  if (!Number.isFinite(numericValue)) return String(value);
+  return formatMoneyAmount(
+    numericValue,
+    currency ? String(currency) : undefined,
+    {
+      currencyPlacement: 'suffix',
+    },
+    separators
+  );
 }
 
 function formatInitialPositionCycles(t: TFunction) {

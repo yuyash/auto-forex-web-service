@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import cast
 
@@ -432,6 +433,7 @@ def compute_task_summary(
     tick_bid = None
     tick_ask = None
     tick_mid = None
+    tick_as_of = None
     account_currency: str | None = None
     current_balance_currency: str | None = None
     current_balance_money: dict[str, str] | None = None
@@ -459,6 +461,7 @@ def compute_task_summary(
         current_balance_currency = str(state.current_balance_currency or "").upper() or None
         ticks_processed = state.ticks_processed
         if state.last_tick_timestamp:
+            tick_as_of = state.last_tick_timestamp
             tick_timestamp = state.last_tick_timestamp.isoformat()
         if state.resume_cursor_timestamp:
             resume_cursor_timestamp = state.resume_cursor_timestamp.isoformat()
@@ -561,35 +564,41 @@ def compute_task_summary(
         current_balance_money = Money.coerce(current_balance, current_balance_currency).as_dict()
 
     instrument = Instrument(getattr(task_obj, "instrument", "") if task_obj else "")
-    preferred_display_currency = (
-        str(getattr(task_obj, "display_currency", "") or "").strip().upper() if task_obj else ""
-    )
+    preferred_display_currency = ""
+    if task_obj:
+        preferred_display_currency = (
+            str(
+                getattr(task_obj, "effective_display_currency", "")
+                or getattr(task_obj, "display_currency", "")
+                or ""
+            )
+            .strip()
+            .upper()
+        )
     if task_obj and task_type == "backtest":
         quote_ccy = quote_ccy or instrument.quote_currency
         account = AccountCurrency(current_balance_currency or account_currency or "")
-        if not preferred_display_currency and quote_ccy:
-            preferred_display_currency = quote_ccy
         if not preferred_display_currency and account.is_known:
             preferred_display_currency = account.code
+    elif task_obj and task_type == "trading":
+        account = AccountCurrency(current_balance_currency or account_currency or "")
+        if account.is_known:
+            preferred_display_currency = account.code
+    else:
+        account = AccountCurrency(current_balance_currency or account_currency or "")
 
-        if current_balance is not None and account.is_known and preferred_display_currency:
-            converted = FX_CONVERSION.convert(
-                Money.coerce(current_balance, account.code),
-                target_currency=preferred_display_currency,
-                instrument=instrument.name,
-                mid_price=tick_mid,
-            )
-            if converted is None and quote_ccy and not account.matches(quote_ccy):
-                converted = FX_CONVERSION.convert(
-                    Money.coerce(current_balance, account.code),
-                    target_currency=quote_ccy,
-                    instrument=instrument.name,
-                    mid_price=tick_mid,
-                )
-            if converted is not None:
-                display_currency = converted.currency_code
-                current_balance_display = converted.amount
-                current_balance_display_money = converted.as_dict()
+    if current_balance is not None and account.is_known and preferred_display_currency:
+        converted = FX_CONVERSION.convert(
+            Money.coerce(current_balance, account.code),
+            target_currency=preferred_display_currency,
+            instrument=instrument.name,
+            mid_price=tick_mid,
+            as_of=tick_as_of,
+        )
+        if converted is not None:
+            display_currency = converted.currency_code
+            current_balance_display = converted.amount
+            current_balance_display_money = converted.as_dict()
 
     pnl_currency = quote_ccy or current_balance_currency or account_currency
     display_currency = display_currency or preferred_display_currency or account_currency
@@ -600,6 +609,7 @@ def compute_task_summary(
         target_currency=display_currency,
         instrument=instrument.name,
         mid_price=tick_mid,
+        as_of=tick_as_of,
     )
 
     return TaskSummary(
@@ -721,6 +731,7 @@ def _pnl_display_money(
     target_currency: str | None,
     instrument: str,
     mid_price: Decimal | None,
+    as_of: datetime | None,
 ) -> dict[str, dict[str, str] | None]:
     """Return realized/unrealized/total PnL converted to display currency."""
     if not source_currency or not target_currency:
@@ -736,6 +747,7 @@ def _pnl_display_money(
         target_currency=target.code,
         instrument=instrument,
         mid_price=mid_price,
+        as_of=as_of,
     )
     if rate is None:
         return {"realized": None, "unrealized": None, "total": None}

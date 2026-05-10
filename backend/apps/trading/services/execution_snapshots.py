@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -281,11 +282,13 @@ def _to_optional_int(value: Any) -> int | None:
 
 
 class _DecimalEncoder(json.JSONEncoder):
-    """JSON encoder that converts Decimal to string."""
+    """JSON encoder that converts Decimal and datetime values to JSON-safe strings."""
 
     def default(self, o: Any) -> Any:
         if isinstance(o, Decimal):
             return str(o)
+        if isinstance(o, datetime | date):
+            return o.isoformat()
         return super().default(o)
 
 
