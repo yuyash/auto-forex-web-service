@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
@@ -447,6 +447,7 @@ class BacktestInitialPositionService:
                             entry=entry,
                             cycle_id=cycle.cycle_id,
                             exit_price=position_spec.exit_price or entry.stop_loss_price,
+                            closed_at=close_event.timestamp,
                             pip_size=pip_size,
                         )
                     )
@@ -821,6 +822,7 @@ def _pending_snapshot_from_entry(
     entry: Entry,
     cycle_id: int,
     exit_price: Decimal | None,
+    closed_at: datetime | None,
     pip_size: Decimal,
 ) -> StopLossClosedEntry:
     realized_pips = Decimal("0")
@@ -840,6 +842,8 @@ def _pending_snapshot_from_entry(
         cycle_id=cycle_id,
         position_id=entry.position_id,
         stop_loss_price=entry.stop_loss_price,
+        stop_loss_exit_price=exit_price,
+        closed_at=closed_at,
         lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count + 1,
         stop_loss_loss_pips=realized_pips,
     )

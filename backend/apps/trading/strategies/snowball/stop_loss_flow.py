@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Protocol
@@ -210,6 +211,9 @@ class StopLossSnapshotFactory:
         entry: Entry,
         cycle: SnowballCycle,
         pips_lost: Decimal,
+        *,
+        exit_price: Decimal,
+        closed_at: datetime,
     ) -> StopLossClosedEntry:
         """Return the pending rebuild record for a stop-loss close."""
         return StopLossClosedEntry(
@@ -226,6 +230,8 @@ class StopLossSnapshotFactory:
             cycle_id=cycle.cycle_id,
             position_id=entry.position_id,
             stop_loss_price=entry.stop_loss_price,
+            stop_loss_exit_price=exit_price,
+            closed_at=closed_at,
             lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
             lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
             stop_loss_loss_pips=pips_lost,
@@ -340,7 +346,13 @@ class StopLossCloseProcessor:
         entry.lifecycle_stop_loss_count += 1
         if strategy.config.rebuild_enabled:
             candidate.slot.close_for_stop_loss(
-                self.snapshot_factory.snapshot(entry, cycle, pips_lost)
+                self.snapshot_factory.snapshot(
+                    entry,
+                    cycle,
+                    pips_lost,
+                    exit_price=exit_price,
+                    closed_at=tick.timestamp,
+                )
             )
         else:
             candidate.slot.close(refillable=False)
@@ -367,7 +379,16 @@ class StopLossRebuildPricePlanner:
         exit_buffer_price: Decimal,
     ) -> StopLossRebuildPlan | None:
         """Return a rebuild plan when the trigger price has been reached."""
-        trigger_price = self.trigger_price(pending, apply_adjustment, entry_buffer_price)
+        if pending.closed_at is not None and tick.timestamp <= pending.closed_at:
+            return None
+
+        trigger_price = self.trigger_price(
+            pending,
+            apply_adjustment,
+            entry_buffer_price,
+            pip_size=strategy.pip_size,
+            use_stop_loss_exit=strategy.config.rebuild_take_profit_recovery_enabled,
+        )
         trigger_price = self.clamp_entry_price(cycle, layer, slot, pending, trigger_price)
         if not self.trigger_hit(pending, tick, trigger_price):
             return None
@@ -400,13 +421,39 @@ class StopLossRebuildPricePlanner:
         pending: StopLossClosedEntry,
         apply_adjustment: bool,
         entry_buffer_price: Decimal,
+        *,
+        pip_size: Decimal,
+        use_stop_loss_exit: bool,
     ) -> Decimal:
         """Return the price that must be reached to rebuild the entry."""
+        base_price = self.base_trigger_price(
+            pending,
+            pip_size=pip_size,
+            use_stop_loss_exit=use_stop_loss_exit,
+        )
         if not apply_adjustment or entry_buffer_price <= 0:
+            return base_price
+        if pending.direction == Direction.LONG:
+            return base_price + entry_buffer_price
+        return base_price - entry_buffer_price
+
+    def base_trigger_price(
+        self,
+        pending: StopLossClosedEntry,
+        *,
+        pip_size: Decimal,
+        use_stop_loss_exit: bool,
+    ) -> Decimal:
+        """Return the unbuffered rebuild trigger price."""
+        if not use_stop_loss_exit:
+            return pending.entry_price
+        if pending.stop_loss_exit_price is not None:
+            return pending.stop_loss_exit_price
+        if pending.stop_loss_loss_pips <= 0 or pip_size <= 0:
             return pending.entry_price
         if pending.direction == Direction.LONG:
-            return pending.entry_price + entry_buffer_price
-        return pending.entry_price - entry_buffer_price
+            return pending.entry_price - pending.stop_loss_loss_pips * pip_size
+        return pending.entry_price + pending.stop_loss_loss_pips * pip_size
 
     def clamp_entry_price(
         self,
