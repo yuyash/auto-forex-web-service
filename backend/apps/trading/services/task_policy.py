@@ -16,6 +16,12 @@ WORKER_OWNED_STATUSES = frozenset(
         TaskStatus.STOPPING,
     }
 )
+CONFIGURATION_LOCK_STATUSES = frozenset(
+    {
+        *WORKER_OWNED_STATUSES,
+        TaskStatus.PAUSED,
+    }
+)
 TERMINAL_STATUSES = frozenset(
     {
         TaskStatus.STOPPED,

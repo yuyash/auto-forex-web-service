@@ -175,9 +175,7 @@ export const TradingTaskDetail: React.FC = () => {
     effectiveExecutionId ?? '',
     TaskType.TRADING
   );
-  const historicalStrategyConfig = isViewingHistorical
-    ? (executionDetail?.strategy_config ?? null)
-    : null;
+  const historicalStrategyConfig = executionDetail?.strategy_config ?? null;
 
   const overviewSummary = useTaskSummary(
     taskId,
@@ -456,9 +454,7 @@ export const TradingTaskDetail: React.FC = () => {
               executionStatusRefreshing={isRefreshingExecutionStatus}
               isViewingHistorical={isViewingHistorical}
               historicalStrategyConfig={historicalStrategyConfig}
-              historicalTaskConfig={
-                isViewingHistorical ? executionDetail?.task_config : null
-              }
+              historicalTaskConfig={executionDetail?.task_config ?? null}
               executionId={effectiveExecutionId}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)

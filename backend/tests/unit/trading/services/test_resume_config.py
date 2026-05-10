@@ -130,5 +130,7 @@ def test_snapshot_defaults_preserve_initial_config_and_append_revision() -> None
     strategy_config = defaults["strategy_config"]
     assert strategy_config["initial"]["name"] == "Original"
     assert strategy_config["current"]["name"] == "Edited"
+    assert strategy_config["current"]["configuration_revision"] == task.config.revision
+    assert strategy_config["current"]["configuration_hash"] == task.config.config_hash
     assert strategy_config["current"]["parameters"]["base_units"] == 2000
     assert strategy_config["revisions"]

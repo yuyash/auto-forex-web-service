@@ -7,6 +7,8 @@ export interface TradingTask {
   user_id: number;
   config_id: string;
   config_name: string;
+  config_revision?: number;
+  config_hash?: string;
   strategy_type: string;
   instrument: string;
   account_id: string;

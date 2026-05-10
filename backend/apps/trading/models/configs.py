@@ -1,5 +1,7 @@
 """Strategy configuration models."""
 
+import hashlib
+import json
 from typing import TYPE_CHECKING, Any
 
 from django.db import models
@@ -52,6 +54,17 @@ class StrategyConfiguration(UUIDModel):
         default=dict,
         help_text="Strategy-specific configuration parameters",
     )
+    revision = models.PositiveIntegerField(
+        default=1,
+        help_text="Monotonic revision for runtime-affecting configuration changes",
+    )
+    config_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Stable hash of strategy_type and parameters for this revision",
+    )
     description = models.TextField(
         blank=True,
         default="",
@@ -86,6 +99,8 @@ class StrategyConfiguration(UUIDModel):
             "name": self.name,
             "strategy_type": self.strategy_type,
             "parameters": self.parameters,
+            "revision": self.revision,
+            "config_hash": self.config_hash,
             "description": self.description,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -133,6 +148,23 @@ class StrategyConfiguration(UUIDModel):
         """
         return self.parameters or {}
 
+    def runtime_config_hash(self) -> str:
+        """Return a stable hash for runtime-affecting configuration fields."""
+        return hash_runtime_config(
+            strategy_type=self.strategy_type,
+            parameters=self.parameters or {},
+        )
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Ensure every persisted configuration has a runtime config hash."""
+        runtime_hash = self.runtime_config_hash()
+        if self.config_hash != runtime_hash:
+            self.config_hash = runtime_hash
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "config_hash"}
+        super().save(*args, **kwargs)
+
     def is_in_use(self) -> bool:
         """Check if configuration is referenced by any tasks.
 
@@ -155,16 +187,16 @@ class StrategyConfiguration(UUIDModel):
             False otherwise.
         """
         from apps.trading.models import BacktestTask, TradingTask
-        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
+        from apps.trading.services.task_policy import CONFIGURATION_LOCK_STATUSES
 
         return (
             TradingTask.objects.filter(
                 config=self,
-                status__in=WORKER_OWNED_STATUSES,
+                status__in=CONFIGURATION_LOCK_STATUSES,
             ).exists()
             or BacktestTask.objects.filter(
                 config=self,
-                status__in=WORKER_OWNED_STATUSES,
+                status__in=CONFIGURATION_LOCK_STATUSES,
             ).exists()
         )
 
@@ -176,12 +208,16 @@ class StrategyConfiguration(UUIDModel):
         backtest task is actively owned by a worker.
         """
         from apps.trading.models import BacktestTask, TradingTask
-        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
+        from apps.trading.services.task_policy import CONFIGURATION_LOCK_STATUSES
 
         user_id = getattr(user, "pk", user)
         return (
-            TradingTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
-            or BacktestTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
+            TradingTask.objects.filter(
+                user=user_id, status__in=CONFIGURATION_LOCK_STATUSES
+            ).exists()
+            or BacktestTask.objects.filter(
+                user=user_id, status__in=CONFIGURATION_LOCK_STATUSES
+            ).exists()
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:
@@ -211,3 +247,17 @@ class StrategyConfiguration(UUIDModel):
             return False, str(exc)
 
         return True, None
+
+
+def hash_runtime_config(*, strategy_type: str, parameters: dict[str, Any]) -> str:
+    """Hash the fields that affect strategy runtime behavior."""
+    payload = {
+        "strategy_type": str(strategy_type),
+        "parameters": _normalize_for_hash(parameters or {}),
+    }
+    normalized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def _normalize_for_hash(value: Any) -> Any:
+    return json.loads(json.dumps(value, sort_keys=True, default=str))

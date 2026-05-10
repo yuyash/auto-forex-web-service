@@ -25,6 +25,8 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   execution_number: string;
   segment_index?: number;
   config_revision_count?: number;
+  configuration_revision?: number | null;
+  configuration_hash?: string | null;
   status: string;
   progress: number;
   started_at?: string | null;
@@ -51,6 +53,8 @@ export interface BackendBacktestTask {
   user_id: number;
   config_id: string;
   config_name: string;
+  config_revision?: number;
+  config_hash?: string;
   strategy_type: string;
   name: string;
   description: string;
@@ -95,6 +99,8 @@ export interface BackendTradingTask {
   user_id: number;
   config_id: string;
   config_name: string;
+  config_revision?: number;
+  config_hash?: string;
   strategy_type: string;
   instrument: string;
   account_id: number;
@@ -147,6 +153,8 @@ export interface BackendStrategyConfig {
   name: string;
   strategy_type: string;
   parameters?: Record<string, unknown> | null;
+  revision: number;
+  config_hash: string;
   description: string;
   is_in_use: boolean;
   has_running_tasks: boolean;

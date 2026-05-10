@@ -234,8 +234,8 @@ class Entry:
 class StopLossClosedEntry:
     """Snapshot of a position closed by stop-loss, awaiting rebuild.
 
-    When the market price returns to ``entry_price``, the position is
-    re-opened with the same parameters.
+    The snapshot keeps both the original entry price and the actual
+    stop-loss exit price.  Rebuild trigger policy decides which price to use.
     """
 
     entry_price: Decimal
@@ -251,6 +251,8 @@ class StopLossClosedEntry:
     cycle_id: int = 0
     position_id: str | None = None
     stop_loss_price: Decimal | None = None
+    stop_loss_exit_price: Decimal | None = None
+    closed_at: datetime | None = None
 
     # Running lifecycle P/L for the slot: accumulates every stop-loss
     # loss so the rebuilt entry can continue the chain and the final
@@ -281,6 +283,10 @@ class StopLossClosedEntry:
             result["position_id"] = self.position_id
         if self.stop_loss_price is not None:
             result["stop_loss_price"] = str(self.stop_loss_price)
+        if self.stop_loss_exit_price is not None:
+            result["stop_loss_exit_price"] = str(self.stop_loss_exit_price)
+        if self.closed_at is not None:
+            result["closed_at"] = self.closed_at.isoformat()
         return result
 
     @staticmethod
@@ -307,6 +313,12 @@ class StopLossClosedEntry:
             cycle_id=strict_int(require(d, "cycle_id"), field_name="cycle_id"),
             position_id=optional_str(d, "position_id"),
             stop_loss_price=optional_decimal(d, "stop_loss_price"),
+            stop_loss_exit_price=optional_decimal(d, "stop_loss_exit_price"),
+            closed_at=(
+                parse_datetime(d["closed_at"], field_name="closed_at")
+                if d.get("closed_at") not in (None, "")
+                else None
+            ),
             lifecycle_realized_pnl=strict_decimal(
                 require(d, "lifecycle_realized_pnl"),
                 field_name="lifecycle_realized_pnl",

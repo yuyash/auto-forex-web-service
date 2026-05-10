@@ -29,6 +29,8 @@ export interface BacktestTask {
   user_id: number;
   config_id: string;
   config_name: string;
+  config_revision?: number;
+  config_hash?: string;
   strategy_type: string;
   name: string;
   description: string;

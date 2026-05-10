@@ -154,7 +154,7 @@ else:
 | `rebuild_take_profit_pips_flat_steps`  | `0`     | 再建TP幅の減衰前に開始値を維持するスロット数。                                                       |
 | `rebuild_take_profit_pips_gamma`       | `1.4`   | 再建TP幅の減衰カーブ係数。                                                                           |
 | `rebuild_take_profit_manual_pips`      | `[]`    | `rebuild_take_profit_mode=manual` 時の R0..R(r_max) の TP 幅。                                       |
-| `rebuild_take_profit_recovery_enabled` | `false` | 直前 SL の損失 pips を最低限回収できる TP まで延長する。                                             |
+| `rebuild_take_profit_recovery_enabled` | `false` | 直前 SL の実決済価格を再建発動価格にし、損失 pips と通常 TP 幅を含む TP 距離にする。                 |
 | `rebuild_take_profit_recovery_mode`    | `pips`  | 現在は `pips` のみ対応。                                                                             |
 | `rebuild_price_adjustment_enabled`     | `true`  | `rebuild_take_profit_mode=same` のとき、再建発動価格と TP にバッファを適用する。                     |
 | `rebuild_entry_price_buffer_pips`      | `0`     | 再建発動価格を利益方向にずらす pips。                                                                |
@@ -486,7 +486,9 @@ SLクローズ時:
 
 再建は `stop_loss_enabled=true` かつ `rebuild_enabled=true` の場合だけ行う。
 
-基本の再建発動価格は、停止前の `pending_rebuild.entry_price` である。`rebuild_price_adjustment_enabled=true` かつ `rebuild_take_profit_mode=same` の場合、`rebuild_entry_price_buffer_pips` だけ利益方向にずらす。
+基本の再建発動価格は、停止前の `pending_rebuild.entry_price` である。`rebuild_take_profit_recovery_enabled=true` の場合は、直前 SL の実決済価格 `pending_rebuild.stop_loss_exit_price` を再建発動価格にする。古い state に実決済価格がない場合は、`pending_rebuild.entry_price` と `stop_loss_loss_pips` から推定する。SL で閉じた同一 tick では即時再建せず、次 tick 以降に発動判定する。
+
+`rebuild_price_adjustment_enabled=true` かつ `rebuild_take_profit_mode=same` の場合、上記の発動価格を `rebuild_entry_price_buffer_pips` だけ利益方向にずらす。
 
 | 方向  | 基本条件               |
 | ----- | ---------------------- |
@@ -512,7 +514,7 @@ SLクローズ時:
 
 - `rebuild_take_profit_mode=same`: 停止前の絶対 TP 価格を使う。
 - その他のモード: 再建建値から `rebuild_take_profit_pips()` で計算する。
-- `rebuild_take_profit_recovery_enabled=true`: 直前 SL の損失 pips を最低限回収できる TP と通常TPを比較し、より遠い方を使う。
+- `rebuild_take_profit_recovery_enabled=true`: 再建発動価格が直前 SL の実決済価格になるため、`same` では停止前の絶対 TP 価格までの距離が「直前 SL の損失 pips + 元の TP 幅」になる。その他の TP モードでは、通常TPと直前 SL の損失 pips を最低限回収できる TP を比較し、より遠い方を使う。
 - `rebuild_exit_price_buffer_pips` があれば利益方向に追加する。
 - グリッド順序を壊す場合は TP を clamp し、必要に応じて他の pending rebuild TP にも伝播する。
 

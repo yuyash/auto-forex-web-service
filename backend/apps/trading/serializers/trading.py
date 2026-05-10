@@ -23,6 +23,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
+    config_revision = serializers.IntegerField(source="config.revision", read_only=True)
+    config_hash = serializers.CharField(source="config.config_hash", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.CharField(read_only=True)
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
@@ -41,6 +43,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "user_id",
             "config_id",
             "config_name",
+            "config_revision",
+            "config_hash",
             "strategy_type",
             "instrument",
             "account_id",
@@ -82,6 +86,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "user_id",
             "config_id",
             "config_name",
+            "config_revision",
+            "config_hash",
             "strategy_type",
             "instrument",
             "account_id",
@@ -121,6 +127,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
+    config_revision = serializers.IntegerField(source="config.revision", read_only=True)
+    config_hash = serializers.CharField(source="config.config_hash", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     instrument = serializers.CharField(read_only=True)
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
@@ -135,6 +143,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "user_id",
             "config_id",
             "config_name",
+            "config_revision",
+            "config_hash",
             "strategy_type",
             "instrument",
             "account_id",

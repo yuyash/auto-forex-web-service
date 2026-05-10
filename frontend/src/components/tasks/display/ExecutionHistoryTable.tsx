@@ -52,6 +52,10 @@ import {
   formatAppPercent,
   currencySymbol,
 } from '../../../utils/numberFormat';
+import {
+  getStrategyConfigSnapshotHash,
+  getStrategyConfigSnapshotRevision,
+} from '../../../utils/strategyConfigRevision';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 
@@ -210,25 +214,29 @@ export function ExecutionHistoryTable({
         minWidth: 90,
         align: 'right' as const,
         render: (row: TaskExecution) => {
-          const count = row.config_revision_count ?? 0;
-          const hash = row.strategy_config?.config_hash;
+          const revision =
+            row.configuration_revision ??
+            getStrategyConfigSnapshotRevision(row.strategy_config);
+          const hash =
+            row.configuration_hash ??
+            getStrategyConfigSnapshotHash(row.strategy_config);
           return (
             <Tooltip
               title={
                 hash
                   ? t('tables.executions.configRevisionsTooltip', {
-                      count,
+                      revision: revision ?? '-',
                       hash,
                     })
                   : t('tables.executions.configRevisionsTooltipNoHash', {
-                      count,
+                      revision: revision ?? '-',
                     })
               }
             >
               <Chip
-                label={count}
+                label={revision ? `rev.${revision}` : '-'}
                 size="small"
-                variant={count ? 'filled' : 'outlined'}
+                variant={revision ? 'filled' : 'outlined'}
                 clickable
                 onClick={(event) => {
                   event.stopPropagation();
@@ -759,9 +767,23 @@ export function ExecutionHistoryTable({
           </Typography>
           <Box sx={{ display: 'grid', gap: 1.5 }}>
             <Typography variant="body2">
+              {t('tables.executions.configRevisions')}:{' '}
+              <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                {revisionTarget?.configuration_revision ??
+                  getStrategyConfigSnapshotRevision(
+                    revisionTarget?.strategy_config
+                  ) ??
+                  '-'}
+              </Box>
+            </Typography>
+            <Typography variant="body2">
               {t('tables.executions.currentConfigHash')}:{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                {revisionTarget?.strategy_config?.config_hash ?? '-'}
+                {revisionTarget?.configuration_hash ??
+                  getStrategyConfigSnapshotHash(
+                    revisionTarget?.strategy_config
+                  ) ??
+                  '-'}
               </Box>
             </Typography>
             <Typography variant="body2">
