@@ -10530,6 +10530,30 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "realized_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "unrealized_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "total_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -11691,6 +11715,14 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,12}(?:\\.\\d{0,12})?$"
+                    },
+                    "quote_to_account_rate_source": {
+                        "type": "string"
+                    },
+                    "quote_to_account_rate_as_of": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     }
                 }
             },

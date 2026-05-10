@@ -46,6 +46,8 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
         decimal_places=12,
         required=False,
     )
+    quote_to_account_rate_source = serializers.CharField(required=False)
+    quote_to_account_rate_as_of = serializers.DateTimeField(allow_null=True, required=False)
 
 
 class TaskExecutionSerializer(serializers.Serializer):

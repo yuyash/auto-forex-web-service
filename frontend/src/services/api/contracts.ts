@@ -41,6 +41,8 @@ export interface BackendExecutionMetrics {
   current_balance_display_money?: BackendMoneyAmount;
   initial_balance_money?: BackendMoneyAmount;
   quote_to_account_rate?: string;
+  quote_to_account_rate_source?: string;
+  quote_to_account_rate_as_of?: string | null;
 }
 
 export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {

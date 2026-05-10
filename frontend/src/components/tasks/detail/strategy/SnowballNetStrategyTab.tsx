@@ -95,8 +95,8 @@ import {
 import { getCandleColors } from '../../../../utils/candleColors';
 import { SequencePositionLine } from '../../../../utils/SequencePositionLine';
 import {
-  currencySymbol,
   formatAppNumber,
+  formatMoneyAmount,
   formatAppPercent,
 } from '../../../../utils/numberFormat';
 import {
@@ -471,16 +471,17 @@ function formatNumberWithUnit(
   options: Parameters<typeof formatAppNumber>[1] = {}
 ): string {
   if (!unit) return formatAppNumber(value, options);
+  const normalizedUnit = unit.trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(normalizedUnit)) {
+    return formatMoneyAmount(value, normalizedUnit, options);
+  }
 
   const sign = options.signed ? (value >= 0 ? '+' : '-') : value < 0 ? '-' : '';
   const formatted = formatAppNumber(Math.abs(value), {
     ...options,
     signed: false,
   });
-  const symbol = currencySymbol(unit);
-  return symbol && symbol !== unit
-    ? `${sign}${symbol} ${formatted}`
-    : `${sign}${formatted} ${unit}`;
+  return `${sign}${formatted} ${unit}`;
 }
 
 function formatNullablePnl(value: number | null, unit?: string | null): string {

@@ -79,6 +79,8 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
         unrealized_account=Money.coerce("1.5", "USD"),
         total_account=Money.coerce("2.5", "USD"),
         conversion_rate=Decimal("0.0066666667"),
+        conversion_rate_source="instrument_mid",
+        conversion_rate_as_of=None,
     )
 
     payload = serializer.serialize(
@@ -115,3 +117,5 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
         "amount": "225.0",
         "currency": "JPY",
     }
+    assert payload["quote_to_account_rate_source"] == "instrument_mid"
+    assert payload["quote_to_account_rate_as_of"] is None

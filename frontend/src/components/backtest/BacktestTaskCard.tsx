@@ -56,7 +56,10 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
-import { formatMoneyAmount } from '../../utils/numberFormat';
+import {
+  formatMoneyAmount,
+  formatMoneyPayload,
+} from '../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -347,13 +350,24 @@ export default function BacktestTaskCard({
   const realizedPnl = summary.pnl.realized;
   const unrealizedPnl = summary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
-  const formatPnl = (value: number): string =>
-    formatMoneyAmount(value, pnlCurrency, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-      signed: true,
-      currencyPlacement: 'suffix',
-    });
+  const pnlDisplayMoney = {
+    total: summary.pnl.totalDisplayMoney,
+    realized: summary.pnl.realizedDisplayMoney,
+    unrealized: summary.pnl.unrealizedDisplayMoney,
+  };
+  const formatPnl = (
+    value: number,
+    money?: { amount: string; currency: string } | null
+  ): string =>
+    money
+      ? formatMoneyPayload(money, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        })
+      : formatMoneyAmount(value, pnlCurrency, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        });
   const pnlItems = [
     {
       key: 'total',
@@ -521,7 +535,10 @@ export default function BacktestTaskCard({
                       overflowWrap: 'anywhere',
                     }}
                   >
-                    {formatPnl(item.value)}
+                    {formatPnl(
+                      item.value,
+                      pnlDisplayMoney[item.key as keyof typeof pnlDisplayMoney]
+                    )}
                   </Typography>
                 </Box>
               </Grid>

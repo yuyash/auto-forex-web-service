@@ -45,7 +45,11 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
-import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatMoneyAmount,
+} from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { TableFilterBar } from '../../common/TableFilterBar';
@@ -187,12 +191,12 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
 
   const formatSignedMoney = useCallback(
     (value: number, currency?: string | null): string =>
-      `${formatCurrencyPrefix(currency)}${formatAppNumber(value, {
+      formatMoneyAmount(value, currency, {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
         signed: true,
-      })}`,
-    [formatCurrencyPrefix]
+      }),
+    []
   );
 
   const formatPriceWithCurrency = useCallback(

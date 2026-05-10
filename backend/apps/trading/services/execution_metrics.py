@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -11,7 +12,7 @@ from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, Wh
 from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.services.fx_rates import FX_CONVERSION
+from apps.trading.services.fx_rates import FX_CONVERSION, FxRate
 from apps.trading.services.summary import TaskSummary
 from apps.trading.utils import Instrument
 
@@ -48,6 +49,8 @@ class ExecutionPnlBreakdown:
     unrealized_account: Money
     total_account: Money
     conversion_rate: Decimal
+    conversion_rate_source: str
+    conversion_rate_as_of: datetime | None
 
 
 class ExecutionTradeOutcomeCollector:
@@ -142,11 +145,11 @@ class ExecutionPnlConverter:
             mid_rate=summary.tick.mid or fallback_mid_rate,
         )
         realized_account = realized_quote.convert(
-            rate=conversion_rate,
+            rate=conversion_rate.rate,
             target_currency=account_currency,
         )
         unrealized_account = unrealized_quote.convert(
-            rate=conversion_rate,
+            rate=conversion_rate.rate,
             target_currency=account_currency,
         )
         return ExecutionPnlBreakdown(
@@ -156,7 +159,9 @@ class ExecutionPnlConverter:
             realized_account=realized_account,
             unrealized_account=unrealized_account,
             total_account=realized_account.add(unrealized_account),
-            conversion_rate=conversion_rate,
+            conversion_rate=conversion_rate.rate,
+            conversion_rate_source=conversion_rate.source,
+            conversion_rate_as_of=conversion_rate.as_of,
         )
 
     def account_currency(self, task: Any) -> str:
@@ -173,7 +178,7 @@ class ExecutionPnlConverter:
         instrument: Instrument,
         account_currency: str,
         mid_rate: Decimal | None,
-    ) -> Decimal:
+    ) -> FxRate:
         """Return quote-to-account conversion for the available market rate."""
         if instrument.name and mid_rate and mid_rate > 0:
             rate = FX_CONVERSION.rate(
@@ -183,9 +188,14 @@ class ExecutionPnlConverter:
                 mid_price=mid_rate,
             )
             if rate is not None:
-                return rate.rate
-            return instrument.quote_to_account_rate(mid_rate, AccountCurrency(account_currency))
-        return Decimal("1")
+                return rate
+            return FxRate(
+                instrument.quote_currency,
+                AccountCurrency(account_currency).code,
+                instrument.quote_to_account_rate(mid_rate, AccountCurrency(account_currency)),
+                source="instrument_heuristic",
+            )
+        return FxRate(account_currency, account_currency, Decimal("1"), source="identity")
 
 
 class ExecutionReturnCalculator:
@@ -236,12 +246,11 @@ class ExecutionMetricsSerializer:
             current_balance_amount if current_balance_amount is not None else Decimal("0"),
             summary.execution.current_balance_currency or account_currency,
         )
-        total_display = self._display_money(pnl.total_account, display_currency, task, summary)
-        realized_display = self._display_money(
-            pnl.realized_account, display_currency, task, summary
-        )
-        unrealized_display = self._display_money(
-            pnl.unrealized_account, display_currency, task, summary
+        total_display, realized_display, unrealized_display = self._display_pnl_money(
+            pnl,
+            display_currency,
+            task,
+            summary,
         )
         metrics: dict[str, Any] = {
             "total_pnl": pnl.total_account.amount,
@@ -275,6 +284,8 @@ class ExecutionMetricsSerializer:
             "unrealized_pnl_quote_money": pnl.unrealized_quote.as_dict(),
             "current_balance_money": current_balance.as_dict(),
             "quote_to_account_rate": pnl.conversion_rate,
+            "quote_to_account_rate_source": pnl.conversion_rate_source,
+            "quote_to_account_rate_as_of": pnl.conversion_rate_as_of,
         }
         if summary.execution.current_balance_display_money is not None:
             metrics["current_balance_display_money"] = (
@@ -302,26 +313,34 @@ class ExecutionMetricsSerializer:
         except Exception:
             return None
 
-    def _display_money(
+    def _display_pnl_money(
         self,
-        money: Money,
+        pnl: ExecutionPnlBreakdown,
         display_currency: str,
         task: Any,
         summary: TaskSummary,
-    ) -> Money | None:
-        """Return money converted to display currency when possible."""
+    ) -> tuple[Money | None, Money | None, Money | None]:
+        """Return total/realized/unrealized PnL converted to display currency."""
         target = str(display_currency or "").strip().upper()
         if not target:
-            return None
-        if money.currency.matches(target):
-            return money
+            return (None, None, None)
+        money_values = (pnl.total_account, pnl.realized_account, pnl.unrealized_account)
+        if pnl.total_account.currency.matches(target):
+            return money_values
         instrument = getattr(task, "instrument", "") or ""
-        return FX_CONVERSION.convert(
-            money,
+        rate = FX_CONVERSION.rate(
+            source_currency=pnl.total_account.currency_code,
             target_currency=target,
             instrument=instrument,
             mid_price=summary.tick.mid,
         )
+        if rate is None:
+            return (None, None, None)
+        total, realized, unrealized = (
+            money.convert(rate=rate.rate, target_currency=rate.target_currency)
+            for money in money_values
+        )
+        return (total, realized, unrealized)
 
 
 class ExecutionMetricsBuilder:

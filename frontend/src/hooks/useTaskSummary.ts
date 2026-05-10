@@ -40,6 +40,9 @@ export interface PnlInfo {
   realizedMoney: MoneyInfo | null;
   unrealizedMoney: MoneyInfo | null;
   totalMoney: MoneyInfo | null;
+  realizedDisplayMoney: MoneyInfo | null;
+  unrealizedDisplayMoney: MoneyInfo | null;
+  totalDisplayMoney: MoneyInfo | null;
 }
 
 export interface MoneyInfo {
@@ -116,6 +119,9 @@ const INITIAL_SUMMARY: TaskSummary = {
     realizedMoney: null,
     unrealizedMoney: null,
     totalMoney: null,
+    realizedDisplayMoney: null,
+    unrealizedDisplayMoney: null,
+    totalDisplayMoney: null,
   },
   counts: {
     totalTrades: 0,

@@ -174,6 +174,9 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             realized=_to_decimal(pnl.get("realized")),
             unrealized=_to_decimal(pnl.get("unrealized")),
             currency=_to_str_or_none(pnl.get("currency")),
+            realized_display_money=_to_money_dict(pnl.get("realized_display_money")),
+            unrealized_display_money=_to_money_dict(pnl.get("unrealized_display_money")),
+            total_display_money=_to_money_dict(pnl.get("total_display_money")),
         ),
         counts=CountsInfo(
             total_trades=int(counts.get("total_trades") or 0),

@@ -7,6 +7,7 @@ import {
   currencyFractionDigits,
   formatAppNumber,
   formatMoneyAmount,
+  formatMoneyPayload,
   formatAppPercent,
   normalizeCurrencyCode,
 } from '../../../src/utils/numberFormat';
@@ -74,5 +75,20 @@ describe('number formatting', () => {
   it('uses zero minor units for JPY-style currencies by default', () => {
     expect(currencyFractionDigits('JPY')).toBe(0);
     expect(formatMoneyAmount(1234.56, 'JPY')).toBe('¥ 1,235');
+  });
+
+  it('formats money payloads from API DTOs', () => {
+    expect(
+      formatMoneyPayload(
+        { amount: '12.5', currency: 'EUR' },
+        {
+          signed: true,
+          currencyPlacement: 'suffix',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }
+      )
+    ).toBe('+12.50 €');
+    expect(formatMoneyPayload(null)).toBe('-');
   });
 });

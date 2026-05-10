@@ -1,6 +1,11 @@
 // Task Execution types
 import type { TaskStatus, TaskType } from './common';
 
+export interface ExecutionMoneyAmount {
+  amount: string;
+  currency: string;
+}
+
 export interface ExecutionLog {
   timestamp: string;
   level: string;
@@ -156,12 +161,19 @@ export interface ExecutionSummary {
   total_pnl_quote?: string;
   realized_pnl_quote?: string;
   unrealized_pnl_quote?: string;
+  total_pnl_money?: ExecutionMoneyAmount;
+  total_pnl_quote_money?: ExecutionMoneyAmount;
+  total_pnl_display_money?: ExecutionMoneyAmount;
   total_trades?: number;
   winning_trades?: number;
   losing_trades?: number;
   win_rate?: string;
   pnl_currency?: string;
   quote_currency?: string;
+  display_currency?: string;
+  quote_to_account_rate?: string;
+  quote_to_account_rate_source?: string;
+  quote_to_account_rate_as_of?: string | null;
 }
 
 export interface ExecutionListParams {

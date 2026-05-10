@@ -24,6 +24,7 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import {
   formatAppNumber,
   formatMoneyAmount,
+  formatMoneyPayload,
   formatAppPercent,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
@@ -361,7 +362,8 @@ function buildResultItems({
     {
       id: 'realized_pnl',
       label: detailLabel('realizedPnl'),
-      value: formatCurrency(
+      value: formatPnlValue(
+        summary.pnl.realizedDisplayMoney,
         summary.pnl.realized,
         pnlCurrency,
         true,
@@ -372,7 +374,8 @@ function buildResultItems({
     {
       id: 'unrealized_pnl',
       label: detailLabel('unrealizedPnl'),
-      value: formatCurrency(
+      value: formatPnlValue(
+        summary.pnl.unrealizedDisplayMoney,
         summary.pnl.unrealized,
         pnlCurrency,
         true,
@@ -622,12 +625,29 @@ function formatCurrency(
     value,
     currencyCode,
     {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
       signed,
     },
     separators
   );
+}
+
+function formatPnlValue(
+  displayMoney: { amount: string; currency: string } | null,
+  fallbackValue: number,
+  fallbackCurrency: string | null | undefined,
+  signed = false,
+  separators?: NumberFormatSeparators
+): string {
+  if (displayMoney) {
+    return formatMoneyPayload(
+      displayMoney,
+      {
+        signed,
+      },
+      separators
+    );
+  }
+  return formatCurrency(fallbackValue, fallbackCurrency, signed, separators);
 }
 
 function formatWholeNumber(

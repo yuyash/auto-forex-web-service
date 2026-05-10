@@ -34,6 +34,9 @@ class PnlInfoSerializer(serializers.Serializer):
     realized_money = MoneySerializer(allow_null=True, required=False)
     unrealized_money = MoneySerializer(allow_null=True, required=False)
     total_money = MoneySerializer(allow_null=True, required=False)
+    realized_display_money = MoneySerializer(allow_null=True, required=False)
+    unrealized_display_money = MoneySerializer(allow_null=True, required=False)
+    total_display_money = MoneySerializer(allow_null=True, required=False)
 
 
 class CountsInfoSerializer(serializers.Serializer):

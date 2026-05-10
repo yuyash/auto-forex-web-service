@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
 from apps.trading.money import AccountCurrency, Money
 from apps.trading.utils import Instrument
@@ -95,12 +95,64 @@ class TickDataFxRateProvider:
                 source.code, target.code, Decimal("1"), as_of=as_of, source=self.source_name
             )
 
-        row = self._latest_tick(source.code, target.code, as_of=as_of)
-        if row is None:
-            return None
+        return self.rates([(source.code, target.code)], as_of=as_of).get((source.code, target.code))
+
+    def rates(
+        self,
+        pairs: Iterable[tuple[str, str]],
+        *,
+        as_of: datetime | None = None,
+    ) -> dict[tuple[str, str], FxRate]:
+        """Return latest direct/inverse rates for many currency pairs in one query."""
+        normalized_pairs: list[tuple[str, str]] = []
+        for source, target in pairs:
+            source_currency = AccountCurrency(source)
+            target_currency = AccountCurrency(target)
+            if source_currency.is_known and target_currency.is_known:
+                normalized_pairs.append((source_currency.code, target_currency.code))
+        if not normalized_pairs:
+            return {}
+
+        results: dict[tuple[str, str], FxRate] = {}
+        missing_pairs: list[tuple[str, str]] = []
+        for source, target in normalized_pairs:
+            key = (source, target)
+            if source == target:
+                results[key] = FxRate(
+                    source,
+                    target,
+                    Decimal("1"),
+                    as_of=as_of,
+                    source=self.source_name,
+                )
+            else:
+                missing_pairs.append(key)
+        if not missing_pairs:
+            return results
+
+        latest_rows = self._latest_ticks(missing_pairs, as_of=as_of)
+        for source, target in missing_pairs:
+            for candidate in self._instrument_candidates(source, target):
+                row = latest_rows.get(candidate)
+                if row is None:
+                    continue
+                rate = self._rate_from_row(source, target, row)
+                if rate is not None:
+                    results[(source, target)] = rate
+                    break
+        return results
+
+    def _rate_from_row(
+        self,
+        source_currency: str,
+        target_currency: str,
+        row: dict[str, Any],
+    ) -> FxRate | None:
         parsed = Instrument(str(row["instrument"]))
         base = AccountCurrency(parsed.base_currency)
         quote = AccountCurrency(parsed.quote_currency)
+        source = AccountCurrency(source_currency)
+        target = AccountCurrency(target_currency)
         mid = Decimal(str(row["mid"]))
         if mid <= 0:
             return None
@@ -122,20 +174,41 @@ class TickDataFxRateProvider:
             )
         return None
 
-    def _latest_tick(
+    def _latest_ticks(
         self,
-        source_currency: str,
-        target_currency: str,
+        pairs: Iterable[tuple[str, str]],
         *,
         as_of: datetime | None,
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, dict[str, Any]]:
         from apps.market.models import TickData
 
-        candidates = self._instrument_candidates(source_currency, target_currency)
+        candidates = tuple(
+            dict.fromkeys(
+                candidate
+                for source_currency, target_currency in pairs
+                for candidate in self._instrument_candidates(
+                    source_currency,
+                    target_currency,
+                )
+            )
+        )
+        if not candidates:
+            return {}
         qs = TickData.objects.filter(instrument__in=candidates)
         if as_of is not None:
             qs = qs.filter(timestamp__lte=as_of)
-        return qs.order_by("-timestamp").values("instrument", "timestamp", "mid").first()
+        latest: dict[str, dict[str, Any]] = {}
+        for row in qs.order_by("instrument", "-timestamp").values(
+            "instrument",
+            "timestamp",
+            "mid",
+        ):
+            instrument = str(row["instrument"])
+            if instrument not in latest:
+                latest[instrument] = row
+            if len(latest) == len(candidates):
+                break
+        return latest
 
     def _instrument_candidates(self, source_currency: str, target_currency: str) -> tuple[str, ...]:
         source = source_currency.strip().upper()
@@ -176,21 +249,14 @@ class TriangulatedFxRateProvider:
                 source="tick_data_triangulated",
             )
 
+        rates = self._rates_by_pivot(source, target, as_of=as_of)
         for pivot in self.pivot_currencies:
             if source.matches(pivot) or target.matches(pivot):
                 continue
-            first = self.direct_provider.rate(
-                source_currency=source.code,
-                target_currency=pivot,
-                as_of=as_of,
-            )
+            first = rates.get((source.code, pivot))
             if first is None:
                 continue
-            second = self.direct_provider.rate(
-                source_currency=pivot,
-                target_currency=target.code,
-                as_of=as_of,
-            )
+            second = rates.get((pivot, target.code))
             if second is None:
                 continue
             return FxRate(
@@ -201,6 +267,21 @@ class TriangulatedFxRateProvider:
                 source="tick_data_triangulated",
             )
         return None
+
+    def _rates_by_pivot(
+        self,
+        source: AccountCurrency,
+        target: AccountCurrency,
+        *,
+        as_of: datetime | None,
+    ) -> dict[tuple[str, str], FxRate]:
+        pairs: list[tuple[str, str]] = []
+        for pivot in self.pivot_currencies:
+            if source.matches(pivot) or target.matches(pivot):
+                continue
+            pairs.append((source.code, pivot))
+            pairs.append((pivot, target.code))
+        return self.direct_provider.rates(pairs, as_of=as_of)
 
 
 @dataclass(frozen=True, slots=True)

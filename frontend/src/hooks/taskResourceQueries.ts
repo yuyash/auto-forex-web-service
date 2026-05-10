@@ -40,6 +40,18 @@ interface TaskSummaryResponse {
       amount?: string | number | null;
       currency?: string | null;
     } | null;
+    realized_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    unrealized_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    total_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
   };
   counts?: {
     total_trades?: number;
@@ -229,6 +241,11 @@ export function createTaskSummaryQuery(
             realizedMoney: normalizeMoney(d.pnl?.realized_money),
             unrealizedMoney: normalizeMoney(d.pnl?.unrealized_money),
             totalMoney: normalizeMoney(d.pnl?.total_money),
+            realizedDisplayMoney: normalizeMoney(d.pnl?.realized_display_money),
+            unrealizedDisplayMoney: normalizeMoney(
+              d.pnl?.unrealized_display_money
+            ),
+            totalDisplayMoney: normalizeMoney(d.pnl?.total_display_money),
           },
           counts: {
             totalTrades: d.counts?.total_trades ?? 0,

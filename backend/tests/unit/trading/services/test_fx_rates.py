@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.market.models import TickData
 from apps.trading.money import Money
@@ -128,3 +130,30 @@ def test_triangulated_tick_data_provider_uses_common_pivot_currency():
     assert converted is not None
     assert converted.amount == Decimal("1650.00")
     assert converted.currency_code == "JPY"
+
+
+@pytest.mark.django_db
+def test_triangulated_tick_data_provider_batches_pivot_lookups():
+    timestamp = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    TickData.objects.create(
+        instrument="EUR_USD",
+        timestamp=timestamp,
+        bid=Decimal("1.09"),
+        ask=Decimal("1.11"),
+        mid=Decimal("1.10"),
+    )
+    TickData.objects.create(
+        instrument="USD_JPY",
+        timestamp=timestamp,
+        bid=Decimal("149.9"),
+        ask=Decimal("150.1"),
+        mid=Decimal("150"),
+    )
+    service = FxConversionService()
+
+    with CaptureQueriesContext(connection) as queries:
+        converted = service.convert(Money.coerce("10", "EUR"), target_currency="JPY")
+
+    assert converted is not None
+    assert converted.amount == Decimal("1650.00")
+    assert len(queries) <= 2

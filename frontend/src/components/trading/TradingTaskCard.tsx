@@ -53,7 +53,10 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
-import { formatMoneyAmount } from '../../utils/numberFormat';
+import {
+  formatMoneyAmount,
+  formatMoneyPayload,
+} from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
@@ -387,8 +390,6 @@ export default function TradingTaskCard({
     '';
   const formatPnl = (value: number): string => {
     return formatMoneyAmount(value, pnlCurrency, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
       signed: true,
       currencyPlacement: 'suffix',
     });
@@ -397,6 +398,21 @@ export default function TradingTaskCard({
   const realizedPnl = taskSummary.pnl.realized;
   const unrealizedPnl = taskSummary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
+  const pnlDisplayMoney = {
+    total: taskSummary.pnl.totalDisplayMoney,
+    realized: taskSummary.pnl.realizedDisplayMoney,
+    unrealized: taskSummary.pnl.unrealizedDisplayMoney,
+  };
+  const formatPnlItem = (
+    value: number,
+    money?: { amount: string; currency: string } | null
+  ): string =>
+    money
+      ? formatMoneyPayload(money, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        })
+      : formatPnl(value);
   const pnlItems = [
     {
       key: 'total',
@@ -574,7 +590,10 @@ export default function TradingTaskCard({
                       overflowWrap: 'anywhere',
                     }}
                   >
-                    {formatPnl(item.value)}
+                    {formatPnlItem(
+                      item.value,
+                      pnlDisplayMoney[item.key as keyof typeof pnlDisplayMoney]
+                    )}
                   </Typography>
                 </Box>
               </Grid>

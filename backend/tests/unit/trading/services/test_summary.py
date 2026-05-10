@@ -110,6 +110,10 @@ def test_snowball_net_summary_uses_runtime_pnl_for_partial_close_accounting():
     )
 
     assert summary.pnl.realized == Decimal("750000")
+    assert summary.pnl.realized_display_money == {
+        "amount": "750000",
+        "currency": "JPY",
+    }
     assert summary.execution.current_balance == Decimal("15000")
     assert summary.execution.current_balance_display == Decimal("2250000")
 
@@ -161,6 +165,7 @@ def test_task_summary_has_serializer_ready_dto_payload():
     assert payload["pnl"]["unrealized"] == Decimal("0")
     assert payload["pnl"]["currency"] == "JPY"
     assert payload["pnl"]["total_money"] == {"amount": "0", "currency": "JPY"}
+    assert payload["pnl"]["total_display_money"] == {"amount": "0", "currency": "JPY"}
     assert payload["execution"]["ticks_processed"] == 10
 
 

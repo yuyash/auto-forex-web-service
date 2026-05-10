@@ -13,6 +13,11 @@ export interface FormatMoneyAmountOptions extends FormatAppNumberOptions {
   useCurrencySymbol?: boolean;
 }
 
+export interface MoneyAmountLike {
+  amount?: string | number | null;
+  currency?: string | null;
+}
+
 export type NumberFormatSeparators = Pick<
   AppSettings,
   'decimalSeparator' | 'thousandsSeparator'
@@ -157,4 +162,15 @@ export function formatMoneyAmount(
   return currencyPlacement === 'suffix'
     ? `${sign}${numericText} ${currency}`
     : `${sign}${currency} ${numericText}`;
+}
+
+export function formatMoneyPayload(
+  money: MoneyAmountLike | null | undefined,
+  options: FormatMoneyAmountOptions = {},
+  separators?: NumberFormatSeparators
+): string {
+  if (!money) return '-';
+  const amount = Number(money.amount);
+  if (!Number.isFinite(amount)) return '-';
+  return formatMoneyAmount(amount, money.currency, options, separators);
 }

@@ -78,6 +78,9 @@ class PnlInfo:
     realized: Decimal
     unrealized: Decimal
     currency: str | None
+    realized_display_money: dict[str, str] | None = None
+    unrealized_display_money: dict[str, str] | None = None
+    total_display_money: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready PnL data."""
@@ -95,6 +98,9 @@ class PnlInfo:
             "total_money": (
                 Money.coerce(total, self.currency).as_dict() if self.currency else None
             ),
+            "realized_display_money": self.realized_display_money,
+            "unrealized_display_money": self.unrealized_display_money,
+            "total_display_money": self.total_display_money,
         }
 
 
@@ -554,13 +560,13 @@ def compute_task_summary(
     if current_balance is not None and current_balance_currency:
         current_balance_money = Money.coerce(current_balance, current_balance_currency).as_dict()
 
+    instrument = Instrument(getattr(task_obj, "instrument", "") if task_obj else "")
+    preferred_display_currency = (
+        str(getattr(task_obj, "display_currency", "") or "").strip().upper() if task_obj else ""
+    )
     if task_obj and task_type == "backtest":
-        instrument = Instrument(getattr(task_obj, "instrument", ""))
         quote_ccy = quote_ccy or instrument.quote_currency
         account = AccountCurrency(current_balance_currency or account_currency or "")
-        preferred_display_currency = (
-            str(getattr(task_obj, "display_currency", "") or "").strip().upper()
-        )
         if not preferred_display_currency and quote_ccy:
             preferred_display_currency = quote_ccy
         if not preferred_display_currency and account.is_known:
@@ -585,12 +591,26 @@ def compute_task_summary(
                 current_balance_display = converted.amount
                 current_balance_display_money = converted.as_dict()
 
+    pnl_currency = quote_ccy or current_balance_currency or account_currency
+    display_currency = display_currency or preferred_display_currency or account_currency
+    pnl_display_money = _pnl_display_money(
+        realized=realized_pnl,
+        unrealized=unrealized_pnl,
+        source_currency=pnl_currency,
+        target_currency=display_currency,
+        instrument=instrument.name,
+        mid_price=tick_mid,
+    )
+
     return TaskSummary(
         timestamp=tick_timestamp,
         pnl=PnlInfo(
             realized=realized_pnl,
             unrealized=unrealized_pnl,
-            currency=quote_ccy or current_balance_currency or account_currency,
+            currency=pnl_currency,
+            realized_display_money=pnl_display_money["realized"],
+            unrealized_display_money=pnl_display_money["unrealized"],
+            total_display_money=pnl_display_money["total"],
         ),
         counts=CountsInfo(
             total_trades=total_trades,
@@ -691,6 +711,48 @@ def _metric_decimal(metrics: dict[str, object], key: str) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def _pnl_display_money(
+    *,
+    realized: Decimal,
+    unrealized: Decimal,
+    source_currency: str | None,
+    target_currency: str | None,
+    instrument: str,
+    mid_price: Decimal | None,
+) -> dict[str, dict[str, str] | None]:
+    """Return realized/unrealized/total PnL converted to display currency."""
+    if not source_currency or not target_currency:
+        return {"realized": None, "unrealized": None, "total": None}
+
+    source = AccountCurrency(source_currency)
+    target = AccountCurrency(target_currency)
+    if not source.is_known or not target.is_known:
+        return {"realized": None, "unrealized": None, "total": None}
+
+    rate = FX_CONVERSION.rate(
+        source_currency=source.code,
+        target_currency=target.code,
+        instrument=instrument,
+        mid_price=mid_price,
+    )
+    if rate is None:
+        return {"realized": None, "unrealized": None, "total": None}
+
+    realized_money = Money.coerce(realized, source.code).convert(
+        rate=rate.rate,
+        target_currency=rate.target_currency,
+    )
+    unrealized_money = Money.coerce(unrealized, source.code).convert(
+        rate=rate.rate,
+        target_currency=rate.target_currency,
+    )
+    return {
+        "realized": realized_money.as_dict(),
+        "unrealized": unrealized_money.as_dict(),
+        "total": realized_money.add(unrealized_money).as_dict(),
+    }
 
 
 def _tick_delivery_info(raw: object) -> TickDeliveryInfo | None:
