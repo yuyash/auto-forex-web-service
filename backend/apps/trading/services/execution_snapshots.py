@@ -178,6 +178,9 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             realized_display_money=_to_money_dict(pnl.get("realized_display_money")),
             unrealized_display_money=_to_money_dict(pnl.get("unrealized_display_money")),
             total_display_money=_to_money_dict(pnl.get("total_display_money")),
+            display_conversion_context=_to_conversion_context(
+                pnl.get("display_conversion_context")
+            ),
         ),
         counts=CountsInfo(
             total_trades=int(counts.get("total_trades") or 0),
@@ -198,6 +201,9 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             display_currency=_to_str_or_none(execution.get("display_currency")),
             current_balance_display_money=_to_money_dict(
                 execution.get("current_balance_display_money")
+            ),
+            current_balance_display_conversion_context=_to_conversion_context(
+                execution.get("current_balance_display_conversion_context")
             ),
             resume_cursor_timestamp=_to_str_or_none(execution.get("resume_cursor_timestamp")),
             margin_ratio=_to_optional_decimal(execution.get("margin_ratio")),
@@ -251,6 +257,21 @@ def _to_money_dict(value: Any) -> dict[str, str] | None:
     if amount is None or currency is None:
         return None
     return {"amount": str(amount), "currency": str(currency)}
+
+
+def _to_conversion_context(value: Any) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        "source_currency": str(value.get("source_currency") or ""),
+        "target_currency": str(value.get("target_currency") or ""),
+        "rate": value.get("rate"),
+        "rate_source": str(value.get("rate_source") or ""),
+        "rate_as_of": value.get("rate_as_of"),
+        "rate_path": [str(item) for item in value.get("rate_path", [])],
+        "conversion_available": bool(value.get("conversion_available", False)),
+        "conversion_policy": str(value.get("conversion_policy") or "unavailable"),
+    }
 
 
 def _to_decimal(value: Any) -> Decimal:

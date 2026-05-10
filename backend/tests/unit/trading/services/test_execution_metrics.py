@@ -121,3 +121,13 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
     assert payload["quote_to_account_rate_source"] == "instrument_mid"
     assert payload["quote_to_account_rate_as_of"] is None
     assert payload["quote_to_account_rate_path"] == ["USD/JPY", "inverse"]
+    assert payload["display_conversion_context"] == {
+        "source_currency": "USD",
+        "target_currency": "JPY",
+        "rate": Decimal("150"),
+        "rate_source": "instrument_mid",
+        "rate_as_of": None,
+        "rate_path": ["USD/JPY", "direct"],
+        "conversion_available": True,
+        "conversion_policy": "runtime_fx_rate",
+    }

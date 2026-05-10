@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.trading.serializers.money import MoneySerializer
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
 
 
 class TickInfoSerializer(serializers.Serializer):
@@ -37,6 +37,10 @@ class PnlInfoSerializer(serializers.Serializer):
     realized_display_money = MoneySerializer(allow_null=True, required=False)
     unrealized_display_money = MoneySerializer(allow_null=True, required=False)
     total_display_money = MoneySerializer(allow_null=True, required=False)
+    display_conversion_context = CurrencyConversionContextSerializer(
+        allow_null=True,
+        required=False,
+    )
 
 
 class CountsInfoSerializer(serializers.Serializer):
@@ -64,6 +68,10 @@ class ExecutionInfoSerializer(serializers.Serializer):
     )
     display_currency = serializers.CharField(allow_null=True)
     current_balance_display_money = MoneySerializer(allow_null=True, required=False)
+    current_balance_display_conversion_context = CurrencyConversionContextSerializer(
+        allow_null=True,
+        required=False,
+    )
     resume_cursor_timestamp = serializers.CharField(allow_null=True)
     margin_ratio = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
     current_atr = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)

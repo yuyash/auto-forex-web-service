@@ -1,6 +1,10 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
-import type { MoneyAmount, TaskMoneyContext } from '../../types/money';
+import type {
+  CurrencyConversionContext,
+  MoneyAmount,
+  TaskMoneyContext,
+} from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
 import type { TaskInstrumentContext } from '../../types/instrument';
@@ -39,6 +43,7 @@ export interface BackendExecutionMetrics {
   current_balance_money?: BackendMoneyAmount;
   current_balance_display_money?: BackendMoneyAmount;
   initial_balance_money?: BackendMoneyAmount;
+  display_conversion_context?: CurrencyConversionContext;
   quote_to_account_rate?: string;
   quote_to_account_rate_source?: string;
   quote_to_account_rate_as_of?: string | null;

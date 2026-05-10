@@ -12,6 +12,7 @@
  */
 
 import type { TaskType } from '../types/common';
+import type { CurrencyConversionContext } from '../types/money';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
@@ -43,6 +44,7 @@ export interface PnlInfo {
   realizedDisplayMoney: MoneyInfo | null;
   unrealizedDisplayMoney: MoneyInfo | null;
   totalDisplayMoney: MoneyInfo | null;
+  displayConversionContext: CurrencyConversionContext | null;
 }
 
 export interface MoneyInfo {
@@ -67,6 +69,7 @@ export interface ExecutionInfo {
   accountCurrency: string | null;
   currentBalanceDisplay: number | null;
   currentBalanceDisplayMoney: MoneyInfo | null;
+  currentBalanceDisplayConversionContext: CurrencyConversionContext | null;
   displayCurrency: string | null;
   resumeCursorTimestamp: string | null;
   marginRatio: number | null;
@@ -122,6 +125,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     realizedDisplayMoney: null,
     unrealizedDisplayMoney: null,
     totalDisplayMoney: null,
+    displayConversionContext: null,
   },
   counts: {
     totalTrades: 0,
@@ -139,6 +143,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     accountCurrency: null,
     currentBalanceDisplay: null,
     currentBalanceDisplayMoney: null,
+    currentBalanceDisplayConversionContext: null,
     displayCurrency: null,
     resumeCursorTimestamp: null,
     marginRatio: null,

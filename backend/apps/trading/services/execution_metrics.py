@@ -12,6 +12,7 @@ from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, Wh
 from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.conversion_context import CurrencyConversionContext
 from apps.trading.services.fx_rates import FX_CONVERSION, FxRate
 from apps.trading.services.summary import TaskSummary
 from apps.trading.utils import Instrument
@@ -52,6 +53,16 @@ class ExecutionPnlBreakdown:
     conversion_rate_source: str
     conversion_rate_as_of: datetime | None
     conversion_rate_path: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DisplayPnlMoney:
+    """Display-currency PnL values and their conversion metadata."""
+
+    total: Money | None
+    realized: Money | None
+    unrealized: Money | None
+    conversion_context: dict[str, object] | None
 
 
 class ExecutionTradeOutcomeCollector:
@@ -258,7 +269,7 @@ class ExecutionMetricsSerializer:
             current_balance_amount if current_balance_amount is not None else Decimal("0"),
             summary.execution.current_balance_currency or account_currency,
         )
-        total_display, realized_display, unrealized_display = self._display_pnl_money(
+        display_pnl = self._display_pnl_money(
             pnl,
             display_currency,
             task,
@@ -304,16 +315,22 @@ class ExecutionMetricsSerializer:
             metrics["current_balance_display_money"] = (
                 summary.execution.current_balance_display_money
             )
-        if total_display is not None:
-            metrics["total_pnl_display_money"] = total_display.as_dict()
-        if realized_display is not None:
-            metrics["realized_pnl_display_money"] = realized_display.as_dict()
-        if unrealized_display is not None:
-            metrics["unrealized_pnl_display_money"] = unrealized_display.as_dict()
-        if initial_balance is not None:
-            metrics["initial_balance_money"] = initial_balance.as_dict()
+        if display_pnl.conversion_context is not None:
+            metrics["display_conversion_context"] = display_pnl.conversion_context
+        elif summary.execution.current_balance_display_conversion_context is not None:
+            metrics["display_conversion_context"] = (
+                summary.execution.current_balance_display_conversion_context
+            )
         if total_return is not None:
             metrics["total_return"] = total_return
+        if display_pnl.total is not None:
+            metrics["total_pnl_display_money"] = display_pnl.total.as_dict()
+        if display_pnl.realized is not None:
+            metrics["realized_pnl_display_money"] = display_pnl.realized.as_dict()
+        if display_pnl.unrealized is not None:
+            metrics["unrealized_pnl_display_money"] = display_pnl.unrealized.as_dict()
+        if initial_balance is not None:
+            metrics["initial_balance_money"] = initial_balance.as_dict()
         return metrics
 
     def initial_balance_money(self, task: Any, *, account_currency: str) -> Money | None:
@@ -332,14 +349,36 @@ class ExecutionMetricsSerializer:
         display_currency: str,
         task: Any,
         summary: TaskSummary,
-    ) -> tuple[Money | None, Money | None, Money | None]:
+    ) -> DisplayPnlMoney:
         """Return total/realized/unrealized PnL converted to display currency."""
         target = str(display_currency or "").strip().upper()
         if not target:
-            return (None, None, None)
+            return DisplayPnlMoney(
+                total=None,
+                realized=None,
+                unrealized=None,
+                conversion_context=CurrencyConversionContext.unavailable(
+                    source_currency=pnl.total_account.currency_code,
+                    target_currency=target,
+                ).as_dict(),
+            )
         money_values = (pnl.total_account, pnl.realized_account, pnl.unrealized_account)
         if pnl.total_account.currency.matches(target):
-            return money_values
+            return DisplayPnlMoney(
+                total=money_values[0],
+                realized=money_values[1],
+                unrealized=money_values[2],
+                conversion_context=CurrencyConversionContext.from_rate(
+                    FxRate(
+                        pnl.total_account.currency_code,
+                        target,
+                        Decimal("1"),
+                        as_of=_summary_tick_as_of(summary),
+                        source="identity",
+                        path=(pnl.total_account.currency_code, target),
+                    )
+                ).as_dict(),
+            )
         instrument = getattr(task, "instrument", "") or ""
         rate = FX_CONVERSION.rate(
             source_currency=pnl.total_account.currency_code,
@@ -349,12 +388,25 @@ class ExecutionMetricsSerializer:
             as_of=_summary_tick_as_of(summary),
         )
         if rate is None:
-            return (None, None, None)
+            return DisplayPnlMoney(
+                total=None,
+                realized=None,
+                unrealized=None,
+                conversion_context=CurrencyConversionContext.unavailable(
+                    source_currency=pnl.total_account.currency_code,
+                    target_currency=target,
+                ).as_dict(),
+            )
         total, realized, unrealized = (
             money.convert(rate=rate.rate, target_currency=rate.target_currency)
             for money in money_values
         )
-        return (total, realized, unrealized)
+        return DisplayPnlMoney(
+            total=total,
+            realized=realized,
+            unrealized=unrealized,
+            conversion_context=CurrencyConversionContext.from_rate(rate).as_dict(),
+        )
 
 
 def _summary_tick_as_of(summary: TaskSummary) -> datetime | None:

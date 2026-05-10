@@ -8184,6 +8184,54 @@
                     "winning_trades"
                 ]
             },
+            "CurrencyConversionContext": {
+                "type": "object",
+                "description": "Serializer for display-currency conversion metadata.",
+                "properties": {
+                    "source_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "target_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,12})?$",
+                        "nullable": true
+                    },
+                    "rate_source": {
+                        "type": "string"
+                    },
+                    "rate_as_of": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "rate_path": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "conversion_available": {
+                        "type": "boolean"
+                    },
+                    "conversion_policy": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "conversion_available",
+                    "conversion_policy",
+                    "rate_path",
+                    "rate_source",
+                    "source_currency",
+                    "target_currency"
+                ]
+            },
             "DataSourceEnum": {
                 "enum": [
                     "postgresql",
@@ -8310,6 +8358,14 @@
                         "allOf": [
                             {
                                 "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "current_balance_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
                             }
                         ],
                         "nullable": true
@@ -10679,6 +10735,14 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -11835,6 +11899,9 @@
                     },
                     "unrealized_pnl_display_money": {
                         "$ref": "#/components/schemas/Money"
+                    },
+                    "display_conversion_context": {
+                        "$ref": "#/components/schemas/CurrencyConversionContext"
                     },
                     "quote_to_account_rate": {
                         "type": "string",

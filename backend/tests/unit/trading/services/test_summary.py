@@ -115,8 +115,28 @@ def test_snowball_net_summary_uses_runtime_pnl_for_partial_close_accounting():
         "amount": "750000",
         "currency": "JPY",
     }
+    assert summary.pnl.display_conversion_context == {
+        "source_currency": "JPY",
+        "target_currency": "JPY",
+        "rate": Decimal("1"),
+        "rate_source": "instrument_mid",
+        "rate_as_of": datetime(2026, 1, 1, 13, 0, tzinfo=UTC),
+        "rate_path": ["JPY", "JPY"],
+        "conversion_available": True,
+        "conversion_policy": "identity",
+    }
     assert summary.execution.current_balance == Decimal("15000")
     assert summary.execution.current_balance_display == Decimal("2250000")
+    assert summary.execution.current_balance_display_conversion_context == {
+        "source_currency": "USD",
+        "target_currency": "JPY",
+        "rate": Decimal("150"),
+        "rate_source": "instrument_mid",
+        "rate_as_of": datetime(2026, 1, 1, 13, 0, tzinfo=UTC),
+        "rate_path": ["USD/JPY", "direct"],
+        "conversion_available": True,
+        "conversion_policy": "runtime_fx_rate",
+    }
 
 
 @pytest.mark.django_db
@@ -167,6 +187,11 @@ def test_task_summary_has_serializer_ready_dto_payload():
     assert payload["pnl"]["currency"] == "JPY"
     assert payload["pnl"]["total_money"] == {"amount": "0", "currency": "JPY"}
     assert payload["pnl"]["total_display_money"] == {"amount": "0", "currency": "JPY"}
+    assert payload["pnl"]["display_conversion_context"]["target_currency"] == "JPY"
+    assert (
+        payload["execution"]["current_balance_display_conversion_context"]["target_currency"]
+        == "JPY"
+    )
     assert payload["execution"]["ticks_processed"] == 10
 
 

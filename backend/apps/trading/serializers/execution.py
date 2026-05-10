@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.trading.serializers.money import MoneySerializer
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
 
 
 class TaskExecutionMetricsSerializer(serializers.Serializer):
@@ -41,6 +41,7 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     total_pnl_display_money = MoneySerializer(required=False)
     realized_pnl_display_money = MoneySerializer(required=False)
     unrealized_pnl_display_money = MoneySerializer(required=False)
+    display_conversion_context = CurrencyConversionContextSerializer(required=False)
     quote_to_account_rate = serializers.DecimalField(
         max_digits=24,
         decimal_places=12,

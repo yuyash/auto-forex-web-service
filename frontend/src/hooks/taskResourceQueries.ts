@@ -19,6 +19,7 @@ import {
   applyTaskStatusTransition,
 } from './taskStatusTransitions';
 import type { StrategyCyclesResponse } from '../types/strategyVisualization';
+import type { CurrencyConversionContext } from '../types/money';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import type { TaskSummary } from './useTaskSummary';
 
@@ -52,6 +53,7 @@ interface TaskSummaryResponse {
       amount?: string | number | null;
       currency?: string | null;
     } | null;
+    display_conversion_context?: CurrencyConversionContext | null;
   };
   counts?: {
     total_trades?: number;
@@ -75,6 +77,7 @@ interface TaskSummaryResponse {
       amount?: string | number | null;
       currency?: string | null;
     } | null;
+    current_balance_display_conversion_context?: CurrencyConversionContext | null;
     display_currency?: string | null;
     resume_cursor_timestamp?: string | null;
     margin_ratio?: string | number | null;
@@ -246,6 +249,7 @@ export function createTaskSummaryQuery(
               d.pnl?.unrealized_display_money
             ),
             totalDisplayMoney: normalizeMoney(d.pnl?.total_display_money),
+            displayConversionContext: d.pnl?.display_conversion_context ?? null,
           },
           counts: {
             totalTrades: d.counts?.total_trades ?? 0,
@@ -269,6 +273,8 @@ export function createTaskSummaryQuery(
             currentBalanceDisplayMoney: normalizeMoney(
               d.execution?.current_balance_display_money
             ),
+            currentBalanceDisplayConversionContext:
+              d.execution?.current_balance_display_conversion_context ?? null,
             displayCurrency: d.execution?.display_currency ?? null,
             resumeCursorTimestamp: d.execution?.resume_cursor_timestamp ?? null,
             marginRatio: parseNullableNumber(d.execution?.margin_ratio),

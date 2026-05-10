@@ -32,3 +32,14 @@ export interface TaskMoneyContext {
   display_requires_conversion: boolean;
   conversion_policy: TaskMoneyConversionPolicy;
 }
+
+export interface CurrencyConversionContext {
+  source_currency: string;
+  target_currency: string;
+  rate?: string | number | null;
+  rate_source: string;
+  rate_as_of?: string | null;
+  rate_path: string[];
+  conversion_available: boolean;
+  conversion_policy: TaskMoneyConversionPolicy;
+}

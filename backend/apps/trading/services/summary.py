@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import cast
+from typing import Any, cast
 
 from django.core.cache import cache
 from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Value, When
@@ -22,6 +22,7 @@ from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Va
 from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.conversion_context import CurrencyConversionContext
 from apps.trading.services.fx_rates import FX_CONVERSION, FxConversionService
 from apps.trading.services.public_errors import (
     task_public_error_code,
@@ -82,6 +83,7 @@ class PnlInfo:
     realized_display_money: dict[str, str] | None = None
     unrealized_display_money: dict[str, str] | None = None
     total_display_money: dict[str, str] | None = None
+    display_conversion_context: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready PnL data."""
@@ -102,6 +104,7 @@ class PnlInfo:
             "realized_display_money": self.realized_display_money,
             "unrealized_display_money": self.unrealized_display_money,
             "total_display_money": self.total_display_money,
+            "display_conversion_context": self.display_conversion_context,
         }
 
 
@@ -150,6 +153,7 @@ class ExecutionInfo:
     recovery_blockers: list[str]
     reconciled_at: str | None
     tick_delivery: TickDeliveryInfo | None
+    current_balance_display_conversion_context: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready execution data."""
@@ -162,6 +166,9 @@ class ExecutionInfo:
             "current_balance_display": self.current_balance_display,
             "display_currency": self.display_currency,
             "current_balance_display_money": self.current_balance_display_money,
+            "current_balance_display_conversion_context": (
+                self.current_balance_display_conversion_context
+            ),
             "resume_cursor_timestamp": self.resume_cursor_timestamp,
             "margin_ratio": self.margin_ratio,
             "current_atr": self.current_atr,
@@ -440,6 +447,7 @@ def compute_task_summary(
     current_balance_display: Decimal | None = None
     display_currency: str | None = None
     current_balance_display_money: dict[str, str] | None = None
+    current_balance_display_conversion_context: dict[str, object] | None = None
     resume_cursor_timestamp: str | None = None
     margin_ratio: Decimal | None = None
     current_atr: Decimal | None = None
@@ -589,17 +597,29 @@ def compute_task_summary(
         account = AccountCurrency(current_balance_currency or account_currency or "")
 
     if current_balance is not None and account.is_known and preferred_display_currency:
-        converted = fx_conversion.convert(
-            Money.coerce(current_balance, account.code),
+        rate = fx_conversion.rate(
+            source_currency=account.code,
             target_currency=preferred_display_currency,
             instrument=instrument.name,
             mid_price=tick_mid,
             as_of=tick_as_of,
         )
-        if converted is not None:
+        if rate is not None:
+            converted = Money.coerce(current_balance, account.code).convert(
+                rate=rate.rate,
+                target_currency=rate.target_currency,
+            )
             display_currency = converted.currency_code
             current_balance_display = converted.amount
             current_balance_display_money = converted.as_dict()
+            current_balance_display_conversion_context = CurrencyConversionContext.from_rate(
+                rate
+            ).as_dict()
+        else:
+            current_balance_display_conversion_context = CurrencyConversionContext.unavailable(
+                source_currency=account.code,
+                target_currency=preferred_display_currency,
+            ).as_dict()
 
     pnl_currency = quote_ccy or current_balance_currency or account_currency
     display_currency = display_currency or preferred_display_currency or account_currency
@@ -623,6 +643,7 @@ def compute_task_summary(
             realized_display_money=pnl_display_money["realized"],
             unrealized_display_money=pnl_display_money["unrealized"],
             total_display_money=pnl_display_money["total"],
+            display_conversion_context=pnl_display_money["conversion_context"],
         ),
         counts=CountsInfo(
             total_trades=total_trades,
@@ -642,6 +663,7 @@ def compute_task_summary(
             current_balance_display=current_balance_display,
             display_currency=display_currency,
             current_balance_display_money=current_balance_display_money,
+            current_balance_display_conversion_context=(current_balance_display_conversion_context),
             resume_cursor_timestamp=resume_cursor_timestamp,
             margin_ratio=margin_ratio,
             current_atr=current_atr,
@@ -735,15 +757,31 @@ def _pnl_display_money(
     mid_price: Decimal | None,
     as_of: datetime | None,
     fx_conversion: FxConversionService = FX_CONVERSION,
-) -> dict[str, dict[str, str] | None]:
+) -> dict[str, Any]:
     """Return realized/unrealized/total PnL converted to display currency."""
     if not source_currency or not target_currency:
-        return {"realized": None, "unrealized": None, "total": None}
+        return {
+            "realized": None,
+            "unrealized": None,
+            "total": None,
+            "conversion_context": CurrencyConversionContext.unavailable(
+                source_currency=source_currency,
+                target_currency=target_currency,
+            ).as_dict(),
+        }
 
     source = AccountCurrency(source_currency)
     target = AccountCurrency(target_currency)
     if not source.is_known or not target.is_known:
-        return {"realized": None, "unrealized": None, "total": None}
+        return {
+            "realized": None,
+            "unrealized": None,
+            "total": None,
+            "conversion_context": CurrencyConversionContext.unavailable(
+                source_currency=source_currency,
+                target_currency=target_currency,
+            ).as_dict(),
+        }
 
     rate = fx_conversion.rate(
         source_currency=source.code,
@@ -753,7 +791,15 @@ def _pnl_display_money(
         as_of=as_of,
     )
     if rate is None:
-        return {"realized": None, "unrealized": None, "total": None}
+        return {
+            "realized": None,
+            "unrealized": None,
+            "total": None,
+            "conversion_context": CurrencyConversionContext.unavailable(
+                source_currency=source.code,
+                target_currency=target.code,
+            ).as_dict(),
+        }
 
     realized_money = Money.coerce(realized, source.code).convert(
         rate=rate.rate,
@@ -767,6 +813,7 @@ def _pnl_display_money(
         "realized": realized_money.as_dict(),
         "unrealized": unrealized_money.as_dict(),
         "total": realized_money.add(unrealized_money).as_dict(),
+        "conversion_context": CurrencyConversionContext.from_rate(rate).as_dict(),
     }
 
 
