@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -24,6 +30,7 @@ import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
+import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
 import {
@@ -41,10 +48,7 @@ import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
 import { useFirstTick } from '../../hooks/useMarketConfig';
-import {
-  DEFAULT_ACCOUNT_CURRENCY,
-  SUPPORTED_CURRENCIES,
-} from '../../constants/currencies';
+import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -385,6 +389,23 @@ export default function BacktestTaskUpdateForm({
   const watchedPipSize = watch('pip_size');
   const watchedAccountCurrency =
     watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
+  const watchedDisplayCurrency = watch('display_currency') || '';
+  const previousAccountCurrencyRef = useRef(watchedAccountCurrency);
+
+  useEffect(() => {
+    const previousAccountCurrency = previousAccountCurrencyRef.current;
+    if (
+      watchedAccountCurrency &&
+      (!watchedDisplayCurrency ||
+        watchedDisplayCurrency === previousAccountCurrency)
+    ) {
+      setValue('display_currency', watchedAccountCurrency, {
+        shouldDirty: watchedDisplayCurrency !== watchedAccountCurrency,
+        shouldValidate: false,
+      });
+    }
+    previousAccountCurrencyRef.current = watchedAccountCurrency;
+  }, [setValue, watchedAccountCurrency, watchedDisplayCurrency]);
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
@@ -648,26 +669,17 @@ export default function BacktestTaskUpdateForm({
             name="account_currency"
             control={control}
             render={({ field }) => (
-              <FormControl fullWidth error={!!errors.account_currency}>
-                <InputLabel id="backtest-update-account-currency-label">
-                  {t('common:labels.accountCurrency', {
-                    defaultValue: 'Account currency',
-                  })}
-                </InputLabel>
-                <Select
-                  {...field}
-                  labelId="backtest-update-account-currency-label"
-                  label={t('common:labels.accountCurrency', {
-                    defaultValue: 'Account currency',
-                  })}
-                >
-                  {SUPPORTED_CURRENCIES.map((currency) => (
-                    <MenuItem key={currency} value={currency}>
-                      {currency}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <CurrencyCodeField
+                id="backtest-update-account-currency"
+                label={t('common:labels.accountCurrency', {
+                  defaultValue: 'Account currency',
+                })}
+                value={field.value}
+                onChange={field.onChange}
+                error={!!errors.account_currency}
+                helperText={errors.account_currency?.message}
+                required
+              />
             )}
           />
         </Grid>
@@ -677,27 +689,16 @@ export default function BacktestTaskUpdateForm({
             name="display_currency"
             control={control}
             render={({ field }) => (
-              <FormControl fullWidth error={!!errors.display_currency}>
-                <InputLabel id="backtest-update-display-currency-label">
-                  {t('common:labels.displayCurrency', {
-                    defaultValue: 'Display currency',
-                  })}
-                </InputLabel>
-                <Select
-                  {...field}
-                  value={field.value || watchedAccountCurrency}
-                  labelId="backtest-update-display-currency-label"
-                  label={t('common:labels.displayCurrency', {
-                    defaultValue: 'Display currency',
-                  })}
-                >
-                  {SUPPORTED_CURRENCIES.map((currency) => (
-                    <MenuItem key={currency} value={currency}>
-                      {currency}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <CurrencyCodeField
+                id="backtest-update-display-currency"
+                label={t('common:labels.displayCurrency', {
+                  defaultValue: 'Display currency',
+                })}
+                value={field.value || watchedAccountCurrency}
+                onChange={field.onChange}
+                error={!!errors.display_currency}
+                helperText={errors.display_currency?.message}
+              />
             )}
           />
         </Grid>

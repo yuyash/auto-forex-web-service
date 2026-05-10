@@ -189,10 +189,10 @@ def test_backtest_summary_defaults_display_currency_to_account_currency():
 
     assert summary.execution.display_currency == "USD"
     assert summary.execution.current_balance_display_money == {
-        "amount": "10005.0000000000",
+        "amount": "10005",
         "currency": "USD",
     }
-    assert summary.pnl.total_display_money == {"amount": "0E-30", "currency": "USD"}
+    assert summary.pnl.total_display_money == {"amount": "0", "currency": "USD"}
 
 
 @pytest.mark.django_db

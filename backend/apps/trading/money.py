@@ -86,7 +86,7 @@ class Money:
 
     def as_dict(self) -> dict[str, str]:
         """Serialize as an amount/currency pair for JSON-friendly payloads."""
-        return {"amount": str(self.amount), "currency": self.currency_code}
+        return {"amount": _plain_decimal(self.amount), "currency": self.currency_code}
 
     def add(self, other: "Money") -> "Money":
         """Add another money value with the same currency."""
@@ -152,3 +152,13 @@ class CurrencyConversion:
                     f"{self.source_currency.code} != {money.currency_code}"
                 )
         return money.convert(rate=self.rate, target_currency=self.target_currency.code)
+
+
+def _plain_decimal(value: Decimal) -> str:
+    """Return a canonical non-scientific decimal string for API money payloads."""
+    if value.is_zero():
+        return "0"
+    text = format(value.normalize(), "f")
+    if "." not in text:
+        return text
+    return text.rstrip("0").rstrip(".")

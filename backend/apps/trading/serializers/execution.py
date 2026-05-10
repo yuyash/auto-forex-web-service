@@ -48,6 +48,10 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     )
     quote_to_account_rate_source = serializers.CharField(required=False)
     quote_to_account_rate_as_of = serializers.DateTimeField(allow_null=True, required=False)
+    quote_to_account_rate_path = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
 
 
 class TaskExecutionSerializer(serializers.Serializer):

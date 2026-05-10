@@ -7,6 +7,16 @@ export const SUPPORTED_CURRENCIES = [
   'CAD',
   'CHF',
   'NZD',
+  'SGD',
+  'HKD',
+  'NOK',
+  'SEK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'HUF',
+  'MXN',
+  'ZAR',
 ] as const;
 
 export const DEFAULT_ACCOUNT_CURRENCY = 'USD';

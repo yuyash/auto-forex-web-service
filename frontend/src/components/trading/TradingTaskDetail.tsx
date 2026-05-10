@@ -324,9 +324,14 @@ export const TradingTaskDetail: React.FC = () => {
   const activeExecutionId = effectiveExecutionId;
   const enableRealtime =
     !isViewingHistorical && shouldEnableRealtimeTaskUpdates(currentStatus);
-  const pnlCurrency = detailTask.instrument?.includes('_')
-    ? detailTask.instrument.split('_')[1]
-    : 'N/A';
+  const pnlCurrency =
+    s.execution.displayCurrency ||
+    s.execution.accountCurrency ||
+    detailTask.display_currency ||
+    detailTask.account_currency ||
+    (detailTask.instrument?.includes('_')
+      ? detailTask.instrument.split('_')[1]
+      : 'N/A');
 
   return (
     <Container maxWidth={false} sx={taskDetailLayout.container}>
@@ -577,7 +582,12 @@ export const TradingTaskDetail: React.FC = () => {
                 data={metricsResult.data}
                 isLoading={metricsResult.isLoading}
                 error={metricsResult.error}
-                currency={s.execution.accountCurrency || pnlCurrency || 'USD'}
+                currency={
+                  s.execution.displayCurrency ||
+                  s.execution.accountCurrency ||
+                  pnlCurrency ||
+                  'USD'
+                }
                 dataSource={metricsResult.dataSource}
                 resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
                 consistencyWarnings={metricsResult.consistencyWarnings}

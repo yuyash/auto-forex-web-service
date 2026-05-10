@@ -156,6 +156,9 @@ export default function TradingTaskUpdateForm({
   const accountHedgingEnabled = accountDetail
     ? (accountDetail as { hedging_enabled?: boolean }).hedging_enabled
     : undefined;
+  const accountCurrency = accountDetail
+    ? (accountDetail as { currency?: string }).currency
+    : undefined;
 
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -294,6 +297,14 @@ export default function TradingTaskUpdateForm({
               {t('common:labels.oandaAccount')}
             </Typography>
             <Typography variant="body1">{accountName}</Typography>
+            {accountCurrency ? (
+              <Typography variant="body2" color="text.secondary">
+                {t('common:labels.accountCurrency', {
+                  defaultValue: 'Account currency',
+                })}
+                : {accountCurrency}
+              </Typography>
+            ) : null}
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Controller

@@ -22,7 +22,7 @@ from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Va
 from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.services.fx_rates import FX_CONVERSION
+from apps.trading.services.fx_rates import FX_CONVERSION, FxConversionService
 from apps.trading.services.public_errors import (
     task_public_error_code,
     task_public_error_message,
@@ -552,6 +552,7 @@ def compute_task_summary(
             unrealized_pnl = runtime_unrealized_quote
 
     # Currency conversion for display
+    fx_conversion = FX_CONVERSION.with_cache()
     if task_obj:
         if task_type == "backtest":
             account_currency = getattr(task_obj, "account_currency", None)
@@ -588,7 +589,7 @@ def compute_task_summary(
         account = AccountCurrency(current_balance_currency or account_currency or "")
 
     if current_balance is not None and account.is_known and preferred_display_currency:
-        converted = FX_CONVERSION.convert(
+        converted = fx_conversion.convert(
             Money.coerce(current_balance, account.code),
             target_currency=preferred_display_currency,
             instrument=instrument.name,
@@ -610,6 +611,7 @@ def compute_task_summary(
         instrument=instrument.name,
         mid_price=tick_mid,
         as_of=tick_as_of,
+        fx_conversion=fx_conversion,
     )
 
     return TaskSummary(
@@ -732,6 +734,7 @@ def _pnl_display_money(
     instrument: str,
     mid_price: Decimal | None,
     as_of: datetime | None,
+    fx_conversion: FxConversionService = FX_CONVERSION,
 ) -> dict[str, dict[str, str] | None]:
     """Return realized/unrealized/total PnL converted to display currency."""
     if not source_currency or not target_currency:
@@ -742,7 +745,7 @@ def _pnl_display_money(
     if not source.is_known or not target.is_known:
         return {"realized": None, "unrealized": None, "total": None}
 
-    rate = FX_CONVERSION.rate(
+    rate = fx_conversion.rate(
         source_currency=source.code,
         target_currency=target.code,
         instrument=instrument,

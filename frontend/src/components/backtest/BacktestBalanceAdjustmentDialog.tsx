@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 
 interface BacktestBalanceAdjustmentDialogProps {
   open: boolean;
@@ -76,7 +77,9 @@ export function BacktestBalanceAdjustmentDialog({
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {currentBalance == null
                 ? '-'
-                : `${currentBalance} ${accountCurrency}`}
+                : formatMoneyAmount(currentBalance, accountCurrency, {
+                    currencyPlacement: 'suffix',
+                  })}
             </Typography>
           </Box>
           <TextField

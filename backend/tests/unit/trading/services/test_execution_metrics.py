@@ -81,6 +81,7 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
         conversion_rate=Decimal("0.0066666667"),
         conversion_rate_source="instrument_mid",
         conversion_rate_as_of=None,
+        conversion_rate_path=("USD/JPY", "inverse"),
     )
 
     payload = serializer.serialize(
@@ -106,7 +107,7 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
         "currency": "USD",
     }
     assert payload["total_pnl_display_money"] == {
-        "amount": "375.0",
+        "amount": "375",
         "currency": "JPY",
     }
     assert payload["realized_pnl_display_money"] == {
@@ -114,8 +115,9 @@ def test_execution_metrics_include_display_pnl_money_from_summary_currency():
         "currency": "JPY",
     }
     assert payload["unrealized_pnl_display_money"] == {
-        "amount": "225.0",
+        "amount": "225",
         "currency": "JPY",
     }
     assert payload["quote_to_account_rate_source"] == "instrument_mid"
     assert payload["quote_to_account_rate_as_of"] is None
+    assert payload["quote_to_account_rate_path"] == ["USD/JPY", "inverse"]

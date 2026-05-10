@@ -51,6 +51,7 @@ class ExecutionPnlBreakdown:
     conversion_rate: Decimal
     conversion_rate_source: str
     conversion_rate_as_of: datetime | None
+    conversion_rate_path: tuple[str, ...]
 
 
 class ExecutionTradeOutcomeCollector:
@@ -163,6 +164,7 @@ class ExecutionPnlConverter:
             conversion_rate=conversion_rate.rate,
             conversion_rate_source=conversion_rate.source,
             conversion_rate_as_of=conversion_rate.as_of,
+            conversion_rate_path=conversion_rate.path,
         )
 
     def account_currency(self, task: Any) -> str:
@@ -197,8 +199,15 @@ class ExecutionPnlConverter:
                 AccountCurrency(account_currency).code,
                 instrument.quote_to_account_rate(mid_rate, AccountCurrency(account_currency)),
                 source="instrument_heuristic",
+                path=(instrument.name, "heuristic"),
             )
-        return FxRate(account_currency, account_currency, Decimal("1"), source="identity")
+        return FxRate(
+            account_currency,
+            account_currency,
+            Decimal("1"),
+            source="identity",
+            path=(account_currency, account_currency),
+        )
 
 
 class ExecutionReturnCalculator:
@@ -289,6 +298,7 @@ class ExecutionMetricsSerializer:
             "quote_to_account_rate": pnl.conversion_rate,
             "quote_to_account_rate_source": pnl.conversion_rate_source,
             "quote_to_account_rate_as_of": pnl.conversion_rate_as_of,
+            "quote_to_account_rate_path": list(pnl.conversion_rate_path),
         }
         if summary.execution.current_balance_display_money is not None:
             metrics["current_balance_display_money"] = (

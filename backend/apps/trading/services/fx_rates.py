@@ -20,6 +20,7 @@ class FxRate:
     rate: Decimal
     as_of: datetime | None = None
     source: str = "instrument_mid"
+    path: tuple[str, ...] = ()
 
 
 class FxRateProvider(Protocol):
@@ -54,7 +55,13 @@ class InstrumentMidRateProvider:
         if not source.is_known or not target.is_known:
             return None
         if source.matches(target):
-            return FxRate(source.code, target.code, Decimal("1"), as_of=as_of)
+            return FxRate(
+                source.code,
+                target.code,
+                Decimal("1"),
+                as_of=as_of,
+                path=(source.code, target.code),
+            )
         if not instrument or mid_price is None or mid_price <= 0:
             return None
 
@@ -64,9 +71,21 @@ class InstrumentMidRateProvider:
         if not base.is_known or not quote.is_known:
             return None
         if source.matches(quote) and target.matches(base):
-            return FxRate(source.code, target.code, Decimal("1") / mid_price, as_of=as_of)
+            return FxRate(
+                source.code,
+                target.code,
+                Decimal("1") / mid_price,
+                as_of=as_of,
+                path=(f"{base.code}/{quote.code}", "inverse"),
+            )
         if source.matches(base) and target.matches(quote):
-            return FxRate(source.code, target.code, mid_price, as_of=as_of)
+            return FxRate(
+                source.code,
+                target.code,
+                mid_price,
+                as_of=as_of,
+                path=(f"{base.code}/{quote.code}", "direct"),
+            )
         return None
 
 
@@ -92,7 +111,12 @@ class TickDataFxRateProvider:
             return None
         if source.matches(target):
             return FxRate(
-                source.code, target.code, Decimal("1"), as_of=as_of, source=self.source_name
+                source.code,
+                target.code,
+                Decimal("1"),
+                as_of=as_of,
+                source=self.source_name,
+                path=(source.code, target.code),
             )
 
         return self.rates([(source.code, target.code)], as_of=as_of).get((source.code, target.code))
@@ -124,6 +148,7 @@ class TickDataFxRateProvider:
                     Decimal("1"),
                     as_of=as_of,
                     source=self.source_name,
+                    path=(source, target),
                 )
             else:
                 missing_pairs.append(key)
@@ -163,6 +188,7 @@ class TickDataFxRateProvider:
                 mid,
                 as_of=row.get("timestamp"),
                 source=self.source_name,
+                path=(f"{base.code}/{quote.code}", "direct"),
             )
         if source.matches(quote) and target.matches(base):
             return FxRate(
@@ -171,6 +197,7 @@ class TickDataFxRateProvider:
                 Decimal("1") / mid,
                 as_of=row.get("timestamp"),
                 source=self.source_name,
+                path=(f"{base.code}/{quote.code}", "inverse"),
             )
         return None
 
@@ -247,6 +274,7 @@ class TriangulatedFxRateProvider:
                 Decimal("1"),
                 as_of=as_of,
                 source="tick_data_triangulated",
+                path=(source.code, target.code),
             )
 
         rates = self._rates_by_pivot(source, target, as_of=as_of)
@@ -265,6 +293,7 @@ class TriangulatedFxRateProvider:
                 first.rate * second.rate,
                 as_of=_older_timestamp(first.as_of, second.as_of),
                 source="tick_data_triangulated",
+                path=(source.code, pivot, target.code),
             )
         return None
 
@@ -293,6 +322,15 @@ class FxConversionService:
         TickDataFxRateProvider(),
         TriangulatedFxRateProvider(),
     )
+    rate_cache: dict[tuple[str, str, str, str, str], FxRate | None] | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+
+    def with_cache(self) -> "FxConversionService":
+        """Return a request-local copy that memoizes repeated rate lookups."""
+        return FxConversionService(providers=self.providers, rate_cache={})
 
     def rate(
         self,
@@ -304,6 +342,16 @@ class FxConversionService:
         as_of: datetime | None = None,
     ) -> FxRate | None:
         """Return the first available conversion rate."""
+        cache_key = self._cache_key(
+            source_currency=source_currency,
+            target_currency=target_currency,
+            instrument=instrument,
+            mid_price=mid_price,
+            as_of=as_of,
+        )
+        if self.rate_cache is not None and cache_key in self.rate_cache:
+            return self.rate_cache[cache_key]
+
         for provider in self.providers:
             rate = provider.rate(
                 source_currency=source_currency,
@@ -313,7 +361,11 @@ class FxConversionService:
                 as_of=as_of,
             )
             if rate is not None:
+                if self.rate_cache is not None:
+                    self.rate_cache[cache_key] = rate
                 return rate
+        if self.rate_cache is not None:
+            self.rate_cache[cache_key] = None
         return None
 
     def convert(
@@ -336,6 +388,25 @@ class FxConversionService:
         if fx_rate is None:
             return None
         return money.convert(rate=fx_rate.rate, target_currency=fx_rate.target_currency)
+
+    def _cache_key(
+        self,
+        *,
+        source_currency: str,
+        target_currency: str,
+        instrument: str,
+        mid_price: Decimal | None,
+        as_of: datetime | None,
+    ) -> tuple[str, str, str, str, str]:
+        source = AccountCurrency(source_currency).code
+        target = AccountCurrency(target_currency).code
+        return (
+            source,
+            target,
+            str(instrument or "").strip().upper(),
+            str(mid_price) if mid_price is not None else "",
+            as_of.isoformat() if as_of is not None else "",
+        )
 
 
 def _older_timestamp(first: datetime | None, second: datetime | None) -> datetime | None:

@@ -695,7 +695,13 @@ export const BacktestTaskDetail: React.FC = () => {
                 data={metricsResult.data}
                 isLoading={metricsResult.isLoading}
                 error={metricsResult.error}
-                currency={s.execution.accountCurrency || 'USD'}
+                currency={
+                  s.execution.displayCurrency ||
+                  s.execution.accountCurrency ||
+                  detailTask.display_currency ||
+                  detailTask.account_currency ||
+                  'USD'
+                }
                 dataSource={metricsResult.dataSource}
                 resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
                 consistencyWarnings={metricsResult.consistencyWarnings}

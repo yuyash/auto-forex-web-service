@@ -41,6 +41,7 @@ export interface BackendExecutionMetrics {
   quote_to_account_rate?: string;
   quote_to_account_rate_source?: string;
   quote_to_account_rate_as_of?: string | null;
+  quote_to_account_rate_path?: string[];
 }
 
 export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {

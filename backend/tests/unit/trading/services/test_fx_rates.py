@@ -37,6 +37,21 @@ def test_quote_to_base_uses_inverse_mid_price():
     assert converted.currency_code == "USD"
 
 
+def test_rate_reports_conversion_path_for_instrument_mid_price():
+    service = FxConversionService()
+
+    rate = service.rate(
+        source_currency="JPY",
+        target_currency="USD",
+        instrument="USD_JPY",
+        mid_price=Decimal("150"),
+    )
+
+    assert rate is not None
+    assert rate.source == "instrument_mid"
+    assert rate.path == ("USD/JPY", "inverse")
+
+
 def test_cross_currency_without_provider_returns_none():
     service = FxConversionService(providers=())
 
@@ -157,3 +172,25 @@ def test_triangulated_tick_data_provider_batches_pivot_lookups():
     assert converted is not None
     assert converted.amount == Decimal("1650.00")
     assert len(queries) <= 2
+
+
+@pytest.mark.django_db
+def test_cached_fx_conversion_service_reuses_rate_lookup():
+    timestamp = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    TickData.objects.create(
+        instrument="EUR_JPY",
+        timestamp=timestamp,
+        bid=Decimal("160"),
+        ask=Decimal("161"),
+        mid=Decimal("160.5"),
+    )
+    service = FxConversionService().with_cache()
+
+    first = service.convert(Money.coerce("10", "EUR"), target_currency="JPY")
+    with CaptureQueriesContext(connection) as queries:
+        second = service.convert(Money.coerce("20", "EUR"), target_currency="JPY")
+
+    assert first is not None
+    assert second is not None
+    assert second.amount == Decimal("3210.0")
+    assert len(queries) == 0

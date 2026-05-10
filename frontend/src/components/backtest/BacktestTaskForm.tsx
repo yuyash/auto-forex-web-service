@@ -26,6 +26,7 @@ import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
+import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { TaskReviewErrors } from '../tasks/forms/TaskReviewErrors';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
@@ -54,13 +55,9 @@ import {
 } from '../../hooks/useMarketConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { useNumberFormatter } from '../../hooks/useNumberFormatter';
 import { useToast } from '../common/useToast';
-import {
-  DEFAULT_ACCOUNT_CURRENCY,
-  SUPPORTED_CURRENCIES,
-} from '../../constants/currencies';
-import { currencySymbol } from '../../utils/numberFormat';
+import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 import {
   fromTimezonePickerDate,
   formatDateTimeInTimezone,
@@ -169,7 +166,6 @@ function ReviewContent({
 }: ReviewContentProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const { settings } = useAppSettings();
-  const { formatNumber } = useNumberFormatter();
   const {
     name,
     description,
@@ -250,12 +246,15 @@ function ReviewContent({
           {t('backtest:detail.initialBalance')}
         </Typography>
         <Typography variant="body1">
-          {currencySymbol(account_currency)}
-          {formatNumber(Number(initial_balance), {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-          {account_currency ? ` ${account_currency}` : ''}
+          {formatMoneyAmount(
+            Number(initial_balance),
+            account_currency,
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            },
+            settings
+          )}
         </Typography>
       </Grid>
 
@@ -273,11 +272,15 @@ function ReviewContent({
           {t('backtest:detail.commissionPerTrade')}
         </Typography>
         <Typography variant="body1">
-          {currencySymbol(account_currency)}
-          {formatNumber(Number(commission_per_trade), {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatMoneyAmount(
+            Number(commission_per_trade),
+            account_currency,
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            },
+            settings
+          )}
         </Typography>
       </Grid>
 
@@ -466,6 +469,23 @@ export default function BacktestTaskForm({
   const watchedPipSize = watch('pip_size');
   const watchedAccountCurrency =
     watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
+  const watchedDisplayCurrency = watch('display_currency') || '';
+  const previousAccountCurrencyRef = useRef(watchedAccountCurrency);
+
+  useEffect(() => {
+    const previousAccountCurrency = previousAccountCurrencyRef.current;
+    if (
+      watchedAccountCurrency &&
+      (!watchedDisplayCurrency ||
+        watchedDisplayCurrency === previousAccountCurrency)
+    ) {
+      setValue('display_currency', watchedAccountCurrency, {
+        shouldDirty: watchedDisplayCurrency !== watchedAccountCurrency,
+        shouldValidate: false,
+      });
+    }
+    previousAccountCurrencyRef.current = watchedAccountCurrency;
+  }, [setValue, watchedAccountCurrency, watchedDisplayCurrency]);
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -980,26 +1000,17 @@ export default function BacktestTaskForm({
                   name="account_currency"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth error={!!errors.account_currency}>
-                      <InputLabel id="backtest-account-currency-label">
-                        {t('common:labels.accountCurrency', {
-                          defaultValue: 'Account currency',
-                        })}
-                      </InputLabel>
-                      <Select
-                        {...field}
-                        labelId="backtest-account-currency-label"
-                        label={t('common:labels.accountCurrency', {
-                          defaultValue: 'Account currency',
-                        })}
-                      >
-                        {SUPPORTED_CURRENCIES.map((currency) => (
-                          <MenuItem key={currency} value={currency}>
-                            {currency}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <CurrencyCodeField
+                      id="backtest-account-currency"
+                      label={t('common:labels.accountCurrency', {
+                        defaultValue: 'Account currency',
+                      })}
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={!!errors.account_currency}
+                      helperText={errors.account_currency?.message}
+                      required
+                    />
                   )}
                 />
               </Grid>
@@ -1009,27 +1020,16 @@ export default function BacktestTaskForm({
                   name="display_currency"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth error={!!errors.display_currency}>
-                      <InputLabel id="backtest-display-currency-label">
-                        {t('common:labels.displayCurrency', {
-                          defaultValue: 'Display currency',
-                        })}
-                      </InputLabel>
-                      <Select
-                        {...field}
-                        value={field.value || watchedAccountCurrency}
-                        labelId="backtest-display-currency-label"
-                        label={t('common:labels.displayCurrency', {
-                          defaultValue: 'Display currency',
-                        })}
-                      >
-                        {SUPPORTED_CURRENCIES.map((currency) => (
-                          <MenuItem key={currency} value={currency}>
-                            {currency}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <CurrencyCodeField
+                      id="backtest-display-currency"
+                      label={t('common:labels.displayCurrency', {
+                        defaultValue: 'Display currency',
+                      })}
+                      value={field.value || watchedAccountCurrency}
+                      onChange={field.onChange}
+                      error={!!errors.display_currency}
+                      helperText={errors.display_currency?.message}
+                    />
                   )}
                 />
               </Grid>

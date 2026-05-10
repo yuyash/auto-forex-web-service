@@ -501,7 +501,7 @@ class TestTradingTaskSummary:
         assert result.execution.account_currency == "JPY"
         assert result.execution.display_currency == "JPY"
         assert result.execution.current_balance_display_money == {
-            "amount": "3000000.0000000000",
+            "amount": "3000000",
             "currency": "JPY",
         }
         assert result.execution.recovery_status == "warning"

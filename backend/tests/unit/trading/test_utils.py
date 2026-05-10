@@ -138,6 +138,16 @@ class TestTradingValueObjects:
         assert money.currency == AccountCurrency("JPY")
         assert money.format(places=2) == "123.46"
 
+    def test_money_api_dict_uses_canonical_plain_decimal_amount(self):
+        assert Money.coerce("0E-30", "usd").as_dict() == {
+            "amount": "0",
+            "currency": "USD",
+        }
+        assert Money.coerce("10005.0000000000", "usd").as_dict() == {
+            "amount": "10005",
+            "currency": "USD",
+        }
+
     def test_money_arithmetic_requires_matching_currency(self):
         total = Money.coerce("100", "usd").add(Money.coerce("25.5", "USD"))
 

@@ -89,6 +89,16 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   CAD: 'C$',
   CHF: 'CHF',
   NZD: 'NZ$',
+  SGD: 'S$',
+  HKD: 'HK$',
+  NOK: 'kr',
+  SEK: 'kr',
+  DKK: 'kr',
+  PLN: 'zł',
+  CZK: 'Kč',
+  HUF: 'Ft',
+  MXN: 'MX$',
+  ZAR: 'R',
 };
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'HUF']);

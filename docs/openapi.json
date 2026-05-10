@@ -11723,6 +11723,12 @@
                         "type": "string",
                         "format": "date-time",
                         "nullable": true
+                    },
+                    "quote_to_account_rate_path": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
