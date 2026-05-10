@@ -35,6 +35,7 @@ from apps.market.services.oanda import (
 )
 from apps.market.views.account_helpers import get_user_accounts
 from apps.market.views.order_errors import order_error_response
+from apps.market.views.upstream_lists import fetch_account_lists, upstream_history_count
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -65,6 +66,17 @@ def _string_or_none(value: object) -> str | None:
     if value in (None, ""):
         return None
     return str(value)
+
+
+def _positive_int(raw: str | int | None, *, default: int, max_value: int | None = None) -> int:
+    try:
+        value = int(raw) if raw not in (None, "") else default
+    except (TypeError, ValueError):
+        value = default
+    value = max(value, 1)
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
 
 
 def _filter_orders_by_created_at(
@@ -217,33 +229,31 @@ class OrderView(APIView):
         if not accounts:
             return Response({"count": 0, "next": None, "previous": None, "results": []})
 
-        all_orders = []
-        failed_accounts: list[str] = []
+        page_number = _positive_int(request.query_params.get("page"), default=1)
+        page_size = _positive_int(
+            request.query_params.get("page_size"),
+            default=StandardPagination.page_size,
+            max_value=StandardPagination.max_page_size,
+        )
+        history_count = upstream_history_count(page=page_number, page_size=page_size)
 
-        for account in accounts:
-            try:
-                client = OandaService(account)
-
-                if order_status == "pending":
-                    # Get only pending orders
-                    for pending_order in client.get_pending_orders(instrument=instrument):
-                        all_orders.append(_format_order_dict(pending_order, account))
-                else:
-                    # Get order history (includes all states)
-                    for order in client.get_order_history(
-                        instrument=instrument,
-                        count=500,
-                        state="ALL",
-                    ):
-                        all_orders.append(_format_order_dict(order, account))
-
-            except OandaAPIError as e:
-                logger.error(
-                    "Failed to fetch orders from OANDA for account %s: %s",
-                    account.account_id,
-                    str(e),
+        def fetch_orders(account: OandaAccounts) -> list[dict]:
+            client = OandaService(account)
+            if order_status == "pending":
+                return [
+                    _format_order_dict(pending_order, account)
+                    for pending_order in client.get_pending_orders(instrument=instrument)
+                ]
+            return [
+                _format_order_dict(order, account)
+                for order in client.get_order_history(
+                    instrument=instrument,
+                    count=history_count,
+                    state="ALL",
                 )
-                failed_accounts.append(str(account.account_id))
+            ]
+
+        all_orders, failed_accounts = fetch_account_lists(accounts, fetch_orders)
 
         # If every account failed, report the upstream error to the caller.
         if failed_accounts and len(failed_accounts) == len(accounts):

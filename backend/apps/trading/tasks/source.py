@@ -931,7 +931,14 @@ class LiveTickDataSource(TickDataSource):
     live trading where ticks are streamed in real-time.
     """
 
-    def __init__(self, channel: str, instrument: str) -> None:
+    def __init__(
+        self,
+        channel: str,
+        instrument: str,
+        *,
+        batch_size: int | None = None,
+        batch_max_latency_seconds: float | None = None,
+    ) -> None:
         """Initialize the live tick data source.
 
         Args:
@@ -940,6 +947,18 @@ class LiveTickDataSource(TickDataSource):
         """
         self.channel = channel
         self.instrument = instrument
+        self.batch_size = max(
+            int(batch_size or getattr(settings, "LIVE_TICK_BATCH_SIZE", 10)),
+            1,
+        )
+        self.batch_max_latency_seconds = max(
+            float(
+                batch_max_latency_seconds
+                if batch_max_latency_seconds is not None
+                else getattr(settings, "LIVE_TICK_BATCH_MAX_LATENCY_SECONDS", 0.25)
+            ),
+            0.0,
+        )
         self.client = None
         self.pubsub = None
 
@@ -947,7 +966,7 @@ class LiveTickDataSource(TickDataSource):
         """Iterate over ticks from real-time market data.
 
         Yields:
-            Single-item batches containing one Tick object each"""
+            Low-latency batches containing one or more Tick objects"""
         import json
 
         import redis
@@ -971,9 +990,18 @@ class LiveTickDataSource(TickDataSource):
             reconnect_attempts = 0
             max_reconnect_attempts = 5
             ticks_received = 0
+            pending_ticks: list[Tick] = []
+            batch_started_at: float | None = None
             while True:
                 try:
-                    message = self.pubsub.get_message(timeout=1.0)
+                    timeout = 1.0
+                    if pending_ticks and batch_started_at is not None:
+                        elapsed = time.monotonic() - batch_started_at
+                        timeout = max(
+                            min(self.batch_max_latency_seconds - elapsed, 1.0),
+                            0.0,
+                        )
+                    message = self.pubsub.get_message(timeout=timeout)
                     reconnect_attempts = 0
                 except (redis.ConnectionError, ConnectionError) as exc:
                     reconnect_attempts += 1
@@ -1006,6 +1034,13 @@ class LiveTickDataSource(TickDataSource):
                     self.pubsub.subscribe(self.channel)
                     continue
                 if not message:
+                    if pending_ticks and batch_started_at is not None:
+                        elapsed = time.monotonic() - batch_started_at
+                        if elapsed >= self.batch_max_latency_seconds:
+                            yield pending_ticks
+                            pending_ticks = []
+                            batch_started_at = None
+                        continue
                     idle_seconds += 1
                     # Yield empty batch every 5 seconds so the executor can
                     # check stop signals and send heartbeats during market close
@@ -1090,8 +1125,19 @@ class LiveTickDataSource(TickDataSource):
                 except (ValueError, InvalidOperation):
                     continue  # Skip ticks with invalid prices
 
-                # Yield single tick as a batch
-                yield [tick]
+                if not pending_ticks:
+                    batch_started_at = time.monotonic()
+                pending_ticks.append(tick)
+                batch_age = (
+                    time.monotonic() - batch_started_at if batch_started_at is not None else 0.0
+                )
+                if len(pending_ticks) >= self.batch_size or (
+                    self.batch_max_latency_seconds == 0
+                    or batch_age >= self.batch_max_latency_seconds
+                ):
+                    yield pending_ticks
+                    pending_ticks = []
+                    batch_started_at = None
 
         finally:
             self.close()

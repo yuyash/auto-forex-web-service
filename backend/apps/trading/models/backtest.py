@@ -2,12 +2,11 @@
 
 from decimal import Decimal
 from typing import Any
-from uuid import uuid4
 
 from django.db import models
 
 from apps.trading.enums import DataSource, TaskStatus
-from apps.trading.models.base import ExecutableTaskBehaviorMixin, UUIDModel
+from apps.trading.models.base import ExecutableTaskModel
 
 
 class BacktestTaskManager(models.Manager["BacktestTask"]):
@@ -30,7 +29,7 @@ class BacktestTaskManager(models.Manager["BacktestTask"]):
         return self.filter(config=config)
 
 
-class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
+class BacktestTask(ExecutableTaskModel):
     """
     Persistent backtesting task with reusable configuration.
 
@@ -65,15 +64,6 @@ class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
 
     objects = BacktestTaskManager()
 
-    name = models.CharField(
-        max_length=255,
-        help_text="Human-readable name for this backtest task",
-    )
-    description = models.TextField(
-        blank=True,
-        default="",
-        help_text="Optional description of this backtest task",
-    )
     user = models.ForeignKey(
         "accounts.User",
         on_delete=models.CASCADE,
@@ -150,112 +140,6 @@ class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
             "Ignored when tick_granularity='tick'."
         ),
     )
-    status = models.CharField(
-        max_length=20,
-        default=TaskStatus.CREATED,
-        choices=TaskStatus.choices,
-        db_index=True,
-        help_text="Current task status",
-    )
-
-    # When true, stop requests that ask for "Close All Positions" will
-    # close every open backtest position at the current tick price before
-    # transitioning to STOPPED.  Live trading tasks store the same flag.
-    sell_on_stop = models.BooleanField(
-        default=False,
-        help_text="Close all positions at current tick price when the task is stopped",
-    )
-
-    # Execution tracking.  ``execution_id`` identifies the logical execution
-    # run and is used as the scope key for all execution-scoped data
-    # (ExecutionState, positions, events, trades, etc.).  It is preserved
-    # across resume so the new run can load the previous run's state.
-    execution_id = models.UUIDField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="UUID identifying the current execution run",
-    )
-    # ``celery_task_id`` is the physical Celery job identifier passed to
-    # ``apply_async(task_id=...)``.  It is rotated on every resume so the
-    # new Celery task is not suppressed by the revoke list of the previous
-    # run.  Rotating this instead of ``execution_id`` keeps the execution
-    # state continuous across resumes.
-    celery_task_id = models.UUIDField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Celery task_id for the current worker invocation",
-    )
-    dispatch_idempotency_key = models.UUIDField(
-        default=uuid4,
-        db_index=True,
-        help_text=(
-            "Idempotency key rotated for each dispatch. "
-            "Workers skip stale redeliveries with mismatched keys."
-        ),
-    )
-
-    # Execution State
-    started_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when the task execution started",
-    )
-    completed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when the task execution completed",
-    )
-
-    # Error Tracking
-    error_message = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Error message if task failed",
-    )
-    error_traceback = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Full error traceback if task failed",
-    )
-    debug_options = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text='Debug settings. Supported: {"tracemalloc": true}',
-    )
-
-    # Drain-on-stop setting (shared with trading tasks).  For backtests the
-    # drain completes as soon as the tick stream reaches its end regardless
-    # of duration.
-    drain_duration_hours = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Maximum duration in hours for drain-on-stop before forcing a stop. "
-            "Set to 0 to wait indefinitely for positions to reach breakeven."
-        ),
-    )
-
-    # Market-aware idle mode (shared with trading tasks).  For backtests the
-    # executor uses the replayed tick timestamp — not wall-clock time — when
-    # evaluating these thresholds, so a backtest that runs in a few minutes
-    # of real time still switches to IDLE as the replayed clock crosses the
-    # configured windows around forex market open/close.  Values in minutes.
-    market_idle_pre_close_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Switch to IDLE this many minutes before the market closes. "
-            "0 disables pre-close idling."
-        ),
-    )
-    market_idle_resume_delay_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Wait this many minutes after the market reopens before resuming trading. "
-            "0 disables the resume delay."
-        ),
-    )
-
     # Market close schedule applied to backtests when evaluating market-idle
     # thresholds.  When ``market_close_enabled`` is False the replay ignores
     # market-closed windows (pre_close / resume_delay become no-ops) and the
@@ -351,22 +235,9 @@ class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
         if BacktestTask.objects.filter(user=self.user, name=new_name).exists():
             raise ValueError(f"A backtest task with name '{new_name}' already exists")
 
-        return BacktestTask.objects.create(
-            user=self.user,
-            config=self.config,
-            name=new_name,
-            description=self.description,
-            data_source=self.data_source,
-            start_time=self.start_time,
-            end_time=self.end_time,
-            initial_balance=self.initial_balance,
-            account_currency=self.account_currency,
-            commission_per_trade=self.commission_per_trade,
-            max_tick_gap_hours=self.max_tick_gap_hours,
-            initial_positions_enabled=self.initial_positions_enabled,
-            initial_position_cycles=self.initial_position_cycles,
-            status=TaskStatus.CREATED,
-        )
+        copy_values = self.copy_values()
+        copy_values.update(name=new_name, status=TaskStatus.CREATED)
+        return BacktestTask.objects.create(**copy_values)
 
     def can_resume(self) -> bool:
         """Whether the current execution can resume from persisted state."""

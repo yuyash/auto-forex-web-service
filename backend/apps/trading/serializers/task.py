@@ -4,6 +4,10 @@ from rest_framework import serializers
 
 from apps.trading.models import BacktestTask, TradingTask
 from apps.trading.models.logs import RecoveryAttempt, TaskLog
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -16,6 +20,8 @@ class TaskSerializer(serializers.ModelSerializer):
 
     duration = serializers.SerializerMethodField()
     task_type = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask  # Base model, will be overridden in subclasses
@@ -32,7 +38,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "completed_at",
             "duration",
             "error_message",
-            "error_traceback",
+            "error_code",
         ]
         read_only_fields = [
             "id",
@@ -43,7 +49,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
-            "error_traceback",
+            "error_code",
         ]
 
     def get_duration(self, obj: BacktestTask | TradingTask) -> float | None:
@@ -76,6 +82,14 @@ class TaskSerializer(serializers.ModelSerializer):
         elif isinstance(obj, TradingTask):
             return "trading"
         return "unknown"
+
+    def get_error_message(self, obj: BacktestTask | TradingTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: BacktestTask | TradingTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
 
 
 class BacktestTaskSerializer(TaskSerializer):

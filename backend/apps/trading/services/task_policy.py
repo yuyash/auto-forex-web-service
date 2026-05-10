@@ -16,6 +16,15 @@ WORKER_OWNED_STATUSES = frozenset(
         TaskStatus.STOPPING,
     }
 )
+ACCOUNT_BLOCKING_STATUSES = (
+    TaskStatus.STARTING,
+    TaskStatus.RUNNING,
+    TaskStatus.PAUSED,
+    TaskStatus.IDLE,
+    TaskStatus.DRAINING,
+    TaskStatus.STOPPING,
+)
+CAPACITY_ACTIVE_STATUSES = ACCOUNT_BLOCKING_STATUSES
 TERMINAL_STATUSES = frozenset(
     {
         TaskStatus.STOPPED,

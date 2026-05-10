@@ -11,6 +11,10 @@ from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
 )
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     can_resume = serializers.SerializerMethodField()
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -63,6 +69,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "created_at",
             "updated_at",
             "debug_options",
@@ -80,6 +87,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "created_at",
             "updated_at",
             "can_resume",
@@ -93,6 +101,14 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     def get_action_policy(self, obj: BacktestTask) -> dict[str, bool]:
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="backtest").as_dict()
+
+    def get_error_message(self, obj: BacktestTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: BacktestTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):

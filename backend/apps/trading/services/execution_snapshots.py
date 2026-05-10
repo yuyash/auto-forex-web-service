@@ -213,6 +213,7 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             started_at=_to_str_or_none(task.get("started_at")),
             completed_at=_to_str_or_none(task.get("completed_at")),
             error_message=_to_str_or_none(task.get("error_message")),
+            error_code=_to_str_or_none(task.get("error_code")),
             stop_reason=_to_str_or_none(task.get("stop_reason")),
             progress=int(task.get("progress") or 0),
         ),

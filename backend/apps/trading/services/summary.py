@@ -16,10 +16,14 @@ from decimal import Decimal, InvalidOperation
 from typing import cast
 
 from django.core.cache import cache
-from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Value, When
 
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 from apps.trading.utils import AccountCurrency, Instrument
 
 
@@ -152,6 +156,7 @@ class TaskInfo:
     started_at: str | None
     completed_at: str | None
     error_message: str | None
+    error_code: str | None
     stop_reason: str | None
     progress: int
 
@@ -162,6 +167,7 @@ class TaskInfo:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "error_message": self.error_message,
+            "error_code": self.error_code,
             "stop_reason": self.stop_reason,
             "progress": self.progress,
         }
@@ -364,10 +370,9 @@ def compute_task_summary(
 
     # Unrealized PnL: sum of open positions' unrealized_pnl
     open_qs = Position.objects.filter(**base_filter, is_open=True)
-    unrealized_agg = open_qs.aggregate(unrealized_pnl=Sum("unrealized_pnl"))
-    unrealized_pnl = unrealized_agg["unrealized_pnl"] or Decimal("0")
-    open_position_count = open_qs.count()
-    open_size_agg = open_qs.aggregate(
+    open_agg = open_qs.aggregate(
+        unrealized_pnl=Sum("unrealized_pnl"),
+        open_position_count=Count("pk"),
         open_long_units=Sum(
             Case(
                 When(direction="long", then=_abs_units()),
@@ -383,6 +388,8 @@ def compute_task_summary(
             )
         ),
     )
+    unrealized_pnl = open_agg["unrealized_pnl"] or Decimal("0")
+    open_position_count = int(open_agg["open_position_count"] or 0)
 
     # Closed position count
     closed_position_count = Position.objects.filter(**base_filter, is_open=False).count()
@@ -482,7 +489,8 @@ def compute_task_summary(
         status = task_obj.status
         started_at = task_obj.started_at.isoformat() if task_obj.started_at else None
         completed_at = task_obj.completed_at.isoformat() if task_obj.completed_at else None
-        error_message = task_obj.error_message
+        error_message = task_public_error_message(task_obj.status)
+    error_code = task_public_error_code(status)
 
     stop_reason = _compute_stop_reason(
         task_type=task_type,
@@ -543,8 +551,8 @@ def compute_task_summary(
             total_trades=total_trades,
             open_positions=open_position_count,
             closed_positions=closed_position_count,
-            open_long_units=int(open_size_agg["open_long_units"] or 0),
-            open_short_units=int(open_size_agg["open_short_units"] or 0),
+            open_long_units=int(open_agg["open_long_units"] or 0),
+            open_short_units=int(open_agg["open_short_units"] or 0),
             winning_trades=winning_trades,
             losing_trades=losing_trades,
         ),
@@ -574,6 +582,7 @@ def compute_task_summary(
             started_at=started_at,
             completed_at=completed_at,
             error_message=error_message,
+            error_code=error_code,
             stop_reason=stop_reason,
             progress=_compute_progress(task_type, task_obj, state),
         ),
@@ -778,9 +787,7 @@ def _compute_stop_reason(
     """Derive a human-readable stop reason for the overview tab.
 
     Priority:
-    1. For FAILED tasks, surface ``task.error_message`` (populated by the
-       executor). Fall back to the ``CeleryTaskStatus.status_message`` if
-       the DB field is empty.
+    1. For FAILED tasks, surface only a fixed public failure message.
     2. For terminal states (STOPPED/COMPLETED/PAUSED), return the
        ``CeleryTaskStatus.status_message`` from the matching execution
        when available (e.g. "Execution completed successfully",
@@ -803,12 +810,7 @@ def _compute_stop_reason(
     )
 
     if status == "failed":
-        err = (getattr(task, "error_message", None) or "").strip()
-        if err:
-            return err
-        if status_message and not _is_progress_only_status_message(status_message):
-            return status_message
-        return None
+        return task_public_error_message(status)
 
     if status_message and not _is_progress_only_status_message(status_message):
         return status_message

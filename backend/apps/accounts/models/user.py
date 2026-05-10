@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models import F
 from django.utils import timezone
 
 username_validator = RegexValidator(
@@ -119,6 +120,10 @@ class User(AbstractUser):
         default=False,
         help_text="Whether the account is locked due to failed login attempts",
     )
+    auth_token_version = models.PositiveIntegerField(
+        default=0,
+        help_text="Version claim used to revoke already-issued access tokens",
+    )
     failed_login_attempts = models.IntegerField(
         default=0,
         help_text="Number of consecutive failed login attempts",
@@ -175,13 +180,19 @@ class User(AbstractUser):
     def lock_account(self) -> None:
         """Lock the user account."""
         self.is_locked = True
-        self.save(update_fields=["is_locked"])
+        self.auth_token_version += 1
+        self.save(update_fields=["is_locked", "auth_token_version"])
 
     def unlock_account(self) -> None:
         """Unlock the user account."""
         self.is_locked = False
         self.failed_login_attempts = 0
         self.save(update_fields=["is_locked", "failed_login_attempts"])
+
+    def revoke_access_tokens(self) -> None:
+        """Invalidate access tokens issued with the current token version."""
+        type(self).objects.filter(pk=self.pk).update(auth_token_version=F("auth_token_version") + 1)
+        self.refresh_from_db(fields=["auth_token_version"])
 
     def generate_verification_token(self) -> str:
         """Generate a unique email verification token."""

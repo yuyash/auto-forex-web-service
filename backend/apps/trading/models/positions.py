@@ -187,6 +187,14 @@ class Position(models.Model):
         status = "OPEN" if self.is_open else "CLOSED"
         return f"{status} {self.direction} {self.units} {self.instrument} @ {self.entry_price}"
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        if "planned_exit_price" in field_names:
+            index = field_names.index("planned_exit_price")
+            instance._loaded_planned_exit_price = values[index]
+        return instance
+
     def save(self, *args, **kwargs) -> None:
         """Override save to enforce planned_exit_price immutability.
 
@@ -196,6 +204,7 @@ class Position(models.Model):
         """
         self._preserve_planned_exit_price(kwargs.get("update_fields"))
         super().save(*args, **kwargs)
+        self._loaded_planned_exit_price = self.planned_exit_price
 
     def _preserve_planned_exit_price(self, update_fields) -> None:
         if not self.pk:
@@ -203,9 +212,15 @@ class Position(models.Model):
         if update_fields is not None and "planned_exit_price" not in update_fields:
             return
 
-        existing = (
-            Position.objects.filter(pk=self.pk).values_list("planned_exit_price", flat=True).first()
-        )
+        existing = getattr(self, "_loaded_planned_exit_price", None)
+        if existing is None and hasattr(self, "_loaded_planned_exit_price"):
+            return
+        if existing is None:
+            existing = (
+                Position.objects.filter(pk=self.pk)
+                .values_list("planned_exit_price", flat=True)
+                .first()
+            )
         if existing is None or self.planned_exit_price is None:
             return
 
@@ -216,7 +231,7 @@ class Position(models.Model):
 
         logger.warning(
             "Attempted to change immutable planned_exit_price on position %s "
-            "(from %s to %s) — preserving original",
+            "(from %s to %s) - preserving original",
             self.pk,
             existing,
             self.planned_exit_price,

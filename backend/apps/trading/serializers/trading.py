@@ -11,6 +11,10 @@ from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
 )
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
@@ -57,6 +63,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             # Broker API retry policy
             "api_retry_max_attempts",
             "api_retry_backoff_base_seconds",
@@ -92,6 +99,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "pip_size",
             "has_strategy_state",
             "can_resume",
@@ -112,6 +120,14 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="trading").as_dict()
 
+    def get_error_message(self, obj: TradingTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: TradingTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
+
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
     """
@@ -127,6 +143,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -151,6 +169,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "api_retry_max_attempts",
             "api_retry_backoff_base_seconds",
             "api_retry_backoff_max_seconds",
@@ -170,6 +189,14 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     def get_action_policy(self, obj: TradingTask) -> dict[str, bool]:
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="trading").as_dict()
+
+    def get_error_message(self, obj: TradingTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: TradingTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):
