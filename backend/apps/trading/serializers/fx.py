@@ -44,3 +44,4 @@ class FxRateResponseSerializer(serializers.Serializer):
     instrument = serializers.CharField(allow_blank=True)
     as_of = serializers.DateTimeField(allow_null=True)
     source = serializers.CharField()
+    path = serializers.ListField(child=serializers.CharField())

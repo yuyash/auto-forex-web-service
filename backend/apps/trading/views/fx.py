@@ -59,6 +59,7 @@ class FxRateView(APIView):
                 "instrument": instrument,
                 "as_of": fx_rate.as_of,
                 "source": fx_rate.source,
+                "path": list(fx_rate.path),
             }
         )
         return Response(response.data, status=status.HTTP_200_OK)

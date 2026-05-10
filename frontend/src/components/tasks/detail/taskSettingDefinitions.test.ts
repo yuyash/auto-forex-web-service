@@ -51,6 +51,9 @@ describe('task setting definition contracts', () => {
     const commission = definitions.find(
       (definition) => definition.key === 'commission_per_trade'
     );
+    const displayCurrency = definitions.find(
+      (definition) => definition.key === 'display_currency'
+    );
 
     expect(
       pipSize?.render?.('0.0001', {
@@ -100,7 +103,18 @@ describe('task setting definition contracts', () => {
         snapshot: null,
         source: {
           initial_balance: '10000',
-          initial_balance_money: { amount: '10000', currency: 'JPY' },
+          money_context: {
+            task_type: 'backtest',
+            account_currency: 'JPY',
+            account_currency_source: 'backtest_task',
+            display_currency: 'USD',
+            display_currency_source: 'task_display_currency',
+            initial_balance_money: { amount: '10000', currency: 'JPY' },
+            commission_per_trade_money: { amount: '1.5', currency: 'JPY' },
+            display_uses_account_currency: false,
+            display_requires_conversion: true,
+            conversion_policy: 'runtime_fx_rate',
+          },
         },
       })
     ).toBe('10,000 ¥');
@@ -110,10 +124,42 @@ describe('task setting definition contracts', () => {
         snapshot: null,
         source: {
           commission_per_trade: '1.5',
-          commission_per_trade_money: { amount: '1.5', currency: 'EUR' },
+          money_context: {
+            task_type: 'backtest',
+            account_currency: 'EUR',
+            account_currency_source: 'backtest_task',
+            display_currency: 'EUR',
+            display_currency_source: 'account_currency',
+            initial_balance_money: { amount: '10000', currency: 'EUR' },
+            commission_per_trade_money: { amount: '1.5', currency: 'EUR' },
+            display_uses_account_currency: true,
+            display_requires_conversion: false,
+            conversion_policy: 'identity',
+          },
         },
       })
     ).toBe('1.50 €');
+    expect(
+      displayCurrency?.render?.('USD', {
+        task: {},
+        snapshot: null,
+        source: {
+          display_currency: 'USD',
+          money_context: {
+            task_type: 'backtest',
+            account_currency: 'JPY',
+            account_currency_source: 'backtest_task',
+            display_currency: 'USD',
+            display_currency_source: 'task_display_currency',
+            initial_balance_money: { amount: '10000', currency: 'JPY' },
+            commission_per_trade_money: { amount: '0', currency: 'JPY' },
+            display_uses_account_currency: false,
+            display_requires_conversion: true,
+            conversion_policy: 'runtime_fx_rate',
+          },
+        },
+      })
+    ).toBe('USD (runtime FX)');
   });
 
   it('trading definitions contain user-facing lifecycle/config fields', () => {
@@ -124,6 +170,8 @@ describe('task setting definition contracts', () => {
     expect(keys.has('id')).toBe(true);
     expect(keys.has('strategy_type')).toBe(true);
     expect(keys.has('dry_run')).toBe(true);
+    expect(keys.has('account_currency')).toBe(true);
+    expect(keys.has('display_currency')).toBe(true);
     expect(keys.has('execution_id')).toBe(true);
     expect(keys.has('celery_task_id')).toBe(false);
   });

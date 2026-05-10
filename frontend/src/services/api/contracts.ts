@@ -1,6 +1,6 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
-import type { MoneyAmount } from '../../types/money';
+import type { MoneyAmount, TaskMoneyContext } from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
 import type { TaskInstrumentContext } from '../../types/instrument';
@@ -92,6 +92,7 @@ export interface BackendBacktestTask {
   initial_balance_money?: BackendMoneyAmount;
   account_currency?: string;
   display_currency?: string;
+  money_context?: TaskMoneyContext;
   commission_per_trade: string;
   commission_per_trade_money?: BackendMoneyAmount;
   pip_size?: string | null;
@@ -140,6 +141,7 @@ export interface BackendTradingTask {
   account_type: 'live' | 'practice';
   account_currency: string;
   display_currency: string;
+  money_context?: TaskMoneyContext;
   name: string;
   description: string;
   sell_on_stop: boolean;

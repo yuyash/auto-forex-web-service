@@ -14,7 +14,7 @@ from apps.trading.serializers.events import (
     TradingEventSerializer,
 )
 from apps.trading.serializers.fx import FxRateQuerySerializer, FxRateResponseSerializer
-from apps.trading.serializers.money import MoneySerializer
+from apps.trading.serializers.money import MoneySerializer, TaskMoneyContextSerializer
 from apps.trading.serializers.strategy import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
@@ -54,6 +54,7 @@ __all__ = [
     "FxRateQuerySerializer",
     "FxRateResponseSerializer",
     "MoneySerializer",
+    "TaskMoneyContextSerializer",
     # Strategy
     "StrategyConfigCreateSerializer",
     "StrategyConfigDetailSerializer",

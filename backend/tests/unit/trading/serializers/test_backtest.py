@@ -32,6 +32,7 @@ class TestBacktestTaskSerializer:
         assert "current_tick" not in fields
         assert "account_currency" in fields
         assert "display_currency" in fields
+        assert "money_context" in fields
         assert "commission_per_trade_money" in fields
         assert "instrument_context" in fields
 
@@ -50,6 +51,7 @@ class TestBacktestTaskListSerializer:
         assert "progress" not in fields
         assert "account_currency" in fields
         assert "display_currency" in fields
+        assert "money_context" in fields
         assert "initial_balance_money" in fields
         assert "commission_per_trade" not in fields
         assert "commission_per_trade_money" not in fields

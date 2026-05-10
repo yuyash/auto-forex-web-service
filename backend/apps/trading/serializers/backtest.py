@@ -17,9 +17,10 @@ from apps.trading.services.public_errors import (
     task_public_error_code,
     task_public_error_message,
 )
-from apps.trading.serializers.money import MoneySerializer
+from apps.trading.serializers.money import MoneySerializer, TaskMoneyContextSerializer
 from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
 from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
+from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     initial_balance_money = serializers.SerializerMethodField()
     commission_per_trade_money = serializers.SerializerMethodField()
     instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -60,6 +62,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "initial_balance_money",
             "account_currency",
             "display_currency",
+            "money_context",
             "commission_per_trade",
             "commission_per_trade_money",
             "pip_size",
@@ -111,6 +114,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "initial_balance_money",
             "commission_per_trade_money",
             "instrument_context",
+            "money_context",
             "can_resume",
             "action_policy",
         ]
@@ -145,6 +149,11 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     def get_instrument_context(self, obj: BacktestTask) -> dict[str, object]:
         """Return instrument metadata and pip-size diagnostics."""
         return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: BacktestTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="backtest").as_dict()
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):

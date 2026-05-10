@@ -9,7 +9,9 @@ from apps.market.models import OandaAccounts
 from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
 from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.serializers.money import TaskMoneyContextSerializer
 from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
+from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
@@ -43,6 +45,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
     instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
@@ -63,6 +66,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_type",
             "account_currency",
             "display_currency",
+            "money_context",
             "name",
             "description",
             "sell_on_stop",
@@ -118,6 +122,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "error_code",
             "pip_size",
             "instrument_context",
+            "money_context",
             "has_strategy_state",
             "can_resume",
             "action_policy",
@@ -150,6 +155,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Return instrument metadata and pip-size diagnostics."""
         return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
 
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="trading").as_dict()
+
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
     """
@@ -172,6 +182,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
     instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -189,6 +200,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "account_type",
             "account_currency",
             "display_currency",
+            "money_context",
             "name",
             "description",
             "sell_on_stop",
@@ -234,6 +246,11 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
         """Return instrument metadata and pip-size diagnostics."""
         return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="trading").as_dict()
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):

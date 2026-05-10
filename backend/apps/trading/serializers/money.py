@@ -8,3 +8,18 @@ class MoneySerializer(serializers.Serializer):
 
     amount = serializers.DecimalField(max_digits=24, decimal_places=10)
     currency = serializers.CharField(max_length=3, allow_blank=True)
+
+
+class TaskMoneyContextSerializer(serializers.Serializer):
+    """Serializer for task-level money and display-currency context."""
+
+    task_type = serializers.CharField()
+    account_currency = serializers.CharField(max_length=3, allow_blank=True)
+    account_currency_source = serializers.CharField()
+    display_currency = serializers.CharField(max_length=3, allow_blank=True)
+    display_currency_source = serializers.CharField()
+    initial_balance_money = MoneySerializer(allow_null=True, required=False)
+    commission_per_trade_money = MoneySerializer(allow_null=True, required=False)
+    display_uses_account_currency = serializers.BooleanField()
+    display_requires_conversion = serializers.BooleanField()
+    conversion_policy = serializers.CharField()

@@ -109,6 +109,7 @@
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
     "pipSizeOverrideValue": "{{value}}（上書き、既定 {{defaultPipSize}}）",
+    "currencyRuntimeFxValue": "{{currency}}（実行時FX）",
     "marginRatio": "証拠金精算割合",
     "currentAtr": "ATR",
     "status": "ステータス",

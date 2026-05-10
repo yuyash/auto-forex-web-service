@@ -71,6 +71,10 @@ class TestBacktestTaskSerializer:
         assert data["instrument_context"]["instrument"] == task.instrument
         assert data["instrument_context"]["effective_pip_size"] == "0.01"
         assert data["instrument_context"]["pip_size_matches_instrument"] is True
+        assert data["money_context"]["account_currency"] == task.account_currency
+        assert data["money_context"]["display_currency"] == task.effective_display_currency
+        assert data["money_context"]["initial_balance_money"] == data["initial_balance_money"]
+        assert data["money_context"]["display_uses_account_currency"] is True
         assert "start_time" in data
         assert "end_time" in data
         assert "created_at" in data
@@ -318,6 +322,9 @@ class TestTradingTaskSerializer:
         assert data["status"] == task.status
         assert data["instrument_context"]["instrument"] == task.instrument
         assert data["instrument_context"]["effective_pip_size"] == "0.01"
+        assert data["money_context"]["account_currency"] == task.oanda_account.currency
+        assert data["money_context"]["display_currency"] == task.oanda_account.currency
+        assert data["money_context"]["account_currency_source"] == "oanda_account"
         assert "has_strategy_state" in data
         assert "can_resume" in data
         # current_tick is now served via /summary/ endpoint only

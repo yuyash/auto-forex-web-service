@@ -7173,6 +7173,14 @@
                         "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
                         "maxLength": 3
                     },
+                    "money_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskMoneyContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -7378,6 +7386,7 @@
                     "id",
                     "initial_balance_money",
                     "instrument_context",
+                    "money_context",
                     "name",
                     "start_time",
                     "started_at",
@@ -7642,6 +7651,14 @@
                         "readOnly": true,
                         "description": "Preferred currency for displaying balances and PnL. Empty uses account currency."
                     },
+                    "money_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskMoneyContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -7844,6 +7861,7 @@
                     "market_open_hour_utc",
                     "market_open_weekday",
                     "max_tick_gap_hours",
+                    "money_context",
                     "name",
                     "pip_size",
                     "sell_on_stop",
@@ -8380,11 +8398,18 @@
                     },
                     "source": {
                         "type": "string"
+                    },
+                    "path": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 },
                 "required": [
                     "as_of",
                     "instrument",
+                    "path",
                     "rate",
                     "source",
                     "source_currency",
@@ -12044,6 +12069,64 @@
                     "results"
                 ]
             },
+            "TaskMoneyContext": {
+                "type": "object",
+                "description": "Serializer for task-level money and display-currency context.",
+                "properties": {
+                    "task_type": {
+                        "type": "string"
+                    },
+                    "account_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "account_currency_source": {
+                        "type": "string"
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "display_currency_source": {
+                        "type": "string"
+                    },
+                    "initial_balance_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "commission_per_trade_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "display_uses_account_currency": {
+                        "type": "boolean"
+                    },
+                    "display_requires_conversion": {
+                        "type": "boolean"
+                    },
+                    "conversion_policy": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account_currency",
+                    "account_currency_source",
+                    "conversion_policy",
+                    "display_currency",
+                    "display_currency_source",
+                    "display_requires_conversion",
+                    "display_uses_account_currency",
+                    "task_type"
+                ]
+            },
             "TaskOrderPaginatedResponse": {
                 "type": "object",
                 "properties": {
@@ -12945,6 +13028,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "money_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskMoneyContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "name": {
                         "type": "string",
                         "description": "Human-readable name for this task",
@@ -13137,6 +13228,7 @@
                     "id",
                     "instrument",
                     "instrument_context",
+                    "money_context",
                     "name",
                     "pip_size",
                     "started_at",
@@ -13306,6 +13398,14 @@
                     },
                     "display_currency": {
                         "type": "string",
+                        "readOnly": true
+                    },
+                    "money_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskMoneyContext"
+                            }
+                        ],
                         "readOnly": true
                     },
                     "name": {
@@ -13498,6 +13598,7 @@
                     "live_tick_status_log_interval_seconds",
                     "market_idle_pre_close_minutes",
                     "market_idle_resume_delay_minutes",
+                    "money_context",
                     "name",
                     "pip_size",
                     "sell_on_stop",

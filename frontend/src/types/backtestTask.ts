@@ -2,7 +2,7 @@
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 import type { TaskInstrumentContext } from './instrument';
-import type { MoneyAmount } from './money';
+import type { MoneyAmount, TaskMoneyContext } from './money';
 
 export type BacktestInitialPositionStatus =
   | 'open'
@@ -43,6 +43,7 @@ export interface BacktestTask {
   initial_balance_money?: MoneyAmount;
   account_currency?: string;
   display_currency?: string;
+  money_context?: TaskMoneyContext;
   commission_per_trade: string;
   commission_per_trade_money?: MoneyAmount;
   pip_size?: string;

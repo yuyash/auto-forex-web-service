@@ -109,6 +109,7 @@
     "instrument": "Instrument",
     "pipSize": "Pip Size",
     "pipSizeOverrideValue": "{{value}} (override, default {{defaultPipSize}})",
+    "currencyRuntimeFxValue": "{{currency}} (runtime FX)",
     "marginRatio": "Margin Closeout Ratio",
     "currentAtr": "ATR",
     "status": "Status",

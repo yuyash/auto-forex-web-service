@@ -11,6 +11,7 @@ import {
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
 import type { TaskInstrumentContext } from '../../../types/instrument';
+import type { MoneyAmount, TaskMoneyContext } from '../../../types/money';
 
 function formatBooleanWithTranslation(t: TFunction) {
   return (value: TaskSettingValue): string =>
@@ -69,6 +70,39 @@ function instrumentContext(
   return context as TaskInstrumentContext;
 }
 
+function taskMoneyContext(
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>
+): TaskMoneyContext | null {
+  const context = source?.money_context ?? task?.money_context;
+  if (!context || typeof context !== 'object') return null;
+  return context as TaskMoneyContext;
+}
+
+function formatCurrencyWithMoneyContext(
+  value: TaskSettingValue,
+  source: Record<string, unknown>,
+  task: Record<string, unknown>,
+  field: 'account_currency' | 'display_currency',
+  t: TFunction
+): string {
+  const context = taskMoneyContext(source, task);
+  const currency =
+    field === 'account_currency'
+      ? context?.account_currency
+      : context?.display_currency;
+  const code = currency || value;
+  if (code === null || code === undefined || code === '') return '-';
+  const text = String(code);
+  if (field === 'display_currency' && context?.display_requires_conversion) {
+    return t('common:labels.currencyRuntimeFxValue', {
+      defaultValue: '{{currency}} (runtime FX)',
+      currency: text,
+    });
+  }
+  return text;
+}
+
 function formatWeekday(t: TFunction) {
   const weekdays = [
     { key: 'monday', label: 'Monday' },
@@ -95,16 +129,23 @@ function formatInitialBalance(
   separators?: NumberFormatSeparators
 ): string {
   if (value === null || value === undefined || value === '') return '-';
-  const money = source.initial_balance_money ?? task.initial_balance_money;
+  const context = taskMoneyContext(source, task);
+  const money =
+    context?.initial_balance_money ??
+    source.initial_balance_money ??
+    task.initial_balance_money;
   if (money && typeof money === 'object') {
     return formatMoneyPayload(
-      money as { amount: string | number; currency: string },
+      money as MoneyAmount,
       { currencyPlacement: 'suffix' },
       separators
     );
   }
   const numericValue = Number(value);
-  const currency = source.account_currency ?? task.account_currency;
+  const currency =
+    context?.account_currency ??
+    source.account_currency ??
+    task.account_currency;
   if (!Number.isFinite(numericValue)) return String(value);
   return formatMoneyAmount(
     numericValue,
@@ -123,17 +164,23 @@ function formatCommissionPerTrade(
   separators?: NumberFormatSeparators
 ): string {
   if (value === null || value === undefined || value === '') return '-';
+  const context = taskMoneyContext(source, task);
   const money =
-    source.commission_per_trade_money ?? task.commission_per_trade_money;
+    context?.commission_per_trade_money ??
+    source.commission_per_trade_money ??
+    task.commission_per_trade_money;
   if (money && typeof money === 'object') {
     return formatMoneyPayload(
-      money as { amount: string | number; currency: string },
+      money as MoneyAmount,
       { currencyPlacement: 'suffix' },
       separators
     );
   }
   const numericValue = Number(value);
-  const currency = source.account_currency ?? task.account_currency;
+  const currency =
+    context?.account_currency ??
+    source.account_currency ??
+    task.account_currency;
   if (!Number.isFinite(numericValue)) return String(value);
   return formatMoneyAmount(
     numericValue,
@@ -214,10 +261,26 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'account_currency',
       label: t('common:labels.accountCurrency', 'Account currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'account_currency',
+          t
+        ),
     },
     {
       key: 'display_currency',
       label: t('common:labels.displayCurrency', 'Display currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'display_currency',
+          t
+        ),
     },
     {
       key: 'commission_per_trade',
@@ -343,6 +406,30 @@ export function buildTradingTaskSettingDefinitions(
     {
       key: 'account_type',
       label: t('trading:detail.accountType', 'Account type'),
+    },
+    {
+      key: 'account_currency',
+      label: t('common:labels.accountCurrency', 'Account currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'account_currency',
+          t
+        ),
+    },
+    {
+      key: 'display_currency',
+      label: t('common:labels.displayCurrency', 'Display currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'display_currency',
+          t
+        ),
     },
     {
       key: 'sell_on_stop',
