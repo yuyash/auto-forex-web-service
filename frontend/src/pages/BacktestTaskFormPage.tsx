@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { lazy, Suspense } from 'react';
 import type { BacktestTaskUpdateFormProps } from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
+import type { BacktestInitialPositionCycle } from '../types/backtestTask';
 import {
   LoadingSpinner,
   Breadcrumbs,
@@ -18,6 +19,37 @@ const BacktestTaskUpdateForm = lazy(
 );
 
 type BacktestTaskUpdateInitialData = BacktestTaskUpdateFormProps['initialData'];
+
+function numericValue(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function optionalNumericValue(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeInitialPositionCycles(
+  cycles: BacktestInitialPositionCycle[] | undefined
+): BacktestTaskUpdateInitialData['initial_position_cycles'] {
+  return (cycles ?? []).map((cycle) => ({
+    direction: cycle.direction,
+    positions: cycle.positions.map((position) => ({
+      layer_number: numericValue(position.layer_number),
+      retracement_count: numericValue(position.retracement_count),
+      units: numericValue(position.units),
+      entry_price: numericValue(position.entry_price),
+      planned_exit_price: optionalNumericValue(position.planned_exit_price),
+      stop_loss_price: optionalNumericValue(position.stop_loss_price),
+      status: position.status ?? 'open',
+      exit_price: optionalNumericValue(position.exit_price),
+      close_reason: position.close_reason,
+    })),
+  }));
+}
 
 function FormLoadingFallback() {
   return (
@@ -59,6 +91,10 @@ export default function BacktestTaskFormPage() {
         market_open_weekday: task.market_open_weekday,
         market_open_hour_utc: task.market_open_hour_utc,
         max_tick_gap_hours: task.max_tick_gap_hours,
+        initial_positions_enabled: task.initial_positions_enabled ?? false,
+        initial_position_cycles: normalizeInitialPositionCycles(
+          task.initial_position_cycles
+        ),
       }
     : null;
 

@@ -1139,7 +1139,8 @@ export default function OandaAccountsPage() {
             <TextField
               fullWidth
               label={t('settings:accounts.tickLatencyMetricIntervalSeconds')}
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={formData.live_tick_latency_metric_interval_seconds}
               onChange={(e) =>
                 setFormData({
@@ -1174,7 +1175,8 @@ export default function OandaAccountsPage() {
                 <TextField
                   fullWidth
                   label={t('settings:accounts.maxGrossUnits')}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_estimated_exposure_units}
                   onChange={(e) =>
                     setFormData({
@@ -1206,7 +1208,8 @@ export default function OandaAccountsPage() {
                 <TextField
                   fullWidth
                   label={t('settings:accounts.maxInitialOrderUnits')}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_initial_order_units}
                   onChange={(e) =>
                     setFormData({
@@ -1238,7 +1241,8 @@ export default function OandaAccountsPage() {
                 <TextField
                   fullWidth
                   label={t('settings:accounts.maxOrderUnits')}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_order_units}
                   onChange={(e) =>
                     setFormData({

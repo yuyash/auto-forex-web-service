@@ -83,6 +83,36 @@ describe('backtest task payload builders', () => {
     });
   });
 
+  it('maps initial Snowball positions when enabled', () => {
+    const initial_position_cycles = [
+      {
+        direction: 'long' as const,
+        positions: [
+          {
+            layer_number: 1,
+            retracement_count: 0,
+            units: 1000,
+            entry_price: '150.1',
+            planned_exit_price: '150.6',
+            stop_loss_price: '149.8',
+            status: 'open' as const,
+          },
+        ],
+      },
+    ];
+
+    expect(
+      buildBacktestTaskCreatePayload({
+        ...baseFormData,
+        initial_positions_enabled: true,
+        initial_position_cycles,
+      })
+    ).toMatchObject({
+      initial_positions_enabled: true,
+      initial_position_cycles,
+    });
+  });
+
   it('stringifies decimal fields and preserves debug options for updates', () => {
     expect(
       buildBacktestTaskUpdatePayload(baseFormData, { tracemalloc: true })

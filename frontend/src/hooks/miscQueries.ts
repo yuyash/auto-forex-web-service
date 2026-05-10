@@ -2,7 +2,11 @@ import type { UseQueryOptions } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { authApi, type UserSettingsResponse } from '../services/api/auth';
 import { healthApi, strategiesApi, type Strategy } from '../services/api';
-import { marketApi, type TickDataRange } from '../services/api/market';
+import {
+  marketApi,
+  type TickDataPoint,
+  type TickDataRange,
+} from '../services/api/market';
 import type { StrategyConfig } from '../types/strategy';
 import type { GranularityOption } from '../services/api/market';
 
@@ -98,5 +102,24 @@ export function createTickDataRangeQuery(
     queryKey: queryKeys.marketConfig.tickDataRange(instrument ?? ''),
     queryFn: async () => marketApi.getTickDataRange(instrument!),
     enabled: Boolean(instrument),
+  };
+}
+
+export function createFirstTickQuery(
+  instrument?: string,
+  fromTime?: string,
+  toTime?: string,
+  options?: { enabled?: boolean }
+): UseQueryOptions<TickDataPoint | null> {
+  return {
+    queryKey: queryKeys.marketConfig.firstTick(
+      instrument ?? '',
+      fromTime ?? '',
+      toTime ?? ''
+    ),
+    queryFn: async () =>
+      marketApi.getFirstTick(instrument!, fromTime!, toTime!),
+    enabled:
+      Boolean(instrument && fromTime && toTime) && options?.enabled !== false,
   };
 }

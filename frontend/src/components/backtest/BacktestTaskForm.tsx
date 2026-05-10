@@ -28,6 +28,7 @@ import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { TaskReviewErrors } from '../tasks/forms/TaskReviewErrors';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -38,12 +39,16 @@ import {
   useCreateBacktestTask,
   useUpdateBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { useConfiguration } from '../../hooks/useConfigurations';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import {
+  useFirstTick,
   useSupportedInstruments,
   useTickDataRange,
 } from '../../hooks/useMarketConfig';
@@ -145,6 +150,8 @@ interface ReviewContentProps {
     tick_window_value_mode: string;
     sell_at_completion?: boolean;
     hedging_enabled?: boolean;
+    initial_positions_enabled?: boolean;
+    initial_position_cycles?: BacktestTaskSchemaOutput['initial_position_cycles'];
   };
 }
 
@@ -287,6 +294,32 @@ function ReviewContent({
         </Typography>
       </Grid>
 
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.initialPositionsEnabled', {
+            defaultValue: 'Create initial positions',
+          })}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.initial_positions_enabled
+            ? t('common:labels.yes')
+            : t('common:labels.no')}
+        </Typography>
+        {formValues.initial_positions_enabled ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('backtest:form.initialPositionsSummary', {
+              defaultValue: '{{cycles}} cycles, {{positions}} positions',
+              cycles: formValues.initial_position_cycles?.length ?? 0,
+              positions:
+                formValues.initial_position_cycles?.reduce(
+                  (sum, cycle) => sum + cycle.positions.length,
+                  0
+                ) ?? 0,
+            })}
+          </Typography>
+        ) : null}
+      </Grid>
+
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
           {t('backtest:form.tickGranularity')}
@@ -354,6 +387,8 @@ export default function BacktestTaskForm({
       tick_window_value_mode: 'first',
       sell_at_completion: false,
       hedging_enabled: true,
+      initial_positions_enabled: false,
+      initial_position_cycles: [],
       drain_duration_hours: 0,
       market_idle_pre_close_minutes: 0,
       market_idle_resume_delay_minutes: 0,
@@ -407,6 +442,8 @@ export default function BacktestTaskForm({
   const showTickWindowValueMode = watchedTickGranularity !== 'tick';
 
   const watchedMarketCloseEnabled = watch('market_close_enabled');
+  const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
+  const watchedPipSize = watch('pip_size');
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -434,14 +471,25 @@ export default function BacktestTaskForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const { data: configurationsData } = useConfigurations({
+    page: 1,
+    page_size: 200,
+  });
+  const selectedListConfig = useMemo(
+    () =>
+      (configurationsData?.results ?? []).find(
+        (config) => config.id === configIdString
+      ),
+    [configIdString, configurationsData?.results]
+  );
+  const selectedStrategyType =
+    selectedConfig?.strategy_type ?? selectedListConfig?.strategy_type;
   const selectedStrategy = useMemo(
     () =>
-      selectedConfig
-        ? strategies.find(
-            (strategy) => strategy.id === selectedConfig.strategy_type
-          )
+      selectedStrategyType
+        ? strategies.find((strategy) => strategy.id === selectedStrategyType)
         : undefined,
-    [selectedConfig, strategies]
+    [selectedStrategyType, strategies]
   );
   const strategySupportsHedging =
     selectedStrategy?.capabilities?.runtime?.hedging !== false;
@@ -463,6 +511,13 @@ export default function BacktestTaskForm({
     error: dataRangeError,
     isLoading: dataRangeLoading,
   } = useTickDataRange(watchedInstrument);
+  const {
+    firstTick,
+    error: firstTickError,
+    isLoading: firstTickLoading,
+  } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
+    enabled: watchedInitialPositionsEnabled === true,
+  });
 
   // When tick data range is loaded for a new task (no initialData dates),
   // set the default date range to [max - 1 month, max] at 12:00 AM in
@@ -567,6 +622,8 @@ export default function BacktestTaskForm({
           'initial_balance',
           'tick_granularity',
           'tick_window_value_mode',
+          'initial_positions_enabled',
+          'initial_position_cycles',
         ];
         break;
       default:
@@ -641,6 +698,8 @@ export default function BacktestTaskForm({
         market_open_weekday: completeData.market_open_weekday,
         market_open_hour_utc: completeData.market_open_hour_utc,
         max_tick_gap_hours: completeData.max_tick_gap_hours,
+        initial_positions_enabled: completeData.initial_positions_enabled,
+        initial_position_cycles: completeData.initial_position_cycles,
       },
       isSuperuser ? { tracemalloc } : undefined
     );
@@ -901,7 +960,8 @@ export default function BacktestTaskForm({
                       {...field}
                       fullWidth
                       label={t('backtest:form.commissionPerTrade')}
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       inputProps={{ min: 0, step: 0.01 }}
                       error={!!errors.commission_per_trade}
                       helperText={errors.commission_per_trade?.message}
@@ -945,7 +1005,8 @@ export default function BacktestTaskForm({
                       }}
                       fullWidth
                       label={t('backtest:form.pipSizeOptional')}
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       inputProps={{ min: 0, step: 0.00001 }}
                       error={!!errors.pip_size}
                       helperText={
@@ -1091,6 +1152,39 @@ export default function BacktestTaskForm({
                 </Grid>
               ) : null}
 
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="initial_position_cycles"
+                  control={control}
+                  render={({ field }) => (
+                    <BacktestInitialPositionsEditor
+                      enabled={watchedInitialPositionsEnabled ?? false}
+                      onEnabledChange={(enabled) =>
+                        setValue('initial_positions_enabled', enabled, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      value={field.value ?? []}
+                      onChange={field.onChange}
+                      selectedConfig={
+                        selectedConfig ?? selectedListConfig ?? undefined
+                      }
+                      strategyType={selectedStrategyType}
+                      pipSize={watchedPipSize}
+                      firstTick={firstTick}
+                      firstTickLoading={firstTickLoading}
+                      firstTickError={firstTickError}
+                      error={
+                        errors.initial_position_cycles?.message as
+                          | string
+                          | undefined
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
               <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
                 <Typography variant="subtitle1" fontWeight={600}>
                   {t('backtest:form.advancedSettings', 'Advanced settings')}
@@ -1120,7 +1214,8 @@ export default function BacktestTaskForm({
                         field.onChange(val === '' ? undefined : Number(val));
                       }}
                       fullWidth
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       label={t(
                         'backtest:form.drainDurationHours',
                         'Drain duration (hours)'
@@ -1152,7 +1247,8 @@ export default function BacktestTaskForm({
                         field.onChange(val === '' ? undefined : Number(val));
                       }}
                       fullWidth
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       label={t(
                         'backtest:form.marketIdlePreCloseMinutes',
                         'Idle before market close (min)'
@@ -1184,7 +1280,8 @@ export default function BacktestTaskForm({
                         field.onChange(val === '' ? undefined : Number(val));
                       }}
                       fullWidth
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       label={t(
                         'backtest:form.marketIdleResumeDelayMinutes',
                         'Resume delay after open (min)'
@@ -1216,7 +1313,8 @@ export default function BacktestTaskForm({
                         field.onChange(val === '' ? undefined : Number(val));
                       }}
                       fullWidth
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       label={t(
                         'backtest:form.maxTickGapHours',
                         'Max tick gap before fail (hours)'
@@ -1329,7 +1427,8 @@ export default function BacktestTaskForm({
                             );
                           }}
                           fullWidth
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           label={t(
                             'backtest:form.marketCloseHourUtc',
                             'Close hour (UTC)'
@@ -1403,7 +1502,8 @@ export default function BacktestTaskForm({
                             );
                           }}
                           fullWidth
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           label={t(
                             'backtest:form.marketOpenHourUtc',
                             'Open hour (UTC)'
@@ -1444,6 +1544,12 @@ export default function BacktestTaskForm({
           tick_window_value_mode: formData.tick_window_value_mode as string,
           sell_at_completion: formData.sell_at_completion as boolean,
           hedging_enabled: formData.hedging_enabled as boolean | undefined,
+          initial_positions_enabled: formData.initial_positions_enabled as
+            | boolean
+            | undefined,
+          initial_position_cycles: formData.initial_position_cycles as
+            | BacktestTaskSchemaOutput['initial_position_cycles']
+            | undefined,
         };
 
         const fieldNameMapping: Record<string, string> = {
@@ -1459,6 +1565,12 @@ export default function BacktestTaskForm({
           instrument: t('common:labels.instrument'),
           tick_granularity: t('backtest:form.tickGranularity'),
           tick_window_value_mode: t('backtest:form.tickWindowValueMode'),
+          initial_positions_enabled: t(
+            'backtest:form.initialPositionsEnabled',
+            {
+              defaultValue: 'Create initial positions',
+            }
+          ),
         };
 
         return (

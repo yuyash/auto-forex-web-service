@@ -17,7 +17,7 @@ from celery.result import AsyncResult
 from django.db import transaction
 from django.utils import timezone as _timezone
 
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import (
     BacktestTask,
     TradingTask,
@@ -293,7 +293,8 @@ class TaskService:
                 raise TaskValidationError(f"Task configuration is invalid: {error_message}")
             self._ensure_dispatch_risk_guard_allows(locked_task)
 
-            locked_task.execution_id = uuid4()
+            if not self._should_preserve_backtest_preview_execution_id(locked_task):
+                locked_task.execution_id = uuid4()
             locked_task.celery_task_id = uuid4()
             locked_task.status = TaskStatus.STARTING
             locked_task.save(
@@ -318,7 +319,8 @@ class TaskService:
             raise TaskValidationError(f"Task configuration is invalid: {error_message}")
         self._ensure_dispatch_risk_guard_allows(task)
 
-        task.execution_id = uuid4()
+        if not self._should_preserve_backtest_preview_execution_id(task):
+            task.execution_id = uuid4()
         task.celery_task_id = uuid4()
         task.status = TaskStatus.STARTING
         try:
@@ -332,6 +334,28 @@ class TaskService:
         if admission.allowed:
             return
         raise TaskCapacityError(admission.reason, decision=admission)
+
+    @staticmethod
+    def _should_preserve_backtest_preview_execution_id(task: BacktestTask | TradingTask) -> bool:
+        if type(task) is not BacktestTask or task.execution_id is None:
+            return False
+        if getattr(task, "initial_positions_enabled", False) is not True:
+            return False
+        from apps.trading.models import ExecutionState
+        from apps.trading.services.backtest_initial_positions import (
+            is_initial_position_preview_state,
+        )
+
+        state = (
+            ExecutionState.objects.filter(
+                task_type=TaskType.BACKTEST.value,
+                task_id=task.pk,
+                execution_id=task.execution_id,
+            )
+            .only("strategy_state")
+            .first()
+        )
+        return is_initial_position_preview_state(state)
 
     def _ensure_dispatch_risk_guard_allows(self, task: BacktestTask | TradingTask) -> None:
         from apps.trading.services.live_risk import LiveTradingRiskError

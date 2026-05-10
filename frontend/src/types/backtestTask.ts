@@ -2,6 +2,28 @@
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 
+export type BacktestInitialPositionStatus =
+  | 'open'
+  | 'closed'
+  | 'pending_rebuild';
+
+export interface BacktestInitialPosition {
+  layer_number: number;
+  retracement_count: number;
+  units: number | string;
+  entry_price: number | string;
+  planned_exit_price?: number | string | null;
+  stop_loss_price?: number | string | null;
+  status?: BacktestInitialPositionStatus;
+  exit_price?: number | string | null;
+  close_reason?: string;
+}
+
+export interface BacktestInitialPositionCycle {
+  direction: 'long' | 'short';
+  positions: BacktestInitialPosition[];
+}
+
 export interface BacktestTask {
   id: string;
   user_id: number;
@@ -33,6 +55,8 @@ export interface BacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   latest_execution?: ExecutionSummary;
   can_resume?: boolean;
   action_policy?: TaskActionPolicy;
@@ -69,6 +93,8 @@ export interface BacktestTaskCreateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   debug_options?: Record<string, unknown>;
 }
 
@@ -97,6 +123,8 @@ export interface BacktestTaskFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
 }
 
 export interface BacktestTaskUpdateData {
@@ -123,6 +151,8 @@ export interface BacktestTaskUpdateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   debug_options?: Record<string, unknown>;
 }
 

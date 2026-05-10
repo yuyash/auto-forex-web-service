@@ -16,6 +16,8 @@ const EXECUTION_SETTING_FIELDS = new Set([
   'live_tick_max_age_seconds',
   'live_tick_status_log_interval_seconds',
   'broker_drift_check_interval_seconds',
+  'initial_positions_enabled',
+  'initial_position_cycles',
 ]);
 
 export function hasDirtyExecutionSettings(

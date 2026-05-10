@@ -192,7 +192,8 @@ export function StopOptionsDialog({
           <Box sx={{ mt: 2 }}>
             <TextField
               fullWidth
-              type="number"
+              type="text"
+              inputMode="decimal"
               label={t(
                 'common:stopOptions.drainDurationMinutesLabel',
                 'Drain duration (minutes)'

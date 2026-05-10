@@ -8,6 +8,21 @@ export interface TickDataRange {
   max_timestamp: string | null;
 }
 
+export interface TickDataPoint {
+  instrument: string;
+  timestamp: string;
+  bid: string;
+  ask: string;
+  mid: string;
+}
+
+interface TicksResponse {
+  count: number;
+  instrument: string;
+  next_cursor: string | null;
+  ticks: TickDataPoint[];
+}
+
 export interface CandlesResponse {
   candles?: unknown[];
 }
@@ -44,6 +59,24 @@ export async function fetchTickDataRange(
   return api.get<TickDataRange>('/api/market/ticks/range/', { instrument });
 }
 
+/**
+ * Fetch the first tick in a backtest period for a given instrument.
+ */
+export async function fetchFirstTick(
+  instrument: string,
+  fromTime: string,
+  toTime: string
+): Promise<TickDataPoint | null> {
+  const response = await api.get<TicksResponse>('/api/market/ticks/', {
+    instrument,
+    from_time: fromTime,
+    to_time: toTime,
+    page_size: 1,
+    ordering: 'timestamp',
+  });
+  return response.ticks[0] ?? null;
+}
+
 export const marketApi = {
   getSupportedInstruments: () =>
     api.get<InstrumentsResponse>('/api/market/instruments/'),
@@ -52,6 +85,7 @@ export const marketApi = {
   getCandles: (params: Record<string, string | number | undefined>) =>
     api.get<CandlesResponse>('/api/market/candles/', params),
   getTickDataRange: fetchTickDataRange,
+  getFirstTick: fetchFirstTick,
   getMarketStatus: () =>
     api.get<MarketStatusResponse>('/api/market/market/status/'),
 };

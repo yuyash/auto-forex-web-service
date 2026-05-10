@@ -73,6 +73,27 @@ function formatInitialBalance(
   return currency ? `${formatted} ${String(currency)}` : formatted;
 }
 
+function formatInitialPositionCycles(t: TFunction) {
+  return (value: TaskSettingValue): string => {
+    if (!Array.isArray(value) || value.length === 0) return '-';
+    const positions = value.reduce((sum, cycle) => {
+      if (
+        cycle &&
+        typeof cycle === 'object' &&
+        Array.isArray((cycle as { positions?: unknown }).positions)
+      ) {
+        return sum + (cycle as { positions: unknown[] }).positions.length;
+      }
+      return sum;
+    }, 0);
+    return t('backtest:form.initialPositionsSummary', {
+      defaultValue: '{{cycles}} cycles, {{positions}} positions',
+      cycles: value.length,
+      positions,
+    });
+  };
+}
+
 export function buildBacktestTaskSettingDefinitions(
   t: TFunction,
   timezone: string,
@@ -84,6 +105,7 @@ export function buildBacktestTaskSettingDefinitions(
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
   const formatBoolean = formatBooleanWithTranslation(t);
   const formatWeekdayValue = formatWeekday(t);
+  const formatInitialPositions = formatInitialPositionCycles(t);
 
   return [
     { key: 'id', label: t('common:labels.taskId', 'Task ID') },
@@ -191,6 +213,22 @@ export function buildBacktestTaskSettingDefinitions(
         'backtest:form.maxTickGapHours',
         'Max tick gap before fail (hours)'
       ),
+    },
+    {
+      key: 'initial_positions_enabled',
+      label: t(
+        'backtest:form.initialPositionsEnabled',
+        'Create initial positions'
+      ),
+      format: formatBoolean,
+    },
+    {
+      key: 'initial_position_cycles',
+      label: t(
+        'backtest:form.initialPositionCycles',
+        'Initial position cycles'
+      ),
+      format: formatInitialPositions,
     },
     ...(options.includeDebugOptions
       ? [{ key: 'debug_options', label: t('common:debug.title') }]

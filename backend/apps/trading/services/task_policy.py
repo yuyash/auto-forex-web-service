@@ -34,6 +34,8 @@ EXECUTION_SETTING_FIELDS = frozenset(
         "start_time",
         "end_time",
         "initial_balance",
+        "initial_positions_enabled",
+        "initial_position_cycles",
         "account_currency",
         "tick_granularity",
         "tick_window_value_mode",

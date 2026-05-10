@@ -75,6 +75,19 @@ class ExecutionStateRepository:
                 state.current_balance,
                 state.ticks_processed,
             )
+            if isinstance(task, BacktestTask):
+                from apps.trading.services.backtest_initial_positions import (
+                    is_initial_position_preview_state,
+                )
+
+                if is_initial_position_preview_state(state):
+                    executor.logger.info(
+                        "Existing ExecutionState is a Snowball initial-position preview; "
+                        "starting as a fresh execution. task_id=%s, execution_id=%s",
+                        task.pk,
+                        task.execution_id,
+                    )
+                    return state, False
             return state, True
         except state_model.DoesNotExist:
             pass

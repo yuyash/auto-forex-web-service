@@ -294,6 +294,18 @@ class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
             "is failed as suspicious. Default: 120 (5 days)."
         ),
     )
+    initial_positions_enabled = models.BooleanField(
+        default=False,
+        help_text="Create Snowball initial cycles/positions before starting the backtest.",
+    )
+    initial_position_cycles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Requested Snowball initial cycle/position structure. "
+            "Positions, trades, orders, and strategy state are generated from this data."
+        ),
+    )
 
     class Meta:
         db_table = "backtest_tasks"
@@ -351,6 +363,8 @@ class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
             account_currency=self.account_currency,
             commission_per_trade=self.commission_per_trade,
             max_tick_gap_hours=self.max_tick_gap_hours,
+            initial_positions_enabled=self.initial_positions_enabled,
+            initial_position_cycles=self.initial_position_cycles,
             status=TaskStatus.CREATED,
         )
 
