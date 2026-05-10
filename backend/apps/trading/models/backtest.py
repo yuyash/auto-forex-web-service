@@ -93,6 +93,12 @@ class BacktestTask(ExecutableTaskModel):
         default="USD",
         help_text="Account base currency (e.g., USD, JPY)",
     )
+    display_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Preferred currency for displaying balances and PnL. Empty uses account currency.",
+    )
     initial_balance = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -115,7 +121,7 @@ class BacktestTask(ExecutableTaskModel):
         decimal_places=5,
         null=True,
         blank=True,
-        default=Decimal("0.01"),
+        default=None,
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
     hedging_enabled = models.BooleanField(

@@ -56,6 +56,7 @@ import {
   getStrategyConfigSnapshotHash,
   getStrategyConfigSnapshotRevision,
 } from '../../../utils/strategyConfigRevision';
+import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 
@@ -166,7 +167,7 @@ export function ExecutionHistoryTable({
         });
   };
 
-  const pnlCurrency = instrument?.includes('_') ? instrument.split('_')[1] : '';
+  const pnlCurrency = quoteCurrencyFromInstrument(instrument) ?? '';
 
   const columns: Column<TaskExecution>[] = useMemo(() => {
     const baseColumns: Column<TaskExecution>[] = [

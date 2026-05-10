@@ -41,6 +41,10 @@ import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
 import { useFirstTick } from '../../hooks/useMarketConfig';
+import {
+  DEFAULT_ACCOUNT_CURRENCY,
+  SUPPORTED_CURRENCIES,
+} from '../../constants/currencies';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -67,6 +71,25 @@ const weekdayOptions: ReadonlyArray<{
 const optionalPositiveNumberSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.coerce.number().positive().optional().nullable()
+);
+
+const currencyCodeSchema = z.preprocess(
+  (value) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase(),
+  z.string().regex(/^[A-Z]{3}$/, 'Currency must be a 3-letter code')
+);
+
+const optionalCurrencyCodeSchema = z.preprocess(
+  (value) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase(),
+  z
+    .union([z.literal(''), z.string().regex(/^[A-Z]{3}$/)])
+    .optional()
+    .default('')
 );
 
 const initialPositionSchema = z.object({
@@ -122,6 +145,8 @@ const backtestTaskUpdateSchema = z
         message: 'Initial balance must be a number',
       })
       .positive('Initial balance must be greater than zero'),
+    account_currency: currencyCodeSchema,
+    display_currency: optionalCurrencyCodeSchema,
     commission_per_trade: z.coerce
       .number({
         message: 'Commission must be a number',
@@ -304,6 +329,12 @@ export default function BacktestTaskUpdateForm({
       ...initialData,
       name: taskName,
       description: taskDescription ?? '',
+      account_currency:
+        initialData.account_currency || DEFAULT_ACCOUNT_CURRENCY,
+      display_currency:
+        initialData.display_currency ||
+        initialData.account_currency ||
+        DEFAULT_ACCOUNT_CURRENCY,
     },
   });
 
@@ -352,6 +383,8 @@ export default function BacktestTaskUpdateForm({
   const selectedTickWindowValueMode = watch('tick_window_value_mode');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
+  const watchedAccountCurrency =
+    watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
@@ -602,10 +635,69 @@ export default function BacktestTaskUpdateForm({
                 value={field.value}
                 onChange={field.onChange}
                 label={t('backtest:detail.initialBalance')}
-                currency="USD"
+                currency={watchedAccountCurrency}
                 error={errors.initial_balance?.message}
                 helperText={errors.initial_balance?.message}
               />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Controller
+            name="account_currency"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth error={!!errors.account_currency}>
+                <InputLabel id="backtest-update-account-currency-label">
+                  {t('common:labels.accountCurrency', {
+                    defaultValue: 'Account currency',
+                  })}
+                </InputLabel>
+                <Select
+                  {...field}
+                  labelId="backtest-update-account-currency-label"
+                  label={t('common:labels.accountCurrency', {
+                    defaultValue: 'Account currency',
+                  })}
+                >
+                  {SUPPORTED_CURRENCIES.map((currency) => (
+                    <MenuItem key={currency} value={currency}>
+                      {currency}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Controller
+            name="display_currency"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth error={!!errors.display_currency}>
+                <InputLabel id="backtest-update-display-currency-label">
+                  {t('common:labels.displayCurrency', {
+                    defaultValue: 'Display currency',
+                  })}
+                </InputLabel>
+                <Select
+                  {...field}
+                  value={field.value || watchedAccountCurrency}
+                  labelId="backtest-update-display-currency-label"
+                  label={t('common:labels.displayCurrency', {
+                    defaultValue: 'Display currency',
+                  })}
+                >
+                  {SUPPORTED_CURRENCIES.map((currency) => (
+                    <MenuItem key={currency} value={currency}>
+                      {currency}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             )}
           />
         </Grid>

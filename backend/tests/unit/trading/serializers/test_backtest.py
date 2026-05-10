@@ -30,6 +30,7 @@ class TestBacktestTaskSerializer:
         assert "progress" not in fields
         assert "current_tick" not in fields
         assert "account_currency" in fields
+        assert "display_currency" in fields
 
 
 class TestBacktestTaskListSerializer:
@@ -45,6 +46,7 @@ class TestBacktestTaskListSerializer:
         assert "max_tick_gap_hours" in fields
         assert "progress" not in fields
         assert "account_currency" in fields
+        assert "display_currency" in fields
 
 
 class TestBacktestTaskCreateSerializer:

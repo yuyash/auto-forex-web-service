@@ -145,6 +145,10 @@ export function buildBacktestTaskSettingDefinitions(
       label: t('common:labels.accountCurrency', 'Account currency'),
     },
     {
+      key: 'display_currency',
+      label: t('common:labels.displayCurrency', 'Display currency'),
+    },
+    {
       key: 'commission_per_trade',
       label: t('backtest:detail.commissionPerTrade'),
     },

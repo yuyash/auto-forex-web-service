@@ -4,11 +4,9 @@ from decimal import Decimal
 
 import pytest
 
+from apps.trading.money import AccountCurrency, CurrencyConversion, Money
 from apps.trading.utils import (
-    AccountCurrency,
-    CurrencyConversion,
     Instrument,
-    Money,
     PipSize,
     Price,
     TradeSide,

@@ -12,8 +12,9 @@ from apps.trading.events import (
     RebuildPositionEvent,
     StrategyEvent,
 )
+from apps.trading.money import AccountCurrency
 from apps.trading.strategies.snowball.entries import Entry
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.utils import Instrument
 
 
 class SnowballEventFactory:

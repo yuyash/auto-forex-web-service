@@ -26,6 +26,7 @@ from apps.trading.models import (
     Trade,
     TradingEvent,
 )
+from apps.trading.money import AccountCurrency
 from apps.trading.order import OrderService
 from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.cycle_state import (
@@ -40,7 +41,7 @@ from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVI
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import mark_event_processed
-from apps.trading.utils import AccountCurrency, Instrument, pip_size_for_instrument
+from apps.trading.utils import Instrument, pip_size_for_instrument
 
 PREVIEW_STATE_MARKER = "_initial_position_seed_preview"
 SEED_VERSION = 1
@@ -382,6 +383,7 @@ class BacktestInitialPositionService:
             execution_id=task.execution_id,
             strategy_state={},
             current_balance=task.initial_balance,
+            current_balance_currency=str(task.account_currency or "").upper(),
             ticks_processed=0,
             last_tick_timestamp=seed_timestamp,
             resume_cursor_timestamp=task.start_time,
@@ -543,6 +545,8 @@ class BacktestInitialPositionService:
                 state.current_balance = (
                     Decimal(str(state.current_balance)) + result.realized_pnl_delta
                 )
+                if result.realized_pnl_delta_currency:
+                    state.current_balance_currency = result.realized_pnl_delta_currency
             binding = result.entry_binding
             if binding is not None:
                 _apply_entry_binding(

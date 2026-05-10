@@ -173,6 +173,7 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
         pnl=PnlInfo(
             realized=_to_decimal(pnl.get("realized")),
             unrealized=_to_decimal(pnl.get("unrealized")),
+            currency=_to_str_or_none(pnl.get("currency")),
         ),
         counts=CountsInfo(
             total_trades=int(counts.get("total_trades") or 0),
@@ -187,8 +188,13 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             current_balance=_to_optional_decimal(execution.get("current_balance")),
             ticks_processed=int(execution.get("ticks_processed") or 0),
             account_currency=_to_str_or_none(execution.get("account_currency")),
+            current_balance_currency=_to_str_or_none(execution.get("current_balance_currency")),
+            current_balance_money=_to_money_dict(execution.get("current_balance_money")),
             current_balance_display=_to_optional_decimal(execution.get("current_balance_display")),
             display_currency=_to_str_or_none(execution.get("display_currency")),
+            current_balance_display_money=_to_money_dict(
+                execution.get("current_balance_display_money")
+            ),
             resume_cursor_timestamp=_to_str_or_none(execution.get("resume_cursor_timestamp")),
             margin_ratio=_to_optional_decimal(execution.get("margin_ratio")),
             current_atr=_to_optional_decimal(execution.get("current_atr")),
@@ -231,6 +237,16 @@ def _deserialize_tick_delivery(raw: Any) -> TickDeliveryInfo | None:
         max_age_seconds=_to_optional_int(raw.get("max_age_seconds")),
         message=_to_str_or_none(raw.get("message")),
     )
+
+
+def _to_money_dict(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    amount = value.get("amount")
+    currency = value.get("currency")
+    if amount is None or currency is None:
+        return None
+    return {"amount": str(amount), "currency": str(currency)}
 
 
 def _to_decimal(value: Any) -> Decimal:

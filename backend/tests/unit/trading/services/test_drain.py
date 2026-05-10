@@ -3,8 +3,8 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+from apps.trading.money import AccountCurrency, Money
 from apps.trading.services.drain import DrainCandidate, DrainPolicy
-from apps.trading.utils import AccountCurrency, Money
 
 
 def test_drain_candidate_keeps_pnl_currency_with_amount():

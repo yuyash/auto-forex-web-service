@@ -72,6 +72,9 @@ export default function BacktestTaskFormPage() {
         start_time: task.start_time,
         end_time: task.end_time,
         initial_balance: parseFloat(task.initial_balance),
+        account_currency: task.account_currency ?? 'USD',
+        display_currency:
+          task.display_currency ?? task.account_currency ?? 'USD',
         commission_per_trade: parseFloat(task.commission_per_trade),
         pip_size: task.pip_size ? parseFloat(task.pip_size) : undefined,
         instrument: task.instrument,

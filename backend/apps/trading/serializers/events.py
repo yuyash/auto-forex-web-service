@@ -96,6 +96,7 @@ class TradeSerializer(serializers.Serializer):
     units = serializers.IntegerField()
     instrument = serializers.CharField()
     price = serializers.DecimalField(max_digits=20, decimal_places=10)
+    price_currency = serializers.CharField(required=False, allow_blank=True)
     execution_method = serializers.ChoiceField(choices=EventType.choices)
     execution_method_display = serializers.SerializerMethodField(
         help_text="Human-readable display name for the execution method.",
@@ -181,6 +182,17 @@ class PositionSerializer(serializers.Serializer):
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     is_rebuild = serializers.BooleanField(required=False, default=False)
+    unrealized_pnl = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        required=False,
+    )
+    unrealized_pnl_currency = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    realized_pnl = serializers.SerializerMethodField()
+    realized_pnl_currency = serializers.SerializerMethodField()
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
@@ -208,6 +220,9 @@ class PositionSerializer(serializers.Serializer):
             return None
         if getattr(obj, "is_open", True):
             return None
+        annotated_reason = getattr(obj, "_close_reason", None)
+        if annotated_reason:
+            return annotated_reason
         # Use prefetched trades if available
         if hasattr(obj, "prefetched_close_reason"):
             return obj.prefetched_close_reason  # type: ignore[return-value]
@@ -242,6 +257,21 @@ class PositionSerializer(serializers.Serializer):
         if hasattr(obj, "trades"):
             return list(obj.trades.values_list("id", flat=True))  # type: ignore[union-attr]
         return []
+
+    def get_realized_pnl(self, obj: object) -> str | None:
+        """Return realized PnL for closed positions when available."""
+        value = None
+        if isinstance(obj, dict):
+            value = cast(dict[str, Any], obj).get("realized_pnl")
+        else:
+            value = getattr(obj, "_realized_pnl", None)
+        return str(value) if value is not None else None
+
+    def get_realized_pnl_currency(self, obj: object) -> str:
+        """Return the currency for realized PnL values."""
+        if isinstance(obj, dict):
+            return str(cast(dict[str, Any], obj).get("unrealized_pnl_currency") or "")
+        return str(getattr(obj, "unrealized_pnl_currency", "") or "")
 
 
 class OrderSerializer(serializers.Serializer):

@@ -56,6 +56,7 @@ import { logger } from '../../utils/logger';
 import { formatAppNumber, currencySymbol } from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -378,10 +379,12 @@ export default function TradingTaskCard({
   };
 
   const quoteCurrency = currencySymbol(
-    currentTask.instrument.split('_').at(-1) ||
+    taskSummary.pnl.currency ||
       currentTask.latest_execution?.quote_currency ||
+      quoteCurrencyFromInstrument(currentTask.instrument) ||
       taskSummary.execution.displayCurrency ||
-      'JPY'
+      taskSummary.execution.accountCurrency ||
+      ''
   );
   const formatPnl = (value: number): string => {
     return `${formatAppNumber(value, {

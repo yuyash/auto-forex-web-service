@@ -13,6 +13,25 @@ const optionalPositiveNumberSchema = z.preprocess(
   z.coerce.number().positive().optional().nullable()
 );
 
+const currencyCodeSchema = z.preprocess(
+  (value) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase(),
+  z.string().regex(/^[A-Z]{3}$/, 'Currency must be a 3-letter code')
+);
+
+const optionalCurrencyCodeSchema = z.preprocess(
+  (value) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase(),
+  z
+    .union([z.literal(''), z.string().regex(/^[A-Z]{3}$/)])
+    .optional()
+    .default('')
+);
+
 const initialPositionSchema = z.object({
   layer_number: z.coerce.number().int().min(1),
   retracement_count: z.coerce.number().int().min(0),
@@ -75,6 +94,8 @@ export const backtestTaskSchema = z
         message: 'Initial balance must be a number',
       })
       .positive('Initial balance must be greater than zero'),
+    account_currency: currencyCodeSchema,
+    display_currency: optionalCurrencyCodeSchema,
     commission_per_trade: z.coerce
       .number({
         message: 'Commission must be a number',
@@ -306,6 +327,8 @@ export type BacktestTaskSchemaOutput = {
   start_time: string;
   end_time: string;
   initial_balance: number;
+  account_currency: string;
+  display_currency?: string;
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;

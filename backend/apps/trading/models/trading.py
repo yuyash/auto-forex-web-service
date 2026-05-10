@@ -82,7 +82,7 @@ class TradingTask(ExecutableTaskModel):
         decimal_places=5,
         null=True,
         blank=True,
-        default=Decimal("0.01"),
+        default=None,
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
     trading_mode = models.CharField(

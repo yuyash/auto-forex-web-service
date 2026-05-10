@@ -66,6 +66,7 @@ class TestBacktestTaskSerializer:
         assert "progress" not in data
         assert "current_tick" not in data
         assert "account_currency" in data
+        assert "display_currency" in data
 
 
 @pytest.mark.django_db

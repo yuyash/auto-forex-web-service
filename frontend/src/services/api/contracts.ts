@@ -16,6 +16,7 @@ export interface BackendExecutionMetrics {
   win_rate?: string;
   pnl_currency?: string;
   quote_currency?: string;
+  display_currency?: string;
 }
 
 export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
@@ -63,6 +64,7 @@ export interface BackendBacktestTask {
   end_time: string;
   initial_balance: string;
   account_currency?: string;
+  display_currency?: string;
   commission_per_trade: string;
   pip_size?: string | null;
   instrument: string;

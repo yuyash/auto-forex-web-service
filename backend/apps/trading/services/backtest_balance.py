@@ -12,9 +12,9 @@ from django.db.models import F
 from django.utils import timezone
 
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.money import Money
 from apps.trading.models import BacktestTask, ExecutionState, TaskLog
 from apps.trading.services.execution_snapshots import sync_execution_snapshot
-from apps.trading.utils import Money
 
 
 class BacktestBalanceAdjustmentError(Exception):
@@ -120,12 +120,15 @@ def set_backtest_current_balance(
         updated_at = timezone.now()
         ExecutionState.objects.filter(pk=state.pk).update(
             current_balance=current_balance_money.amount,
+            current_balance_currency=account_currency,
             updated_at=updated_at,
             state_version=F("state_version") + 1,
         )
         task.updated_at = updated_at
         task.save(update_fields=["updated_at"])
-        state.refresh_from_db(fields=["current_balance", "state_version"])
+        state.refresh_from_db(
+            fields=["current_balance", "current_balance_currency", "state_version"]
+        )
 
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,

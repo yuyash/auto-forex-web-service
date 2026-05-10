@@ -28,6 +28,9 @@ export interface TaskPosition {
   oanda_trade_id?: string | null;
   replayed_at?: string | null;
   unrealized_pnl?: string | null;
+  unrealized_pnl_currency?: string | null;
+  realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
   is_open: boolean;
   layer_index?: number | null;
   retracement_count?: number | null;

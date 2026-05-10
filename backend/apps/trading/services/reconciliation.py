@@ -24,6 +24,7 @@ from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Position, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.services.broker_snapshot import BrokerSnapshotLoader
+from apps.trading.utils import Instrument
 
 logger: Logger = getLogger(name=__name__)
 
@@ -385,6 +386,7 @@ class TradingResumeReconciler:
         )
 
         self.state.current_balance = details.balance
+        self.state.current_balance_currency = str(details.currency or "").strip().upper()
         report.updated_account_snapshot = True
 
     def _check_pending_orders(self, report: ReconciliationReport) -> None:
@@ -457,6 +459,10 @@ class TradingResumeReconciler:
             if local_position.unrealized_pnl != broker_trade.unrealized_pnl:
                 local_position.unrealized_pnl = broker_trade.unrealized_pnl
                 updated_fields.append("unrealized_pnl")
+            quote_currency = Instrument(local_position.instrument).quote_currency
+            if quote_currency and local_position.unrealized_pnl_currency != quote_currency:
+                local_position.unrealized_pnl_currency = quote_currency
+                updated_fields.append("unrealized_pnl_currency")
 
             if self._strategy_type() == "snowball_net":
                 if local_position.layer_index != 1:
@@ -497,6 +503,7 @@ class TradingResumeReconciler:
                 is_open=True,
                 oanda_trade_id=broker_trade.trade_id,
                 unrealized_pnl=broker_trade.unrealized_pnl,
+                unrealized_pnl_currency=Instrument(broker_trade.instrument).quote_currency,
                 layer_index=1 if self._strategy_type() == "snowball_net" else None,
                 retracement_count=0 if self._strategy_type() == "snowball_net" else None,
             )
@@ -602,6 +609,7 @@ class TradingResumeReconciler:
         ).update(
             strategy_state=self.state.strategy_state,
             current_balance=self.state.current_balance,
+            current_balance_currency=self.state.current_balance_currency,
             ticks_processed=self.state.ticks_processed,
             last_tick_timestamp=self.state.last_tick_timestamp,
             resume_cursor_timestamp=(

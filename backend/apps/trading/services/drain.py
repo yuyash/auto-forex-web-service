@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-from apps.trading.utils import Money
+from apps.trading.money import Money
 
 
 @dataclass(frozen=True, slots=True)

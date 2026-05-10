@@ -157,7 +157,10 @@ def test_task_summary_has_serializer_ready_dto_payload():
     )
     payload = summary.to_dict()
 
-    assert payload["pnl"] == {"realized": Decimal("0"), "unrealized": Decimal("0")}
+    assert payload["pnl"]["realized"] == Decimal("0")
+    assert payload["pnl"]["unrealized"] == Decimal("0")
+    assert payload["pnl"]["currency"] == "JPY"
+    assert payload["pnl"]["total_money"] == {"amount": "0", "currency": "JPY"}
     assert payload["execution"]["ticks_processed"] == 10
 
 

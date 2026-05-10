@@ -57,6 +57,7 @@ import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 import { currencySymbol, formatAppNumber } from '../../utils/numberFormat';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BacktestTaskCardProps {
@@ -336,12 +337,14 @@ export default function BacktestTaskCard({
   });
   const { summary } = summaryData;
   const progress = summary.task.progress;
-  const quoteCurrency = currencySymbol(
-    currentTask.instrument.split('_').at(-1) ||
-      summary.execution.displayCurrency ||
-      currentTask.account_currency ||
-      ''
-  );
+  const pnlCurrency =
+    summary.pnl.currency ||
+    quoteCurrencyFromInstrument(currentTask.instrument) ||
+    currentTask.display_currency ||
+    summary.execution.accountCurrency ||
+    currentTask.account_currency ||
+    '';
+  const pnlCurrencySymbol = currencySymbol(pnlCurrency);
   const realizedPnl = summary.pnl.realized;
   const unrealizedPnl = summary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
@@ -350,7 +353,7 @@ export default function BacktestTaskCard({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       signed: true,
-    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
+    })}${pnlCurrencySymbol ? ` ${pnlCurrencySymbol}` : ''}`;
   const pnlItems = [
     {
       key: 'total',

@@ -105,6 +105,10 @@ import {
   writeStoredValue,
 } from '../../../../utils/persistentState';
 import {
+  baseCurrencyFromInstrument,
+  quoteCurrencyFromInstrument,
+} from '../../../../utils/instrumentCurrency';
+import {
   measureContainer,
   measureContainerWidth,
 } from '../../../../utils/measureContainer';
@@ -447,13 +451,6 @@ function normalizeCurrencyCode(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toUpperCase();
   return normalized ? normalized : null;
-}
-
-function quoteCurrencyFromInstrument(
-  instrument?: string | null
-): string | null {
-  if (!instrument || !instrument.includes('_')) return null;
-  return normalizeCurrencyCode(instrument.split('_').at(-1));
 }
 
 function pnlCurrencyCode(data: SnowballNetChartResponse): string | null {
@@ -2734,7 +2731,8 @@ function CurrentChips({
   const unrealizedPnl = toNumber(current.unrealized_pnl);
   const price = toNumber(current.current_price ?? current.mid);
   const pnlCurrency = pnlCurrencyCode(data);
-  const suffix = instrument ? ` ${instrument.split('_')[0] ?? ''}` : '';
+  const baseCurrency = baseCurrencyFromInstrument(instrument);
+  const suffix = baseCurrency ? ` ${baseCurrency}` : '';
   return (
     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
       {directionLabel ? (

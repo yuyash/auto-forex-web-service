@@ -11,6 +11,7 @@ from apps.market.services.oanda import MarketOrder as OandaMarketOrder
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Order, Position
 from apps.trading.models.orders import OrderStatus, OrderType
+from apps.trading.utils import Instrument
 
 logger: Logger = getLogger(__name__)
 
@@ -239,6 +240,9 @@ class PositionRepository:
             position.planned_exit_price = planned_exit_price
         if planned_exit_price_formula is not None:
             position.planned_exit_price_formula = planned_exit_price_formula
+        quote_currency = Instrument(position.instrument).quote_currency
+        if quote_currency and position.unrealized_pnl_currency != quote_currency:
+            position.unrealized_pnl_currency = quote_currency
         position.execution_id = self.execution_id
         position.save()
 
@@ -274,6 +278,7 @@ class PositionRepository:
             entry_price=entry_price,
             entry_time=entry_time,
             is_open=True,
+            unrealized_pnl_currency=Instrument(instrument).quote_currency,
             layer_index=layer_index,
             oanda_trade_id=oanda_trade_id,
             retracement_count=retracement_count,

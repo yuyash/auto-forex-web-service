@@ -24,6 +24,7 @@ from apps.trading.events import (
 )
 from apps.trading.models import Order, Position, Trade, TradingEvent
 from apps.trading.order import OrderService, OrderServiceError
+from apps.trading.utils import Instrument
 
 logger: Logger = getLogger(name=__name__)
 lifecycle_logger: Logger = getLogger(name="position.lifecycle")
@@ -214,6 +215,19 @@ class EventHandler:
     def _execution_id(self):
         return self.order_service.execution_id
 
+    @property
+    def _account_currency(self) -> str:
+        task = getattr(self.order_service, "task", None)
+        return str(
+            getattr(task, "account_currency", "")
+            or getattr(getattr(self.order_service, "account", None), "currency", "")
+            or ""
+        ).upper()
+
+    @property
+    def _quote_currency(self) -> str:
+        return Instrument(self.instrument).quote_currency
+
     def _cache_position(self, layer_number: int, position: Position) -> None:
         self.positions.cache_position(layer_number, position)
 
@@ -317,6 +331,7 @@ class EventHandler:
             units=units,
             instrument=instrument,
             price=price,
+            price_currency=Instrument(instrument).quote_currency,
             execution_method=execution_method,
             layer_index=layer_index,
             retracement_count=retracement_count,
@@ -416,6 +431,8 @@ class EventHandler:
         return EventExecutionResult(
             realized_pnl_delta=realized_delta,
             realized_pnl_delta_quote=realized_delta_quote,
+            realized_pnl_delta_currency=self._account_currency,
+            realized_pnl_delta_quote_currency=self._quote_currency,
             execution_price=getattr(self, "_last_close_execution_price", None),
             executed_units=getattr(self, "_last_close_executed_units", 0),
         )
@@ -442,6 +459,8 @@ class EventHandler:
         return EventExecutionResult(
             realized_pnl_delta=realized_delta,
             realized_pnl_delta_quote=realized_delta_quote,
+            realized_pnl_delta_currency=self._account_currency,
+            realized_pnl_delta_quote_currency=self._quote_currency,
         )
 
     def _dispatch_volatility_hedge_neutralize(
@@ -460,6 +479,8 @@ class EventHandler:
         return EventExecutionResult(
             realized_pnl_delta=realized_delta,
             realized_pnl_delta_quote=realized_delta_quote,
+            realized_pnl_delta_currency=self._account_currency,
+            realized_pnl_delta_quote_currency=self._quote_currency,
         )
 
     def _dispatch_informational(self, strategy_event: StrategyEvent) -> EventExecutionResult:

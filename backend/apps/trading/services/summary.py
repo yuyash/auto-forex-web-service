@@ -18,13 +18,15 @@ from typing import cast
 from django.core.cache import cache
 from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Value, When
 
+from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.fx_rates import FX_CONVERSION
 from apps.trading.services.public_errors import (
     task_public_error_code,
     task_public_error_message,
 )
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.utils import Instrument
 
 
 @dataclass(frozen=True)
@@ -75,12 +77,24 @@ class PnlInfo:
 
     realized: Decimal
     unrealized: Decimal
+    currency: str | None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready PnL data."""
+        total = self.realized + self.unrealized
         return {
             "realized": self.realized,
             "unrealized": self.unrealized,
+            "currency": self.currency,
+            "realized_money": (
+                Money.coerce(self.realized, self.currency).as_dict() if self.currency else None
+            ),
+            "unrealized_money": (
+                Money.coerce(self.unrealized, self.currency).as_dict() if self.currency else None
+            ),
+            "total_money": (
+                Money.coerce(total, self.currency).as_dict() if self.currency else None
+            ),
         }
 
 
@@ -116,8 +130,11 @@ class ExecutionInfo:
     current_balance: Decimal | None
     ticks_processed: int
     account_currency: str | None
+    current_balance_currency: str | None
+    current_balance_money: dict[str, str] | None
     current_balance_display: Decimal | None
     display_currency: str | None
+    current_balance_display_money: dict[str, str] | None
     resume_cursor_timestamp: str | None
     margin_ratio: Decimal | None
     current_atr: Decimal | None
@@ -133,8 +150,11 @@ class ExecutionInfo:
             "current_balance": self.current_balance,
             "ticks_processed": self.ticks_processed,
             "account_currency": self.account_currency,
+            "current_balance_currency": self.current_balance_currency,
+            "current_balance_money": self.current_balance_money,
             "current_balance_display": self.current_balance_display,
             "display_currency": self.display_currency,
+            "current_balance_display_money": self.current_balance_display_money,
             "resume_cursor_timestamp": self.resume_cursor_timestamp,
             "margin_ratio": self.margin_ratio,
             "current_atr": self.current_atr,
@@ -408,8 +428,11 @@ def compute_task_summary(
     tick_ask = None
     tick_mid = None
     account_currency: str | None = None
+    current_balance_currency: str | None = None
+    current_balance_money: dict[str, str] | None = None
     current_balance_display: Decimal | None = None
     display_currency: str | None = None
+    current_balance_display_money: dict[str, str] | None = None
     resume_cursor_timestamp: str | None = None
     margin_ratio: Decimal | None = None
     current_atr: Decimal | None = None
@@ -428,6 +451,7 @@ def compute_task_summary(
     state = ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()
     if state:
         current_balance = state.current_balance
+        current_balance_currency = str(state.current_balance_currency or "").upper() or None
         ticks_processed = state.ticks_processed
         if state.last_tick_timestamp:
             tick_timestamp = state.last_tick_timestamp.isoformat()
@@ -485,11 +509,13 @@ def compute_task_summary(
     error_message = None
 
     task_obj = _get_task(task_type, task_id)
+    quote_ccy: str | None = None
     if task_obj:
         status = task_obj.status
         started_at = task_obj.started_at.isoformat() if task_obj.started_at else None
         completed_at = task_obj.completed_at.isoformat() if task_obj.completed_at else None
         error_message = task_public_error_message(task_obj.status)
+        quote_ccy = Instrument(getattr(task_obj, "instrument", "")).quote_currency or None
     error_code = task_public_error_code(status)
 
     stop_reason = _compute_stop_reason(
@@ -524,29 +550,49 @@ def compute_task_summary(
         else:
             account = getattr(task_obj, "oanda_account", None)
             account_currency = getattr(account, "currency", None)
+    account_currency = str(account_currency or "").upper() or None
+    current_balance_currency = current_balance_currency or account_currency
+    if current_balance is not None and current_balance_currency:
+        current_balance_money = Money.coerce(current_balance, current_balance_currency).as_dict()
 
     if task_obj and task_type == "backtest":
         instrument = Instrument(getattr(task_obj, "instrument", ""))
-        quote_ccy = instrument.quote_currency
-        account = AccountCurrency(account_currency or "")
-        if (
-            account.is_known
-            and quote_ccy
-            and not account.matches(quote_ccy)
-            and current_balance is not None
-            and tick_mid is not None
-            and tick_mid > 0
-        ):
-            display_currency = quote_ccy
-            current_balance_display = current_balance * tick_mid
-        elif account.is_known and quote_ccy and account.matches(quote_ccy):
-            # Account currency matches quote currency — no conversion needed
-            display_currency = account.code
-            current_balance_display = current_balance
+        quote_ccy = quote_ccy or instrument.quote_currency
+        account = AccountCurrency(current_balance_currency or account_currency or "")
+        preferred_display_currency = (
+            str(getattr(task_obj, "display_currency", "") or "").strip().upper()
+        )
+        if not preferred_display_currency and quote_ccy:
+            preferred_display_currency = quote_ccy
+        if not preferred_display_currency and account.is_known:
+            preferred_display_currency = account.code
+
+        if current_balance is not None and account.is_known and preferred_display_currency:
+            converted = FX_CONVERSION.convert(
+                Money.coerce(current_balance, account.code),
+                target_currency=preferred_display_currency,
+                instrument=instrument.name,
+                mid_price=tick_mid,
+            )
+            if converted is None and quote_ccy and not account.matches(quote_ccy):
+                converted = FX_CONVERSION.convert(
+                    Money.coerce(current_balance, account.code),
+                    target_currency=quote_ccy,
+                    instrument=instrument.name,
+                    mid_price=tick_mid,
+                )
+            if converted is not None:
+                display_currency = converted.currency_code
+                current_balance_display = converted.amount
+                current_balance_display_money = converted.as_dict()
 
     return TaskSummary(
         timestamp=tick_timestamp,
-        pnl=PnlInfo(realized=realized_pnl, unrealized=unrealized_pnl),
+        pnl=PnlInfo(
+            realized=realized_pnl,
+            unrealized=unrealized_pnl,
+            currency=quote_ccy or current_balance_currency or account_currency,
+        ),
         counts=CountsInfo(
             total_trades=total_trades,
             open_positions=open_position_count,
@@ -560,8 +606,11 @@ def compute_task_summary(
             current_balance=current_balance,
             ticks_processed=ticks_processed,
             account_currency=account_currency,
+            current_balance_currency=current_balance_currency,
+            current_balance_money=current_balance_money,
             current_balance_display=current_balance_display,
             display_currency=display_currency,
+            current_balance_display_money=current_balance_display_money,
             resume_cursor_timestamp=resume_cursor_timestamp,
             margin_ratio=margin_ratio,
             current_atr=current_atr,

@@ -8,8 +8,9 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from apps.trading.money import AccountCurrency
 from apps.trading.models.positions import Position
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.utils import Instrument
 
 
 @dataclass(slots=True)

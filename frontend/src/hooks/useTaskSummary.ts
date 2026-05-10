@@ -36,6 +36,15 @@ export interface TickDeliveryInfo {
 export interface PnlInfo {
   realized: number;
   unrealized: number;
+  currency: string | null;
+  realizedMoney: MoneyInfo | null;
+  unrealizedMoney: MoneyInfo | null;
+  totalMoney: MoneyInfo | null;
+}
+
+export interface MoneyInfo {
+  amount: string;
+  currency: string;
 }
 
 export interface CountsInfo {
@@ -50,9 +59,11 @@ export interface CountsInfo {
 
 export interface ExecutionInfo {
   currentBalance: number | null;
+  currentBalanceMoney: MoneyInfo | null;
   ticksProcessed: number;
   accountCurrency: string | null;
   currentBalanceDisplay: number | null;
+  currentBalanceDisplayMoney: MoneyInfo | null;
   displayCurrency: string | null;
   resumeCursorTimestamp: string | null;
   marginRatio: number | null;
@@ -98,7 +109,14 @@ export interface UseTaskSummaryResult {
 
 const INITIAL_SUMMARY: TaskSummary = {
   timestamp: null,
-  pnl: { realized: 0, unrealized: 0 },
+  pnl: {
+    realized: 0,
+    unrealized: 0,
+    currency: null,
+    realizedMoney: null,
+    unrealizedMoney: null,
+    totalMoney: null,
+  },
   counts: {
     totalTrades: 0,
     openPositions: 0,
@@ -110,9 +128,11 @@ const INITIAL_SUMMARY: TaskSummary = {
   },
   execution: {
     currentBalance: null,
+    currentBalanceMoney: null,
     ticksProcessed: 0,
     accountCurrency: null,
     currentBalanceDisplay: null,
+    currentBalanceDisplayMoney: null,
     displayCurrency: null,
     resumeCursorTimestamp: null,
     marginRatio: null,

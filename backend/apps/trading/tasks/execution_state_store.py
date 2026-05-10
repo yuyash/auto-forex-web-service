@@ -22,6 +22,7 @@ class ExecutionStateStore:
         update_fields: dict[str, object] = {
             "strategy_state": state.strategy_state,
             "current_balance": state.current_balance,
+            "current_balance_currency": getattr(state, "current_balance_currency", ""),
             "ticks_processed": state.ticks_processed,
             "last_tick_timestamp": state.last_tick_timestamp,
             "resume_cursor_timestamp": (state.resume_cursor_timestamp or state.last_tick_timestamp),

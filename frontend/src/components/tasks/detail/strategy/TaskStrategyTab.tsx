@@ -50,6 +50,7 @@ import {
   formatDateTimeInTimezone,
   type DateTimeFormatOptions,
 } from '../../../../utils/timezone';
+import { quoteCurrencyFromInstrument } from '../../../../utils/instrumentCurrency';
 import { useAppSettings } from '../../../../hooks/useAppSettings';
 
 export interface TaskStrategyTabProps {
@@ -75,9 +76,7 @@ function formatDateTime(
 }
 
 function getPnlCurrencyCode(instrument?: string): string | null {
-  if (!instrument || !instrument.includes('_')) return null;
-  const [, quoteCurrency] = instrument.split('_');
-  return quoteCurrency?.trim().toUpperCase() || null;
+  return quoteCurrencyFromInstrument(instrument);
 }
 
 function formatSignedCurrency(

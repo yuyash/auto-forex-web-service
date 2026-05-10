@@ -15,6 +15,7 @@ from apps.trading.services.public_errors import (
     task_public_error_code,
     task_public_error_message,
 )
+from apps.trading.serializers.money import MoneySerializer
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "account_currency",
+            "display_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -158,10 +160,13 @@ class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
     execution_id = serializers.UUIDField()
     previous_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
     previous_balance_currency = serializers.CharField(max_length=3)
+    previous_balance_money = MoneySerializer()
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
     current_balance_currency = serializers.CharField(max_length=3)
+    current_balance_money = MoneySerializer()
     adjustment = serializers.DecimalField(max_digits=20, decimal_places=10)
     adjustment_currency = serializers.CharField(max_length=3)
+    adjustment_money = MoneySerializer()
     currency = serializers.CharField(max_length=3)
     state_version = serializers.IntegerField()
 
@@ -180,6 +185,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "account_currency",
+            "display_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -208,6 +214,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time": {"required": False},
             "initial_balance": {"required": False},
             "account_currency": {"required": False},
+            "display_currency": {"required": False},
             "commission_per_trade": {"required": False},
             "pip_size": {"required": False},
             "instrument": {"required": False},
@@ -257,6 +264,20 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Initial balance must be positive")
         return value
+
+    def validate_account_currency(self, value: str) -> str:
+        """Normalize account currency codes."""
+        currency = str(value or "").strip().upper()
+        if len(currency) != 3:
+            raise serializers.ValidationError("Account currency must be a 3-letter code")
+        return currency
+
+    def validate_display_currency(self, value: str) -> str:
+        """Normalize optional display currency codes."""
+        currency = str(value or "").strip().upper()
+        if currency and len(currency) != 3:
+            raise serializers.ValidationError("Display currency must be a 3-letter code")
+        return currency
 
     def validate_pip_size(self, value: Decimal | None) -> Decimal | None:
         """Validate pip size is positive if provided."""

@@ -83,6 +83,7 @@ import {
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 import { useTaskExecution } from '../../hooks/useTaskExecutions';
 import { BacktestBalanceAdjustmentDialog } from './BacktestBalanceAdjustmentDialog';
 
@@ -401,9 +402,13 @@ export const BacktestTaskDetail: React.FC = () => {
   const activeExecutionId = effectiveExecutionId;
   const enableRealtime =
     !isViewingHistorical && shouldEnableRealtimeTaskUpdates(currentStatus);
-  const pnlCurrency = detailTask.instrument?.includes('_')
-    ? detailTask.instrument.split('_')[1]
-    : 'N/A';
+  const pnlCurrency =
+    s.pnl.currency ||
+    quoteCurrencyFromInstrument(detailTask.instrument) ||
+    detailTask.display_currency ||
+    s.execution.accountCurrency ||
+    detailTask.account_currency ||
+    'N/A';
   const canAdjustBalance =
     (currentStatus === TaskStatus.PAUSED ||
       currentStatus === TaskStatus.STOPPED) &&

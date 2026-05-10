@@ -2,6 +2,8 @@
 
 from rest_framework import serializers
 
+from apps.trading.serializers.money import MoneySerializer
+
 
 class TaskExecutionMetricsSerializer(serializers.Serializer):
     """Serializer for execution-level aggregate metrics."""
@@ -22,18 +24,19 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     pnl_currency = serializers.CharField(required=False)
     account_currency = serializers.CharField(required=False)
     quote_currency = serializers.CharField(required=False)
+    display_currency = serializers.CharField(required=False)
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     initial_balance = serializers.CharField(required=False)
     current_balance_currency = serializers.CharField(required=False)
     initial_balance_currency = serializers.CharField(required=False)
-    total_pnl_money = serializers.DictField(required=False)
-    realized_pnl_money = serializers.DictField(required=False)
-    unrealized_pnl_money = serializers.DictField(required=False)
-    total_pnl_quote_money = serializers.DictField(required=False)
-    realized_pnl_quote_money = serializers.DictField(required=False)
-    unrealized_pnl_quote_money = serializers.DictField(required=False)
-    current_balance_money = serializers.DictField(required=False)
-    initial_balance_money = serializers.DictField(required=False)
+    total_pnl_money = MoneySerializer(required=False)
+    realized_pnl_money = MoneySerializer(required=False)
+    unrealized_pnl_money = MoneySerializer(required=False)
+    total_pnl_quote_money = MoneySerializer(required=False)
+    realized_pnl_quote_money = MoneySerializer(required=False)
+    unrealized_pnl_quote_money = MoneySerializer(required=False)
+    current_balance_money = MoneySerializer(required=False)
+    initial_balance_money = MoneySerializer(required=False)
     quote_to_account_rate = serializers.DecimalField(
         max_digits=24,
         decimal_places=12,

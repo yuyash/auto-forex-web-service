@@ -27,6 +27,19 @@ interface TaskSummaryResponse {
   pnl?: {
     realized?: string | number | null;
     unrealized?: string | number | null;
+    currency?: string | null;
+    realized_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    unrealized_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    total_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
   };
   counts?: {
     total_trades?: number;
@@ -39,9 +52,17 @@ interface TaskSummaryResponse {
   };
   execution?: {
     current_balance?: string | number | null;
+    current_balance_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
     ticks_processed?: number;
     account_currency?: string | null;
     current_balance_display?: string | number | null;
+    current_balance_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
     display_currency?: string | null;
     resume_cursor_timestamp?: string | null;
     margin_ratio?: string | number | null;
@@ -98,6 +119,22 @@ function parseNullableNumber(
   if (value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeMoney(
+  value:
+    | {
+        amount?: string | number | null;
+        currency?: string | null;
+      }
+    | null
+    | undefined
+): { amount: string; currency: string } | null {
+  if (!value) return null;
+  return {
+    amount: String(value.amount ?? ''),
+    currency: value.currency ?? '',
+  };
 }
 
 export function shouldPollTaskStatus(status: string | undefined): boolean {
@@ -188,6 +225,10 @@ export function createTaskSummaryQuery(
           pnl: {
             realized: parseNumber(d.pnl?.realized),
             unrealized: parseNumber(d.pnl?.unrealized),
+            currency: d.pnl?.currency ?? null,
+            realizedMoney: normalizeMoney(d.pnl?.realized_money),
+            unrealizedMoney: normalizeMoney(d.pnl?.unrealized_money),
+            totalMoney: normalizeMoney(d.pnl?.total_money),
           },
           counts: {
             totalTrades: d.counts?.total_trades ?? 0,
@@ -200,10 +241,16 @@ export function createTaskSummaryQuery(
           },
           execution: {
             currentBalance: parseNullableNumber(d.execution?.current_balance),
+            currentBalanceMoney: normalizeMoney(
+              d.execution?.current_balance_money
+            ),
             ticksProcessed: d.execution?.ticks_processed ?? 0,
             accountCurrency: d.execution?.account_currency ?? null,
             currentBalanceDisplay: parseNullableNumber(
               d.execution?.current_balance_display
+            ),
+            currentBalanceDisplayMoney: normalizeMoney(
+              d.execution?.current_balance_display_money
             ),
             displayCurrency: d.execution?.display_currency ?? null,
             resumeCursorTimestamp: d.execution?.resume_cursor_timestamp ?? null,

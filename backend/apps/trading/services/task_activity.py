@@ -448,6 +448,7 @@ class TaskActivityQueryService:
                 "units",
                 "instrument",
                 "price",
+                "price_currency",
                 "execution_method",
                 "layer_index",
                 "retracement_count",
@@ -519,7 +520,7 @@ class TaskActivityQueryService:
             task_type=task_type_label,
             task_id=task.pk,
             execution_id=query.execution.execution_id,
-        ).prefetch_related("trades")
+        )
 
         if query.position_status == "open":
             queryset = queryset.filter(is_open=True)
@@ -543,6 +544,8 @@ class TaskActivityQueryService:
             ).filter(_id_str__istartswith=query.position_id)
 
         queryset = self.position_sort_query.apply(queryset)
+        if query.include_trade_ids:
+            queryset = queryset.prefetch_related("trades")
         queryset = POSITION_ORDERING.apply_to_queryset(queryset, query.ordering)
         return queryset, query
 

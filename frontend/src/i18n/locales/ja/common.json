@@ -116,6 +116,8 @@
     "strategyType": "戦略タイプ",
     "strategyConfiguration": "戦略設定",
     "accountCurrency": "口座通貨",
+    "displayCurrency": "表示通貨",
+    "currency": "通貨",
     "oandaAccount": "OANDAアカウント",
     "hedgingEnabled": "両建て有効",
     "sellOnStop": "停止時に売却",

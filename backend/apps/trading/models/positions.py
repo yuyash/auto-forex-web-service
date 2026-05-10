@@ -102,6 +102,12 @@ class Position(models.Model):
         default=Decimal("0"),
         help_text="Unrealized PnL based on the latest tick price. Updated each tick batch.",
     )
+    unrealized_pnl_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Currency code for unrealized_pnl.",
+    )
     planned_exit_price = models.DecimalField(
         max_digits=20,
         decimal_places=10,

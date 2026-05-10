@@ -8,10 +8,11 @@ from typing import Any, Protocol
 
 from django.db.models import Case, F, Sum, Value, When
 
+from apps.trading.money import AccountCurrency
 from apps.trading.models import ExecutionMetricAggregate
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.utils import Instrument
 
 
 class MetricResumeExecutor(Protocol):

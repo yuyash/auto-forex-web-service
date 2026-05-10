@@ -1,6 +1,6 @@
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
 import type { CopyValueExtractors } from '../../../utils/tableCopyUtils';
-import { formatAppNumber } from '../../../utils/numberFormat';
+import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
 
 type PositionDirection = 'long' | 'short';
 
@@ -23,7 +23,11 @@ export function createClosedPositionCopyExtractors(
     ...baseCopyExtractors(formatTimestamp, formatPrice),
     exit_time: (row) => (row.exit_time ? formatTimestamp(row.exit_time) : '-'),
     exit_price: (row) =>
-      row.exit_price ? `¥${formatPrice(row.exit_price, 3)}` : '-',
+      formatPriceWithCurrency(
+        row.exit_price,
+        row.unrealized_pnl_currency,
+        formatPrice
+      ),
     pips: (row) =>
       formatPositionPips(row, direction, {
         pipSize,
@@ -63,7 +67,11 @@ export function createGenericPositionCopyExtractors(
     is_open: (row) => (row.is_open ? 'Open' : 'Closed'),
     exit_time: (row) => (row.exit_time ? formatTimestamp(row.exit_time) : '-'),
     exit_price: (row) =>
-      row.exit_price ? `¥${formatPrice(row.exit_price, 3)}` : '-',
+      formatPriceWithCurrency(
+        row.exit_price,
+        row.unrealized_pnl_currency,
+        formatPrice
+      ),
     pips: (row) => {
       const direction = row.direction;
       if (row.exit_price) {
@@ -109,15 +117,25 @@ function baseCopyExtractors(
     retracement_count: (row) =>
       row.retracement_count != null ? String(row.retracement_count) : '-',
     entry_price: (row) =>
-      row.entry_price ? `¥${formatPrice(row.entry_price, 3)}` : '-',
+      formatPriceWithCurrency(
+        row.entry_price,
+        row.unrealized_pnl_currency,
+        formatPrice
+      ),
     planned_exit_price: (row) =>
-      row.planned_exit_price
-        ? `¥${formatPrice(row.planned_exit_price, 3)}`
-        : '-',
+      formatPriceWithCurrency(
+        row.planned_exit_price,
+        row.unrealized_pnl_currency,
+        formatPrice
+      ),
     planned_exit_price_formula: (row) => row.planned_exit_price_formula ?? '-',
     oanda_trade_id: (row) => row.oanda_trade_id ?? '-',
     stop_loss_price: (row) =>
-      row.stop_loss_price ? `¥${formatPrice(row.stop_loss_price, 3)}` : '-',
+      formatPriceWithCurrency(
+        row.stop_loss_price,
+        row.unrealized_pnl_currency,
+        formatPrice
+      ),
     is_rebuild: (row) => (row.is_rebuild ? 'Yes' : '-'),
   };
 }
@@ -163,16 +181,23 @@ function formatClosedPositionPnl(
   const entryPrice = parseOptionalFloat(row.entry_price);
   const exitPrice = parseOptionalFloat(row.exit_price);
   if (entryPrice == null || exitPrice == null) return '-';
-  const units = Math.abs(row.units ?? 0);
   const value =
-    direction === 'long'
-      ? (exitPrice - entryPrice) * units
-      : (entryPrice - exitPrice) * units;
-  return formatAppNumber(value, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    signed: options.signed,
-  });
+    parseOptionalFloat(row.realized_pnl) ??
+    (() => {
+      const units = Math.abs(row.units ?? 0);
+      return direction === 'long'
+        ? (exitPrice - entryPrice) * units
+        : (entryPrice - exitPrice) * units;
+    })();
+  return formatMoney(
+    value,
+    row.realized_pnl_currency || row.unrealized_pnl_currency,
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: options.signed,
+    }
+  );
 }
 
 function formatOpenPositionPnl(
@@ -180,6 +205,14 @@ function formatOpenPositionPnl(
   direction: PositionDirection,
   options: { currentPrice?: number | null; signed: boolean }
 ): string {
+  const storedValue = parseOptionalFloat(row.unrealized_pnl);
+  if (storedValue != null) {
+    return formatMoney(storedValue, row.unrealized_pnl_currency, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: options.signed,
+    });
+  }
   const entryPrice = parseOptionalFloat(row.entry_price);
   if (entryPrice == null || options.currentPrice == null) return '-';
   const units = Math.abs(row.units ?? 0);
@@ -187,11 +220,38 @@ function formatOpenPositionPnl(
     direction === 'long'
       ? (options.currentPrice - entryPrice) * units
       : (entryPrice - options.currentPrice) * units;
-  return formatAppNumber(value, {
+  return formatMoney(value, row.unrealized_pnl_currency, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     signed: options.signed,
   });
+}
+
+function formatPriceWithCurrency(
+  value: string | number | null | undefined,
+  currency: string | null | undefined,
+  formatPrice: (
+    value: string | number | null | undefined,
+    digits?: number
+  ) => string
+): string {
+  const formatted = value == null || value === '' ? '-' : formatPrice(value, 3);
+  return formatted === '-'
+    ? formatted
+    : `${currencyPrefix(currency)}${formatted}`;
+}
+
+function formatMoney(
+  value: number,
+  currency: string | null | undefined,
+  options: Parameters<typeof formatAppNumber>[1]
+): string {
+  return `${currencyPrefix(currency)}${formatAppNumber(value, options)}`;
+}
+
+function currencyPrefix(currency: string | null | undefined): string {
+  const symbol = currency ? currencySymbol(currency) : '';
+  return symbol.length > 2 ? `${symbol} ` : symbol;
 }
 
 function parseOptionalFloat(value: string | number | null | undefined) {

@@ -56,6 +56,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useNumberFormatter } from '../../hooks/useNumberFormatter';
 import { useToast } from '../common/useToast';
+import {
+  DEFAULT_ACCOUNT_CURRENCY,
+  SUPPORTED_CURRENCIES,
+} from '../../constants/currencies';
 import { currencySymbol } from '../../utils/numberFormat';
 import {
   fromTimezonePickerDate,
@@ -143,6 +147,8 @@ interface ReviewContentProps {
     start_time: string;
     end_time: string;
     initial_balance: number;
+    account_currency: string;
+    display_currency?: string;
     commission_per_trade: number;
     pip_size?: number;
     instrument: string;
@@ -170,6 +176,8 @@ function ReviewContent({
     start_time,
     end_time,
     initial_balance,
+    account_currency,
+    display_currency,
     commission_per_trade,
     pip_size,
     instrument,
@@ -242,11 +250,21 @@ function ReviewContent({
           {t('backtest:detail.initialBalance')}
         </Typography>
         <Typography variant="body1">
-          {currencySymbol('USD')}
+          {currencySymbol(account_currency)}
           {formatNumber(Number(initial_balance), {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}
+          {account_currency ? ` ${account_currency}` : ''}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('common:labels.currency', { defaultValue: 'Currency' })}
+        </Typography>
+        <Typography variant="body1">
+          {display_currency || account_currency || DEFAULT_ACCOUNT_CURRENCY}
         </Typography>
       </Grid>
 
@@ -255,7 +273,7 @@ function ReviewContent({
           {t('backtest:detail.commissionPerTrade')}
         </Typography>
         <Typography variant="body1">
-          {currencySymbol('USD')}
+          {currencySymbol(account_currency)}
           {formatNumber(Number(commission_per_trade), {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -380,8 +398,10 @@ export default function BacktestTaskForm({
       start_time: defaultDateRange.start_time,
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
+      account_currency: DEFAULT_ACCOUNT_CURRENCY,
+      display_currency: DEFAULT_ACCOUNT_CURRENCY,
       commission_per_trade: 0,
-      pip_size: 0.01,
+      pip_size: undefined,
       instrument: 'USD_JPY',
       tick_granularity: 'tick',
       tick_window_value_mode: 'first',
@@ -444,6 +464,8 @@ export default function BacktestTaskForm({
   const watchedMarketCloseEnabled = watch('market_close_enabled');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
+  const watchedAccountCurrency =
+    watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -678,6 +700,8 @@ export default function BacktestTaskForm({
         start_time: completeData.start_time,
         end_time: completeData.end_time,
         initial_balance: completeData.initial_balance,
+        account_currency: completeData.account_currency,
+        display_currency: completeData.display_currency,
         commission_per_trade: completeData.commission_per_trade,
         pip_size: completeData.pip_size,
         instrument: completeData.instrument,
@@ -943,10 +967,69 @@ export default function BacktestTaskForm({
                       value={field.value}
                       onChange={field.onChange}
                       label={t('backtest:detail.initialBalance')}
-                      currency="USD"
+                      currency={watchedAccountCurrency}
                       error={errors.initial_balance?.message}
                       helperText={errors.initial_balance?.message}
                     />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 3 }}>
+                <Controller
+                  name="account_currency"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.account_currency}>
+                      <InputLabel id="backtest-account-currency-label">
+                        {t('common:labels.accountCurrency', {
+                          defaultValue: 'Account currency',
+                        })}
+                      </InputLabel>
+                      <Select
+                        {...field}
+                        labelId="backtest-account-currency-label"
+                        label={t('common:labels.accountCurrency', {
+                          defaultValue: 'Account currency',
+                        })}
+                      >
+                        {SUPPORTED_CURRENCIES.map((currency) => (
+                          <MenuItem key={currency} value={currency}>
+                            {currency}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 3 }}>
+                <Controller
+                  name="display_currency"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.display_currency}>
+                      <InputLabel id="backtest-display-currency-label">
+                        {t('common:labels.displayCurrency', {
+                          defaultValue: 'Display currency',
+                        })}
+                      </InputLabel>
+                      <Select
+                        {...field}
+                        value={field.value || watchedAccountCurrency}
+                        labelId="backtest-display-currency-label"
+                        label={t('common:labels.displayCurrency', {
+                          defaultValue: 'Display currency',
+                        })}
+                      >
+                        {SUPPORTED_CURRENCIES.map((currency) => (
+                          <MenuItem key={currency} value={currency}>
+                            {currency}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   )}
                 />
               </Grid>
@@ -1537,6 +1620,10 @@ export default function BacktestTaskForm({
           start_time: formData.start_time as string,
           end_time: formData.end_time as string,
           initial_balance: formData.initial_balance as number,
+          account_currency:
+            (formData.account_currency as string | undefined) ||
+            DEFAULT_ACCOUNT_CURRENCY,
+          display_currency: formData.display_currency as string | undefined,
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
@@ -1560,6 +1647,12 @@ export default function BacktestTaskForm({
           start_time: t('backtest:config.startDate'),
           end_time: t('backtest:config.endDate'),
           initial_balance: t('backtest:detail.initialBalance'),
+          account_currency: t('common:labels.accountCurrency', {
+            defaultValue: 'Account currency',
+          }),
+          display_currency: t('common:labels.displayCurrency', {
+            defaultValue: 'Display currency',
+          }),
           commission_per_trade: t('backtest:detail.commissionPerTrade'),
           pip_size: t('common:labels.pipSize'),
           instrument: t('common:labels.instrument'),

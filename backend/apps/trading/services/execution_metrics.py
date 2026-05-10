@@ -8,10 +8,12 @@ from typing import Any
 
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 
+from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.fx_rates import FX_CONVERSION
 from apps.trading.services.summary import TaskSummary
-from apps.trading.utils import AccountCurrency, Instrument, Money
+from apps.trading.utils import Instrument
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +176,14 @@ class ExecutionPnlConverter:
     ) -> Decimal:
         """Return quote-to-account conversion for the available market rate."""
         if instrument.name and mid_rate and mid_rate > 0:
+            rate = FX_CONVERSION.rate(
+                source_currency=instrument.quote_currency,
+                target_currency=account_currency,
+                instrument=instrument.name,
+                mid_price=mid_rate,
+            )
+            if rate is not None:
+                return rate.rate
             return instrument.quote_to_account_rate(mid_rate, AccountCurrency(account_currency))
         return Decimal("1")
 
@@ -215,6 +225,7 @@ class ExecutionMetricsSerializer:
     ) -> dict[str, Any]:
         """Build the API-facing metrics dict while preserving legacy keys."""
         account_currency = pnl.total_account.currency_code
+        display_currency = str(getattr(task, "display_currency", "") or "").strip().upper()
         initial_balance = self.initial_balance_money(task, account_currency=account_currency)
         current_balance_amount = summary.execution.current_balance
         current_balance = Money.coerce(
@@ -240,6 +251,7 @@ class ExecutionMetricsSerializer:
             "pnl_currency": account_currency,
             "account_currency": account_currency,
             "quote_currency": pnl.total_quote.currency_code,
+            "display_currency": display_currency or account_currency,
             "current_balance_currency": current_balance.currency_code,
             "initial_balance_currency": (
                 initial_balance.currency_code if initial_balance is not None else account_currency

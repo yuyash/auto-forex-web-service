@@ -24,11 +24,12 @@ from apps.market.services.oanda import (
 from apps.market.services.oanda_retry import OandaRetryPolicy
 from apps.trading.broker_gateway import BrokerGateway, OandaBrokerGateway
 from apps.trading.enums import Direction, TaskType
+from apps.trading.money import AccountCurrency
 from apps.trading.models import Order, Position
 from apps.trading.models.orders import OrderType
 from apps.trading.order_client_ids import TradingOrderClientIdFactory
 from apps.trading.order_repositories import OrderRepository, PositionRepository
-from apps.trading.utils import AccountCurrency, Instrument, Units
+from apps.trading.utils import Instrument, Units
 
 if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask

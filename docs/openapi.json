@@ -1775,6 +1775,79 @@
                 }
             }
         },
+        "/api/trading/fx/rate/": {
+            "get": {
+                "operationId": "trading_fx_rate",
+                "description": "Resolve a conversion multiplier between two currencies. Direct same-currency rates do not require market data; base/quote conversions use the supplied instrument mid price.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "as_of",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "instrument",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 20
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "mid_price",
+                        "schema": {
+                            "type": "string",
+                            "format": "decimal",
+                            "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "source_currency",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 3
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "target_currency",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 3
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FxRateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/operations/metrics/": {
             "get": {
                 "operationId": "trading_operations_metrics",
@@ -6963,6 +7036,9 @@
                         "type": "string",
                         "maxLength": 3
                     },
+                    "previous_balance_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
                     "current_balance": {
                         "type": "string",
                         "format": "decimal",
@@ -6972,6 +7048,9 @@
                         "type": "string",
                         "maxLength": 3
                     },
+                    "current_balance_money": {
+                        "$ref": "#/components/schemas/Money"
+                    },
                     "adjustment": {
                         "type": "string",
                         "format": "decimal",
@@ -6980,6 +7059,9 @@
                     "adjustment_currency": {
                         "type": "string",
                         "maxLength": 3
+                    },
+                    "adjustment_money": {
+                        "$ref": "#/components/schemas/Money"
                     },
                     "currency": {
                         "type": "string",
@@ -6992,12 +7074,15 @@
                 "required": [
                     "adjustment",
                     "adjustment_currency",
+                    "adjustment_money",
                     "currency",
                     "current_balance",
                     "current_balance_currency",
+                    "current_balance_money",
                     "execution_id",
                     "previous_balance",
                     "previous_balance_currency",
+                    "previous_balance_money",
                     "state_version",
                     "task_id"
                 ]
@@ -7073,6 +7158,11 @@
                     "account_currency": {
                         "type": "string",
                         "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
                         "maxLength": 3
                     },
                     "commission_per_trade": {
@@ -7319,6 +7409,11 @@
                         "description": "Account base currency (e.g., USD, JPY)",
                         "maxLength": 3
                     },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
+                        "maxLength": 3
+                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -7507,6 +7602,11 @@
                         "readOnly": true,
                         "description": "Account base currency (e.g., USD, JPY)"
                     },
+                    "display_currency": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency."
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -7680,6 +7780,7 @@
                     "data_source",
                     "debug_options",
                     "description",
+                    "display_currency",
                     "drain_duration_hours",
                     "end_time",
                     "error_code",
@@ -7753,6 +7854,11 @@
                         "type": "string",
                         "minLength": 1,
                         "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
                         "maxLength": 3
                     },
                     "commission_per_trade": {
@@ -8115,6 +8221,18 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "current_balance_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "current_balance_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
                     "current_balance_display": {
                         "type": "string",
                         "format": "decimal",
@@ -8123,6 +8241,14 @@
                     },
                     "display_currency": {
                         "type": "string",
+                        "nullable": true
+                    },
+                    "current_balance_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
                         "nullable": true
                     },
                     "resume_cursor_timestamp": {
@@ -8180,6 +8306,44 @@
                     "recovery_status",
                     "resume_cursor_timestamp",
                     "ticks_processed"
+                ]
+            },
+            "FxRateResponse": {
+                "type": "object",
+                "description": "Response for a resolved FX conversion rate.",
+                "properties": {
+                    "source_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "target_currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    },
+                    "rate": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,12})?$"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "as_of": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "source": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "as_of",
+                    "instrument",
+                    "rate",
+                    "source",
+                    "source_currency",
+                    "target_currency"
                 ]
             },
             "GranularitiesResponse": {
@@ -8739,6 +8903,25 @@
                     "instrument",
                     "mid",
                     "timestamp"
+                ]
+            },
+            "Money": {
+                "type": "object",
+                "description": "Serializer for a numeric amount paired with its currency code.",
+                "properties": {
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,14}(?:\\.\\d{0,10})?$"
+                    },
+                    "currency": {
+                        "type": "string",
+                        "maxLength": 3
+                    }
+                },
+                "required": [
+                    "amount",
+                    "currency"
                 ]
             },
             "NotificationItem": {
@@ -10045,6 +10228,11 @@
                         "description": "Account base currency (e.g., USD, JPY)",
                         "maxLength": 3
                     },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
+                        "maxLength": 3
+                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -10314,6 +10502,34 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "realized_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "unrealized_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "total_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -10395,6 +10611,25 @@
                         "type": "boolean",
                         "default": false
                     },
+                    "unrealized_pnl": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "unrealized_pnl_currency": {
+                        "type": "string"
+                    },
+                    "realized_pnl": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Return realized PnL for closed positions when available.",
+                        "readOnly": true
+                    },
+                    "realized_pnl_currency": {
+                        "type": "string",
+                        "description": "Return the currency for realized PnL values.",
+                        "readOnly": true
+                    },
                     "oanda_trade_id": {
                         "type": "string",
                         "nullable": true
@@ -10432,6 +10667,8 @@
                     "id",
                     "instrument",
                     "is_open",
+                    "realized_pnl",
+                    "realized_pnl_currency",
                     "trade_ids",
                     "units"
                 ]
@@ -11397,6 +11634,9 @@
                     "quote_currency": {
                         "type": "string"
                     },
+                    "display_currency": {
+                        "type": "string"
+                    },
                     "current_balance": {
                         "type": "string",
                         "format": "decimal",
@@ -11412,36 +11652,28 @@
                         "type": "string"
                     },
                     "total_pnl_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "realized_pnl_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "unrealized_pnl_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "total_pnl_quote_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "realized_pnl_quote_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "unrealized_pnl_quote_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "current_balance_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "initial_balance_money": {
-                        "type": "object",
-                        "additionalProperties": {}
+                        "$ref": "#/components/schemas/Money"
                     },
                     "quote_to_account_rate": {
                         "type": "string",
@@ -12287,6 +12519,9 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "price_currency": {
+                        "type": "string"
                     },
                     "execution_method": {
                         "$ref": "#/components/schemas/EventTypeEnum"

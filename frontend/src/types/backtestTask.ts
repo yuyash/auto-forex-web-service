@@ -24,6 +24,11 @@ export interface BacktestInitialPositionCycle {
   positions: BacktestInitialPosition[];
 }
 
+export interface MoneyAmount {
+  amount: string;
+  currency: string;
+}
+
 export interface BacktestTask {
   id: string;
   user_id: number;
@@ -39,6 +44,7 @@ export interface BacktestTask {
   end_time: string;
   initial_balance: string;
   account_currency?: string;
+  display_currency?: string;
   commission_per_trade: string;
   pip_size?: string;
   instrument: string;
@@ -80,6 +86,8 @@ export interface BacktestTaskCreateData {
   start_time: string;
   end_time: string;
   initial_balance: number | string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument: string;
@@ -110,6 +118,8 @@ export interface BacktestTaskFormData {
   start_time: string;
   end_time: string;
   initial_balance: number;
+  account_currency: string;
+  display_currency?: string;
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
@@ -138,6 +148,8 @@ export interface BacktestTaskUpdateData {
   start_time?: string;
   end_time?: string;
   initial_balance?: number | string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument?: string;
@@ -168,8 +180,15 @@ export interface BacktestBalanceAdjustmentResult {
   task_id: string;
   execution_id: string;
   previous_balance: string;
+  previous_balance_currency: string;
+  previous_balance_money: MoneyAmount;
   current_balance: string;
+  current_balance_currency: string;
+  current_balance_money: MoneyAmount;
   adjustment: string;
+  adjustment_currency: string;
+  adjustment_money: MoneyAmount;
+  currency: string;
   state_version: number;
 }
 

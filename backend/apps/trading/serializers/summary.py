@@ -2,6 +2,8 @@
 
 from rest_framework import serializers
 
+from apps.trading.serializers.money import MoneySerializer
+
 
 class TickInfoSerializer(serializers.Serializer):
     """Serializer for tick information."""
@@ -28,6 +30,10 @@ class PnlInfoSerializer(serializers.Serializer):
 
     realized = serializers.DecimalField(max_digits=20, decimal_places=10)
     unrealized = serializers.DecimalField(max_digits=20, decimal_places=10)
+    currency = serializers.CharField(allow_null=True, required=False)
+    realized_money = MoneySerializer(allow_null=True, required=False)
+    unrealized_money = MoneySerializer(allow_null=True, required=False)
+    total_money = MoneySerializer(allow_null=True, required=False)
 
 
 class CountsInfoSerializer(serializers.Serializer):
@@ -48,10 +54,13 @@ class ExecutionInfoSerializer(serializers.Serializer):
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
     ticks_processed = serializers.IntegerField()
     account_currency = serializers.CharField(allow_null=True)
+    current_balance_currency = serializers.CharField(allow_null=True, required=False)
+    current_balance_money = MoneySerializer(allow_null=True, required=False)
     current_balance_display = serializers.DecimalField(
         max_digits=20, decimal_places=2, allow_null=True
     )
     display_currency = serializers.CharField(allow_null=True)
+    current_balance_display_money = MoneySerializer(allow_null=True, required=False)
     resume_cursor_timestamp = serializers.CharField(allow_null=True)
     margin_ratio = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
     current_atr = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)

@@ -15,6 +15,7 @@ from apps.trading.models import Position, TradingTask
 from apps.trading.models.trades import Trade
 from apps.trading.order import OrderServiceError
 from apps.trading.services.drain import DrainCandidate, DrainPolicy
+from apps.trading.utils import Instrument
 
 
 class DrainExecutor(Protocol):
@@ -226,6 +227,9 @@ class TaskDrainCoordinator:
         )
 
         loop.state.current_balance = Decimal(str(loop.state.current_balance)) + realized_delta
+        loop.state.current_balance_currency = str(
+            getattr(executor, "account_currency", "") or ""
+        ).upper()
         exit_px = closed_position.exit_price or (
             Decimal(str(override_price)) if override_price is not None else Decimal("0")
         )
@@ -283,6 +287,7 @@ class TaskDrainCoordinator:
                 units=closed_units,
                 instrument=position.instrument,
                 price=exit_price,
+                price_currency=Instrument(position.instrument).quote_currency,
                 execution_method="close_position",
                 layer_index=getattr(position, "layer_index", None),
                 retracement_count=getattr(position, "retracement_count", None),

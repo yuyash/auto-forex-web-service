@@ -30,6 +30,7 @@ import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -119,14 +120,14 @@ const shortId = (value?: string | null): string =>
 
 function quoteCurrencySymbol(instrument?: string): string {
   if (!instrument) return '';
-  const quote = instrument.split('_')[1] ?? '';
+  const quote = quoteCurrencyFromInstrument(instrument) ?? '';
   const symbol = currencySymbol(quote);
   return symbol === quote ? `${quote} ` : symbol;
 }
 
 function quoteCurrencyDecimals(instrument?: string): number {
   if (!instrument) return 3;
-  const quote = instrument.split('_')[1] ?? '';
+  const quote = quoteCurrencyFromInstrument(instrument) ?? '';
   return quote === 'JPY' ? 0 : 2;
 }
 

@@ -116,6 +116,8 @@
     "strategyType": "Strategy Type",
     "strategyConfiguration": "Strategy Configuration",
     "accountCurrency": "Account Currency",
+    "displayCurrency": "Display Currency",
+    "currency": "Currency",
     "oandaAccount": "OANDA Account",
     "hedgingEnabled": "Hedging Enabled",
     "sellOnStop": "Sell on Stop",

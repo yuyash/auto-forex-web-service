@@ -22,6 +22,7 @@ export interface TaskTrade {
   direction: 'long' | 'short' | null | '';
   units: string;
   price: string;
+  price_currency?: string | null;
   layer_index?: number | null;
   retracement_count?: number | null;
   execution_method?: string;
