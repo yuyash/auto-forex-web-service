@@ -472,7 +472,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.apiRetryMaxAttempts',
                   'OANDA retry attempts'
@@ -504,7 +505,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.apiRetryBaseSeconds',
                   'Retry backoff base (s)'
@@ -536,7 +538,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.apiRetryMaxSeconds',
                   'Retry backoff max (s)'
@@ -568,7 +571,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.drainDurationHours',
                   'Drain duration (hours)'
@@ -600,7 +604,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.marketIdlePreCloseMinutes',
                   'Idle before market close (min)'
@@ -632,7 +637,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.marketIdleResumeDelayMinutes',
                   'Resume delay after open (min)'
@@ -692,7 +698,8 @@ export default function TradingTaskUpdateForm({
                 }}
                 fullWidth
                 disabled={liveTickStaleGuardEnabled === false}
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.liveTickMaxAgeSeconds',
                   'Max live tick age (s)'
@@ -724,7 +731,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.liveTickStatusLogIntervalSeconds',
                   'Tick status log interval (s)'
@@ -756,7 +764,8 @@ export default function TradingTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'trading:form.brokerDriftCheckIntervalSeconds',
                   'OANDA drift check interval (s)'

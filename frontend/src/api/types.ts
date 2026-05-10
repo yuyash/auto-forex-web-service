@@ -32,6 +32,28 @@ export enum JurisdictionEnum {
   OTHER = 'OTHER',
 }
 
+export type BacktestInitialPositionStatus =
+  | 'open'
+  | 'closed'
+  | 'pending_rebuild';
+
+export interface BacktestInitialPositionRequest {
+  layer_number: number;
+  retracement_count: number;
+  units: number | string;
+  entry_price: number | string;
+  planned_exit_price?: number | string | null;
+  stop_loss_price?: number | string | null;
+  status?: BacktestInitialPositionStatus;
+  exit_price?: number | string | null;
+  close_reason?: string;
+}
+
+export interface BacktestInitialPositionCycleRequest {
+  direction: 'long' | 'short';
+  positions: BacktestInitialPositionRequest[];
+}
+
 // --- OANDA Account types ---
 
 export interface OandaAccounts {
@@ -102,6 +124,8 @@ export interface BacktestTaskRequest {
   initial_balance?: string;
   commission_per_trade?: string;
   instrument?: string;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycleRequest[];
 }
 
 export interface PatchedBacktestTaskCreateRequest {
@@ -114,6 +138,8 @@ export interface PatchedBacktestTaskCreateRequest {
   initial_balance?: string;
   commission_per_trade?: string;
   instrument?: string;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycleRequest[];
 }
 
 // --- Strategy Config types ---

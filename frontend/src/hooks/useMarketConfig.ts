@@ -1,8 +1,10 @@
 import {
   type GranularityOption,
+  type TickDataPoint,
   type TickDataRange,
 } from '../services/api/market';
 import {
+  createFirstTickQuery,
   createSupportedGranularitiesQuery,
   createSupportedInstrumentsQuery,
   createTickDataRangeQuery,
@@ -81,6 +83,25 @@ export const useTickDataRange = (instrument?: string) => {
 
   return mapQueryStateFields(query, (data, state) => ({
     dataRange: (data as TickDataRange | undefined) ?? null,
+    error: state.error instanceof Error ? state.error.message : null,
+  }));
+};
+
+/**
+ * Hook to fetch the first tick in a backtest period for a given instrument.
+ */
+export const useFirstTick = (
+  instrument?: string,
+  fromTime?: string,
+  toTime?: string,
+  options?: { enabled?: boolean }
+) => {
+  const query = useSimpleQueryState(
+    createFirstTickQuery(instrument, fromTime, toTime, options)
+  );
+
+  return mapQueryStateFields(query, (data, state) => ({
+    firstTick: (data as TickDataPoint | null | undefined) ?? null,
     error: state.error instanceof Error ? state.error.message : null,
   }));
 };

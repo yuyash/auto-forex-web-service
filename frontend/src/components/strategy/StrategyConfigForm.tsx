@@ -638,7 +638,8 @@ const StrategyConfigForm = ({
           key={fieldName}
           fullWidth
           label={labelNode}
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={value}
           onChange={(e) => {
             const numValue =
@@ -699,7 +700,8 @@ const StrategyConfigForm = ({
                     <TextField
                       key={`${fieldName}_${i}`}
                       label={stepLabel}
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       size="small"
                       value={stepValue}
                       onChange={(e) => {

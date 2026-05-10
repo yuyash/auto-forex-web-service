@@ -214,6 +214,14 @@ export const queryKeys = {
       [...queryKeys.marketConfig.all, 'granularities'] as const,
     tickDataRange: (instrument: string) =>
       [...queryKeys.marketConfig.all, 'tick-data-range', instrument] as const,
+    firstTick: (instrument: string, fromTime: string, toTime: string) =>
+      [
+        ...queryKeys.marketConfig.all,
+        'first-tick',
+        instrument,
+        fromTime,
+        toTime,
+      ] as const,
   },
 };
 

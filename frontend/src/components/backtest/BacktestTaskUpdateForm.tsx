@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -26,7 +26,10 @@ import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
-import { useConfiguration } from '../../hooks/useConfigurations';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -36,6 +39,8 @@ import { logger } from '../../utils/logger';
 import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
+import { useFirstTick } from '../../hooks/useMarketConfig';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -58,6 +63,42 @@ const weekdayOptions: ReadonlyArray<{
   { value: 5, key: 'saturday', label: 'Saturday' },
   { value: 6, key: 'sunday', label: 'Sunday' },
 ];
+
+const optionalPositiveNumberSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.coerce.number().positive().optional().nullable()
+);
+
+const initialPositionSchema = z.object({
+  layer_number: z.coerce.number().int().min(1),
+  retracement_count: z.coerce.number().int().min(0),
+  units: z.coerce.number().int().positive(),
+  entry_price: z.coerce.number().positive(),
+  planned_exit_price: optionalPositiveNumberSchema,
+  stop_loss_price: optionalPositiveNumberSchema,
+  status: z
+    .enum(['open', 'closed', 'pending_rebuild'])
+    .optional()
+    .default('open'),
+  exit_price: optionalPositiveNumberSchema,
+  close_reason: z.string().optional(),
+});
+
+const initialPositionCycleSchema = z.object({
+  direction: z.enum(['long', 'short']),
+  positions: z.array(initialPositionSchema).min(1),
+});
+
+function expectedInitialPositionSlot(
+  positionIndex: number,
+  rMax = 7
+): { layer: number; retracement: number } {
+  const perLayer = rMax + 1;
+  return {
+    layer: Math.floor(positionIndex / perLayer) + 1,
+    retracement: positionIndex % perLayer,
+  };
+}
 
 const backtestTaskUpdateSchema = z
   .object({
@@ -156,6 +197,59 @@ const backtestTaskUpdateSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    initial_positions_enabled: z.boolean().optional().default(false),
+    initial_position_cycles: z
+      .array(initialPositionCycleSchema)
+      .optional()
+      .default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.initial_positions_enabled) {
+      return;
+    }
+    if (!data.initial_position_cycles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['initial_position_cycles'],
+        message: 'At least one initial cycle is required',
+      });
+    }
+    data.initial_position_cycles.forEach((cycle, cycleIndex) => {
+      const seen = new Set<string>();
+      cycle.positions.forEach((position, positionIndex) => {
+        const expected = expectedInitialPositionSlot(positionIndex);
+        if (
+          position.layer_number !== expected.layer ||
+          position.retracement_count !== expected.retracement
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [
+              'initial_position_cycles',
+              cycleIndex,
+              'positions',
+              positionIndex,
+            ],
+            message: `Positions must be stacked from L1/R0. Expected L${expected.layer}/R${expected.retracement}.`,
+          });
+        }
+        const key = `${position.layer_number}:${position.retracement_count}`;
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [
+              'initial_position_cycles',
+              cycleIndex,
+              'positions',
+              positionIndex,
+              'retracement_count',
+            ],
+            message: `Duplicate L${position.layer_number}/R${position.retracement_count}`,
+          });
+        }
+        seen.add(key);
+      });
+    });
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -221,14 +315,25 @@ export default function BacktestTaskUpdateForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const { data: configurationsData } = useConfigurations({
+    page: 1,
+    page_size: 200,
+  });
+  const selectedListConfig = useMemo(
+    () =>
+      (configurationsData?.results ?? []).find(
+        (config) => config.id === configIdString
+      ),
+    [configIdString, configurationsData?.results]
+  );
+  const selectedStrategyType =
+    selectedConfig?.strategy_type ?? selectedListConfig?.strategy_type;
   const selectedStrategy = useMemo(
     () =>
-      selectedConfig
-        ? strategies.find(
-            (strategy) => strategy.id === selectedConfig.strategy_type
-          )
+      selectedStrategyType
+        ? strategies.find((strategy) => strategy.id === selectedStrategyType)
         : undefined,
-    [selectedConfig, strategies]
+    [selectedStrategyType, strategies]
   );
   const strategySupportsHedging =
     selectedStrategy?.capabilities?.runtime?.hedging !== false;
@@ -245,6 +350,18 @@ export default function BacktestTaskUpdateForm({
   const initialTickWindowValueMode = initialData.tick_window_value_mode;
   const selectedTickGranularity = watch('tick_granularity');
   const selectedTickWindowValueMode = watch('tick_window_value_mode');
+  const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
+  const watchedPipSize = watch('pip_size');
+  const watchedInstrument = watch('instrument');
+  const watchedStartTime = watch('start_time');
+  const watchedEndTime = watch('end_time');
+  const {
+    firstTick,
+    error: firstTickError,
+    isLoading: firstTickLoading,
+  } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
+    enabled: watchedInitialPositionsEnabled === true,
+  });
   const replaySettingsChanged =
     selectedTickGranularity !== initialTickGranularity ||
     selectedTickWindowValueMode !== initialTickWindowValueMode;
@@ -316,7 +433,11 @@ export default function BacktestTaskUpdateForm({
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+    <Box
+      component="form"
+      onSubmit={handleSubmit(onSubmit)}
+      onKeyDown={preventInputEnterSubmit}
+    >
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           {t('common:labels.taskDetails')}
@@ -498,7 +619,8 @@ export default function BacktestTaskUpdateForm({
                 {...field}
                 fullWidth
                 label={t('backtest:form.commissionPerTrade')}
-                type="number"
+                type="text"
+                inputMode="decimal"
                 inputProps={{ min: 0, step: 0.01 }}
                 error={!!errors.commission_per_trade}
                 helperText={errors.commission_per_trade?.message}
@@ -516,7 +638,8 @@ export default function BacktestTaskUpdateForm({
                 {...field}
                 fullWidth
                 label={t('backtest:form.pipSizeOptional')}
-                type="number"
+                type="text"
+                inputMode="decimal"
                 inputProps={{ min: 0, step: 0.00001 }}
                 error={!!errors.pip_size}
                 helperText={
@@ -653,6 +776,37 @@ export default function BacktestTaskUpdateForm({
           />
         </Grid>
 
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="initial_position_cycles"
+            control={control}
+            render={({ field }) => (
+              <BacktestInitialPositionsEditor
+                enabled={watchedInitialPositionsEnabled ?? false}
+                onEnabledChange={(enabled) =>
+                  setValue('initial_positions_enabled', enabled, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+                value={field.value ?? []}
+                onChange={field.onChange}
+                selectedConfig={
+                  selectedConfig ?? selectedListConfig ?? undefined
+                }
+                strategyType={selectedStrategyType}
+                pipSize={watchedPipSize}
+                firstTick={firstTick}
+                firstTickLoading={firstTickLoading}
+                firstTickError={firstTickError}
+                error={
+                  errors.initial_position_cycles?.message as string | undefined
+                }
+              />
+            )}
+          />
+        </Grid>
+
         <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
           <Typography variant="subtitle1" fontWeight={600}>
             {t('backtest:form.advancedSettings', 'Advanced settings')}
@@ -682,7 +836,8 @@ export default function BacktestTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'backtest:form.drainDurationHours',
                   'Drain duration (hours)'
@@ -714,7 +869,8 @@ export default function BacktestTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'backtest:form.marketIdlePreCloseMinutes',
                   'Idle before market close (min)'
@@ -746,7 +902,8 @@ export default function BacktestTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'backtest:form.marketIdleResumeDelayMinutes',
                   'Resume delay after open (min)'
@@ -778,7 +935,8 @@ export default function BacktestTaskUpdateForm({
                   field.onChange(val === '' ? undefined : Number(val));
                 }}
                 fullWidth
-                type="number"
+                type="text"
+                inputMode="decimal"
                 label={t(
                   'backtest:form.maxTickGapHours',
                   'Max tick gap before fail (hours)'
@@ -881,7 +1039,8 @@ export default function BacktestTaskUpdateForm({
                       field.onChange(val === '' ? undefined : Number(val));
                     }}
                     fullWidth
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     label={t(
                       'backtest:form.marketCloseHourUtc',
                       'Close hour (UTC)'
@@ -945,7 +1104,8 @@ export default function BacktestTaskUpdateForm({
                       field.onChange(val === '' ? undefined : Number(val));
                     }}
                     fullWidth
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     label={t(
                       'backtest:form.marketOpenHourUtc',
                       'Open hour (UTC)'
@@ -996,4 +1156,23 @@ export default function BacktestTaskUpdateForm({
       </Box>
     </Box>
   );
+}
+
+function preventInputEnterSubmit(event: KeyboardEvent<HTMLFormElement>) {
+  if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+    return;
+  }
+
+  if (event.target instanceof HTMLInputElement) {
+    const allowedInputTypes = new Set([
+      'button',
+      'checkbox',
+      'radio',
+      'reset',
+      'submit',
+    ]);
+    if (!allowedInputTypes.has(event.target.type)) {
+      event.preventDefault();
+    }
+  }
 }

@@ -37,6 +37,8 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     sell_at_completion: task.sell_on_stop ?? false,
     latest_execution: toExecutionSummary(task.latest_execution),
     pip_size: task.pip_size ?? undefined,
+    initial_positions_enabled: task.initial_positions_enabled ?? false,
+    initial_position_cycles: task.initial_position_cycles ?? [],
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,

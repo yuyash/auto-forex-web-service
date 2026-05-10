@@ -8,6 +8,42 @@ const dataSourceValues = [
   DataSource.S3,
 ] as const;
 
+const optionalPositiveNumberSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.coerce.number().positive().optional().nullable()
+);
+
+const initialPositionSchema = z.object({
+  layer_number: z.coerce.number().int().min(1),
+  retracement_count: z.coerce.number().int().min(0),
+  units: z.coerce.number().int().positive(),
+  entry_price: z.coerce.number().positive(),
+  planned_exit_price: optionalPositiveNumberSchema,
+  stop_loss_price: optionalPositiveNumberSchema,
+  status: z
+    .enum(['open', 'closed', 'pending_rebuild'])
+    .optional()
+    .default('open'),
+  exit_price: optionalPositiveNumberSchema,
+  close_reason: z.string().optional(),
+});
+
+const initialPositionCycleSchema = z.object({
+  direction: z.enum(['long', 'short']),
+  positions: z.array(initialPositionSchema).min(1),
+});
+
+function expectedInitialPositionSlot(
+  positionIndex: number,
+  rMax = 7
+): { layer: number; retracement: number } {
+  const perLayer = rMax + 1;
+  return {
+    layer: Math.floor(positionIndex / perLayer) + 1,
+    retracement: positionIndex % perLayer,
+  };
+}
+
 // Configuration validation schema
 export const configurationSchema = z.object({
   name: z
@@ -117,6 +153,59 @@ export const backtestTaskSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    initial_positions_enabled: z.boolean().optional().default(false),
+    initial_position_cycles: z
+      .array(initialPositionCycleSchema)
+      .optional()
+      .default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.initial_positions_enabled) {
+      return;
+    }
+    if (!data.initial_position_cycles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['initial_position_cycles'],
+        message: 'At least one initial cycle is required',
+      });
+    }
+    data.initial_position_cycles.forEach((cycle, cycleIndex) => {
+      const seen = new Set<string>();
+      cycle.positions.forEach((position, positionIndex) => {
+        const expected = expectedInitialPositionSlot(positionIndex);
+        if (
+          position.layer_number !== expected.layer ||
+          position.retracement_count !== expected.retracement
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [
+              'initial_position_cycles',
+              cycleIndex,
+              'positions',
+              positionIndex,
+            ],
+            message: `Positions must be stacked from L1/R0. Expected L${expected.layer}/R${expected.retracement}.`,
+          });
+        }
+        const key = `${position.layer_number}:${position.retracement_count}`;
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [
+              'initial_position_cycles',
+              cycleIndex,
+              'positions',
+              positionIndex,
+              'retracement_count',
+            ],
+            message: `Duplicate L${position.layer_number}/R${position.retracement_count}`,
+          });
+        }
+        seen.add(key);
+      });
+    });
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -233,6 +322,8 @@ export type BacktestTaskSchemaOutput = {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: z.infer<typeof initialPositionCycleSchema>[];
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

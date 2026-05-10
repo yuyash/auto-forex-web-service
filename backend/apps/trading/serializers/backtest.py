@@ -55,6 +55,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "initial_positions_enabled",
+            "initial_position_cycles",
             "sell_on_stop",
             "status",
             "execution_id",
@@ -167,6 +169,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "initial_positions_enabled",
+            "initial_position_cycles",
             "sell_on_stop",
             "debug_options",
         ]
@@ -209,6 +213,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 "max_value": 23,
             },
             "max_tick_gap_hours": {"required": False, "min_value": 1},
+            "initial_positions_enabled": {"required": False},
+            "initial_position_cycles": {"required": False},
             "sell_on_stop": {"required": False},
             "debug_options": {"required": False},
         }
@@ -311,6 +317,30 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         if not is_valid:
             raise serializers.ValidationError({"config": error_message})
 
+        initial_positions_enabled = attrs.get(
+            "initial_positions_enabled",
+            getattr(self.instance, "initial_positions_enabled", False),
+        )
+        initial_position_cycles = attrs.get(
+            "initial_position_cycles",
+            getattr(self.instance, "initial_position_cycles", []),
+        )
+        if initial_positions_enabled:
+            from apps.trading.services.backtest_initial_positions import (
+                InitialPositionValidationError,
+                validate_initial_position_cycles,
+            )
+
+            try:
+                validate_initial_position_cycles(
+                    task=self.instance,
+                    config=config,
+                    cycles=initial_position_cycles,
+                    pip_size=attrs.get("pip_size", getattr(self.instance, "pip_size", None)),
+                )
+            except InitialPositionValidationError as exc:
+                raise serializers.ValidationError(exc.errors) from exc
+
         # Validate instrument is provided
         instrument = attrs.get("instrument", getattr(self.instance, "instrument", None))
         if not instrument:
@@ -370,7 +400,13 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         if instrument and not validated_data.get("pip_size"):
             validated_data["pip_size"] = pip_size_for_instrument(instrument)
 
-        return BacktestTask.objects.create(**validated_data)
+        task = BacktestTask.objects.create(**validated_data)
+        from apps.trading.services.backtest_initial_positions import (
+            BacktestInitialPositionService,
+        )
+
+        BacktestInitialPositionService().sync_for_task(task)
+        return task
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
         """Update backtest task."""
@@ -400,5 +436,22 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 instance.status = TaskStatus.STOPPED
 
         instance.save()
+        preview_seed_fields = {
+            "initial_positions_enabled",
+            "initial_position_cycles",
+            "config",
+            "pip_size",
+            "instrument",
+            "start_time",
+            "initial_balance",
+            "account_currency",
+            "hedging_enabled",
+        }
+        if preview_seed_fields & set(validated_data):
+            from apps.trading.services.backtest_initial_positions import (
+                BacktestInitialPositionService,
+            )
+
+            BacktestInitialPositionService().sync_for_task(instance)
         audit_task_update(task=instance, task_type="backtest", changes=changes)
         return instance

@@ -740,7 +740,8 @@ const AccountManagement = () => {
                     'settings:accounts.maxGrossUnits',
                     'Max Gross Units'
                   )}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_estimated_exposure_units}
                   onChange={(e) =>
                     setFormData({
@@ -778,7 +779,8 @@ const AccountManagement = () => {
                     'settings:accounts.maxInitialOrderUnits',
                     'Max Initial Order Units'
                   )}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_initial_order_units}
                   onChange={(e) =>
                     setFormData({
@@ -816,7 +818,8 @@ const AccountManagement = () => {
                     'settings:accounts.maxOrderUnits',
                     'Max Order Units'
                   )}
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.live_max_order_units}
                   onChange={(e) =>
                     setFormData({

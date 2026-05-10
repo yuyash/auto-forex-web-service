@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.52.2",
+        "version": "1.52.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -7137,6 +7137,13 @@
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the backtest."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -7366,6 +7373,13 @@
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the backtest."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -7529,6 +7543,15 @@
                         "readOnly": true,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Create Snowball initial cycles/positions before starting the backtest."
+                    },
+                    "initial_position_cycles": {
+                        "readOnly": true,
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "readOnly": true,
@@ -7610,6 +7633,8 @@
                     "hedging_enabled",
                     "id",
                     "initial_balance",
+                    "initial_position_cycles",
+                    "initial_positions_enabled",
                     "instrument",
                     "market_close_enabled",
                     "market_close_hour_utc",
@@ -7766,6 +7791,13 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the backtest."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
                     "sell_on_stop": {
                         "type": "boolean",
@@ -10049,6 +10081,13 @@
                         "maximum": 2147483647,
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the backtest."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
                     "sell_on_stop": {
                         "type": "boolean",

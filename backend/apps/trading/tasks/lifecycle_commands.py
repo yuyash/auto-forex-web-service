@@ -76,6 +76,13 @@ class TaskLifecycleCommands:
         task_type = "backtest" if is_backtest_task else "trading"
 
         try:
+            if type(task) is BacktestTask:
+                from apps.trading.services.backtest_initial_positions import (
+                    BacktestInitialPositionService,
+                )
+
+                BacktestInitialPositionService().sync_for_task(task)
+                task.refresh_from_db()
             task = self._prepare_start(task=task, model_class=model_class)
             self.logger.info(
                 "[SERVICE:START] Task type determined - task_id=%s, type=%s, execution_id=%s",

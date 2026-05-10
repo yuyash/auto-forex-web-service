@@ -507,7 +507,8 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
                 value={closeUnits}
                 onChange={(e) => setCloseUnits(e.target.value)}
                 margin="normal"
-                type="number"
+                type="text"
+                inputMode="decimal"
               />
             </Box>
           )}
@@ -607,7 +608,8 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
                 setOpenForm({ ...openForm, units: e.target.value })
               }
               margin="normal"
-              type="number"
+              type="text"
+              inputMode="decimal"
               required
             />
             <Box sx={{ mt: 1 }}>
@@ -631,7 +633,8 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
                     setOpenForm({ ...openForm, take_profit: e.target.value })
                   }
                   margin="dense"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                 />
               )}
             </Box>
@@ -656,7 +659,8 @@ export function PositionsTable({ accountDbId }: { accountDbId: number }) {
                     setOpenForm({ ...openForm, stop_loss: e.target.value })
                   }
                   margin="dense"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                 />
               )}
             </Box>

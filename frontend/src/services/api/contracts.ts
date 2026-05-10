@@ -1,6 +1,7 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
 import type { StrategyCapabilities } from '../../types/strategy';
+import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
 
 export interface BackendExecutionMetrics {
   total_return?: string;
@@ -82,6 +83,8 @@ export interface BackendBacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;
