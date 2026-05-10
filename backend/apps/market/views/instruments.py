@@ -20,21 +20,12 @@ from apps.market.services.instruments import (
 )
 from apps.market.services.oanda_retry import OandaApiRequestExecutor
 from apps.trading import utils as trading_utils
+from apps.trading.serializers.instrument import InstrumentMetadataSerializer
 
 logger: Logger = getLogger(name=__name__)
 
 INSTRUMENTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 INSTRUMENT_DETAIL_CACHE_TTL_SECONDS = 60 * 60
-
-
-class InstrumentMetadataSerializer(serializers.Serializer):
-    """Serializer for instrument metadata derived from the instrument symbol."""
-
-    normalized_name = serializers.CharField()
-    base_currency = serializers.CharField()
-    quote_currency = serializers.CharField()
-    pip_size = serializers.CharField()
-    is_high_value_quote = serializers.BooleanField()
 
 
 class InstrumentMetadataPresenter:

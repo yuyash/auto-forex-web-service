@@ -29,3 +29,13 @@ export interface InstrumentDetail extends InstrumentMetadata {
   leverage?: string;
   source?: string;
 }
+
+export interface TaskInstrumentContext {
+  instrument: string;
+  instrument_metadata: InstrumentMetadata;
+  configured_pip_size: string;
+  default_pip_size: string;
+  effective_pip_size: string;
+  pip_size_source: 'instrument_default' | 'task_override';
+  pip_size_matches_instrument: boolean;
+}

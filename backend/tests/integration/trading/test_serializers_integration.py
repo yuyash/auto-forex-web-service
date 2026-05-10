@@ -68,6 +68,9 @@ class TestBacktestTaskSerializer:
             data["commission_per_trade_money"]
             == Money.coerce(task.commission_per_trade, task.account_currency).as_dict()
         )
+        assert data["instrument_context"]["instrument"] == task.instrument
+        assert data["instrument_context"]["effective_pip_size"] == "0.01"
+        assert data["instrument_context"]["pip_size_matches_instrument"] is True
         assert "start_time" in data
         assert "end_time" in data
         assert "created_at" in data
@@ -313,6 +316,8 @@ class TestTradingTaskSerializer:
         assert data["display_currency"] == task.oanda_account.currency
         assert data["name"] == task.name
         assert data["status"] == task.status
+        assert data["instrument_context"]["instrument"] == task.instrument
+        assert data["instrument_context"]["effective_pip_size"] == "0.01"
         assert "has_strategy_state" in data
         assert "can_resume" in data
         # current_tick is now served via /summary/ endpoint only

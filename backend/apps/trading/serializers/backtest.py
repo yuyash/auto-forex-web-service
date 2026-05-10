@@ -18,6 +18,8 @@ from apps.trading.services.public_errors import (
     task_public_error_message,
 )
 from apps.trading.serializers.money import MoneySerializer
+from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     error_code = serializers.SerializerMethodField()
     initial_balance_money = serializers.SerializerMethodField()
     commission_per_trade_money = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -60,6 +63,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "commission_per_trade",
             "commission_per_trade_money",
             "pip_size",
+            "instrument_context",
             "instrument",
             "hedging_enabled",
             "tick_granularity",
@@ -106,6 +110,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "updated_at",
             "initial_balance_money",
             "commission_per_trade_money",
+            "instrument_context",
             "can_resume",
             "action_policy",
         ]
@@ -135,6 +140,11 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     def get_commission_per_trade_money(self, obj: BacktestTask) -> dict[str, str]:
         """Return the per-trade commission with its account currency."""
         return Money.coerce(obj.commission_per_trade, obj.account_currency).as_dict()
+
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: BacktestTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):

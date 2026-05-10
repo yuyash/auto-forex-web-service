@@ -3,6 +3,7 @@ import type { TaskActionPolicy } from '../../types/common';
 import type { MoneyAmount } from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
+import type { TaskInstrumentContext } from '../../types/instrument';
 
 export type BackendMoneyAmount = MoneyAmount;
 
@@ -94,6 +95,7 @@ export interface BackendBacktestTask {
   commission_per_trade: string;
   commission_per_trade_money?: BackendMoneyAmount;
   pip_size?: string | null;
+  instrument_context?: TaskInstrumentContext;
   instrument: string;
   hedging_enabled: boolean;
   sell_on_stop: boolean;
@@ -144,6 +146,7 @@ export interface BackendTradingTask {
   dry_run: boolean;
   hedging_enabled: boolean;
   pip_size?: string | null;
+  instrument_context?: TaskInstrumentContext;
   status: string;
   execution_id?: string | null;
   started_at?: string | null;

@@ -108,6 +108,7 @@
     "description": "Description",
     "instrument": "Instrument",
     "pipSize": "Pip Size",
+    "pipSizeOverrideValue": "{{value}} (override, default {{defaultPipSize}})",
     "marginRatio": "Margin Closeout Ratio",
     "currentAtr": "ATR",
     "status": "Status",

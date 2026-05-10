@@ -1,6 +1,7 @@
 // Trading Task types
 import type { TaskActionPolicy, TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
+import type { TaskInstrumentContext } from './instrument';
 
 export interface TradingTask {
   id: string;
@@ -42,6 +43,7 @@ export interface TradingTask {
   error_message?: string;
   error_code?: string;
   pip_size?: string;
+  instrument_context?: TaskInstrumentContext;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

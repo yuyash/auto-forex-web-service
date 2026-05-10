@@ -1,6 +1,7 @@
 // Backtest Task types
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
+import type { TaskInstrumentContext } from './instrument';
 import type { MoneyAmount } from './money';
 
 export type BacktestInitialPositionStatus =
@@ -45,6 +46,7 @@ export interface BacktestTask {
   commission_per_trade: string;
   commission_per_trade_money?: MoneyAmount;
   pip_size?: string;
+  instrument_context?: TaskInstrumentContext;
   instrument: string;
   tick_granularity: string;
   tick_window_value_mode: string;

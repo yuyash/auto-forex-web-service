@@ -4,7 +4,19 @@ import {
   buildTradingTaskSettingDefinitions,
 } from './taskSettingDefinitions';
 
-const t = (key: string, fallback?: string) => fallback ?? key;
+const t = (
+  key: string,
+  fallback?: string | { defaultValue?: string; [key: string]: unknown }
+) => {
+  if (fallback && typeof fallback === 'object') {
+    return Object.entries(fallback).reduce(
+      (text, [name, value]) =>
+        text.replaceAll(`{{${name}}}`, value == null ? '' : String(value)),
+      fallback.defaultValue ?? key
+    );
+  }
+  return fallback ?? key;
+};
 
 describe('task setting definition contracts', () => {
   it('backtest definitions contain user-facing lifecycle/config fields', () => {
@@ -40,8 +52,37 @@ describe('task setting definition contracts', () => {
       (definition) => definition.key === 'commission_per_trade'
     );
 
-    expect(pipSize?.format?.('0.01')).toBe('0.01');
-    expect(pipSize?.format?.('0.1234')).toBe('0.12');
+    expect(
+      pipSize?.render?.('0.0001', {
+        task: {},
+        snapshot: null,
+        source: { pip_size: '0.0001' },
+      })
+    ).toBe('0.0001');
+    expect(
+      pipSize?.render?.('0.02', {
+        task: {},
+        snapshot: null,
+        source: {
+          pip_size: '0.02',
+          instrument_context: {
+            instrument: 'EUR_USD',
+            instrument_metadata: {
+              normalized_name: 'EUR_USD',
+              base_currency: 'EUR',
+              quote_currency: 'USD',
+              pip_size: '0.0001',
+              is_high_value_quote: false,
+            },
+            configured_pip_size: '0.02',
+            default_pip_size: '0.0001',
+            effective_pip_size: '0.02',
+            pip_size_source: 'task_override',
+            pip_size_matches_instrument: false,
+          },
+        },
+      })
+    ).toBe('0.02 (override, default 0.0001)');
     expect(closeWeekday?.format?.(4)).toBe('Friday');
     expect(closeWeekday?.format?.(6)).toBe('Sunday');
     expect(openWeekday?.format?.(0)).toBe('Monday');

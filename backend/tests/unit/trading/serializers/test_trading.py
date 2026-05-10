@@ -26,6 +26,7 @@ class TestTradingTaskSerializer:
         assert "display_currency" in fields
         assert "has_strategy_state" in fields
         assert "can_resume" in fields
+        assert "instrument_context" in fields
 
     def test_instrument_is_model_field(self):
         fields = TradingTaskSerializer().get_fields()
@@ -53,6 +54,7 @@ class TestTradingTaskListSerializer:
         assert "status" in fields
         assert "account_currency" in fields
         assert "display_currency" in fields
+        assert "instrument_context" in fields
         # List view should not have has_strategy_state
         assert "has_strategy_state" not in fields
 

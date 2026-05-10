@@ -7194,6 +7194,14 @@
                         "nullable": true,
                         "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
                     },
+                    "instrument_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskInstrumentContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "instrument": {
                         "type": "string",
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
@@ -7369,6 +7377,7 @@
                     "execution_id",
                     "id",
                     "initial_balance_money",
+                    "instrument_context",
                     "name",
                     "start_time",
                     "started_at",
@@ -7641,6 +7650,14 @@
                         "nullable": true,
                         "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
                     },
+                    "instrument_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskInstrumentContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "instrument": {
                         "type": "string",
                         "readOnly": true,
@@ -7818,6 +7835,7 @@
                     "initial_position_cycles",
                     "initial_positions_enabled",
                     "instrument",
+                    "instrument_context",
                     "market_close_enabled",
                     "market_close_hour_utc",
                     "market_close_weekday",
@@ -11883,6 +11901,42 @@
                     "stop_reason"
                 ]
             },
+            "TaskInstrumentContext": {
+                "type": "object",
+                "description": "Serializer for task-level instrument and pip-size diagnostics.",
+                "properties": {
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "instrument_metadata": {
+                        "$ref": "#/components/schemas/InstrumentMetadata"
+                    },
+                    "configured_pip_size": {
+                        "type": "string"
+                    },
+                    "default_pip_size": {
+                        "type": "string"
+                    },
+                    "effective_pip_size": {
+                        "type": "string"
+                    },
+                    "pip_size_source": {
+                        "type": "string"
+                    },
+                    "pip_size_matches_instrument": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "configured_pip_size",
+                    "default_pip_size",
+                    "effective_pip_size",
+                    "instrument",
+                    "instrument_metadata",
+                    "pip_size_matches_instrument",
+                    "pip_size_source"
+                ]
+            },
             "TaskLog": {
                 "type": "object",
                 "description": "Serializer for TaskLog model.\n\nProvides access to task execution logs with timestamp, level, and message.",
@@ -12920,6 +12974,14 @@
                         "nullable": true,
                         "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
                     },
+                    "instrument_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskInstrumentContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -13074,6 +13136,7 @@
                     "has_strategy_state",
                     "id",
                     "instrument",
+                    "instrument_context",
                     "name",
                     "pip_size",
                     "started_at",
@@ -13278,6 +13341,14 @@
                         "nullable": true,
                         "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
                     },
+                    "instrument_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskInstrumentContext"
+                            }
+                        ],
+                        "readOnly": true
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -13421,6 +13492,7 @@
                     "hedging_enabled",
                     "id",
                     "instrument",
+                    "instrument_context",
                     "live_tick_max_age_seconds",
                     "live_tick_stale_guard_enabled",
                     "live_tick_status_log_interval_seconds",

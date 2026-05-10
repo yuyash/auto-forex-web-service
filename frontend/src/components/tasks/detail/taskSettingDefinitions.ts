@@ -10,6 +10,7 @@ import {
   formatMoneyPayload,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
+import type { TaskInstrumentContext } from '../../../types/instrument';
 
 function formatBooleanWithTranslation(t: TFunction) {
   return (value: TaskSettingValue): string =>
@@ -18,20 +19,54 @@ function formatBooleanWithTranslation(t: TFunction) {
 
 function formatPipSize(
   value: TaskSettingValue,
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>,
+  t?: TFunction,
   separators?: NumberFormatSeparators
 ): string {
-  if (value === null || value === undefined || value === '') return '-';
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return String(value);
-  return formatAppNumber(
+  const context = instrumentContext(source, task);
+  const rawValue = context?.effective_pip_size || value;
+  if (rawValue === null || rawValue === undefined || rawValue === '')
+    return '-';
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return String(rawValue);
+  const formatted = formatAppNumber(
     numericValue,
     {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8,
       useGrouping: false,
     },
     separators
   );
+  if (!context || context.pip_size_source !== 'task_override') {
+    return formatted;
+  }
+  const defaultFormatted = formatAppNumber(
+    Number(context.default_pip_size),
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8,
+      useGrouping: false,
+    },
+    separators
+  );
+  return (
+    t?.('common:labels.pipSizeOverrideValue', {
+      defaultValue: '{{value}} (override, default {{defaultPipSize}})',
+      value: formatted,
+      defaultPipSize: defaultFormatted,
+    }) ?? `${formatted} (override, default ${defaultFormatted})`
+  );
+}
+
+function instrumentContext(
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>
+): TaskInstrumentContext | null {
+  const context = source?.instrument_context ?? task?.instrument_context;
+  if (!context || typeof context !== 'object') return null;
+  return context as TaskInstrumentContext;
 }
 
 function formatWeekday(t: TFunction) {
@@ -157,7 +192,8 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: (value) => formatPipSize(value, options.numberSeparators),
+      render: (value, { source, task }) =>
+        formatPipSize(value, source, task, t, options.numberSeparators),
     },
     {
       key: 'start_time',
@@ -300,7 +336,8 @@ export function buildTradingTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: (value) => formatPipSize(value, options.numberSeparators),
+      render: (value, { source, task }) =>
+        formatPipSize(value, source, task, t, options.numberSeparators),
     },
     { key: 'account_name', label: t('trading:detail.account', 'Account') },
     {

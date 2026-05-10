@@ -2,11 +2,14 @@
 
 import logging
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
 from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
+from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
 from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
@@ -39,6 +42,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
@@ -65,6 +69,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "dry_run",
             "hedging_enabled",
             "pip_size",
+            "instrument_context",
             "status",
             "execution_id",
             "started_at",
@@ -112,6 +117,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "error_message",
             "error_code",
             "pip_size",
+            "instrument_context",
             "has_strategy_state",
             "can_resume",
             "action_policy",
@@ -139,6 +145,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
 
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
     """
@@ -160,6 +171,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -183,6 +195,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "dry_run",
             "hedging_enabled",
             "pip_size",
+            "instrument_context",
             "status",
             "execution_id",
             "started_at",
@@ -216,6 +229,11 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     def get_error_code(self, obj: TradingTask) -> str | None:
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
+
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):
