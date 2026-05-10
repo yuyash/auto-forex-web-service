@@ -30,7 +30,7 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
-  error_traceback?: string | null;
+  error_code?: string | null;
   duration?: number | null;
   created_at: string;
 }
@@ -71,6 +71,7 @@ export interface BackendBacktestTask {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
   can_resume?: boolean;
   action_policy?: TaskActionPolicy;
@@ -111,6 +112,7 @@ export interface BackendTradingTask {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
   has_strategy_state: boolean;
   can_resume: boolean;

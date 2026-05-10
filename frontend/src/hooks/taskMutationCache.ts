@@ -340,6 +340,7 @@ export function patchTaskDerivedCaches(
     started_at: latestExecution.started_at,
     completed_at: latestExecution.completed_at,
     error_message: latestExecution.error_message,
+    error_code: latestExecution.error_code,
     created_at: latestExecution.started_at,
     metrics: {
       total_return: latestExecution.total_return,

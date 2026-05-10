@@ -64,6 +64,7 @@ export interface BacktestTask {
   started_at?: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

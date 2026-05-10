@@ -70,6 +70,7 @@ interface TaskSummaryResponse {
     started_at?: string | null;
     completed_at?: string | null;
     error_message?: string | null;
+    error_code?: string | null;
     stop_reason?: string | null;
     progress?: number;
   };
@@ -243,6 +244,7 @@ export function createTaskSummaryQuery(
             startedAt: d.task?.started_at ?? null,
             completedAt: d.task?.completed_at ?? null,
             errorMessage: d.task?.error_message ?? null,
+            errorCode: d.task?.error_code ?? null,
             stopReason: d.task?.stop_reason ?? null,
             progress: d.task?.progress ?? 0,
           },

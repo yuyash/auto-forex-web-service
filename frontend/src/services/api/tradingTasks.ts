@@ -65,6 +65,7 @@ function toExecutionSummary(
     started_at: execution.started_at ?? execution.created_at,
     completed_at: execution.completed_at ?? undefined,
     error_message: execution.error_message ?? undefined,
+    error_code: execution.error_code ?? undefined,
   };
 }
 
@@ -79,6 +80,7 @@ function toTradingTask(task: BackendTradingTask): TradingTask {
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,
     error_message: task.error_message ?? undefined,
+    error_code: task.error_code ?? undefined,
   };
 }
 

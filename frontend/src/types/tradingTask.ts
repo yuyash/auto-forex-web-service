@@ -36,6 +36,7 @@ export interface TradingTask {
   started_at?: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   pip_size?: string;
   created_at: string;
   updated_at: string;

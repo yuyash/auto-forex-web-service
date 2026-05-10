@@ -69,6 +69,7 @@ export interface TaskInfo {
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  errorCode: string | null;
   stopReason: string | null;
   progress: number;
 }
@@ -128,6 +129,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     startedAt: null,
     completedAt: null,
     errorMessage: null,
+    errorCode: null,
     stopReason: null,
     progress: 0,
   },

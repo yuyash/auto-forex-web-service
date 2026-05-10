@@ -18,6 +18,8 @@ class TestJWTService:
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.email = "test@example.com"
+        mock_user.is_staff = False
+        mock_user.auth_token_version = 3
 
         with patch("apps.accounts.services.jwt.jwt.encode") as mock_encode:
             mock_encode.return_value = "test_token"
@@ -26,6 +28,29 @@ class TestJWTService:
 
         assert token == "test_token"
         mock_encode.assert_called_once()
+        payload = mock_encode.call_args.args[0]
+        assert payload["user_id"] == 1
+        assert payload["auth_version"] == 3
+        assert isinstance(payload["jti"], str)
+
+    def test_generate_token_includes_session_id(self) -> None:
+        """Session-bound tokens include the tracked user-session id."""
+        service = JWTService()
+        mock_user = MagicMock()
+        mock_user.id = 1
+        mock_user.is_staff = False
+        mock_user.auth_token_version = 0
+        mock_session = MagicMock()
+        mock_session.pk = 42
+
+        with patch("apps.accounts.services.jwt.jwt.encode") as mock_encode:
+            mock_encode.return_value = "test_token"
+
+            token = service.generate_token(mock_user, session=mock_session)
+
+        assert token == "test_token"
+        payload = mock_encode.call_args.args[0]
+        assert payload["sid"] == 42
 
     def test_decode_token_valid(self) -> None:
         """Test decoding valid token."""
@@ -78,6 +103,43 @@ class TestJWTService:
                 user = service.get_user_from_token("valid_token")
 
         assert user == mock_user
+
+    def test_get_user_from_token_rejects_stale_auth_version(self) -> None:
+        """Access tokens are rejected after the user's auth version changes."""
+        service = JWTService()
+
+        with patch.object(service, "decode_token") as mock_decode:
+            mock_decode.return_value = {"user_id": 1, "auth_version": 1}
+
+            with patch("apps.accounts.models.User.objects.get") as mock_get:
+                mock_user = MagicMock()
+                mock_user.auth_token_version = 2
+                mock_get.return_value = mock_user
+
+                user = service.get_user_from_token("stale_token")
+
+        assert user is None
+
+    def test_get_user_from_token_rejects_inactive_session(self) -> None:
+        """Session-bound access tokens are rejected after session termination."""
+        service = JWTService()
+
+        with patch.object(service, "decode_token") as mock_decode:
+            mock_decode.return_value = {"user_id": 1, "auth_version": 2, "sid": 42}
+
+            with (
+                patch("apps.accounts.models.User.objects.get") as mock_get,
+                patch("apps.accounts.models.security.UserSession.objects.filter") as mock_filter,
+            ):
+                mock_user = MagicMock()
+                mock_user.auth_token_version = 2
+                mock_get.return_value = mock_user
+                mock_filter.return_value.exists.return_value = False
+
+                user = service.get_user_from_token("terminated_session_token")
+
+        assert user is None
+        mock_filter.assert_called_once_with(pk=42, user=mock_user, is_active=True)
 
     def test_get_user_from_token_invalid(self) -> None:
         """Test getting user from invalid token."""

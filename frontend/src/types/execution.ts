@@ -19,7 +19,7 @@ export interface TaskExecution {
   started_at: string;
   completed_at?: string;
   error_message?: string;
-  error_traceback?: string;
+  error_code?: string;
   logs?: ExecutionLog[];
   duration?: string;
   created_at: string;
@@ -144,6 +144,7 @@ export interface ExecutionSummary {
   started_at: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   total_return?: string;
   total_pnl?: string;
   total_pnl_quote?: string;
