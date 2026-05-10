@@ -314,6 +314,8 @@ def _snapshot_strategy_config(task: Any) -> dict[str, Any]:
         "id": str(config.pk),
         "name": config.name,
         "strategy_type": config.strategy_type,
+        "configuration_revision": getattr(config, "revision", None),
+        "configuration_hash": getattr(config, "config_hash", "") or "",
         "parameters": _make_json_safe(config.parameters) if config.parameters else {},
     }
 

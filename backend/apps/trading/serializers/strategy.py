@@ -28,6 +28,8 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
             "name",
             "strategy_type",
             "parameters",
+            "revision",
+            "config_hash",
             "description",
             "is_in_use",
             "has_running_tasks",
@@ -39,6 +41,8 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
             "user_id",
             "is_in_use",
             "has_running_tasks",
+            "revision",
+            "config_hash",
             "created_at",
             "updated_at",
         ]
@@ -69,6 +73,8 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
             "name",
             "strategy_type",
             "description",
+            "revision",
+            "config_hash",
             "is_in_use",
             "has_running_tasks",
             "created_at",
@@ -214,6 +220,12 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
             )
 
         changes = changed_field_values(instance, validated_data)
+        if {"strategy_type", "parameters"} & set(changes):
+            try:
+                current_revision = int(getattr(instance, "revision", 1) or 1)
+            except (TypeError, ValueError):
+                current_revision = 1
+            instance.revision = current_revision + 1
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

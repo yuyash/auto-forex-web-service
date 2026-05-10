@@ -761,6 +761,36 @@ class TestSnowballRebuildTakeProfitModes:
 
         assert short_tp == Decimal("157.096")
 
+    def test_recovery_flag_is_the_only_switch_for_rebuild_loss_recovery(self):
+        pending = self._make_pending_rebuild(
+            direction=Direction.SHORT,
+            stop_loss_loss_pips=Decimal("30.1"),
+            close_price=Decimal("157.247"),
+        )
+        base = {
+            "stop_loss_enabled": True,
+            "rebuild_take_profit_mode": "same",
+            "rebuild_take_profit_recovery_mode": "pips",
+        }
+        disabled = _strategy({**base, "rebuild_take_profit_recovery_enabled": False})
+        enabled = _strategy({**base, "rebuild_take_profit_recovery_enabled": True})
+
+        disabled_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
+            pending=pending,
+            entry_price=Decimal("157.397"),
+            pip_size=Decimal("0.01"),
+            config=disabled.config,
+        )
+        enabled_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
+            pending=pending,
+            entry_price=Decimal("157.397"),
+            pip_size=Decimal("0.01"),
+            config=enabled.config,
+        )
+
+        assert disabled_tp == Decimal("157.247")
+        assert enabled_tp == Decimal("157.096")
+
     def test_recovery_mode_keeps_farther_existing_take_profit(self):
         s = _strategy(
             {

@@ -18,6 +18,12 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
+import {
+  formatStrategyConfigRevisionLabel,
+  getStrategyConfigSnapshotName,
+  getStrategyConfigSnapshotRevision,
+  getStrategyConfigSnapshotType,
+} from '../../../utils/strategyConfigRevision';
 
 const BACKTEST_PERIOD_SETTING_KEYS = new Set([
   'start_time',
@@ -64,7 +70,6 @@ export function BacktestOverviewTab({
   executionStatusRefreshing = false,
   timezone,
   language,
-  isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
   onOpenConfiguration,
@@ -77,16 +82,14 @@ export function BacktestOverviewTab({
   const { separators } = useNumberFormatter();
   const isSuperuser = Boolean(user?.is_superuser);
   const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
+  const hasExecutionConfigSnapshot = Boolean(historicalStrategyConfig);
 
-  // When viewing a historical execution, prefer snapshot values for task settings
+  // Prefer execution snapshots when available, including the current run.
   const effectiveStartTime =
-    (isViewingHistorical && historicalTaskConfig?.start_time) ||
-    task.start_time;
-  const effectiveEndTime =
-    (isViewingHistorical && historicalTaskConfig?.end_time) || task.end_time;
+    historicalTaskConfig?.start_time || task.start_time;
+  const effectiveEndTime = historicalTaskConfig?.end_time || task.end_time;
   const effectiveInstrument =
-    (isViewingHistorical && historicalTaskConfig?.instrument) ||
-    task.instrument;
+    historicalTaskConfig?.instrument || task.instrument;
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
   const latestMarginRatio =
     latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
@@ -111,12 +114,19 @@ export function BacktestOverviewTab({
               ...definition,
               render: () => {
                 const label =
-                  (isViewingHistorical &&
-                    (historicalStrategyConfig?.current?.name ??
-                      historicalStrategyConfig?.name)) ||
-                  task.config_name;
+                  (hasExecutionConfigSnapshot &&
+                    formatStrategyConfigRevisionLabel(
+                      getStrategyConfigSnapshotName(historicalStrategyConfig),
+                      getStrategyConfigSnapshotRevision(
+                        historicalStrategyConfig
+                      )
+                    )) ||
+                  formatStrategyConfigRevisionLabel(
+                    task.config_name,
+                    task.config_revision
+                  );
 
-                if (isViewingHistorical) {
+                if (hasExecutionConfigSnapshot) {
                   if (!historicalStrategyConfig) {
                     return (
                       <Typography
@@ -179,9 +189,8 @@ export function BacktestOverviewTab({
               render: () =>
                 getStrategyDisplayName(
                   strategies,
-                  (isViewingHistorical &&
-                    (historicalStrategyConfig?.current?.strategy_type ??
-                      historicalStrategyConfig?.strategy_type)) ||
+                  (hasExecutionConfigSnapshot &&
+                    getStrategyConfigSnapshotType(historicalStrategyConfig)) ||
                     task.strategy_type
                 ),
             };
@@ -191,8 +200,8 @@ export function BacktestOverviewTab({
         }),
     [
       historicalStrategyConfig,
+      hasExecutionConfigSnapshot,
       isSuperuser,
-      isViewingHistorical,
       language,
       onOpenConfiguration,
       separators,
@@ -200,6 +209,7 @@ export function BacktestOverviewTab({
       t,
       task.config_id,
       task.config_name,
+      task.config_revision,
       task.strategy_type,
       timezone,
     ]

@@ -14,6 +14,8 @@ export interface TaskExecution {
   execution_number: number;
   segment_index?: number;
   config_revision_count?: number;
+  configuration_revision?: number | null;
+  configuration_hash?: string | null;
   status: TaskStatus;
   progress: number;
   started_at: string;
@@ -32,10 +34,14 @@ export interface TaskExecution {
     id: string;
     name: string;
     strategy_type: string;
+    configuration_revision?: number | null;
+    configuration_hash?: string | null;
     current?: {
       id?: string;
       name?: string;
       strategy_type?: string;
+      configuration_revision?: number | null;
+      configuration_hash?: string | null;
       parameters?: Record<string, unknown>;
     };
     initial?: Record<string, unknown>;
