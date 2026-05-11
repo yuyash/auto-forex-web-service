@@ -37,6 +37,7 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import React from 'react';
 import type { TaskExecution } from '../../../types/execution';
 import type { TaskType } from '../../../types/common';
+import type { MoneyAmountLike } from '../../../types/money';
 import {
   fetchPaginatedMetrics,
   type MetricPoint,
@@ -50,6 +51,7 @@ import { computeAutoInterval } from '../../../utils/autoGranularity';
 import {
   formatAppNumber,
   formatMoneyAmount,
+  formatMoneyPayload,
   formatAppPercent,
 } from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
@@ -191,6 +193,68 @@ const RESULT_KEYS = [
   'pnl_currency',
   'quote_currency',
 ];
+
+function isMoneyAmountLike(value: unknown): value is MoneyAmountLike {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    'amount' in value &&
+    'currency' in value
+  );
+}
+
+function moneyPayload(value: unknown): MoneyAmountLike | null {
+  if (!isMoneyAmountLike(value) || value.amount == null) return null;
+  return value;
+}
+
+function metricMoney(
+  metrics: Record<string, unknown> | null | undefined,
+  key: string
+): MoneyAmountLike | null {
+  if (!metrics) return null;
+  if (key.endsWith('_quote')) {
+    return (
+      moneyPayload(metrics[`${key}_money`]) ??
+      moneyPayload(metrics[`${key}_display_money`])
+    );
+  }
+  const displayMoney = moneyPayload(metrics[`${key}_display_money`]);
+  if (displayMoney) return displayMoney;
+  const directMoney = moneyPayload(metrics[`${key}_money`]);
+  if (directMoney) return directMoney;
+  if (key === 'total_pnl') {
+    return (
+      moneyPayload(metrics.total_pnl_display_money) ??
+      moneyPayload(metrics.total_pnl_money)
+    );
+  }
+  if (key === 'realized_pnl' || key === 'unrealized_pnl') {
+    return (
+      moneyPayload(metrics[`${key}_display_money`]) ??
+      moneyPayload(metrics[`${key}_money`])
+    );
+  }
+  return null;
+}
+
+function metricOverlayValue(
+  metrics: Record<string, unknown>,
+  key: string,
+  format?: 'pct' | 'int' | 'currency'
+): number | null {
+  if (format === 'currency') {
+    const money = metricMoney(metrics, key);
+    const amount = Number(money?.amount);
+    if (Number.isFinite(amount)) return amount;
+  }
+  const val = metrics[key];
+  if (val == null || val === '') return null;
+  const num = Number(val);
+  if (!Number.isFinite(num)) return null;
+  const scale = RATIO_KEYS.has(key) ? 100 : 1;
+  return num * scale;
+}
 
 /** Truncate execution number to first 8 characters for display. */
 function shortExecId(exec: TaskExecution): string {
@@ -616,6 +680,68 @@ function ConfigComparisonPanel({
 /*  Results Comparison Panel                                          */
 /* ------------------------------------------------------------------ */
 
+function formatResultMetric(
+  metrics: Record<string, unknown> | null | undefined,
+  key: string
+): { display: string; numeric: number | null } {
+  const money = metricMoney(metrics, key);
+  if (money) {
+    const amount = Number(money.amount);
+    return {
+      display: formatMoneyPayload(money, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        signed:
+          key.includes('pnl') ||
+          key === 'average_win' ||
+          key === 'average_loss',
+        currencyPlacement: 'suffix',
+      }),
+      numeric: Number.isFinite(amount) ? amount : null,
+    };
+  }
+
+  const value = metrics?.[key];
+  if (value == null) return { display: '-', numeric: null };
+  const text = String(value);
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric)) return { display: text, numeric: null };
+
+  if (key === 'total_return' || key === 'win_rate' || key === 'max_drawdown') {
+    return { display: formatAppPercent(numeric, 2, true), numeric };
+  }
+
+  if (key.endsWith('_quote')) {
+    return {
+      display: formatMoneyAmount(
+        numeric,
+        String(metrics?.quote_currency || ''),
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+          signed: true,
+          currencyPlacement: 'suffix',
+        }
+      ),
+      numeric,
+    };
+  }
+
+  if (key.includes('pnl') || key === 'average_win' || key === 'average_loss') {
+    return {
+      display: formatMoneyAmount(numeric, String(metrics?.pnl_currency || ''), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        signed: true,
+        currencyPlacement: 'suffix',
+      }),
+      numeric,
+    };
+  }
+
+  return { display: text, numeric };
+}
+
 function ResultsComparisonPanel({
   executions,
 }: {
@@ -625,13 +751,11 @@ function ResultsComparisonPanel({
 
   const resultRows = useMemo(() => {
     return RESULT_KEYS.map((key) => {
-      const values = executions.map((exec) => {
-        const v = exec.metrics?.[key];
-        if (v == null) return '-';
-        return String(v);
-      });
+      const values = executions.map((exec) =>
+        formatResultMetric(exec.metrics, key)
+      );
       return { key, values };
-    }).filter((row) => row.values.some((v) => v !== '-'));
+    }).filter((row) => row.values.some((v) => v.display !== '-'));
   }, [executions]);
 
   if (resultRows.length === 0) {
@@ -684,7 +808,9 @@ function ResultsComparisonPanel({
         </thead>
         <tbody>
           {resultRows.map(({ key, values }) => {
-            const allSame = values.every((v) => v === values[0]);
+            const allSame = values.every(
+              (v) => v.display === values[0].display
+            );
             return (
               <tr key={key}>
                 <td>
@@ -699,50 +825,18 @@ function ResultsComparisonPanel({
                   </Typography>
                 </td>
                 {values.map((v, i) => {
-                  const num = parseFloat(v);
+                  const num = v.numeric;
                   const isPnl =
                     key.includes('pnl') ||
                     key === 'total_return' ||
                     key === 'average_win' ||
                     key === 'average_loss';
                   const color =
-                    isPnl && !isNaN(num)
+                    isPnl && num != null
                       ? num >= 0
                         ? 'success.main'
                         : 'error.main'
                       : undefined;
-                  // Format value with currency/percent suffix
-                  let display = v;
-                  if (v !== '-' && !isNaN(num)) {
-                    const exec = executions[i];
-                    const acctCcy = exec.metrics?.pnl_currency || '';
-                    const quoteCcy = exec.metrics?.quote_currency || '';
-                    if (
-                      key === 'total_return' ||
-                      key === 'win_rate' ||
-                      key === 'max_drawdown'
-                    ) {
-                      display = formatAppPercent(num, 2, true);
-                    } else if (key.endsWith('_quote')) {
-                      display = formatMoneyAmount(num, quoteCcy, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                        signed: true,
-                        currencyPlacement: 'suffix',
-                      });
-                    } else if (
-                      key.includes('pnl') ||
-                      key === 'average_win' ||
-                      key === 'average_loss'
-                    ) {
-                      display = formatMoneyAmount(num, acctCcy, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                        signed: true,
-                        currencyPlacement: 'suffix',
-                      });
-                    }
-                  }
                   return (
                     <td
                       key={executions[i].id}
@@ -761,7 +855,7 @@ function ResultsComparisonPanel({
                           fontSize: '0.75rem',
                         }}
                       >
-                        {display}
+                        {v.display}
                       </Typography>
                     </td>
                   );
@@ -804,9 +898,11 @@ function MetricsOverlayPanel({
     const keysWithData = new Set<string>();
     for (const points of metricsData.values()) {
       for (const point of points) {
-        for (const [k, v] of Object.entries(point.metrics)) {
-          if (v != null && v !== '' && !isNaN(Number(v))) {
-            keysWithData.add(k);
+        for (const metric of CHART_METRICS) {
+          if (
+            metricOverlayValue(point.metrics, metric.key, metric.format) != null
+          ) {
+            keysWithData.add(metric.key);
           }
         }
       }
@@ -827,8 +923,6 @@ function MetricsOverlayPanel({
     > = {};
 
     for (const m of availableMetrics) {
-      const scale = RATIO_KEYS.has(m.key) ? 100 : 1;
-
       // Collect per-execution data as timestamp→value maps
       const execData: {
         execIndex: number;
@@ -839,12 +933,9 @@ function MetricsOverlayPanel({
         const points = metricsData.get(exec.id) ?? [];
         const byTime = new Map<number, number>();
         for (const point of points) {
-          const val = point.metrics[m.key];
-          if (val != null && val !== '') {
-            const num = Number(val);
-            if (!isNaN(num)) {
-              byTime.set(point.t, num * scale);
-            }
+          const value = metricOverlayValue(point.metrics, m.key, m.format);
+          if (value != null) {
+            byTime.set(point.t, value);
           }
         }
         if (byTime.size >= 2) {

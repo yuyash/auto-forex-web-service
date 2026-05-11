@@ -138,10 +138,18 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["data_source"] == "strategy_metrics"
         assert response.data["result"]["t"] == int(now.timestamp())
-        assert response.data["result"]["metrics"] == {
-            "margin_ratio": "0.12",
-            "current_balance": "10050",
+        metrics = response.data["result"]["metrics"]
+        assert metrics["margin_ratio"] == "0.12"
+        assert metrics["current_balance"] == "10050"
+        assert metrics["current_balance_money"] == {
+            "amount": "10050",
+            "currency": "USD",
         }
+        assert metrics["current_balance_display_money"] == {
+            "amount": "10050",
+            "currency": "USD",
+        }
+        assert metrics["display_conversion_context"]["conversion_policy"] == "identity"
 
     def test_latest_metric_falls_back_to_latest_metric_row(self):
         task = _make_task()

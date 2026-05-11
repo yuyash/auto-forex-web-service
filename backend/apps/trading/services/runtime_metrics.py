@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from apps.trading.money import AccountCurrency
+from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.utils import Instrument
 
@@ -129,7 +129,7 @@ class RuntimeMetricsTracker:
         mid: Decimal,
         current_balance: Decimal,
         ticks_processed: int = 0,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Update rolling state for a tick and return common metrics."""
         self._record_tick(timestamp=timestamp, mid=mid)
 
@@ -168,7 +168,7 @@ class RuntimeMetricsTracker:
 
         account_currency = str(self.account_currency or "").upper()
         quote_currency = instrument.quote_currency
-        metrics: dict[str, str] = {
+        metrics: dict[str, Any] = {
             "margin_ratio": str(
                 self._calculate_margin_ratio(
                     mid=mid,
@@ -179,18 +179,29 @@ class RuntimeMetricsTracker:
             ),
             "current_balance": str(current_balance),
             "current_balance_currency": account_currency,
+            "current_balance_money": Money.coerce(current_balance, account_currency).as_dict(),
             "realized_pnl": str(realized_pnl),
             "realized_pnl_currency": account_currency,
+            "realized_pnl_money": Money.coerce(realized_pnl, account_currency).as_dict(),
             "realized_pnl_quote": str(self._realized_pnl_quote),
             "realized_pnl_quote_currency": quote_currency,
+            "realized_pnl_quote_money": Money.coerce(
+                self._realized_pnl_quote, quote_currency
+            ).as_dict(),
             "unrealized_pnl": str(unrealized_pnl),
             "unrealized_pnl_currency": account_currency,
+            "unrealized_pnl_money": Money.coerce(unrealized_pnl, account_currency).as_dict(),
             "unrealized_pnl_quote": str(unrealized_pnl_quote),
             "unrealized_pnl_quote_currency": quote_currency,
+            "unrealized_pnl_quote_money": Money.coerce(
+                unrealized_pnl_quote, quote_currency
+            ).as_dict(),
             "total_pnl": str(total_pnl),
             "total_pnl_currency": account_currency,
+            "total_pnl_money": Money.coerce(total_pnl, account_currency).as_dict(),
             "total_pnl_quote": str(total_pnl_quote),
             "total_pnl_quote_currency": quote_currency,
+            "total_pnl_quote_money": Money.coerce(total_pnl_quote, quote_currency).as_dict(),
             "total_return": str(total_return),
             "open_positions": str(len(self._open_positions)),
             "closed_positions": str(self._closed_positions),
@@ -203,6 +214,11 @@ class RuntimeMetricsTracker:
             "account_currency": account_currency,
             "quote_currency": quote_currency,
             "quote_to_account_rate": str(conv),
+            "instrument": self.instrument,
+            "bid_price": str(bid),
+            "ask_price": str(ask),
+            "mid_price": str(mid),
+            "price_currency": quote_currency,
         }
 
         atr_cache: dict[int, Decimal] = {}
