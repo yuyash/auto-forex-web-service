@@ -11,6 +11,8 @@ from uuid import UUID
 from django.db.models import QuerySet
 
 from apps.trading.models import Position, TaskLog, Trade
+from apps.trading.services.position_money import PositionMoneyEnricher
+from apps.trading.utils import Instrument
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,7 @@ class PositionLifecycleQuery:
     task_id: UUID
     execution_id: UUID | None
     position_id_query: str
+    task: Any | None = None
 
 
 class PositionLifecycleService:
@@ -59,6 +62,21 @@ class PositionLifecycleService:
             positions.values(),
             key=lambda position: (position.entry_time, str(position.id)),
         )
+        for position in ordered_positions:
+            realized_pnl = self._realized_pnl(position)
+            if realized_pnl is not None:
+                setattr(position, "_realized_pnl", realized_pnl)
+        money_enricher = (
+            PositionMoneyEnricher.for_task(
+                task=query.task,
+                task_type_label=query.task_type,
+            )
+            if query.task is not None
+            else None
+        )
+        if money_enricher is not None:
+            money_enricher.enrich_positions(ordered_positions)
+
         payload_positions = [
             self._serialize_position(
                 position=position,
@@ -74,6 +92,11 @@ class PositionLifecycleService:
         ]
 
         chain_realized_pnl = self._chain_realized_pnl(payload_positions)
+        chain_money_fields = self._chain_money_fields(
+            chain_realized_pnl=chain_realized_pnl,
+            ordered_positions=ordered_positions,
+            money_enricher=money_enricher,
+        )
 
         return {
             "requested_position_id": query.position_id_query,
@@ -81,6 +104,7 @@ class PositionLifecycleService:
             "position_ids": [str(position.id) for position in ordered_positions],
             "positions": payload_positions,
             "chain_realized_pnl": chain_realized_pnl,
+            **chain_money_fields,
         }
 
     def _base_logs_queryset(self, query: PositionLifecycleQuery) -> QuerySet[TaskLog]:
@@ -246,6 +270,7 @@ class PositionLifecycleService:
                 "stop_loss_price": self._decimal_str(position.stop_loss_price),
                 "close_reason": self._close_reason_for_position(position, close_trade, logs),
                 "realized_pnl": self._realized_pnl(position),
+                **self._realized_pnl_money_fields(position),
             },
             "events": events,
         }
@@ -394,6 +419,7 @@ class PositionLifecycleService:
                     "description": close_trade.description if close_trade else "",
                     "close_reason": self._close_reason_for_position(position, close_trade, logs),
                     "realized_pnl": self._realized_pnl(position),
+                    **self._realized_pnl_money_fields(position),
                 }
             )
 
@@ -430,6 +456,11 @@ class PositionLifecycleService:
             realized_pnl = self._realized_pnl(position)
         else:
             realized_pnl = None
+        realized_pnl_money_fields = (
+            self._realized_pnl_money_fields(position)
+            if kind in {"closed", "stop_loss_closed", "partial_close"} and position is not None
+            else {}
+        )
 
         return {
             "id": str(log.id),
@@ -446,6 +477,7 @@ class PositionLifecycleService:
             "description": context.get("description") or "",
             "close_reason": context.get("close_reason"),
             "realized_pnl": realized_pnl,
+            **realized_pnl_money_fields,
         }
 
     def _select_close_trade(self, trades: list[Trade]) -> Trade | None:
@@ -507,6 +539,71 @@ class PositionLifecycleService:
             except (InvalidOperation, ValueError):
                 continue
         return str(total) if has_any else None
+
+    def _chain_money_fields(
+        self,
+        *,
+        chain_realized_pnl: str | None,
+        ordered_positions: list[Position],
+        money_enricher: PositionMoneyEnricher | None,
+    ) -> dict[str, Any]:
+        if chain_realized_pnl is None or money_enricher is None or not ordered_positions:
+            return {}
+
+        reference_position = next(
+            (
+                position
+                for position in reversed(ordered_positions)
+                if position.exit_price is not None
+            ),
+            ordered_positions[-1],
+        )
+        source_currency = self._position_quote_currency(reference_position)
+        row: dict[str, Any] = {
+            "instrument": reference_position.instrument,
+            "is_open": False,
+            "realized_pnl": chain_realized_pnl,
+            "unrealized_pnl_currency": source_currency,
+            "exit_price": reference_position.exit_price,
+            "exit_time": reference_position.exit_time,
+        }
+        money_enricher.enrich_position(row)
+        return {
+            "chain_realized_pnl_currency": row.get("realized_pnl_currency"),
+            "chain_realized_pnl_money": row.get("realized_pnl_money"),
+            "chain_realized_pnl_display_money": row.get("realized_pnl_display_money"),
+            "chain_realized_pnl_display_conversion_context": row.get(
+                "realized_pnl_display_conversion_context"
+            ),
+        }
+
+    def _realized_pnl_money_fields(self, position: Position | None) -> dict[str, Any]:
+        if position is None:
+            return {}
+        return {
+            "realized_pnl_currency": getattr(
+                position,
+                "realized_pnl_currency",
+                self._position_quote_currency(position),
+            ),
+            "realized_pnl_money": getattr(position, "realized_pnl_money", None),
+            "realized_pnl_display_money": getattr(
+                position,
+                "realized_pnl_display_money",
+                None,
+            ),
+            "realized_pnl_display_conversion_context": getattr(
+                position,
+                "realized_pnl_display_conversion_context",
+                None,
+            ),
+        }
+
+    def _position_quote_currency(self, position: Position) -> str:
+        explicit = str(getattr(position, "unrealized_pnl_currency", "") or "").strip().upper()
+        if len(explicit) == 3 and explicit.isalpha():
+            return explicit
+        return Instrument(position.instrument).quote_currency
 
     def _log_position_ids(self, log: TaskLog) -> tuple[str | None, str | None]:
         context = self._log_context(log)

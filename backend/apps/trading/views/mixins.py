@@ -22,6 +22,7 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
 from apps.trading.services.position_money import PositionMoneyEnricher
 from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
@@ -273,6 +274,15 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
                     "position_ids": serializers.ListField(child=serializers.UUIDField()),
                     "positions": serializers.ListField(child=serializers.DictField()),
                     "chain_realized_pnl": serializers.CharField(allow_null=True),
+                    "chain_realized_pnl_currency": serializers.CharField(
+                        allow_blank=True,
+                        allow_null=True,
+                    ),
+                    "chain_realized_pnl_money": MoneySerializer(allow_null=True),
+                    "chain_realized_pnl_display_money": MoneySerializer(allow_null=True),
+                    "chain_realized_pnl_display_conversion_context": (
+                        CurrencyConversionContextSerializer(allow_null=True)
+                    ),
                 },
             )
         },
@@ -302,6 +312,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
                     task_id=task.pk,
                     execution_id=query.execution_id,
                     position_id_query=query.position_id,
+                    task=task,
                 )
             )
         except ValueError as exc:

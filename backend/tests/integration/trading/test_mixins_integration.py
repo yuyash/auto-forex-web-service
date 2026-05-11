@@ -1392,18 +1392,47 @@ class TestPositionLifecycle:
         # value in the chain.  The rebuilt position is still open so it
         # contributes nothing; only the SL-closed original counts.
         assert response.data["chain_realized_pnl"] == "-1722.0000000000"
+        assert response.data["chain_realized_pnl_currency"] == "JPY"
+        assert response.data["chain_realized_pnl_money"] == {
+            "amount": "-1722",
+            "currency": "JPY",
+        }
+        assert response.data["chain_realized_pnl_display_money"]["currency"] == "USD"
+        assert (
+            response.data["chain_realized_pnl_display_conversion_context"]["source_currency"]
+            == "JPY"
+        )
+        assert (
+            response.data["chain_realized_pnl_display_conversion_context"]["target_currency"]
+            == "USD"
+        )
 
         old_position = response.data["positions"][0]
         rebuilt_position = response.data["positions"][1]
 
         assert old_position["summary"]["close_reason"] == "stop_loss"
         assert old_position["summary"]["realized_pnl"] == "-1722.0000000000"
+        assert old_position["summary"]["realized_pnl_currency"] == "JPY"
+        assert old_position["summary"]["realized_pnl_money"] == {
+            "amount": "-1722",
+            "currency": "JPY",
+        }
+        assert old_position["summary"]["realized_pnl_display_money"]["currency"] == "USD"
+        assert (
+            old_position["summary"]["realized_pnl_display_conversion_context"]["source_currency"]
+            == "JPY"
+        )
         assert [event["kind"] for event in old_position["events"]] == [
             "opened",
             "stop_loss_closed",
             "rebuilt_into",
         ]
         assert old_position["events"][1]["related_position_id"] == str(rebuilt_position_id)
+        assert old_position["events"][1]["realized_pnl_money"] == {
+            "amount": "-1722",
+            "currency": "JPY",
+        }
+        assert old_position["events"][1]["realized_pnl_display_money"]["currency"] == "USD"
 
         assert rebuilt_position["original_position_id"] == str(old_position_id)
         assert [event["kind"] for event in rebuilt_position["events"]] == ["rebuilt"]

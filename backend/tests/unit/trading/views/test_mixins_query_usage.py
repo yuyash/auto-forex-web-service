@@ -131,6 +131,8 @@ def test_position_lifecycle_uses_position_lifecycle_query_params():
         response = view.position_lifecycle(request, pk=1)
 
     from_request.assert_called_once_with(request, default_execution_id="exec-1")
+    lifecycle_query = build.call_args.args[0]
+    assert lifecycle_query.task is view.get_object()
     assert response.status_code == 200
 
 

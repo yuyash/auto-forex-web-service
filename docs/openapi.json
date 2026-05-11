@@ -12329,10 +12329,42 @@
                     "chain_realized_pnl": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "chain_realized_pnl_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
                     "chain_realized_pnl",
+                    "chain_realized_pnl_currency",
+                    "chain_realized_pnl_display_conversion_context",
+                    "chain_realized_pnl_display_money",
+                    "chain_realized_pnl_money",
                     "matched_position_id",
                     "position_ids",
                     "positions",
