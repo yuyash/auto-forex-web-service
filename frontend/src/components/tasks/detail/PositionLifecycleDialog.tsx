@@ -17,7 +17,6 @@ import {
   InputAdornment,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -30,18 +29,13 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import {
-  currencyFractionDigits,
-  currencySymbol,
-  formatAppNumber,
-  formatMoneyPayload,
-} from '../../../utils/numberFormat';
+import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
-import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 import type {
   CurrencyConversionContext,
   MoneyAmountLike,
 } from '../../../types/money';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -130,8 +124,10 @@ interface PositionLifecycleResponse {
 
 interface LifecycleRealizedPnlCarrier {
   realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
   realized_pnl_money?: MoneyAmountLike | null;
   realized_pnl_display_money?: MoneyAmountLike | null;
+  realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
 }
 
 const formatTimestamp = (
@@ -154,12 +150,6 @@ function quoteCurrencySymbol(instrument?: string): string {
   return symbol === quote ? `${quote} ` : symbol;
 }
 
-function quoteCurrencyDecimals(instrument?: string): number {
-  if (!instrument) return 3;
-  const quote = quoteCurrencyFromInstrument(instrument) ?? '';
-  return currencyFractionDigits(quote, 2);
-}
-
 const formatPrice = (value?: string | null, instrument?: string): string => {
   if (!value) return '-';
   const parsed = Number(value);
@@ -172,28 +162,16 @@ const formatPrice = (value?: string | null, instrument?: string): string => {
     : value;
 };
 
-const formatSignedPnl = (
-  value?: string | null,
-  instrument?: string
-): string => {
-  if (!value) return '-';
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return value;
-  const sym = quoteCurrencySymbol(instrument);
-  const decimals = quoteCurrencyDecimals(instrument);
-  const text = `${sym}${formatAppNumber(Math.abs(parsed), {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}`;
-  if (parsed > 0) return `+${text}`;
-  if (parsed < 0) return `-${text}`;
-  return text;
-};
-
 const realizedPnlMoney = (
   value: LifecycleRealizedPnlCarrier
 ): MoneyAmountLike | null | undefined =>
   value.realized_pnl_display_money ?? value.realized_pnl_money;
+
+const realizedPnlFallbackCurrency = (
+  value: LifecycleRealizedPnlCarrier,
+  instrument?: string
+): string | null | undefined =>
+  value.realized_pnl_currency ?? quoteCurrencyFromInstrument(instrument);
 
 const hasRealizedPnl = (value: LifecycleRealizedPnlCarrier): boolean =>
   value.realized_pnl != null || realizedPnlMoney(value) != null;
@@ -204,17 +182,6 @@ const realizedPnlNumericValue = (
   const rawAmount = realizedPnlMoney(value)?.amount ?? value.realized_pnl;
   const parsed = Number(rawAmount);
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const formatRealizedPnl = (
-  value: LifecycleRealizedPnlCarrier,
-  instrument?: string
-): string => {
-  const money = realizedPnlMoney(value);
-  if (money) {
-    return formatMoneyPayload(money, { signed: true });
-  }
-  return formatSignedPnl(value.realized_pnl, instrument);
 };
 
 function eventColor(
@@ -311,24 +278,6 @@ const LifecycleEventRow: React.FC<{
 }> = ({ event, timezone = 'UTC', instrument, closeReasonLabels }) => {
   const { t, i18n } = useTranslation('common');
   const pnlValue = realizedPnlNumericValue(event);
-  const pnlTooltip = formatCurrencyConversionContext(
-    event.realized_pnl_display_conversion_context,
-    {
-      t,
-      timezone,
-      language: i18n.language,
-    }
-  );
-  const pnlContent =
-    pnlValue != null ? (
-      <Typography
-        component="span"
-        color={pnlValue >= 0 ? 'success.main' : 'error.main'}
-        fontWeight={700}
-      >
-        {formatRealizedPnl(event, instrument)}
-      </Typography>
-    ) : null;
   const relatedLabel =
     event.kind === 'rebuilt'
       ? t('tables.positions.lifecycle.fields.rebuiltFrom')
@@ -406,15 +355,28 @@ const LifecycleEventRow: React.FC<{
             value={formatPrice(event.planned_exit_price, instrument)}
           />
         ) : null}
-        {hasRealizedPnl(event) && pnlContent ? (
+        {hasRealizedPnl(event) ? (
           <LifecycleField
             label={t('tables.positions.realizedPnl')}
             value={
-              pnlTooltip ? (
-                <Tooltip title={pnlTooltip}>{pnlContent}</Tooltip>
-              ) : (
-                pnlContent
-              )
+              <MoneyAmountText
+                money={realizedPnlMoney(event)}
+                fallbackAmount={pnlValue}
+                fallbackCurrency={realizedPnlFallbackCurrency(
+                  event,
+                  instrument
+                )}
+                options={{ signed: true }}
+                conversionContext={
+                  event.realized_pnl_display_conversion_context
+                }
+                timezone={timezone}
+                language={i18n.language}
+                typographyProps={{
+                  color: (pnlValue ?? 0) >= 0 ? 'success.main' : 'error.main',
+                  fontWeight: 700,
+                }}
+              />
             }
           />
         ) : null}
@@ -469,23 +431,6 @@ const PositionCard: React.FC<{
   const { t, i18n } = useTranslation('common');
   const summary = item.summary;
   const pnlValue = realizedPnlNumericValue(summary);
-  const pnlTooltip = formatCurrencyConversionContext(
-    summary.realized_pnl_display_conversion_context,
-    {
-      t,
-      timezone,
-      language: i18n.language,
-    }
-  );
-  const pnlContent =
-    pnlValue != null ? (
-      <Typography
-        variant="h6"
-        color={pnlValue >= 0 ? 'success.main' : 'error.main'}
-      >
-        {formatRealizedPnl(summary, summary.instrument)}
-      </Typography>
-    ) : null;
 
   return (
     <Card variant="outlined">
@@ -550,12 +495,25 @@ const PositionCard: React.FC<{
                 {summary.position_id}
               </Typography>
             </Box>
-            {hasRealizedPnl(summary) && pnlContent ? (
-              pnlTooltip ? (
-                <Tooltip title={pnlTooltip}>{pnlContent}</Tooltip>
-              ) : (
-                pnlContent
-              )
+            {hasRealizedPnl(summary) ? (
+              <MoneyAmountText
+                money={realizedPnlMoney(summary)}
+                fallbackAmount={pnlValue}
+                fallbackCurrency={realizedPnlFallbackCurrency(
+                  summary,
+                  summary.instrument
+                )}
+                options={{ signed: true }}
+                conversionContext={
+                  summary.realized_pnl_display_conversion_context
+                }
+                timezone={timezone}
+                language={i18n.language}
+                typographyProps={{
+                  variant: 'h6',
+                  color: (pnlValue ?? 0) >= 0 ? 'success.main' : 'error.main',
+                }}
+              />
             ) : null}
           </Stack>
 
@@ -770,23 +728,16 @@ export const PositionLifecycleDialog: React.FC<
   const chainPnlCarrier: LifecycleRealizedPnlCarrier | null = data
     ? {
         realized_pnl: data.chain_realized_pnl,
+        realized_pnl_currency: data.chain_realized_pnl_currency,
         realized_pnl_money: data.chain_realized_pnl_money,
         realized_pnl_display_money: data.chain_realized_pnl_display_money,
+        realized_pnl_display_conversion_context:
+          data.chain_realized_pnl_display_conversion_context,
       }
     : null;
   const chainPnlValue = chainPnlCarrier
     ? realizedPnlNumericValue(chainPnlCarrier)
     : null;
-  const chainPnlTooltip = data
-    ? formatCurrencyConversionContext(
-        data.chain_realized_pnl_display_conversion_context,
-        {
-          t,
-          timezone: resolvedTimezone,
-          language: i18n.language,
-        }
-      )
-    : '';
 
   const handleSearch = () => {
     const trimmed = searchValue.trim();
@@ -909,21 +860,27 @@ export const PositionLifecycleDialog: React.FC<
                             }
                             fontWeight={700}
                           >
-                            {chainPnlTooltip ? (
-                              <Tooltip title={chainPnlTooltip}>
-                                <span>
-                                  {formatRealizedPnl(
-                                    chainPnlCarrier,
-                                    positions[0]?.summary.instrument
-                                  )}
-                                </span>
-                              </Tooltip>
-                            ) : (
-                              formatRealizedPnl(
+                            <MoneyAmountText
+                              money={realizedPnlMoney(chainPnlCarrier)}
+                              fallbackAmount={chainPnlValue}
+                              fallbackCurrency={realizedPnlFallbackCurrency(
                                 chainPnlCarrier,
                                 positions[0]?.summary.instrument
-                              )
-                            )}
+                              )}
+                              options={{ signed: true }}
+                              conversionContext={
+                                chainPnlCarrier.realized_pnl_display_conversion_context
+                              }
+                              timezone={resolvedTimezone}
+                              language={i18n.language}
+                              typographyProps={{
+                                color:
+                                  (chainPnlValue ?? 0) >= 0
+                                    ? 'success.main'
+                                    : 'error.main',
+                                fontWeight: 700,
+                              }}
+                            />
                           </Typography>
                         </Stack>
                       ) : null}

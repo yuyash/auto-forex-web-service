@@ -22,7 +22,7 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
-from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
+from apps.trading.serializers.lifecycle import PositionLifecycleResponseSerializer
 from apps.trading.services.position_money import PositionMoneyEnricher
 from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
@@ -266,25 +266,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
         tags=["Trading"],
         parameters=[PositionLifecycleQueryParamsSchemaSerializer],
         responses={
-            200: inline_serializer(
-                "TaskPositionLifecycleResponse",
-                fields={
-                    "requested_position_id": serializers.CharField(),
-                    "matched_position_id": serializers.UUIDField(),
-                    "position_ids": serializers.ListField(child=serializers.UUIDField()),
-                    "positions": serializers.ListField(child=serializers.DictField()),
-                    "chain_realized_pnl": serializers.CharField(allow_null=True),
-                    "chain_realized_pnl_currency": serializers.CharField(
-                        allow_blank=True,
-                        allow_null=True,
-                    ),
-                    "chain_realized_pnl_money": MoneySerializer(allow_null=True),
-                    "chain_realized_pnl_display_money": MoneySerializer(allow_null=True),
-                    "chain_realized_pnl_display_conversion_context": (
-                        CurrencyConversionContextSerializer(allow_null=True)
-                    ),
-                },
-            )
+            200: PositionLifecycleResponseSerializer,
         },
         description="Retrieve the full lifecycle chain for one position, including rebuild links.",
     )

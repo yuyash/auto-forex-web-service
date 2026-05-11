@@ -25,6 +25,7 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
@@ -45,7 +46,6 @@ import {
   currencySymbol,
   formatAppNumber,
   formatMoneyAmount,
-  formatMoneyPayload,
 } from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
@@ -61,7 +61,6 @@ import {
   createGenericPositionCopyExtractors,
   createOpenPositionCopyExtractors,
 } from './taskPositionCopyExtractors';
-import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -258,14 +257,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       ? (row.realized_pnl_display_money ?? row.realized_pnl_money)
       : (row.unrealized_pnl_display_money ?? row.unrealized_pnl_money);
 
-  const positionPnlConversionContext = (
-    row: TaskPosition,
-    kind: PositionPnlKind
-  ) =>
-    kind === 'realized'
-      ? row.realized_pnl_display_conversion_context
-      : row.unrealized_pnl_display_conversion_context;
-
   const positionPnlNumericValue = (
     row: TaskPosition,
     kind: PositionPnlKind,
@@ -276,27 +267,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     return Number.isFinite(value) ? value : fallbackValue;
   };
 
-  const formatPositionPnl = (
-    row: TaskPosition,
-    kind: PositionPnlKind,
-    fallbackValue: number,
-    fallbackCurrency?: string | null
-  ): string => {
-    const money = positionPnlMoney(row, kind);
-    if (money) {
-      return formatMoneyPayload(
-        money,
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-          signed: true,
-        },
-        separators
-      );
-    }
-    return formatSignedMoney(fallbackValue, fallbackCurrency);
-  };
-
   const renderPositionPnl = (
     row: TaskPosition,
     kind: PositionPnlKind,
@@ -304,25 +274,31 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     fallbackCurrency?: string | null
   ) => {
     const value = positionPnlNumericValue(row, kind, fallbackValue);
-    const content = (
-      <Typography
-        variant="body2"
-        color={value >= 0 ? 'success.main' : 'error.main'}
-        fontWeight="bold"
-      >
-        {formatPositionPnl(row, kind, fallbackValue, fallbackCurrency)}
-      </Typography>
+    const conversionContext =
+      kind === 'realized'
+        ? row.realized_pnl_display_conversion_context
+        : row.unrealized_pnl_display_conversion_context;
+    return (
+      <MoneyAmountText
+        money={positionPnlMoney(row, kind)}
+        fallbackAmount={fallbackValue}
+        fallbackCurrency={fallbackCurrency}
+        options={{
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+          signed: true,
+        }}
+        separators={separators}
+        conversionContext={conversionContext}
+        timezone={timezone}
+        language={language}
+        typographyProps={{
+          variant: 'body2',
+          color: value >= 0 ? 'success.main' : 'error.main',
+          fontWeight: 'bold',
+        }}
+      />
     );
-    const tooltip = formatCurrencyConversionContext(
-      positionPnlConversionContext(row, kind),
-      {
-        t,
-        timezone,
-        language,
-        separators,
-      }
-    );
-    return tooltip ? <Tooltip title={tooltip}>{content}</Tooltip> : content;
   };
 
   // --- Shared column fragments ---

@@ -30,6 +30,7 @@ import {
   Clear as ClearIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import {
@@ -59,7 +60,6 @@ import {
   tableFilterDateRangeSx,
   tableFilterFieldSx,
 } from '../../common/tableFilterLayout';
-import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -252,17 +252,6 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     return Number.isFinite(value) ? value : null;
   }, []);
 
-  const formatTradePnlConversion = useCallback(
-    (row: TaskTrade): string =>
-      formatCurrencyConversionContext(row.display_conversion_context, {
-        t,
-        timezone,
-        language,
-        separators,
-      }),
-    [language, separators, t, timezone]
-  );
-
   const columns: Column<TaskTrade>[] = [
     {
       id: 'id',
@@ -388,17 +377,27 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       render: (row: TaskTrade) => {
         const value = tradePnlNumericValue(row);
         if (value == null) return '-';
-        const content = (
-          <Typography
-            variant="body2"
-            color={value >= 0 ? 'success.main' : 'error.main'}
-            fontWeight="bold"
-          >
-            {formatTradePnl(row)}
-          </Typography>
+        return (
+          <MoneyAmountText
+            money={row.pnl_display_money ?? row.pnl_money}
+            fallbackAmount={value}
+            fallbackCurrency={row.pnl_currency || row.price_currency}
+            options={{
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+              signed: true,
+            }}
+            separators={separators}
+            conversionContext={row.display_conversion_context}
+            timezone={timezone}
+            language={language}
+            typographyProps={{
+              variant: 'body2',
+              color: value >= 0 ? 'success.main' : 'error.main',
+              fontWeight: 'bold',
+            }}
+          />
         );
-        const tooltip = formatTradePnlConversion(row);
-        return tooltip ? <Tooltip title={tooltip}>{content}</Tooltip> : content;
       },
     },
     {

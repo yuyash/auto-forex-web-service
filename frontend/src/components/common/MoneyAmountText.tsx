@@ -1,5 +1,10 @@
 import { Tooltip, Typography, type TypographyProps } from '@mui/material';
-import type { MoneyAmountLike } from '../../types/money';
+import { useTranslation } from 'react-i18next';
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+} from '../../types/money';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
 import {
   formatMoneyAmount,
   formatMoneyPayload,
@@ -14,6 +19,9 @@ interface MoneyAmountTextProps {
   options?: FormatMoneyAmountOptions;
   separators?: NumberFormatSeparators;
   tooltip?: string;
+  conversionContext?: CurrencyConversionContext | null;
+  timezone?: string;
+  language?: string;
   typographyProps?: TypographyProps;
 }
 
@@ -24,8 +32,12 @@ export function MoneyAmountText({
   options,
   separators,
   tooltip,
+  conversionContext,
+  timezone,
+  language,
   typographyProps,
 }: MoneyAmountTextProps) {
+  const { t, i18n } = useTranslation('common');
   const text = money
     ? formatMoneyPayload(money, options, separators)
     : fallbackAmount == null
@@ -36,14 +48,21 @@ export function MoneyAmountText({
           options,
           separators
         );
+  const conversionTooltip = formatCurrencyConversionContext(conversionContext, {
+    t,
+    timezone,
+    language: language ?? i18n.language,
+    separators,
+  });
+  const resolvedTooltip = tooltip || conversionTooltip;
   const content = (
     <Typography component="span" {...typographyProps}>
       {text}
     </Typography>
   );
-  if (!tooltip) return content;
+  if (!resolvedTooltip) return content;
   return (
-    <Tooltip title={tooltip} arrow>
+    <Tooltip title={resolvedTooltip} arrow>
       {content}
     </Tooltip>
   );

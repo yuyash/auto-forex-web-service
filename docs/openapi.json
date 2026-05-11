@@ -3597,7 +3597,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskPositionLifecycleResponse"
+                                    "$ref": "#/components/schemas/PositionLifecycleResponse"
                                 }
                             }
                         },
@@ -5843,7 +5843,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskPositionLifecycleResponse"
+                                    "$ref": "#/components/schemas/PositionLifecycleResponse"
                                 }
                             }
                         },
@@ -11031,6 +11031,310 @@
                     "unrealized_pnl"
                 ]
             },
+            "PositionLifecycleEvent": {
+                "type": "object",
+                "description": "Serializer for one point in a position lifecycle timeline.",
+                "properties": {
+                    "realized_pnl": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "realized_pnl_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "realized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "position_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "related_position_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "direction": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "units": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "entry_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "exit_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "planned_exit_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "planned_exit_price_formula": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "close_reason": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "position_id"
+                ]
+            },
+            "PositionLifecycleItem": {
+                "type": "object",
+                "description": "Serializer for a position and its lifecycle timeline.",
+                "properties": {
+                    "position_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "original_position_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "rebuilt_position_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/PositionLifecycleSummary"
+                    },
+                    "events": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PositionLifecycleEvent"
+                        }
+                    }
+                },
+                "required": [
+                    "events",
+                    "position_id",
+                    "rebuilt_position_ids",
+                    "summary"
+                ]
+            },
+            "PositionLifecycleResponse": {
+                "type": "object",
+                "description": "Serializer for a complete position lifecycle chain response.",
+                "properties": {
+                    "requested_position_id": {
+                        "type": "string"
+                    },
+                    "matched_position_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "position_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    "positions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PositionLifecycleItem"
+                        }
+                    },
+                    "chain_realized_pnl": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "chain_realized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "chain_realized_pnl",
+                    "matched_position_id",
+                    "position_ids",
+                    "positions",
+                    "requested_position_id"
+                ]
+            },
+            "PositionLifecycleSummary": {
+                "type": "object",
+                "description": "Serializer for one position summary within a lifecycle chain.",
+                "properties": {
+                    "realized_pnl": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "realized_pnl_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "realized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "position_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "direction": {
+                        "type": "string"
+                    },
+                    "units": {
+                        "type": "integer"
+                    },
+                    "is_open": {
+                        "type": "boolean"
+                    },
+                    "is_rebuild": {
+                        "type": "boolean"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "layer_index": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "retracement_count": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "entry_price": {
+                        "type": "string"
+                    },
+                    "entry_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "exit_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "exit_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "planned_exit_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "planned_exit_price_formula": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "stop_loss_price": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "close_reason": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "direction",
+                    "entry_price",
+                    "instrument",
+                    "is_open",
+                    "is_rebuild",
+                    "position_id",
+                    "units"
+                ]
+            },
             "PositionListResponse": {
                 "type": "object",
                 "properties": {
@@ -12300,75 +12604,6 @@
                     "next",
                     "previous",
                     "results"
-                ]
-            },
-            "TaskPositionLifecycleResponse": {
-                "type": "object",
-                "properties": {
-                    "requested_position_id": {
-                        "type": "string"
-                    },
-                    "matched_position_id": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "position_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    },
-                    "positions": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": {}
-                        }
-                    },
-                    "chain_realized_pnl": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "chain_realized_pnl_currency": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "chain_realized_pnl_money": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/Money"
-                            }
-                        ],
-                        "nullable": true
-                    },
-                    "chain_realized_pnl_display_money": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/Money"
-                            }
-                        ],
-                        "nullable": true
-                    },
-                    "chain_realized_pnl_display_conversion_context": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/CurrencyConversionContext"
-                            }
-                        ],
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "chain_realized_pnl",
-                    "chain_realized_pnl_currency",
-                    "chain_realized_pnl_display_conversion_context",
-                    "chain_realized_pnl_display_money",
-                    "chain_realized_pnl_money",
-                    "matched_position_id",
-                    "position_ids",
-                    "positions",
-                    "requested_position_id"
                 ]
             },
             "TaskPositionPaginatedResponse": {
