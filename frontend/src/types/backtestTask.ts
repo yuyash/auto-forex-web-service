@@ -2,7 +2,11 @@
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 import type { TaskInstrumentContext } from './instrument';
-import type { MoneyAmount, TaskMoneyContext } from './money';
+import type {
+  CurrencyConversionContext,
+  MoneyAmount,
+  TaskMoneyContext,
+} from './money';
 
 export type BacktestInitialPositionStatus =
   | 'open'
@@ -183,12 +187,16 @@ export interface BacktestBalanceAdjustmentResult {
   previous_balance: string;
   previous_balance_currency: string;
   previous_balance_money: MoneyAmount;
+  previous_balance_display_money?: MoneyAmount | null;
   current_balance: string;
   current_balance_currency: string;
   current_balance_money: MoneyAmount;
+  current_balance_display_money?: MoneyAmount | null;
   adjustment: string;
   adjustment_currency: string;
   adjustment_money: MoneyAmount;
+  adjustment_display_money?: MoneyAmount | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   currency: string;
   state_version: number;
 }

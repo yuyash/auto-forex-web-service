@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,7 +15,9 @@ from django.utils import timezone
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.money import Money
 from apps.trading.models import BacktestTask, ExecutionState, TaskLog
+from apps.trading.services.conversion_context import CurrencyConversionContext
 from apps.trading.services.execution_snapshots import sync_execution_snapshot
+from apps.trading.services.fx_rates import FX_CONVERSION
 
 
 class BacktestBalanceAdjustmentError(Exception):
@@ -39,6 +42,10 @@ class BacktestBalanceAdjustmentResult:
     adjustment: Decimal
     adjustment_currency: str
     state_version: int
+    previous_balance_display_money: dict[str, str] | None = None
+    current_balance_display_money: dict[str, str] | None = None
+    adjustment_display_money: dict[str, str] | None = None
+    display_conversion_context: dict[str, object] | None = None
 
     @property
     def currency(self) -> str:
@@ -59,6 +66,14 @@ class BacktestBalanceAdjustmentResult:
     def adjustment_money(self) -> Money:
         """Return the adjustment as an amount/currency pair."""
         return Money.coerce(self.adjustment, self.adjustment_currency)
+
+
+@dataclass(frozen=True)
+class _BacktestBalanceDisplayValues:
+    previous: dict[str, str] | None
+    current: dict[str, str] | None
+    adjustment: dict[str, str] | None
+    conversion_context: dict[str, object] | None
 
 
 def set_backtest_current_balance(
@@ -118,6 +133,13 @@ def set_backtest_current_balance(
         previous_balance = previous_balance_money.amount
         adjustment = adjustment_money.amount
         updated_at = timezone.now()
+        display_values = _display_balance_values(
+            previous_balance_money=previous_balance_money,
+            current_balance_money=current_balance_money,
+            adjustment_money=adjustment_money,
+            task=task,
+            as_of=updated_at,
+        )
         ExecutionState.objects.filter(pk=state.pk).update(
             current_balance=current_balance_money.amount,
             current_balance_currency=account_currency,
@@ -148,6 +170,12 @@ def set_backtest_current_balance(
                 ).as_dict(),
                 "adjustment": str(adjustment),
                 "adjustment_money": adjustment_money.as_dict(),
+                "previous_balance_display_money": display_values.previous,
+                "current_balance_display_money": display_values.current,
+                "adjustment_display_money": display_values.adjustment,
+                "display_conversion_context": _json_safe_conversion_context(
+                    display_values.conversion_context
+                ),
                 "currency": account_currency,
                 "reason": reason,
             },
@@ -164,7 +192,77 @@ def set_backtest_current_balance(
             adjustment=adjustment,
             adjustment_currency=account_currency,
             state_version=state.state_version,
+            previous_balance_display_money=display_values.previous,
+            current_balance_display_money=display_values.current,
+            adjustment_display_money=display_values.adjustment,
+            display_conversion_context=display_values.conversion_context,
         )
+
+
+def _display_balance_values(
+    *,
+    previous_balance_money: Money,
+    current_balance_money: Money,
+    adjustment_money: Money,
+    task: BacktestTask,
+    as_of: datetime,
+) -> _BacktestBalanceDisplayValues:
+    """Return display-currency balance values and conversion metadata."""
+    source_currency = current_balance_money.currency_code
+    target_currency = (
+        str(
+            getattr(task, "effective_display_currency", "")
+            or getattr(task, "display_currency", "")
+            or source_currency
+        )
+        .strip()
+        .upper()
+    )
+    rate = FX_CONVERSION.rate(
+        source_currency=source_currency,
+        target_currency=target_currency,
+        instrument=str(getattr(task, "instrument", "") or ""),
+        as_of=as_of,
+    )
+    if rate is None:
+        return _BacktestBalanceDisplayValues(
+            previous=None,
+            current=None,
+            adjustment=None,
+            conversion_context=CurrencyConversionContext.unavailable(
+                source_currency=source_currency,
+                target_currency=target_currency,
+            ).as_dict(),
+        )
+
+    return _BacktestBalanceDisplayValues(
+        previous=previous_balance_money.convert(
+            rate=rate.rate,
+            target_currency=rate.target_currency,
+        ).as_dict(),
+        current=current_balance_money.convert(
+            rate=rate.rate,
+            target_currency=rate.target_currency,
+        ).as_dict(),
+        adjustment=adjustment_money.convert(
+            rate=rate.rate,
+            target_currency=rate.target_currency,
+        ).as_dict(),
+        conversion_context=CurrencyConversionContext.from_rate(rate).as_dict(),
+    )
+
+
+def _json_safe_conversion_context(value: dict[str, object] | None) -> dict[str, object] | None:
+    """Return conversion metadata with JSONField-safe primitive values."""
+    if value is None:
+        return None
+    result = dict(value)
+    if result.get("rate") is not None:
+        result["rate"] = str(result["rate"])
+    rate_as_of = result.get("rate_as_of")
+    if isinstance(rate_as_of, datetime):
+        result["rate_as_of"] = rate_as_of.isoformat()
+    return result
 
 
 def _refresh_balance_dependent_snapshots(task: BacktestTask) -> None:

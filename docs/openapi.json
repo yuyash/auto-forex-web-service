@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.53.0",
+        "version": "1.53.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -7051,6 +7051,14 @@
                     "current_balance_money": {
                         "$ref": "#/components/schemas/Money"
                     },
+                    "current_balance_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
                     "adjustment": {
                         "type": "string",
                         "format": "decimal",
@@ -7062,6 +7070,30 @@
                     },
                     "adjustment_money": {
                         "$ref": "#/components/schemas/Money"
+                    },
+                    "adjustment_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "previous_balance_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
                     },
                     "currency": {
                         "type": "string",

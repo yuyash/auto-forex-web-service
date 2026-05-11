@@ -333,9 +333,7 @@ class StopLossClosedEntry:
             ),
             position_id=SNOWBALL_STATE_PARSER.optional_str(d, "position_id"),
             stop_loss_price=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_price"),
-            stop_loss_exit_price=SNOWBALL_STATE_PARSER.optional_decimal(
-                d, "stop_loss_exit_price"
-            ),
+            stop_loss_exit_price=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_exit_price"),
             closed_at=(
                 SNOWBALL_STATE_PARSER.parse_datetime(d["closed_at"], field_name="closed_at")
                 if d.get("closed_at") not in (None, "")

@@ -2,10 +2,9 @@
 
 ## [1.68.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.0...frontend-v1.68.1) (2026-05-10)
 
-
 ### Bug Fixes
 
-* config revision visibility ([#698](https://github.com/yuyash/auto-forex-web-service/issues/698)) ([05b4f33](https://github.com/yuyash/auto-forex-web-service/commit/05b4f334ca57d00b2a51713e832a4965035e19e5))
+- config revision visibility ([#698](https://github.com/yuyash/auto-forex-web-service/issues/698)) ([05b4f33](https://github.com/yuyash/auto-forex-web-service/commit/05b4f334ca57d00b2a51713e832a4965035e19e5))
 
 ## [1.68.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.67.2...frontend-v1.68.0) (2026-05-10)
 

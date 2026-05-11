@@ -17,7 +17,11 @@ from apps.trading.services.public_errors import (
     task_public_error_code,
     task_public_error_message,
 )
-from apps.trading.serializers.money import MoneySerializer, TaskMoneyContextSerializer
+from apps.trading.serializers.money import (
+    CurrencyConversionContextSerializer,
+    MoneySerializer,
+    TaskMoneyContextSerializer,
+)
 from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
 from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
 from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
@@ -200,9 +204,16 @@ class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
     current_balance_currency = serializers.CharField(max_length=3)
     current_balance_money = MoneySerializer()
+    current_balance_display_money = MoneySerializer(allow_null=True, required=False)
     adjustment = serializers.DecimalField(max_digits=20, decimal_places=10)
     adjustment_currency = serializers.CharField(max_length=3)
     adjustment_money = MoneySerializer()
+    adjustment_display_money = MoneySerializer(allow_null=True, required=False)
+    previous_balance_display_money = MoneySerializer(allow_null=True, required=False)
+    display_conversion_context = CurrencyConversionContextSerializer(
+        allow_null=True,
+        required=False,
+    )
     currency = serializers.CharField(max_length=3)
     state_version = serializers.IntegerField()
 

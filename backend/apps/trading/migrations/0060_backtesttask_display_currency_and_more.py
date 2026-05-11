@@ -58,6 +58,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('trading', '0059_alter_backtesttask_description_and_more'),
+        ('trading', '0059_strategy_config_revision'),
     ]
 
     operations = [
