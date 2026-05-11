@@ -4,6 +4,7 @@ import {
   currencySymbol,
   formatAppNumber,
   formatMoneyAmount,
+  formatMoneyPayload,
 } from '../../../utils/numberFormat';
 
 type PositionDirection = 'long' | 'short';
@@ -182,6 +183,14 @@ function formatClosedPositionPnl(
   direction: PositionDirection,
   options: { signed: boolean }
 ): string {
+  const money = row.realized_pnl_display_money ?? row.realized_pnl_money;
+  if (money) {
+    return formatMoneyPayload(money, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: options.signed,
+    });
+  }
   const entryPrice = parseOptionalFloat(row.entry_price);
   const exitPrice = parseOptionalFloat(row.exit_price);
   if (entryPrice == null || exitPrice == null) return '-';
@@ -209,6 +218,14 @@ function formatOpenPositionPnl(
   direction: PositionDirection,
   options: { currentPrice?: number | null; signed: boolean }
 ): string {
+  const money = row.unrealized_pnl_display_money ?? row.unrealized_pnl_money;
+  if (money) {
+    return formatMoneyPayload(money, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: options.signed,
+    });
+  }
   const storedValue = parseOptionalFloat(row.unrealized_pnl);
   if (storedValue != null) {
     return formatMoney(storedValue, row.unrealized_pnl_currency, {

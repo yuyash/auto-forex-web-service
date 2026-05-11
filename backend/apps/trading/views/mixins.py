@@ -22,6 +22,7 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.services.position_money import PositionMoneyEnricher
 from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
@@ -248,6 +249,11 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
         )
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            page = PositionMoneyEnricher.for_task(
+                task=task,
+                task_type_label=self.task_type_label,
+            ).enrich_positions(list(page))
         serializer = PositionSerializer(
             page,
             many=True,

@@ -1116,6 +1116,45 @@ class TestPositions:
         pos = response.data["results"][0]
         assert pos["instrument"] == "USD_JPY"
         assert pos["is_open"] is True
+        assert pos["unrealized_pnl_currency"] == "JPY"
+        assert pos["unrealized_pnl_money"] == {
+            "amount": "0.0000000000",
+            "currency": "JPY",
+        }
+        assert pos["unrealized_pnl_display_money"] is None
+        assert pos["unrealized_pnl_display_conversion_context"]["source_currency"] == "JPY"
+
+    def test_positions_include_realized_pnl_money_for_closed_rows(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            exit_price=Decimal("151.100"),
+            exit_time=now + timedelta(minutes=5),
+            is_open=False,
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/positions/")
+
+        assert response.status_code == status.HTTP_200_OK
+        pos = response.data["results"][0]
+        assert pos["realized_pnl"] == "600.0000000000"
+        assert pos["realized_pnl_currency"] == "JPY"
+        assert pos["realized_pnl_money"] == {
+            "amount": "600.0000000000",
+            "currency": "JPY",
+        }
+        assert pos["realized_pnl_display_money"]["currency"] == "USD"
+        assert pos["realized_pnl_display_conversion_context"]["source_currency"] == "JPY"
 
     def test_without_positions(self):
         task = _make_task()

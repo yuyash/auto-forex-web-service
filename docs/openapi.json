@@ -10864,6 +10864,30 @@
                     "unrealized_pnl_currency": {
                         "type": "string"
                     },
+                    "unrealized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "unrealized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "unrealized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
+                    },
                     "realized_pnl": {
                         "type": "string",
                         "nullable": true,
@@ -10874,6 +10898,30 @@
                         "type": "string",
                         "description": "Return the currency for realized PnL values.",
                         "readOnly": true
+                    },
+                    "realized_pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "realized_pnl_display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
                     },
                     "oanda_trade_id": {
                         "type": "string",

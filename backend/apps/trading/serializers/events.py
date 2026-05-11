@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from rest_framework import serializers
@@ -203,8 +204,20 @@ class PositionSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+    unrealized_pnl_money = MoneySerializer(required=False, allow_null=True)
+    unrealized_pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    unrealized_pnl_display_conversion_context = CurrencyConversionContextSerializer(
+        required=False,
+        allow_null=True,
+    )
     realized_pnl = serializers.SerializerMethodField()
     realized_pnl_currency = serializers.SerializerMethodField()
+    realized_pnl_money = MoneySerializer(required=False, allow_null=True)
+    realized_pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    realized_pnl_display_conversion_context = CurrencyConversionContextSerializer(
+        required=False,
+        allow_null=True,
+    )
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
@@ -277,12 +290,23 @@ class PositionSerializer(serializers.Serializer):
             value = cast(dict[str, Any], obj).get("realized_pnl")
         else:
             value = getattr(obj, "_realized_pnl", None)
-        return str(value) if value is not None else None
+        if value is None:
+            return None
+        try:
+            return str(Decimal(str(value)).quantize(Decimal("0.0000000001")))
+        except (InvalidOperation, TypeError, ValueError):
+            return str(value)
 
     def get_realized_pnl_currency(self, obj: object) -> str:
         """Return the currency for realized PnL values."""
         if isinstance(obj, dict):
-            return str(cast(dict[str, Any], obj).get("unrealized_pnl_currency") or "")
+            data = cast(dict[str, Any], obj)
+            return str(
+                data.get("realized_pnl_currency") or data.get("unrealized_pnl_currency") or ""
+            )
+        explicit = getattr(obj, "realized_pnl_currency", None)
+        if explicit:
+            return str(explicit)
         return str(getattr(obj, "unrealized_pnl_currency", "") or "")
 
 
