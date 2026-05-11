@@ -12960,6 +12960,34 @@
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
                         "nullable": true
                     },
+                    "pnl_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "pnl_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "pnl_display_money": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "display_conversion_context": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyConversionContext"
+                            }
+                        ],
+                        "nullable": true
+                    },
                     "entry_price": {
                         "type": "string",
                         "format": "decimal",

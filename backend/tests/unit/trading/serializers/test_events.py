@@ -1,5 +1,7 @@
 """Unit tests for trading serializers events."""
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import MagicMock
 
 from apps.trading.enums import EventType
@@ -59,6 +61,44 @@ class TestTradeSerializer:
         assert "oanda_trade_id" in serializer.fields
         assert "replayed_at" in serializer.fields
         assert "pnl" in serializer.fields
+        assert "pnl_currency" in serializer.fields
+        assert "pnl_money" in serializer.fields
+        assert "pnl_display_money" in serializer.fields
+        assert "display_conversion_context" in serializer.fields
+
+    def test_serializes_trade_pnl_money_payloads(self):
+        timestamp = datetime(2026, 1, 1, tzinfo=UTC)
+        serializer = TradeSerializer(
+            {
+                "direction": "buy",
+                "units": 1000,
+                "instrument": "USD_JPY",
+                "price": Decimal("150.100"),
+                "price_currency": "JPY",
+                "execution_method": EventType.TAKE_PROFIT.value,
+                "timestamp": timestamp,
+                "pnl": Decimal("100"),
+                "pnl_currency": "JPY",
+                "pnl_money": {"amount": "100", "currency": "JPY"},
+                "pnl_display_money": {"amount": "0.666222518321119", "currency": "USD"},
+                "display_conversion_context": {
+                    "source_currency": "JPY",
+                    "target_currency": "USD",
+                    "rate": Decimal("0.00666222518321119"),
+                    "rate_source": "instrument_mid",
+                    "rate_as_of": timestamp,
+                    "rate_path": ["USD/JPY", "inverse"],
+                    "conversion_available": True,
+                    "conversion_policy": "runtime_fx_rate",
+                },
+            }
+        )
+
+        data = serializer.data
+
+        assert data["pnl_money"] == {"amount": "100.0000000000", "currency": "JPY"}
+        assert data["pnl_display_money"]["currency"] == "USD"
+        assert data["display_conversion_context"]["source_currency"] == "JPY"
 
     def test_get_execution_method_display_valid(self):
         serializer = TradeSerializer()

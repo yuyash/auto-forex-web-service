@@ -59,6 +59,11 @@ def test_trades_normalizes_direction_and_close_pnl():
     assert page_size > 0
     assert rows[0]["direction"] == "buy"
     assert rows[0]["pnl"] == Decimal("100.000")
+    assert rows[0]["pnl_currency"] == "JPY"
+    assert rows[0]["pnl_money"] == {"amount": "100", "currency": "JPY"}
+    assert rows[0]["pnl_display_money"]["currency"] == "USD"
+    assert rows[0]["display_conversion_context"]["source_currency"] == "JPY"
+    assert rows[0]["display_conversion_context"]["target_currency"] == "USD"
 
 
 @pytest.mark.django_db
@@ -126,6 +131,8 @@ def test_trades_use_lifecycle_snapshot_for_partial_close_pnl():
     assert rows[0]["entry_price"] == Decimal("150.000")
     assert rows[0]["price"] == Decimal("150.100")
     assert rows[0]["pnl"] == Decimal("100.000")
+    assert rows[0]["pnl_money"] == {"amount": "100", "currency": "JPY"}
+    assert rows[0]["pnl_display_money"]["currency"] == "USD"
 
 
 @pytest.mark.django_db

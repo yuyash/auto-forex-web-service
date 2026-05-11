@@ -1080,6 +1080,13 @@ class TestTrades:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
         assert response.data["results"][0]["pnl"] == "600.0000000000"
+        assert response.data["results"][0]["pnl_currency"] == "JPY"
+        assert response.data["results"][0]["pnl_money"] == {
+            "amount": "600.0000000000",
+            "currency": "JPY",
+        }
+        assert response.data["results"][0]["pnl_display_money"]["currency"] == "USD"
+        assert response.data["results"][0]["display_conversion_context"]["source_currency"] == "JPY"
 
 
 @pytest.mark.django_db

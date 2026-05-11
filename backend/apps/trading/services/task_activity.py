@@ -29,6 +29,7 @@ from apps.trading.models.logs import TaskLog
 from apps.trading.models.orders import Order
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
+from apps.trading.services.trade_money import TradeMoneyEnricher
 from apps.trading.views.pagination import ActivityPagination, TradePositionPagination
 from apps.trading.views.query_params import (
     EventsQueryParams,
@@ -471,7 +472,12 @@ class TaskActivityQueryService:
             task_type_label=task_type_label,
             execution_id=query.execution.execution_id,
         )
-        return self._normalize_trade_rows(rows, close_snapshots), total_count, page, page_size
+        normalized_rows = self._normalize_trade_rows(rows, close_snapshots)
+        enriched_rows = TradeMoneyEnricher.for_task(
+            task=task,
+            task_type_label=task_type_label,
+        ).enrich_rows(normalized_rows)
+        return enriched_rows, total_count, page, page_size
 
     @staticmethod
     def _close_snapshots_by_order_id(

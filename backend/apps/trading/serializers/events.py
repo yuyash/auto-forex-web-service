@@ -8,6 +8,7 @@ from rest_framework import serializers
 
 from apps.trading.enums import Direction, EventType
 from apps.trading.models import StrategyEventRecord, TradingEvent
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
 
 
 class TradingEventSerializer(serializers.ModelSerializer):
@@ -116,6 +117,17 @@ class TradeSerializer(serializers.Serializer):
     pnl = serializers.DecimalField(
         max_digits=20,
         decimal_places=10,
+        required=False,
+        allow_null=True,
+    )
+    pnl_currency = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    pnl_money = MoneySerializer(required=False, allow_null=True)
+    pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    display_conversion_context = CurrencyConversionContextSerializer(
         required=False,
         allow_null=True,
     )
