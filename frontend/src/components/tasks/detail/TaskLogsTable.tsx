@@ -48,6 +48,14 @@ import {
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { useStrategies } from '../../../hooks/useStrategies';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+} from '../../../types/money';
+import { formatMoneyPayload } from '../../../utils/numberFormat';
+import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 
 interface TaskLogsTableProps {
   taskId: string;
@@ -61,6 +69,77 @@ type SortOrder = 'asc' | 'desc';
 
 const toOrdering = (field: string, order: SortOrder): string =>
   order === 'desc' ? `-${field}` : field;
+
+interface LogMoneyDetail {
+  key: string;
+  label: string;
+  value: string;
+  tooltip: string;
+}
+
+interface LogMoneyFormatOptions {
+  language?: string;
+  separators: ReturnType<typeof useNumberFormatter>['separators'];
+  t: ReturnType<typeof useTranslation>['t'];
+  timezone: string;
+}
+
+const LOG_MONEY_KEYS: Array<{
+  key: string;
+  labelKey: string;
+  fallback: string;
+}> = [
+  {
+    key: 'current_balance_display_money',
+    labelKey: 'tables.logs.currentBalanceDisplayMoney',
+    fallback: 'Display balance',
+  },
+  {
+    key: 'current_balance_money',
+    labelKey: 'tables.logs.currentBalanceMoney',
+    fallback: 'Account balance',
+  },
+  {
+    key: 'adjustment_display_money',
+    labelKey: 'tables.logs.adjustmentDisplayMoney',
+    fallback: 'Display adjustment',
+  },
+  {
+    key: 'adjustment_money',
+    labelKey: 'tables.logs.adjustmentMoney',
+    fallback: 'Account adjustment',
+  },
+];
+
+function formatLogMoneyDetails(
+  details: Record<string, unknown> | undefined,
+  options: LogMoneyFormatOptions
+): LogMoneyDetail[] {
+  if (!details) return [];
+  const conversionTooltip = formatCurrencyConversionContext(
+    details.display_conversion_context as CurrencyConversionContext | null,
+    options
+  );
+  return LOG_MONEY_KEYS.flatMap(({ key, labelKey, fallback }) => {
+    const money = asMoneyAmount(details[key]);
+    if (!money) return [];
+    return [
+      {
+        key,
+        label: options.t(labelKey, { defaultValue: fallback }),
+        value: formatMoneyPayload(money, {}, options.separators),
+        tooltip: key.includes('display') ? conversionTooltip : '',
+      },
+    ];
+  });
+}
+
+function asMoneyAmount(value: unknown): MoneyAmountLike | null {
+  if (value == null || typeof value !== 'object') return null;
+  const candidate = value as MoneyAmountLike;
+  if (candidate.amount == null || !candidate.currency) return null;
+  return candidate;
+}
 
 export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   taskId,
@@ -77,6 +156,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     includeMilliseconds: true,
     includeTimezone: true,
   });
+  const { user } = useAuth();
+  const { separators } = useNumberFormatter();
   const [levelFilter, setLevelFilter] = useState<string[]>([]);
   const [componentFilter, setComponentFilter] = useState<string[]>([]);
   const [messageFilter, setMessageFilter] = useState('');
@@ -261,6 +342,12 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       minWidth: 400,
       render: (row) => {
         const strategyEventLabel = getStrategyEventLabel(row);
+        const moneyDetails = formatLogMoneyDetails(row.details, {
+          language: user?.language,
+          separators,
+          t,
+          timezone: user?.timezone || 'UTC',
+        });
         return (
           <Box
             sx={{
@@ -282,6 +369,20 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
               />
             ) : null}
             <span>{String(row.message ?? '')}</span>
+            {moneyDetails.length > 0 ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {moneyDetails.map((detail) => (
+                  <Tooltip title={detail.tooltip || ''} key={detail.key} arrow>
+                    <Chip
+                      label={`${detail.label}: ${detail.value}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontFamily: 'inherit' }}
+                    />
+                  </Tooltip>
+                ))}
+              </Box>
+            ) : null}
           </Box>
         );
       },
@@ -307,7 +408,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       component: (r) => (r.component as string) ?? '-',
       message: (r) => {
         const strategyEventLabel = getStrategyEventLabel(r);
-        return [strategyEventLabel, (r.message as string) ?? '-']
+        const moneyDetails = formatLogMoneyDetails(r.details, {
+          language: user?.language,
+          separators,
+          t,
+          timezone: user?.timezone || 'UTC',
+        })
+          .map((detail) => `${detail.label}: ${detail.value}`)
+          .join(' | ');
+        return [strategyEventLabel, (r.message as string) ?? '-', moneyDetails]
           .filter(Boolean)
           .join(' | ');
       },
@@ -323,8 +432,12 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     getStrategyEventLabel,
     logs,
     pageRowIds,
+    separators,
     selection,
     visibleColumns,
+    user?.language,
+    user?.timezone,
+    t,
   ]);
 
   const renderMobileCell = useCallback(

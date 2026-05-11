@@ -10,12 +10,19 @@ import {
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { formatMoneyAmount } from '../../utils/numberFormat';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNumberFormatter } from '../../hooks/useNumberFormatter';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
+import type { CurrencyConversionContext, MoneyAmount } from '../../types/money';
+import { MoneyAmountText } from '../common/MoneyAmountText';
 
 interface BacktestBalanceAdjustmentDialogProps {
   open: boolean;
   currentBalance: number | null;
   accountCurrency: string;
+  currentBalanceMoney?: MoneyAmount | null;
+  currentBalanceDisplayMoney?: MoneyAmount | null;
+  currentBalanceDisplayConversionContext?: CurrencyConversionContext | null;
   isLoading?: boolean;
   onCancel: () => void;
   onConfirm: (data: {
@@ -36,11 +43,16 @@ export function BacktestBalanceAdjustmentDialog({
   open,
   currentBalance,
   accountCurrency,
+  currentBalanceMoney,
+  currentBalanceDisplayMoney,
+  currentBalanceDisplayConversionContext,
   isLoading = false,
   onCancel,
   onConfirm,
 }: BacktestBalanceAdjustmentDialogProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const { user } = useAuth();
+  const { separators } = useNumberFormatter();
   const [balance, setBalance] = useState(() =>
     currentBalance == null ? '' : String(currentBalance)
   );
@@ -59,6 +71,19 @@ export function BacktestBalanceAdjustmentDialog({
       ...(reason.trim() ? { reason: reason.trim() } : {}),
     });
   };
+  const conversionTooltip = formatCurrencyConversionContext(
+    currentBalanceDisplayConversionContext,
+    {
+      language: user?.language,
+      separators,
+      t,
+      timezone: user?.timezone || 'UTC',
+    }
+  );
+  const displayDiffers =
+    currentBalanceMoney &&
+    currentBalanceDisplayMoney &&
+    currentBalanceMoney.currency !== currentBalanceDisplayMoney.currency;
 
   return (
     <Dialog
@@ -75,17 +100,41 @@ export function BacktestBalanceAdjustmentDialog({
               {t('backtest:detail.currentBalance')}
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {currentBalance == null
-                ? '-'
-                : formatMoneyAmount(currentBalance, accountCurrency, {
-                    currencyPlacement: 'suffix',
-                  })}
+              <MoneyAmountText
+                money={currentBalanceDisplayMoney ?? currentBalanceMoney}
+                fallbackAmount={currentBalance}
+                fallbackCurrency={accountCurrency}
+                options={{ currencyPlacement: 'suffix' }}
+                separators={separators}
+                tooltip={conversionTooltip}
+              />
+              {displayDiffers ? (
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ ml: 1 }}
+                >
+                  (
+                  <MoneyAmountText
+                    money={currentBalanceMoney}
+                    fallbackAmount={currentBalance}
+                    fallbackCurrency={accountCurrency}
+                    options={{ currencyPlacement: 'suffix' }}
+                    separators={separators}
+                  />
+                  )
+                </Typography>
+              ) : null}
             </Typography>
           </Box>
           <TextField
             autoFocus
             fullWidth
-            label={t('backtest:detail.newCurrentBalance')}
+            label={t('backtest:detail.newCurrentBalanceWithCurrency', {
+              currency: accountCurrency,
+              defaultValue: `New Current Balance (${accountCurrency})`,
+            })}
             value={balance}
             onChange={(event) => {
               setBalance(event.target.value);

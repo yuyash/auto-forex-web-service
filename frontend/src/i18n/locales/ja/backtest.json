@@ -172,6 +172,7 @@
     "currentBalance": "現在残高",
     "adjustBalance": "残高変更",
     "newCurrentBalance": "変更後の現在残高",
+    "newCurrentBalanceWithCurrency": "変更後の現在残高（{{currency}}）",
     "balanceAdjustmentTitle": "バックテスト残高を変更",
     "balanceAdjustmentReason": "理由",
     "balanceAdjustmentInvalid": "0以上の残高を入力してください。",
@@ -303,6 +304,7 @@
     "resumedSuccessfully": "バックテストタスクが正常に再開されました",
     "restartedSuccessfully": "バックテストタスクが正常に再起動されました",
     "balanceAdjustedSuccessfully": "バックテスト残高を更新しました",
+    "balanceAdjustedSuccessfullyWithBalance": "バックテスト残高を {{balance}} に更新しました",
     "deletedSuccessfully": "バックテストタスクが正常に削除されました",
     "cannotDeleteRunning": "実行中のタスクは削除できません。先に停止してください。"
   },

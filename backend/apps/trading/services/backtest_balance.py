@@ -15,9 +15,8 @@ from django.utils import timezone
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.money import Money
 from apps.trading.models import BacktestTask, ExecutionState, TaskLog
-from apps.trading.services.conversion_context import CurrencyConversionContext
+from apps.trading.services.display_money import DISPLAY_MONEY
 from apps.trading.services.execution_snapshots import sync_execution_snapshot
-from apps.trading.services.fx_rates import FX_CONVERSION
 
 
 class BacktestBalanceAdjustmentError(Exception):
@@ -218,37 +217,21 @@ def _display_balance_values(
         .strip()
         .upper()
     )
-    rate = FX_CONVERSION.rate(
-        source_currency=source_currency,
+    converted = DISPLAY_MONEY.convert_many(
+        {
+            "previous": previous_balance_money,
+            "current": current_balance_money,
+            "adjustment": adjustment_money,
+        },
         target_currency=target_currency,
         instrument=str(getattr(task, "instrument", "") or ""),
         as_of=as_of,
     )
-    if rate is None:
-        return _BacktestBalanceDisplayValues(
-            previous=None,
-            current=None,
-            adjustment=None,
-            conversion_context=CurrencyConversionContext.unavailable(
-                source_currency=source_currency,
-                target_currency=target_currency,
-            ).as_dict(),
-        )
-
     return _BacktestBalanceDisplayValues(
-        previous=previous_balance_money.convert(
-            rate=rate.rate,
-            target_currency=rate.target_currency,
-        ).as_dict(),
-        current=current_balance_money.convert(
-            rate=rate.rate,
-            target_currency=rate.target_currency,
-        ).as_dict(),
-        adjustment=adjustment_money.convert(
-            rate=rate.rate,
-            target_currency=rate.target_currency,
-        ).as_dict(),
-        conversion_context=CurrencyConversionContext.from_rate(rate).as_dict(),
+        previous=converted.values["previous"],
+        current=converted.values["current"],
+        adjustment=converted.values["adjustment"],
+        conversion_context=converted.conversion_context,
     )
 
 

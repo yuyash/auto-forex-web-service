@@ -72,6 +72,7 @@ interface TaskSummaryResponse {
     } | null;
     ticks_processed?: number;
     account_currency?: string | null;
+    current_balance_currency?: string | null;
     current_balance_display?: string | number | null;
     current_balance_display_money?: {
       amount?: string | number | null;
@@ -267,6 +268,8 @@ export function createTaskSummaryQuery(
             ),
             ticksProcessed: d.execution?.ticks_processed ?? 0,
             accountCurrency: d.execution?.account_currency ?? null,
+            currentBalanceCurrency:
+              d.execution?.current_balance_currency ?? null,
             currentBalanceDisplay: parseNullableNumber(
               d.execution?.current_balance_display
             ),

@@ -172,6 +172,7 @@
     "currentBalance": "Current Balance",
     "adjustBalance": "Adjust Balance",
     "newCurrentBalance": "New Current Balance",
+    "newCurrentBalanceWithCurrency": "New Current Balance ({{currency}})",
     "balanceAdjustmentTitle": "Adjust Backtest Balance",
     "balanceAdjustmentReason": "Reason",
     "balanceAdjustmentInvalid": "Enter a balance of zero or greater.",
@@ -303,6 +304,7 @@
     "resumedSuccessfully": "Backtest task resumed successfully",
     "restartedSuccessfully": "Backtest task restarted successfully",
     "balanceAdjustedSuccessfully": "Backtest balance updated successfully",
+    "balanceAdjustedSuccessfullyWithBalance": "Backtest balance updated to {{balance}}",
     "deletedSuccessfully": "Backtest task deleted successfully",
     "cannotDeleteRunning": "Cannot delete running task. Stop it first."
   },

@@ -67,6 +67,7 @@ export interface ExecutionInfo {
   currentBalanceMoney: MoneyInfo | null;
   ticksProcessed: number;
   accountCurrency: string | null;
+  currentBalanceCurrency: string | null;
   currentBalanceDisplay: number | null;
   currentBalanceDisplayMoney: MoneyInfo | null;
   currentBalanceDisplayConversionContext: CurrencyConversionContext | null;
@@ -141,6 +142,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     currentBalanceMoney: null,
     ticksProcessed: 0,
     accountCurrency: null,
+    currentBalanceCurrency: null,
     currentBalanceDisplay: null,
     currentBalanceDisplayMoney: null,
     currentBalanceDisplayConversionContext: null,

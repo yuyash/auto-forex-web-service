@@ -428,7 +428,7 @@ describe('BacktestTaskDetail', () => {
   it('adjusts balance for paused backtest tasks from the detail header', async () => {
     const taskMod = await import('../../../src/hooks/useBacktestTasks');
     const summaryMod = await import('../../../src/hooks/useTaskSummary');
-    vi.mocked(taskMod.useBacktestTask).mockReturnValueOnce({
+    vi.mocked(taskMod.useBacktestTask).mockReturnValue({
       data: { ...mockTaskData, status: TaskStatus.PAUSED },
       isLoading: false,
       error: null,
@@ -448,9 +448,13 @@ describe('BacktestTaskDetail', () => {
       },
       execution: {
         currentBalance: 10000,
+        currentBalanceMoney: { amount: '10000', currency: 'USD' },
         ticksProcessed: 0,
         accountCurrency: 'USD',
+        currentBalanceCurrency: 'USD',
         currentBalanceDisplay: null,
+        currentBalanceDisplayMoney: null,
+        currentBalanceDisplayConversionContext: null,
         displayCurrency: null,
         resumeCursorTimestamp: null,
         marginRatio: null,
@@ -483,7 +487,7 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Adjust Balance' }));
-    const input = screen.getByLabelText('New Current Balance');
+    const input = screen.getByLabelText('New Current Balance (USD)');
     await user.clear(input);
     await user.type(input, '12500');
     await user.click(screen.getByRole('button', { name: 'OK' }));

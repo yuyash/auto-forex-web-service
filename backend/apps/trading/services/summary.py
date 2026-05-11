@@ -23,6 +23,7 @@ from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
 from apps.trading.services.conversion_context import CurrencyConversionContext
+from apps.trading.services.display_money import DISPLAY_MONEY
 from apps.trading.services.fx_rates import FX_CONVERSION, FxConversionService
 from apps.trading.services.public_errors import (
     task_public_error_code,
@@ -597,29 +598,19 @@ def compute_task_summary(
         account = AccountCurrency(current_balance_currency or account_currency or "")
 
     if current_balance is not None and account.is_known and preferred_display_currency:
-        rate = fx_conversion.rate(
-            source_currency=account.code,
+        converted_balance = DISPLAY_MONEY.convert_many(
+            {"current_balance": Money.coerce(current_balance, account.code)},
             target_currency=preferred_display_currency,
             instrument=instrument.name,
             mid_price=tick_mid,
             as_of=tick_as_of,
+            fx_conversion=fx_conversion,
         )
-        if rate is not None:
-            converted = Money.coerce(current_balance, account.code).convert(
-                rate=rate.rate,
-                target_currency=rate.target_currency,
-            )
-            display_currency = converted.currency_code
-            current_balance_display = converted.amount
-            current_balance_display_money = converted.as_dict()
-            current_balance_display_conversion_context = CurrencyConversionContext.from_rate(
-                rate
-            ).as_dict()
-        else:
-            current_balance_display_conversion_context = CurrencyConversionContext.unavailable(
-                source_currency=account.code,
-                target_currency=preferred_display_currency,
-            ).as_dict()
+        current_balance_display_money = converted_balance.values["current_balance"]
+        if current_balance_display_money is not None:
+            display_currency = current_balance_display_money["currency"]
+            current_balance_display = Decimal(current_balance_display_money["amount"])
+        current_balance_display_conversion_context = converted_balance.conversion_context
 
     pnl_currency = quote_ccy or current_balance_currency or account_currency
     display_currency = display_currency or preferred_display_currency or account_currency
@@ -772,48 +763,23 @@ def _pnl_display_money(
 
     source = AccountCurrency(source_currency)
     target = AccountCurrency(target_currency)
-    if not source.is_known or not target.is_known:
-        return {
-            "realized": None,
-            "unrealized": None,
-            "total": None,
-            "conversion_context": CurrencyConversionContext.unavailable(
-                source_currency=source_currency,
-                target_currency=target_currency,
-            ).as_dict(),
-        }
-
-    rate = fx_conversion.rate(
-        source_currency=source.code,
+    converted = DISPLAY_MONEY.convert_many(
+        {
+            "realized": Money.coerce(realized, source.code),
+            "unrealized": Money.coerce(unrealized, source.code),
+            "total": Money.coerce(realized + unrealized, source.code),
+        },
         target_currency=target.code,
         instrument=instrument,
         mid_price=mid_price,
         as_of=as_of,
-    )
-    if rate is None:
-        return {
-            "realized": None,
-            "unrealized": None,
-            "total": None,
-            "conversion_context": CurrencyConversionContext.unavailable(
-                source_currency=source.code,
-                target_currency=target.code,
-            ).as_dict(),
-        }
-
-    realized_money = Money.coerce(realized, source.code).convert(
-        rate=rate.rate,
-        target_currency=rate.target_currency,
-    )
-    unrealized_money = Money.coerce(unrealized, source.code).convert(
-        rate=rate.rate,
-        target_currency=rate.target_currency,
+        fx_conversion=fx_conversion,
     )
     return {
-        "realized": realized_money.as_dict(),
-        "unrealized": unrealized_money.as_dict(),
-        "total": realized_money.add(unrealized_money).as_dict(),
-        "conversion_context": CurrencyConversionContext.from_rate(rate).as_dict(),
+        "realized": converted.values["realized"],
+        "unrealized": converted.values["unrealized"],
+        "total": converted.values["total"],
+        "conversion_context": converted.conversion_context,
     }
 
 

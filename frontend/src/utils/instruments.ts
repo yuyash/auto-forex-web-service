@@ -1,6 +1,8 @@
 import type { InstrumentMetadata } from '../types/instrument';
 
 const HIGH_VALUE_QUOTE_CURRENCIES = new Set(['JPY', 'HUF']);
+export const DEFAULT_PIP_SIZE = '0.0001';
+export const HIGH_VALUE_QUOTE_PIP_SIZE = '0.01';
 
 export function normalizeInstrumentName(instrument: string): string {
   const raw = String(instrument ?? '')
@@ -34,9 +36,20 @@ export function deriveInstrumentMetadata(
     normalized_name: normalizedName,
     base_currency: baseCurrency,
     quote_currency: quoteCurrency,
-    pip_size: isHighValueQuote ? '0.01' : '0.0001',
+    pip_size: isHighValueQuote ? HIGH_VALUE_QUOTE_PIP_SIZE : DEFAULT_PIP_SIZE,
     is_high_value_quote: isHighValueQuote,
   };
+}
+
+export function decimalPlacesForPipSize(
+  pipSize: string | number | null | undefined,
+  fallback = 4
+): number {
+  const numeric = Number(pipSize);
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+  const fixed = numeric.toFixed(10).replace(/0+$/, '');
+  const decimalIndex = fixed.indexOf('.');
+  return decimalIndex === -1 ? 0 : fixed.length - decimalIndex - 1;
 }
 
 export function buildInstrumentMetadataMap(

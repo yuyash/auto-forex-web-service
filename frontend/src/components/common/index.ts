@@ -11,3 +11,4 @@ export { default as SkipLinks } from './SkipLinks';
 export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
 export { TaskControlButtons } from './TaskControlButtons';
 export type { TaskControlButtonsProps } from './TaskControlButtons';
+export { MoneyAmountText } from './MoneyAmountText';

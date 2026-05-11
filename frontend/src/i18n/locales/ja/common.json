@@ -652,7 +652,11 @@
       "timestampFrom": "開始日時",
       "timestampTo": "終了日時",
       "noLogs": "ログなし",
-      "resetFilters": "フィルターリセット"
+      "resetFilters": "フィルターリセット",
+      "currentBalanceDisplayMoney": "表示残高",
+      "currentBalanceMoney": "口座残高",
+      "adjustmentDisplayMoney": "表示調整額",
+      "adjustmentMoney": "口座調整額"
     },
     "executions": {
       "title": "実行履歴",

@@ -22,6 +22,10 @@ import { TaskStatus, type TaskActionPolicy } from '../../../types/common';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { formatAppNumber } from '../../../utils/numberFormat';
+import {
+  DEFAULT_PIP_SIZE,
+  decimalPlacesForPipSize,
+} from '../../../utils/instruments';
 
 interface TaskDetailHeaderProps {
   taskId: string;
@@ -56,30 +60,31 @@ interface TaskDetailHeaderProps {
 }
 
 function buildTickText(tick: TickInfo, pipSize?: string) {
-  const pipSizeNum = pipSize ? parseFloat(pipSize) : 0.01;
+  const pipSizeNum = pipSize ? parseFloat(pipSize) : Number(DEFAULT_PIP_SIZE);
+  const priceFractionDigits = Math.max(2, decimalPlacesForPipSize(pipSize));
 
   return {
     mid:
       tick.mid != null
         ? formatAppNumber(tick.mid, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: priceFractionDigits,
+            maximumFractionDigits: priceFractionDigits,
             useGrouping: false,
           })
         : undefined,
     bid:
       tick.bid != null
         ? formatAppNumber(tick.bid, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: priceFractionDigits,
+            maximumFractionDigits: priceFractionDigits,
             useGrouping: false,
           })
         : undefined,
     ask:
       tick.ask != null
         ? formatAppNumber(tick.ask, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: priceFractionDigits,
+            maximumFractionDigits: priceFractionDigits,
             useGrouping: false,
           })
         : undefined,

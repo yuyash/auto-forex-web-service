@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildInstrumentMetadataMap,
+  decimalPlacesForPipSize,
   deriveInstrumentMetadata,
   normalizeInstrumentName,
 } from './instruments';
@@ -23,5 +24,12 @@ describe('instrument utilities', () => {
       quote_currency: 'USD',
       pip_size: '0.0001',
     });
+  });
+
+  it('derives price precision from pip size', () => {
+    expect(decimalPlacesForPipSize('0.01')).toBe(2);
+    expect(decimalPlacesForPipSize('0.0001')).toBe(4);
+    expect(decimalPlacesForPipSize('0.00001')).toBe(5);
+    expect(decimalPlacesForPipSize(undefined)).toBe(4);
   });
 });

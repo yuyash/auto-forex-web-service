@@ -652,7 +652,11 @@
       "timestampFrom": "From",
       "timestampTo": "To",
       "noLogs": "No logs available",
-      "resetFilters": "Reset Filters"
+      "resetFilters": "Reset Filters",
+      "currentBalanceDisplayMoney": "Display balance",
+      "currentBalanceMoney": "Account balance",
+      "adjustmentDisplayMoney": "Display adjustment",
+      "adjustmentMoney": "Account adjustment"
     },
     "executions": {
       "title": "Execution History",

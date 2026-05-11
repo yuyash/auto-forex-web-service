@@ -13,7 +13,10 @@ from apps.trading.money import (
     MoneyFormatter as _MoneyFormatter,
 )
 
-# JPY-quoted pairs use pip_size 0.01; all others use 0.0001
+DEFAULT_PIP_SIZE = Decimal("0.0001")
+HIGH_VALUE_QUOTE_PIP_SIZE = Decimal("0.01")
+
+# High-value quoted pairs use a wider pip convention; all others use 0.0001.
 _JPY_QUOTE_CURRENCIES = {"JPY", "HUF"}
 
 
@@ -30,8 +33,8 @@ class PipSize:
             instrument if isinstance(instrument, Instrument) else Instrument(instrument)
         )
         if instrument_obj.is_high_value_quote:
-            return cls(Decimal("0.01"))
-        return cls(Decimal("0.0001"))
+            return cls(HIGH_VALUE_QUOTE_PIP_SIZE)
+        return cls(DEFAULT_PIP_SIZE)
 
 
 @dataclass(frozen=True, slots=True)

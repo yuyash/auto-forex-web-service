@@ -31,6 +31,7 @@ import type {
   BacktestInitialPositionStatus,
 } from '../../types/backtestTask';
 import type { StrategyConfig } from '../../types/configuration';
+import { DEFAULT_PIP_SIZE } from '../../utils/instruments';
 
 interface BacktestInitialPositionsEditorProps {
   enabled: boolean;
@@ -729,7 +730,7 @@ function snowballConfig(
   const nFlat = intNum(params.n_pips_flat_steps, 2);
   const nGamma = num(params.n_pips_gamma, 1.4);
   return {
-    pipSize: num(pipSize, num(params.pip_size, 0.01)),
+    pipSize: num(pipSize, num(params.pip_size, Number(DEFAULT_PIP_SIZE))),
     baseUnits: intNum(params.base_units, 1000),
     trendLotSize: intNum(params.trend_lot_size, 1),
     rMax: intNum(params.r_max, 7),

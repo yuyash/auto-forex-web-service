@@ -13,6 +13,7 @@ from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
 from apps.trading.services.conversion_context import CurrencyConversionContext
+from apps.trading.services.display_money import DISPLAY_MONEY
 from apps.trading.services.fx_rates import FX_CONVERSION, FxRate
 from apps.trading.services.summary import TaskSummary
 from apps.trading.utils import Instrument
@@ -380,32 +381,32 @@ class ExecutionMetricsSerializer:
                 ).as_dict(),
             )
         instrument = getattr(task, "instrument", "") or ""
-        rate = FX_CONVERSION.rate(
-            source_currency=pnl.total_account.currency_code,
+        converted = DISPLAY_MONEY.convert_many(
+            {
+                "total": pnl.total_account,
+                "realized": pnl.realized_account,
+                "unrealized": pnl.unrealized_account,
+            },
             target_currency=target,
             instrument=instrument,
             mid_price=summary.tick.mid,
             as_of=_summary_tick_as_of(summary),
         )
-        if rate is None:
+        total_money = converted.values["total"]
+        realized_money = converted.values["realized"]
+        unrealized_money = converted.values["unrealized"]
+        if total_money is None or realized_money is None or unrealized_money is None:
             return DisplayPnlMoney(
                 total=None,
                 realized=None,
                 unrealized=None,
-                conversion_context=CurrencyConversionContext.unavailable(
-                    source_currency=pnl.total_account.currency_code,
-                    target_currency=target,
-                ).as_dict(),
+                conversion_context=converted.conversion_context,
             )
-        total, realized, unrealized = (
-            money.convert(rate=rate.rate, target_currency=rate.target_currency)
-            for money in money_values
-        )
         return DisplayPnlMoney(
-            total=total,
-            realized=realized,
-            unrealized=unrealized,
-            conversion_context=CurrencyConversionContext.from_rate(rate).as_dict(),
+            total=Money.coerce(total_money["amount"], total_money["currency"]),
+            realized=Money.coerce(realized_money["amount"], realized_money["currency"]),
+            unrealized=Money.coerce(unrealized_money["amount"], unrealized_money["currency"]),
+            conversion_context=converted.conversion_context,
         )
 
 

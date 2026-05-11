@@ -41,7 +41,7 @@ from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVI
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import mark_event_processed
-from apps.trading.utils import Instrument, pip_size_for_instrument
+from apps.trading.utils import DEFAULT_PIP_SIZE, Instrument, pip_size_for_instrument
 
 PREVIEW_STATE_MARKER = "_initial_position_seed_preview"
 SEED_VERSION = 1
@@ -1022,7 +1022,9 @@ def _resolve_pip_size(*, task: BacktestTask | None, pip_size: Decimal | None) ->
         return Decimal(str(pip_size))
     if task is not None and getattr(task, "pip_size", None):
         return Decimal(str(task.pip_size))
-    instrument = getattr(task, "instrument", "USD_JPY") if task is not None else "USD_JPY"
+    instrument = getattr(task, "instrument", "") if task is not None else ""
+    if not instrument:
+        return DEFAULT_PIP_SIZE
     return Decimal(str(pip_size_for_instrument(instrument)))
 
 
