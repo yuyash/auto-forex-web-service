@@ -819,11 +819,14 @@ export default function OandaAccountsPage() {
     <PageContainer sx={{ mt: { xs: 2, sm: 4 }, mb: 4 }}>
       <Breadcrumbs />
       <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-        gap={1}
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1,
+          mb: 2,
+        }}
       >
         <Typography
           variant="h4"
@@ -831,7 +834,15 @@ export default function OandaAccountsPage() {
         >
           {t('settings:accounts.title')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+          }}
+        >
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
