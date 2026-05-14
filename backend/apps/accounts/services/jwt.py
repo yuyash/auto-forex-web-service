@@ -191,7 +191,7 @@ class JWTService:
 
         with transaction.atomic():
             rt = (
-                RefreshToken.objects.select_for_update()
+                RefreshToken.objects.select_for_update(of=("self",))
                 .select_related("user", "session")
                 .filter(token=token_hash)
                 .first()
@@ -201,7 +201,7 @@ class JWTService:
                 # hashing migration. Once all environments are migrated, these
                 # rows should no longer exist.
                 rt = (
-                    RefreshToken.objects.select_for_update()
+                    RefreshToken.objects.select_for_update(of=("self",))
                     .select_related("user", "session")
                     .filter(token=refresh_token_value)
                     .first()

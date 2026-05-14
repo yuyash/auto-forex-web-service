@@ -306,6 +306,10 @@ class TestJWTService:
 
         assert results.count(("new-access", "new-refresh", user)) == 1
         assert results.count(None) == 1
+        assert manager.select_for_update.call_count == 2
+        assert all(
+            call.kwargs == {"of": ("self",)} for call in manager.select_for_update.call_args_list
+        )
         assert mock_access.call_count == 1
         assert mock_refresh.call_count == 1
         mock_revoke_session.assert_called_once_with(fake_rt.session)
