@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.3...frontend-v1.68.4) (2026-05-14)
+
+
+### Bug Fixes
+
+* **frontend:** improve layout density and header spacing ([#706](https://github.com/yuyash/auto-forex-web-service/issues/706)) ([f3b85ab](https://github.com/yuyash/auto-forex-web-service/commit/f3b85ab257e02b6b1f2461fdf925571fb69e7c92))
+
 ## [1.68.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.2...frontend-v1.68.3) (2026-05-14)
 
 
