@@ -11,6 +11,7 @@ export interface FormatAppNumberOptions {
 
 export interface FormatMoneyAmountOptions extends FormatAppNumberOptions {
   currencyPlacement?: 'prefix' | 'suffix';
+  language?: string;
   useCurrencySymbol?: boolean;
 }
 
@@ -126,6 +127,17 @@ export function currencySymbol(code: string | null | undefined): string {
   return CURRENCY_SYMBOLS[upper] ?? upper;
 }
 
+function currencySuffixLabel(
+  code: string,
+  language: string | null | undefined
+): string {
+  if (language?.toLowerCase().startsWith('ja')) {
+    if (code === 'JPY') return '円';
+    if (code === 'USD') return 'ドル';
+  }
+  return code;
+}
+
 export function currencyFractionDigits(
   code: string | null | undefined,
   fallback = 2
@@ -144,6 +156,7 @@ export function formatMoneyAmount(
   if (!Number.isFinite(value)) return '-';
   const {
     currencyPlacement = 'prefix',
+    language,
     useCurrencySymbol = true,
     signed = false,
     minimumFractionDigits = currencyFractionDigits(currencyCode),
@@ -151,7 +164,12 @@ export function formatMoneyAmount(
     ...numberOptions
   } = options;
   const code = normalizeCurrencyCode(currencyCode);
-  const currency = useCurrencySymbol ? currencySymbol(code) : code;
+  const currency =
+    currencyPlacement === 'suffix'
+      ? currencySuffixLabel(code, language)
+      : useCurrencySymbol
+        ? currencySymbol(code)
+        : code;
   const sign = signed ? (value >= 0 ? '+' : '-') : value < 0 ? '-' : '';
   const absoluteValue = signed || value < 0 ? Math.abs(value) : value;
   const numericText = formatAppNumber(

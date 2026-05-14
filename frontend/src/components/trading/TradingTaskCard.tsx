@@ -394,7 +394,6 @@ export default function TradingTaskCard({
   const formatPnl = (value: number): string => {
     return formatMoneyAmount(value, pnlCurrency, {
       signed: true,
-      currencyPlacement: 'suffix',
     });
   };
 
@@ -417,7 +416,6 @@ export default function TradingTaskCard({
     money
       ? formatMoneyPayload(money, {
           signed: true,
-          currencyPlacement: 'suffix',
         })
       : formatPnl(value);
   const pnlItems = [

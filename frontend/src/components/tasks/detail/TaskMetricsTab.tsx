@@ -837,7 +837,6 @@ export function TaskMetricsTab({
       return formatMoneyAmount(val, valueCurrency ?? currency, {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-        currencyPlacement: 'suffix',
       });
     return formatAppNumber(val, {
       minimumFractionDigits: 1,

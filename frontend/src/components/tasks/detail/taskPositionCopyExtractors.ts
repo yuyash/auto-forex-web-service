@@ -1,7 +1,6 @@
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
 import type { CopyValueExtractors } from '../../../utils/tableCopyUtils';
 import {
-  currencySymbol,
   formatAppNumber,
   formatMoneyAmount,
   formatMoneyPayload,
@@ -25,14 +24,10 @@ export function createClosedPositionCopyExtractors(
 ): CopyValueExtractors<TaskPosition> {
   const { formatTimestamp, formatPrice, pipSize } = options;
   return {
-    ...baseCopyExtractors(formatTimestamp, formatPrice),
+    ...baseCopyExtractors(formatTimestamp),
     exit_time: (row) => (row.exit_time ? formatTimestamp(row.exit_time) : '-'),
     exit_price: (row) =>
-      formatPriceWithCurrency(
-        row.exit_price,
-        row.unrealized_pnl_currency,
-        formatPrice
-      ),
+      formatPriceWithCurrency(row.exit_price, row.unrealized_pnl_currency),
     pips: (row) =>
       formatPositionPips(row, direction, {
         pipSize,
@@ -50,7 +45,7 @@ export function createOpenPositionCopyExtractors(
 ): CopyValueExtractors<TaskPosition> {
   const { currentPrice, formatTimestamp, formatPrice, pipSize } = options;
   return {
-    ...baseCopyExtractors(formatTimestamp, formatPrice),
+    ...baseCopyExtractors(formatTimestamp),
     pips: (row) =>
       formatOpenPositionPips(row, direction, {
         currentPrice,
@@ -67,16 +62,12 @@ export function createGenericPositionCopyExtractors(
 ): CopyValueExtractors<TaskPosition> {
   const { currentPrice, formatTimestamp, formatPrice, pipSize } = options;
   return {
-    ...baseCopyExtractors(formatTimestamp, formatPrice),
+    ...baseCopyExtractors(formatTimestamp),
     direction: (row) => row.direction ?? '-',
     is_open: (row) => (row.is_open ? 'Open' : 'Closed'),
     exit_time: (row) => (row.exit_time ? formatTimestamp(row.exit_time) : '-'),
     exit_price: (row) =>
-      formatPriceWithCurrency(
-        row.exit_price,
-        row.unrealized_pnl_currency,
-        formatPrice
-      ),
+      formatPriceWithCurrency(row.exit_price, row.unrealized_pnl_currency),
     pips: (row) => {
       const direction = row.direction;
       if (row.exit_price) {
@@ -103,11 +94,7 @@ export function createGenericPositionCopyExtractors(
 }
 
 function baseCopyExtractors(
-  formatTimestamp: (value: string) => string,
-  formatPrice: (
-    value: string | number | null | undefined,
-    digits?: number
-  ) => string
+  formatTimestamp: (value: string) => string
 ): CopyValueExtractors<TaskPosition> {
   return {
     id: (row) => (row.id ? String(row.id).slice(0, 8) : '-'),
@@ -122,25 +109,16 @@ function baseCopyExtractors(
     retracement_count: (row) =>
       row.retracement_count != null ? String(row.retracement_count) : '-',
     entry_price: (row) =>
-      formatPriceWithCurrency(
-        row.entry_price,
-        row.unrealized_pnl_currency,
-        formatPrice
-      ),
+      formatPriceWithCurrency(row.entry_price, row.unrealized_pnl_currency),
     planned_exit_price: (row) =>
       formatPriceWithCurrency(
         row.planned_exit_price,
-        row.unrealized_pnl_currency,
-        formatPrice
+        row.unrealized_pnl_currency
       ),
     planned_exit_price_formula: (row) => row.planned_exit_price_formula ?? '-',
     oanda_trade_id: (row) => row.oanda_trade_id ?? '-',
     stop_loss_price: (row) =>
-      formatPriceWithCurrency(
-        row.stop_loss_price,
-        row.unrealized_pnl_currency,
-        formatPrice
-      ),
+      formatPriceWithCurrency(row.stop_loss_price, row.unrealized_pnl_currency),
     is_rebuild: (row) => (row.is_rebuild ? 'Yes' : '-'),
   };
 }
@@ -250,16 +228,17 @@ function formatOpenPositionPnl(
 
 function formatPriceWithCurrency(
   value: string | number | null | undefined,
-  currency: string | null | undefined,
-  formatPrice: (
-    value: string | number | null | undefined,
-    digits?: number
-  ) => string
+  currency: string | null | undefined
 ): string {
-  const formatted = value == null || value === '' ? '-' : formatPrice(value, 3);
-  return formatted === '-'
-    ? formatted
-    : `${currencyPrefix(currency)}${formatted}`;
+  if (value == null || value === '') return '-';
+  const numericValue =
+    typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (!Number.isFinite(numericValue)) return '-';
+  return formatMoneyAmount(numericValue, currency, {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+    useGrouping: false,
+  });
 }
 
 function formatMoney(
@@ -268,11 +247,6 @@ function formatMoney(
   options: Parameters<typeof formatAppNumber>[1]
 ): string {
   return formatMoneyAmount(value, currency, options);
-}
-
-function currencyPrefix(currency: string | null | undefined): string {
-  const symbol = currency ? currencySymbol(currency) : '';
-  return symbol.length > 2 ? `${symbol} ` : symbol;
 }
 
 function parseOptionalFloat(value: string | number | null | undefined) {

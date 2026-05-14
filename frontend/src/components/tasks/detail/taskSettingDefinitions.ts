@@ -135,11 +135,7 @@ function formatInitialBalance(
     source.initial_balance_money ??
     task.initial_balance_money;
   if (money && typeof money === 'object') {
-    return formatMoneyPayload(
-      money as MoneyAmount,
-      { currencyPlacement: 'suffix' },
-      separators
-    );
+    return formatMoneyPayload(money as MoneyAmount, {}, separators);
   }
   const numericValue = Number(value);
   const currency =
@@ -150,9 +146,7 @@ function formatInitialBalance(
   return formatMoneyAmount(
     numericValue,
     currency ? String(currency) : undefined,
-    {
-      currencyPlacement: 'suffix',
-    },
+    {},
     separators
   );
 }
@@ -170,11 +164,7 @@ function formatCommissionPerTrade(
     source.commission_per_trade_money ??
     task.commission_per_trade_money;
   if (money && typeof money === 'object') {
-    return formatMoneyPayload(
-      money as MoneyAmount,
-      { currencyPlacement: 'suffix' },
-      separators
-    );
+    return formatMoneyPayload(money as MoneyAmount, {}, separators);
   }
   const numericValue = Number(value);
   const currency =
@@ -185,7 +175,7 @@ function formatCommissionPerTrade(
   return formatMoneyAmount(
     numericValue,
     currency ? String(currency) : undefined,
-    { currencyPlacement: 'suffix' },
+    {},
     separators
   );
 }

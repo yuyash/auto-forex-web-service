@@ -43,7 +43,6 @@ import {
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
 import {
-  currencySymbol,
   formatAppNumber,
   formatMoneyAmount,
 } from '../../../utils/numberFormat';
@@ -222,20 +221,25 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       useGrouping: false,
     });
 
-  const formatCurrencyPrefix = (currency?: string | null): string => {
-    const symbol = currency ? currencySymbol(currency) : '';
-    return symbol.length > 2 ? `${symbol} ` : symbol;
-  };
-
   const formatPriceWithCurrency = (
     value: string | number | null | undefined,
     currency?: string | null,
     digits = 3
   ): string => {
-    const formatted = formatPrice(value, digits);
-    return formatted === '-'
-      ? formatted
-      : `${formatCurrencyPrefix(currency)}${formatted}`;
+    if (value == null || value === '') return '-';
+    const numericValue =
+      typeof value === 'string' ? parseFloat(value) : Number(value);
+    if (!Number.isFinite(numericValue)) return '-';
+    return formatMoneyAmount(
+      numericValue,
+      currency,
+      {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+        useGrouping: false,
+      },
+      separators
+    );
   };
 
   const formatSignedMoney = (value: number, currency?: string | null): string =>

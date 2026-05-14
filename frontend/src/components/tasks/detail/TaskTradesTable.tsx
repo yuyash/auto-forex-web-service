@@ -47,7 +47,6 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import {
-  currencySymbol,
   formatAppNumber,
   formatMoneyAmount,
   formatMoneyPayload,
@@ -170,29 +169,6 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     [formatDateTime]
   );
 
-  const formatPrice = useCallback(
-    (value: string | number | null | undefined, digits = 5): string => {
-      if (value == null || value === '') return '-';
-      const numericValue =
-        typeof value === 'string' ? parseFloat(value) : Number(value);
-      if (!Number.isFinite(numericValue)) return '-';
-      return formatAppNumber(numericValue, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-        useGrouping: false,
-      });
-    },
-    []
-  );
-
-  const formatCurrencyPrefix = useCallback(
-    (currency?: string | null): string => {
-      const symbol = currency ? currencySymbol(currency) : '';
-      return symbol.length > 2 ? `${symbol} ` : symbol;
-    },
-    []
-  );
-
   const formatSignedMoney = useCallback(
     (value: number, currency?: string | null): string =>
       formatMoneyAmount(
@@ -214,12 +190,22 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       currency?: string | null,
       digits = 5
     ): string => {
-      const formatted = formatPrice(value, digits);
-      return formatted === '-'
-        ? formatted
-        : `${formatCurrencyPrefix(currency)}${formatted}`;
+      if (value == null || value === '') return '-';
+      const numericValue =
+        typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (!Number.isFinite(numericValue)) return '-';
+      return formatMoneyAmount(
+        numericValue,
+        currency,
+        {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+          useGrouping: false,
+        },
+        separators
+      );
     },
-    [formatCurrencyPrefix, formatPrice]
+    [separators]
   );
 
   const formatTradePnl = useCallback(
