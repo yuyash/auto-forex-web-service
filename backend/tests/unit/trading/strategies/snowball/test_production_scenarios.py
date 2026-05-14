@@ -27,17 +27,22 @@ class TestSnowballProductionScenarios:
         scenario = SnowballProductionScenarioFactory().ignored_grid_violation()
 
         with caplog.at_level(
-            logging.WARNING,
+            logging.INFO,
             logger="apps.trading.strategies.snowball.strategy",
         ):
             result = scenario.strategy.on_tick(tick=scenario.tick, state=scenario.state)
+            scenario.strategy.on_tick(tick=scenario.tick, state=scenario.state)
 
         assert result.should_stop is False
         assert result.is_error is False
         assert result.stop_reason == ""
-        assert any(
-            "Grid ordering violation ignored" in record.getMessage() for record in caplog.records
-        )
+        tolerated_logs = [
+            record
+            for record in caplog.records
+            if "Grid ordering violation tolerated" in record.getMessage()
+        ]
+        assert len(tolerated_logs) == 1
+        assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
     def test_cross_layer_pending_rebuild_recovers_grid_ordering(self):
         scenario = SnowballProductionScenarioFactory().cross_layer_pending_rebuild()
