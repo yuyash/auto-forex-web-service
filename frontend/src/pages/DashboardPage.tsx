@@ -11,7 +11,7 @@ import {
   useSupportedGranularities,
   useSupportedInstruments,
 } from '../hooks/useMarketConfig';
-import { Breadcrumbs, PageContainer } from '../components/common';
+import { PageContainer } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
@@ -89,16 +89,14 @@ const DashboardPage = () => {
   return (
     <PageContainer
       sx={{
-        mt: 4,
-        mb: 4,
+        mt: { xs: 1, sm: 1.5 },
+        mb: { xs: 1, sm: 1.5 },
         display: 'flex',
         flexDirection: 'column',
-        height: { xs: 'auto', md: 'calc(100vh - 64px)' },
-        overflow: { xs: 'auto', md: 'hidden' },
+        minHeight: { md: 'calc(100vh - 96px)' },
+        overflow: 'visible',
       }}
     >
-      <Breadcrumbs />
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
@@ -106,7 +104,11 @@ const DashboardPage = () => {
       )}
 
       {/* Task Widgets */}
-      <Grid container spacing={3} sx={{ mb: 3, flexShrink: 0 }}>
+      <Grid
+        container
+        spacing={{ xs: 1, md: 1.5 }}
+        sx={{ mb: 1.25, flexShrink: 0 }}
+      >
         <Grid size={{ xs: 12, md: 4 }}>
           <ActiveTasksWidget />
         </Grid>
@@ -122,12 +124,13 @@ const DashboardPage = () => {
       <Paper
         elevation={2}
         sx={{
-          p: { xs: 1.5, sm: 2 },
-          mb: 3,
-          flex: { xs: 'none', md: 1 },
+          p: { xs: 1, sm: 1.25 },
+          mb: 1,
+          flex: { xs: '0 0 auto', md: '1 0 auto' },
           display: 'flex',
           flexDirection: 'column',
-          minHeight: { xs: 'auto', md: 0 },
+          height: { md: 'max(560px, calc(100vh - 250px))' },
+          minHeight: { xs: 420, sm: 500, md: 560 },
           overflow: 'hidden',
         }}
       >
@@ -159,9 +162,9 @@ const DashboardPage = () => {
           sx={{
             width: '100%',
             position: 'relative',
-            flex: { xs: 'none', md: 1 },
+            flex: { xs: '0 0 auto', md: 1 },
             height: { xs: 360, sm: 440, md: 'auto' },
-            minHeight: { xs: 360, sm: 440, md: 0 },
+            minHeight: { xs: 360, sm: 440, md: 500 },
           }}
         >
           {!hasOandaAccount ? (

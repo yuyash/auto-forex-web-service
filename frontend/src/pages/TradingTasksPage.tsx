@@ -61,7 +61,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`trading-tasks-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ py: 1 }}>{children}</Box>}
     </div>
   );
 }
@@ -207,7 +207,7 @@ export default function TradingTasksPage() {
 
   return (
     <PageContainer>
-      <Box sx={{ py: { xs: 2, sm: 4 } }}>
+      <Box sx={{ py: { xs: 1, sm: 1.5 } }}>
         <Breadcrumbs />
 
         {/* Header */}
@@ -216,7 +216,7 @@ export default function TradingTasksPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: { xs: 2, sm: 3 },
+            mb: 1,
             flexWrap: 'wrap',
             gap: 1,
           }}
@@ -224,7 +224,11 @@ export default function TradingTasksPage() {
           <Typography
             variant="h4"
             component="h1"
-            sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+            sx={{
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              lineHeight: 1.2,
+              fontWeight: 600,
+            }}
           >
             {t('trading:pages.title')}
           </Typography>
@@ -235,14 +239,14 @@ export default function TradingTasksPage() {
                 xs: 'repeat(2, minmax(0, 1fr))',
                 '@media (max-width: 340px)': '1fr',
               },
-              gap: 1,
+              gap: 0.75,
               width: { xs: '100%', sm: 'auto' },
               flexWrap: { sm: 'wrap' },
               justifyContent: { sm: 'flex-end' },
               '& .MuiButton-root': {
                 minWidth: 0,
                 width: { xs: '100%', sm: 'auto' },
-                px: { xs: 1.25, sm: 2 },
+                px: { xs: 1, sm: 1.25 },
                 whiteSpace: 'nowrap',
               },
             }}
@@ -282,7 +286,15 @@ export default function TradingTasksPage() {
         </Box>
 
         {/* Warning about one-task-per-account rule */}
-        <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 3 }}>
+        <Alert
+          severity="warning"
+          icon={<WarningIcon />}
+          sx={{
+            mb: 1,
+            py: 0.5,
+            '& .MuiAlert-message': { py: 0.25 },
+          }}
+        >
           <AlertTitle>
             {t('trading:warnings.oneTaskPerAccountTitle')}
           </AlertTitle>
@@ -290,12 +302,22 @@ export default function TradingTasksPage() {
         </Alert>
 
         {/* Tabs */}
-        <Paper sx={{ mb: 3 }}>
+        <Paper sx={{ mb: 1 }}>
           <Tabs
             value={tabValue}
             onChange={handleTabChange}
             aria-label="trading tasks tabs"
-            sx={{ borderBottom: 1, borderColor: 'divider' }}
+            sx={{
+              minHeight: 34,
+              borderBottom: 1,
+              borderColor: 'divider',
+              '& .MuiTab-root': {
+                minHeight: 34,
+                px: { xs: 1, sm: 1.25 },
+                py: 0.5,
+                fontSize: '0.8125rem',
+              },
+            }}
           >
             <Tab label={t('trading:tabs.all')} {...a11yProps(0)} />
             <Tab label={t('trading:tabs.running')} {...a11yProps(1)} />
@@ -305,8 +327,8 @@ export default function TradingTasksPage() {
         </Paper>
 
         {/* Filters */}
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Grid container spacing={2} alignItems="center">
+        <Paper sx={{ p: 1, mb: 1 }}>
+          <Grid container spacing={1} alignItems="center">
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
@@ -384,7 +406,7 @@ export default function TradingTasksPage() {
         {pollingError && (
           <Alert
             severity="warning"
-            sx={{ mb: 2 }}
+            sx={{ mb: 1 }}
             onClose={() => setPollingError(null)}
           >
             {t('common:errors.refreshFailed')}: {pollingError}
@@ -394,15 +416,15 @@ export default function TradingTasksPage() {
         {/* Tab Panels */}
         <TabPanel value={tabValue} index={0}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 {t('trading:empty.noTasksFound')}
               </Typography>
@@ -419,7 +441,7 @@ export default function TradingTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} onRefresh={handleRefresh} />
@@ -427,7 +449,9 @@ export default function TradingTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -442,22 +466,22 @@ export default function TradingTasksPage() {
 
         <TabPanel value={tabValue} index={1}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('trading:empty.noRunningTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} onRefresh={handleRefresh} />
@@ -465,7 +489,9 @@ export default function TradingTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -480,22 +506,22 @@ export default function TradingTasksPage() {
 
         <TabPanel value={tabValue} index={2}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('trading:empty.noPausedTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} onRefresh={handleRefresh} />
@@ -503,7 +529,9 @@ export default function TradingTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -518,22 +546,22 @@ export default function TradingTasksPage() {
 
         <TabPanel value={tabValue} index={3}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('trading:empty.noStoppedTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
                     <TradingTaskCard task={task} onRefresh={handleRefresh} />
@@ -541,7 +569,9 @@ export default function TradingTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}

@@ -87,13 +87,13 @@ export const StatCard: React.FC<StatCardProps> = React.memo(
         }}
         onClick={onClick}
       >
-        <CardContent>
+        <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              mb: 2,
+              mb: 0.5,
             }}
           >
             <Typography
@@ -127,9 +127,9 @@ export const StatCard: React.FC<StatCardProps> = React.memo(
           ) : (
             <>
               <Typography
-                variant="h4"
+                variant="h6"
                 component="div"
-                sx={{ fontWeight: 600, mb: 0.5 }}
+                sx={{ fontWeight: 600, mb: 0.25, lineHeight: 1.25 }}
                 color={color !== 'default' ? getColorStyles.color : undefined}
               >
                 {value}

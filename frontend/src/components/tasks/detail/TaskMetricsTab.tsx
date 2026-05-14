@@ -27,7 +27,7 @@ import {
   type MetricsChartOrderItem,
 } from './MetricsChartOrderDialog';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
-import { layoutTokens, spacingTokens } from '../../../theme/density';
+import { spacingTokens } from '../../../theme/density';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { MoneyAmountLike } from '../../../types/money';
 import {
@@ -848,8 +848,8 @@ export function TaskMetricsTab({
     <Box
       data-testid="task-metrics-tab"
       sx={{
-        px: { xs: 0, sm: 2, md: 3 },
-        py: { xs: 0.5, sm: 1.5 },
+        px: { xs: 0, sm: 1 },
+        py: { xs: 0.5, sm: 1 },
         minWidth: 0,
         width: '100%',
         maxWidth: '100%',
@@ -877,7 +877,7 @@ export function TaskMetricsTab({
       ) : null}
       <Grid
         container
-        spacing={{ xs: 0.75, sm: layoutTokens.sectionGap.sm }}
+        spacing={{ xs: 0.75, sm: 1 }}
         justifyContent="flex-start"
         alignItems="stretch"
         sx={{ mt: 0, minWidth: 0, width: '100%' }}

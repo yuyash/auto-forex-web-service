@@ -399,12 +399,17 @@ export default function BacktestTaskCard({
         transition: 'box-shadow 0.3s',
       }}
     >
-      <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.5, sm: 2 } }}>
+      <CardContent
+        sx={{
+          p: { xs: 1, sm: 1.25 },
+          '&:last-child': { pb: { xs: 1, sm: 1.25 } },
+        }}
+      >
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
-            mb: 2,
+            mb: 0.75,
             gap: 1,
           }}
         >
@@ -412,15 +417,19 @@ export default function BacktestTaskCard({
             sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
             onClick={handleView}
           >
-            <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
+            <Typography
+              variant="subtitle1"
+              component="h2"
+              sx={{ mb: 0.5, fontWeight: 600, lineHeight: 1.25 }}
+            >
               {currentTask.name}
             </Typography>
             <Box
               sx={{
                 display: 'flex',
-                gap: 1,
+                gap: 0.5,
                 alignItems: 'center',
-                mb: 1,
+                mb: 0.5,
                 flexWrap: 'wrap',
               }}
             >
@@ -473,7 +482,7 @@ export default function BacktestTaskCard({
         </Box>
 
         {/* Action buttons using TaskControlButtons component */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 0.75 }}>
           <TaskControlButtons
             taskId={task.id}
             status={displayStatus}
@@ -492,7 +501,7 @@ export default function BacktestTaskCard({
 
         {/* Progress bar for running tasks using TaskProgress component in compact mode (Requirement 3.2) */}
         {displayStatus === TaskStatus.RUNNING && (
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 0.75 }}>
             <TaskProgress
               status={displayStatus}
               progress={progress}
@@ -503,14 +512,14 @@ export default function BacktestTaskCard({
         )}
 
         {shouldShowPnlSnapshot && (
-          <Grid container spacing={1} sx={{ mt: 1, mb: 1.5 }}>
+          <Grid container spacing={0.75} sx={{ mt: 0.75, mb: 0.75 }}>
             {pnlItems.map((item) => (
               <Grid key={item.key} size={{ xs: 12, sm: 4 }}>
                 <Box
                   sx={{
                     height: '100%',
-                    minHeight: 64,
-                    p: 1,
+                    minHeight: 50,
+                    p: 0.75,
                     border: 1,
                     borderColor: 'divider',
                     borderRadius: 1,
@@ -518,7 +527,7 @@ export default function BacktestTaskCard({
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: 1,
+                    gap: 0.25,
                   }}
                 >
                   <Typography
@@ -560,7 +569,7 @@ export default function BacktestTaskCard({
         {/* Stats for completed tasks */}
         {displayStatus === TaskStatus.COMPLETED &&
           currentTask.latest_execution && (
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={1} sx={{ mt: 0.75 }}>
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <StatCard
@@ -595,7 +604,7 @@ export default function BacktestTaskCard({
 
         {/* Error message for failed tasks */}
         {displayStatus === TaskStatus.FAILED && (
-          <Alert severity="error" sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mt: 1 }}>
             <Typography variant="body2" fontWeight="bold">
               {t('backtest:card.taskExecutionFailed')}
             </Typography>
@@ -610,8 +619,8 @@ export default function BacktestTaskCard({
         {/* Footer with metadata */}
         <Box
           sx={{
-            mt: 2,
-            pt: 2,
+            mt: 1,
+            pt: 1,
             borderTop: 1,
             borderColor: 'divider',
             display: 'flex',

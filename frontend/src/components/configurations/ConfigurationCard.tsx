@@ -113,21 +113,28 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           },
         }}
       >
-        <CardContent sx={{ flexGrow: 1 }}>
+        <CardContent
+          sx={{
+            flexGrow: 1,
+            p: { xs: 1, sm: 1.25 },
+            '&:last-child': { pb: { xs: 1, sm: 1.25 } },
+          }}
+        >
           {/* Header with name and menu */}
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              mb: 2,
+              mb: 0.75,
             }}
           >
             <Typography
-              variant="h6"
+              variant="subtitle1"
               component="div"
               sx={{
                 fontWeight: 600,
+                lineHeight: 1.25,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
@@ -144,18 +151,19 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
                 e.stopPropagation();
                 handleMenuOpen(e);
               }}
-              sx={{ mt: -1, mr: -1 }}
+              sx={{ mt: -0.5, mr: -0.5 }}
             >
               <MoreVertIcon />
             </IconButton>
           </Box>
 
           {/* Strategy Type */}
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 0.75 }}>
             <Chip
               label={getDisplayName(configuration.strategy_type)}
               color="primary"
               variant="outlined"
+              size="small"
             />
           </Box>
 
@@ -165,13 +173,12 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               variant="body2"
               color="text.secondary"
               sx={{
-                mb: 2,
+                mb: 0.75,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
-                WebkitLineClamp: 2,
+                WebkitLineClamp: 1,
                 WebkitBoxOrient: 'vertical',
-                minHeight: '2.5em',
               }}
             >
               {configuration.description}
@@ -183,7 +190,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 1,
+              gap: 0.5,
               mt: 'auto',
             }}
           >
@@ -202,7 +209,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               </Typography>
             </Box>
             {configuration.is_in_use && (
-              <Box sx={{ mt: 1 }}>
+              <Box sx={{ mt: 0.25 }}>
                 <Chip
                   label={t('common:labels.inUse')}
                   color="success"
@@ -214,7 +221,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           </Box>
         </CardContent>
 
-        <CardActions sx={{ px: 2, pb: 2, pt: 0 }}>
+        <CardActions sx={{ px: { xs: 1, sm: 1.25 }, pb: 1, pt: 0 }}>
           <Tooltip title={editTooltip}>
             <IconButton
               color="primary"
@@ -223,7 +230,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
                 handleEdit();
               }}
               disabled={editDisabled}
-              sx={{ mr: 1 }}
+              sx={{ mr: 0.5 }}
             >
               <EditIcon fontSize="small" />
             </IconButton>
@@ -234,7 +241,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
                 e.stopPropagation();
                 handleCopy();
               }}
-              sx={{ mr: 1 }}
+              sx={{ mr: 0.5 }}
             >
               <ContentCopyIcon fontSize="small" />
             </IconButton>

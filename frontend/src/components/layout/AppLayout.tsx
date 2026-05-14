@@ -79,7 +79,6 @@ const AppLayout = () => {
               display: 'flex',
               flexDirection: 'column',
               overflowY: 'auto',
-              marginTop: '32px', // Space for AppBar
               marginBottom: isMobile ? '8px' : 0, // Space for bottom nav on mobile
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
               '--app-content-max-width': settings.constrainContentWidth

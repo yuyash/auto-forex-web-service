@@ -40,7 +40,6 @@ interface TaskDetailHeaderProps {
   pipSize?: string;
   tick: TickInfo;
   timezone: string;
-  isMobile: boolean;
   progress: number;
   showProgress?: boolean;
   currentAtr?: number | null;
@@ -146,7 +145,6 @@ export function TaskDetailHeader({
   pipSize,
   tick,
   timezone,
-  isMobile,
   progress,
   showProgress = true,
   currentAtr,
@@ -174,17 +172,16 @@ export function TaskDetailHeader({
   const editDisabled = !(actionPolicy?.can_edit_metadata ?? !actionDisabled);
   const deleteDisabled = !(actionPolicy?.can_delete ?? !actionDisabled);
   const tickText = buildTickText(tick, pipSize);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <Paper sx={{ p: { xs: 1.5, sm: 2 }, pb: 1, mb: { xs: 1, sm: 2 } }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+    <Paper sx={{ p: { xs: 0.75, sm: 1 }, mb: { xs: 0.75, sm: 1 } }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
-            p: '4px',
+            gap: 0.75,
             flexWrap: 'wrap',
           }}
         >
@@ -192,7 +189,9 @@ export function TaskDetailHeader({
             variant="h4"
             component="h1"
             sx={{
-              fontSize: { xs: '1.25rem', sm: '2.125rem' },
+              fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' },
+              lineHeight: 1.2,
+              fontWeight: 600,
               wordBreak: 'break-word',
               flex: 1,
               minWidth: 0,
@@ -201,6 +200,48 @@ export function TaskDetailHeader({
             {taskName}
           </Typography>
           <StatusBadge status={status} />
+          {!isViewingHistorical && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                flexWrap: 'wrap',
+              }}
+            >
+              <TaskControlButtons
+                taskId={taskId}
+                status={status}
+                taskType={taskType}
+                actionPolicy={actionPolicy}
+                onStart={onStart}
+                onStop={onStop}
+                onRestart={onRestart}
+                onResume={onResume}
+                onPause={onPause}
+              />
+              {extraActions}
+              <ActionButton
+                title={editLabel}
+                disabled={editDisabled}
+                size="small"
+                ariaLabel={editLabel}
+                onClick={onEdit}
+              >
+                <EditIcon fontSize="small" />
+              </ActionButton>
+              <ActionButton
+                title={deleteLabel}
+                disabled={deleteDisabled}
+                size="small"
+                color="error"
+                ariaLabel={deleteLabel}
+                onClick={onDelete}
+              >
+                <DeleteIcon fontSize="small" />
+              </ActionButton>
+            </Box>
+          )}
           <Tooltip title={expanded ? 'Collapse header' : 'Expand header'}>
             <IconButton
               size="small"
@@ -213,57 +254,11 @@ export function TaskDetailHeader({
         </Box>
 
         <Collapse in={expanded}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                pl: '4px',
-                flexWrap: 'wrap',
-              }}
-            >
-              {!isViewingHistorical && (
-                <>
-                  <TaskControlButtons
-                    taskId={taskId}
-                    status={status}
-                    taskType={taskType}
-                    actionPolicy={actionPolicy}
-                    onStart={onStart}
-                    onStop={onStop}
-                    onRestart={onRestart}
-                    onResume={onResume}
-                    onPause={onPause}
-                  />
-                  {extraActions}
-                  <ActionButton
-                    title={editLabel}
-                    disabled={editDisabled}
-                    size={isMobile ? 'small' : 'medium'}
-                    ariaLabel={editLabel}
-                    onClick={onEdit}
-                  >
-                    <EditIcon />
-                  </ActionButton>
-                  <ActionButton
-                    title={deleteLabel}
-                    disabled={deleteDisabled}
-                    size={isMobile ? 'small' : 'medium'}
-                    color="error"
-                    ariaLabel={deleteLabel}
-                    onClick={onDelete}
-                  >
-                    <DeleteIcon />
-                  </ActionButton>
-                </>
-              )}
-            </Box>
-
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Typography
               variant="body1"
               color="text.secondary"
-              sx={{ pl: '4px', fontSize: { xs: '0.85rem', sm: '1rem' } }}
+              sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' } }}
             >
               {strategyName}
             </Typography>
@@ -272,7 +267,7 @@ export function TaskDetailHeader({
               <Typography
                 variant="body2"
                 color="text.secondary"
-                sx={{ pl: '4px' }}
+                sx={{ fontSize: '0.8125rem' }}
               >
                 {taskDescription}
               </Typography>
@@ -287,7 +282,6 @@ export function TaskDetailHeader({
                   flexWrap: 'wrap',
                   alignItems: 'center',
                   gap: 1,
-                  pl: '4px',
                   fontSize: { xs: '0.75rem', sm: '0.875rem' },
                 }}
               >
@@ -312,7 +306,6 @@ export function TaskDetailHeader({
                   flexWrap: 'wrap',
                   alignItems: 'center',
                   gap: { xs: 0.5, sm: 1 },
-                  pl: '4px',
                   rowGap: 0.25,
                   fontSize: { xs: '0.7rem', sm: '0.875rem' },
                 }}
@@ -407,7 +400,7 @@ export function TaskDetailHeader({
                 <Typography
                   variant="body2"
                   color="text.secondary"
-                  sx={{ pl: '4px', fontWeight: 600 }}
+                  sx={{ fontWeight: 600 }}
                 >
                   {Math.round(Math.min(Math.max(progress, 0), 100))}%{' '}
                   {completedLabel}
