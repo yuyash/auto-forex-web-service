@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.4...frontend-v1.68.5) (2026-05-14)
+
+
+### Bug Fixes
+
+* **frontend:** stack OANDA accounts page header on narrow viewports ([#712](https://github.com/yuyash/auto-forex-web-service/issues/712)) ([b520bd1](https://github.com/yuyash/auto-forex-web-service/commit/b520bd14c79ce1829f3eda2253f819d3de19dd9a))
+
 ## [1.68.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.3...frontend-v1.68.4) (2026-05-14)
 
 
