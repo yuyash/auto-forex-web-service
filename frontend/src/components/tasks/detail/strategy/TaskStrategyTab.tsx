@@ -447,18 +447,27 @@ export function TaskStrategyTab({
   return (
     <Box
       sx={{
-        p: 3,
+        p: { xs: 0.75, sm: 1 },
         display: 'flex',
         flexDirection: 'column',
-        height: { lg: 'calc(100vh - 160px)' },
+        height: {
+          xs: 'max(640px, calc(100vh - 170px))',
+          lg: 'max(680px, calc(100vh - 170px))',
+        },
+        minHeight: { xs: 640, lg: 680 },
         overflow: 'hidden',
       }}
     >
       {summary ? (
         <Stack
           direction="row"
-          spacing={1}
-          sx={{ mb: 2, flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}
+          spacing={0.5}
+          sx={{
+            mb: 0.75,
+            flexWrap: 'wrap',
+            flexShrink: 0,
+            alignItems: 'center',
+          }}
         >
           <Chip
             label={t('common:strategyVisualization.chips.cycles', {
@@ -526,8 +535,8 @@ export function TaskStrategyTab({
         >
           <Box
             sx={{
-              px: 1.5,
-              py: 1,
+              px: 1,
+              py: 0.75,
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
@@ -594,7 +603,7 @@ export function TaskStrategyTab({
             />
           </Box>
           <Divider />
-          <Box sx={{ px: 1.5, py: 0.75, flexShrink: 0 }}>
+          <Box sx={{ px: 1, py: 0.5, flexShrink: 0 }}>
             <TextField
               size="small"
               fullWidth
@@ -634,7 +643,7 @@ export function TaskStrategyTab({
               }}
             />
           </Box>
-          <Box sx={{ px: 1.5, pb: 0.75, flexShrink: 0 }}>
+          <Box sx={{ px: 1, pb: 0.5, flexShrink: 0 }}>
             <TextField
               size="small"
               fullWidth
@@ -678,9 +687,9 @@ export function TaskStrategyTab({
           <Divider />
           <Box
             sx={{
-              p: 1.5,
+              p: 0.75,
               display: 'grid',
-              gap: 1.25,
+              gap: 0.75,
               overflowY: 'auto',
               minHeight: 0,
             }}
@@ -705,8 +714,8 @@ export function TaskStrategyTab({
                     }
                   }}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 0.75,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor:
                       cycle.cycle_id === selectedCycle?.cycle_id
@@ -794,7 +803,7 @@ export function TaskStrategyTab({
                       sidebarExtendedGridStates.get(cycle.cycle_id) ??
                         cycle.grid_state
                     )) ? (
-                    <Box sx={{ mt: 1 }}>
+                    <Box sx={{ mt: 0.5 }}>
                       <StrategyGridIndicator
                         gridState={
                           sidebarExtendedGridStates.get(cycle.cycle_id) ??
@@ -841,9 +850,9 @@ export function TaskStrategyTab({
                 sx={{
                   flexShrink: 0,
                   '& .MuiTablePagination-toolbar': {
-                    minHeight: 44,
-                    paddingLeft: 1.5,
-                    paddingRight: 1.5,
+                    minHeight: 36,
+                    paddingLeft: 1,
+                    paddingRight: 1,
                   },
                   '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows':
                     {
@@ -907,7 +916,7 @@ export function TaskStrategyTab({
               <CircularProgress />
             </Box>
           ) : selectedCycle ? (
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: 1 }}>
               {isMobile ? (
                 <Box
                   sx={{
@@ -915,7 +924,7 @@ export function TaskStrategyTab({
                     top: 0,
                     zIndex: 10,
                     bgcolor: 'background.paper',
-                    pb: 1,
+                    pb: 0.5,
                   }}
                 >
                   <IconButton
@@ -931,8 +940,8 @@ export function TaskStrategyTab({
               ) : null}
               <Stack
                 direction="row"
-                spacing={1}
-                sx={{ mb: 1, flexWrap: 'wrap', alignItems: 'center' }}
+                spacing={0.75}
+                sx={{ mb: 0.5, flexWrap: 'wrap', alignItems: 'center' }}
               >
                 <Typography variant="h6">
                   {selectedCycle.direction.toUpperCase()}{' '}
@@ -977,7 +986,11 @@ export function TaskStrategyTab({
                   </Tooltip>
                 )}
               </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 0.75 }}
+              >
                 {formatDateTime(
                   selectedCycle.started_at,
                   timezone,
@@ -993,11 +1006,15 @@ export function TaskStrategyTab({
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ mb: 1, display: 'block', fontFamily: 'monospace' }}
+                sx={{ mb: 0.5, display: 'block', fontFamily: 'monospace' }}
               >
                 Cycle ID: {selectedCycle.cycle_id}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 0.75 }}
+              >
                 {t('common:strategyVisualization.cycleList.opensAndCloses', {
                   opens: selectedCycle.open_count,
                   closes: selectedCycle.close_count,
@@ -1017,7 +1034,7 @@ export function TaskStrategyTab({
                 </Typography>
               </Typography>
               {supportsGridVisualization && selectedCycle.grid_state ? (
-                <Box sx={{ mb: 2 }}>
+                <Box sx={{ mb: 1 }}>
                   <StrategyGridIndicator
                     gridState={selectedCycleExtendedGridState}
                     showSlotBuildCounts={true}
@@ -1030,8 +1047,8 @@ export function TaskStrategyTab({
                 <Paper
                   variant="outlined"
                   sx={{
-                    p: 2,
-                    mb: 2,
+                    p: 1,
+                    mb: 1,
                     bgcolor: alpha(theme.palette.primary.main, 0.03),
                   }}
                 >
@@ -1055,8 +1072,8 @@ export function TaskStrategyTab({
 
               <Stack
                 direction="row"
-                spacing={1}
-                sx={{ mb: 1, alignItems: 'center' }}
+                spacing={0.75}
+                sx={{ mb: 0.5, alignItems: 'center', flexWrap: 'wrap' }}
               >
                 <Typography variant="subtitle1">
                   {t('common:strategyVisualization.cycleList.trades')} (
@@ -1105,7 +1122,7 @@ export function TaskStrategyTab({
                   </Typography>
                 ) : null}
               </Stack>
-              <Divider sx={{ mb: 1 }} />
+              <Divider sx={{ mb: 0.5 }} />
               {pagedTradesError ? (
                 <Box sx={{ pb: 2 }}>
                   <Alert severity="error">{pagedTradesError.message}</Alert>
@@ -1205,7 +1222,7 @@ function TradeRow({
   return (
     <Box
       sx={{
-        py: 1,
+        py: 0.5,
         px: 0.5,
         cursor: 'pointer',
         borderRadius: 1,
@@ -1223,7 +1240,7 @@ function TradeRow({
     >
       <Stack
         direction="row"
-        spacing={1}
+        spacing={0.75}
         sx={{ alignItems: 'center', flexWrap: 'wrap' }}
       >
         <Chip
@@ -1359,7 +1376,7 @@ function TradeRow({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ display: 'block', mt: 0.5 }}
+          sx={{ display: 'block', mt: 0.25 }}
         >
           {trade.description}
         </Typography>

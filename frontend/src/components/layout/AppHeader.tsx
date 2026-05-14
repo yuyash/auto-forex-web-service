@@ -80,8 +80,12 @@ const AppHeader = ({
 
   return (
     <AppBar
-      position="fixed"
-      sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
+      position="sticky"
+      sx={{
+        top: 0,
+        flexShrink: 0,
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+      }}
     >
       <Toolbar sx={{ minHeight: 'auto !important', py: 0.5 }}>
         {/* Menu button for tablet only (not mobile) */}

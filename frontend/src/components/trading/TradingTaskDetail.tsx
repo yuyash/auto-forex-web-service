@@ -24,8 +24,6 @@ import {
   Link,
   CircularProgress,
   Alert,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
 import {
@@ -105,8 +103,6 @@ export const TradingTaskDetail: React.FC = () => {
   const stopTask = useStopTradingTask();
   const restartTask = useRestartTradingTask();
   const resumeTask = useResumeTradingTask();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
   const { showError } = useToast();
   const timezone = user?.timezone || 'UTC';
@@ -398,7 +394,6 @@ export const TradingTaskDetail: React.FC = () => {
             : s.tick
         }
         timezone={timezone}
-        isMobile={isMobile}
         progress={
           isViewingHistorical
             ? (executionDetail?.progress ?? 0)

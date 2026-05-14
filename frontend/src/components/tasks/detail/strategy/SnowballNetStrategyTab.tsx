@@ -2469,8 +2469,8 @@ export function SnowballNetStrategyTab({
   );
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 }, minWidth: 0 }}>
-      <Stack spacing={{ xs: 0.75, sm: 1 }} sx={{ mb: 1.5, minWidth: 0 }}>
+    <Box sx={{ p: { xs: 0.75, sm: 1 }, minWidth: 0 }}>
+      <Stack spacing={{ xs: 0.5, sm: 0.75 }} sx={{ mb: 1, minWidth: 0 }}>
         {/* Desktop: icon buttons right-aligned on the same row as selectors.
             Mobile: icon buttons on their own row. */}
         <Box
@@ -2487,7 +2487,7 @@ export function SnowballNetStrategyTab({
         <Box
           sx={{
             display: 'flex',
-            gap: { xs: 0.75, sm: 1 },
+            gap: { xs: 0.5, sm: 0.75 },
             alignItems: 'center',
             flexWrap: { xs: 'wrap', sm: 'nowrap' },
             minWidth: 0,
@@ -2970,8 +2970,8 @@ function SnowballNetCharts({
           lg: 'repeat(2, minmax(0, 1fr))',
           xl: 'repeat(3, minmax(0, 1fr))',
         },
-        gap: 1.5,
-        mt: 1.5,
+        gap: 1,
+        mt: 1,
       }}
     >
       {visibleKeys.map((key) => {

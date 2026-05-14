@@ -73,9 +73,9 @@ export default function DashboardChartToolbar({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 1.5,
+        gap: 0.75,
         flexWrap: 'wrap',
-        mb: 1,
+        mb: 0.75,
         flexShrink: 0,
       }}
     >
@@ -89,7 +89,7 @@ export default function DashboardChartToolbar({
           {t('common:tables.trend.granularityFallbackWarning')}
         </Alert>
       )}
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 'auto' }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 'auto' }}>
         {t('dashboard:chart.title')}
       </Typography>
 

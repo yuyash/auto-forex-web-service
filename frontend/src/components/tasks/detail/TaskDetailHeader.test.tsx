@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import i18n from '../../../i18n/config';
 import { TaskStatus } from '../../../types/common';
@@ -22,7 +22,6 @@ const baseProps = {
     mid: null,
   },
   timezone: 'UTC',
-  isMobile: false,
   progress: 0,
   completedLabel: 'completed',
   editLabel: 'Edit',
@@ -49,6 +48,7 @@ describe('TaskDetailHeader', () => {
     });
 
     render(<TaskDetailHeader {...baseProps} />);
+    fireEvent.click(screen.getByLabelText('Expand header'));
 
     expect(
       screen.getByText(

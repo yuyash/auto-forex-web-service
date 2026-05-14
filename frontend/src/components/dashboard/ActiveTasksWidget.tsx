@@ -71,16 +71,17 @@ const ActiveTasksWidget = () => {
   );
 
   return (
-    <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
+    <Paper elevation={2} sx={{ p: { xs: 1, sm: 1.25 }, height: '100%' }}>
       <Box
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 2,
+          gap: 1,
+          mb: 0.75,
         }}
       >
-        <Typography variant="h6">
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t('widgets.activeTasks')} ({totalActive})
         </Typography>
         <Button
@@ -92,15 +93,15 @@ const ActiveTasksWidget = () => {
       </Box>
 
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-          <CircularProgress size={32} />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
+          <CircularProgress size={24} />
         </Box>
       ) : totalActive === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
           {t('widgets.noActiveTasksRunning')}
         </Typography>
       ) : (
-        <Stack spacing={2}>
+        <Stack spacing={0.75}>
           {/* Trading Tasks */}
           {tradingTasks.map((task) => (
             <Card
@@ -114,13 +115,14 @@ const ActiveTasksWidget = () => {
               }}
               onClick={() => navigate(`/trading-tasks/${task.id}`)}
             >
-              <CardContent>
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
                 <Box
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'flex-start',
-                    mb: 1,
+                    gap: 1,
+                    mb: 0.25,
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -149,13 +151,14 @@ const ActiveTasksWidget = () => {
               }}
               onClick={() => navigate(`/backtest-tasks/${task.id}`)}
             >
-              <CardContent>
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
                 <Box
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'flex-start',
-                    mb: 1,
+                    gap: 1,
+                    mb: 0.25,
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

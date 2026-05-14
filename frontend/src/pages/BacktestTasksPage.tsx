@@ -57,7 +57,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`backtest-tasks-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ py: 1 }}>{children}</Box>}
     </div>
   );
 }
@@ -195,7 +195,7 @@ export default function BacktestTasksPage() {
 
   return (
     <PageContainer>
-      <Box sx={{ py: { xs: 2, sm: 4 } }}>
+      <Box sx={{ py: { xs: 1, sm: 1.5 } }}>
         <Breadcrumbs />
 
         {/* Header */}
@@ -204,7 +204,7 @@ export default function BacktestTasksPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: { xs: 2, sm: 3 },
+            mb: 1,
             flexWrap: 'wrap',
             gap: 1,
           }}
@@ -212,7 +212,11 @@ export default function BacktestTasksPage() {
           <Typography
             variant="h4"
             component="h1"
-            sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+            sx={{
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              lineHeight: 1.2,
+              fontWeight: 600,
+            }}
           >
             {t('backtest:pages.title')}
           </Typography>
@@ -245,12 +249,22 @@ export default function BacktestTasksPage() {
         </Box>
 
         {/* Tabs */}
-        <Paper sx={{ mb: 3 }}>
+        <Paper sx={{ mb: 1 }}>
           <Tabs
             value={tabValue}
             onChange={handleTabChange}
             aria-label="backtest tasks tabs"
-            sx={{ borderBottom: 1, borderColor: 'divider' }}
+            sx={{
+              minHeight: 34,
+              borderBottom: 1,
+              borderColor: 'divider',
+              '& .MuiTab-root': {
+                minHeight: 34,
+                px: { xs: 1, sm: 1.25 },
+                py: 0.5,
+                fontSize: '0.8125rem',
+              },
+            }}
           >
             <Tab label={t('backtest:tabs.all')} {...a11yProps(0)} />
             <Tab label={t('backtest:tabs.running')} {...a11yProps(1)} />
@@ -260,8 +274,8 @@ export default function BacktestTasksPage() {
         </Paper>
 
         {/* Filters */}
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Grid container spacing={2} alignItems="center">
+        <Paper sx={{ p: 1, mb: 1 }}>
+          <Grid container spacing={1} alignItems="center">
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
@@ -332,7 +346,7 @@ export default function BacktestTasksPage() {
         {pollingError && (
           <Alert
             severity="warning"
-            sx={{ mb: 2 }}
+            sx={{ mb: 1 }}
             onClose={() => setPollingError(null)}
           >
             {t('common:errors.refreshFailed')}: {pollingError}
@@ -342,15 +356,15 @@ export default function BacktestTasksPage() {
         {/* Tab Panels */}
         <TabPanel value={tabValue} index={0}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 {t('backtest:empty.noTasksFound')}
               </Typography>
@@ -367,7 +381,7 @@ export default function BacktestTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
                     <BacktestTaskCard task={task} onRefresh={handleRefresh} />
@@ -375,7 +389,9 @@ export default function BacktestTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -390,22 +406,22 @@ export default function BacktestTasksPage() {
 
         <TabPanel value={tabValue} index={1}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('backtest:empty.noRunningTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
                     <BacktestTaskCard task={task} onRefresh={handleRefresh} />
@@ -413,7 +429,9 @@ export default function BacktestTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -428,22 +446,22 @@ export default function BacktestTasksPage() {
 
         <TabPanel value={tabValue} index={2}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('backtest:empty.noCompletedTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
                     <BacktestTaskCard task={task} onRefresh={handleRefresh} />
@@ -451,7 +469,9 @@ export default function BacktestTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -466,22 +486,22 @@ export default function BacktestTasksPage() {
 
         <TabPanel value={tabValue} index={3}>
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <LoadingSpinner />
             </Box>
           ) : error ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 {t('backtest:empty.noFailedTasks')}
               </Typography>
             </Paper>
           ) : (
             <>
-              <Grid container spacing={3}>
+              <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid key={task.id} size={{ xs: 12 }}>
                     <BacktestTaskCard task={task} onRefresh={handleRefresh} />
@@ -489,7 +509,9 @@ export default function BacktestTasksPage() {
                 ))}
               </Grid>
               {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
+                >
                   <Pagination
                     count={totalPages}
                     page={page}

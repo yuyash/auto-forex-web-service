@@ -40,12 +40,12 @@ const QuickActionsWidget = () => {
   ];
 
   return (
-    <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
+    <Paper elevation={2} sx={{ p: { xs: 1, sm: 1.25 }, height: '100%' }}>
+      <Typography variant="subtitle1" sx={{ mb: 0.75, fontWeight: 600 }}>
         {t('widgets.quickActions')}
       </Typography>
 
-      <Stack spacing={2}>
+      <Stack spacing={0.75}>
         {actions.map((action) => (
           <Button
             key={action.path}
@@ -56,7 +56,7 @@ const QuickActionsWidget = () => {
             onClick={() => navigate(action.path)}
             sx={{
               justifyContent: 'flex-start',
-              py: 1.5,
+              py: 0.5,
             }}
           >
             {action.label}

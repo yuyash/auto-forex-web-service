@@ -45,9 +45,9 @@ export function TaskDetailTabs({
         allowScrollButtonsMobile
         sx={{
           flex: 1,
-          minHeight: 40,
+          minHeight: 34,
           '& .MuiTabs-scrollButtons': {
-            width: 32,
+            width: 28,
           },
         }}
       >
@@ -57,9 +57,9 @@ export function TaskDetailTabs({
             label={tab.label}
             {...a11yProps(idx)}
             sx={{
-              minWidth: { xs: 'auto', sm: 90 },
-              minHeight: 40,
-              px: { xs: 1, sm: 1.5 },
+              minWidth: { xs: 'auto', sm: 76 },
+              minHeight: 34,
+              px: { xs: 0.75, sm: 1 },
               fontSize: componentDensity.controlFontSize,
             }}
           />
@@ -69,7 +69,7 @@ export function TaskDetailTabs({
         <IconButton
           onClick={onConfigureTabs}
           size="small"
-          sx={{ mr: 1 }}
+          sx={{ mr: 0.5 }}
           aria-label={configureTabsLabel}
         >
           <SettingsIcon fontSize="small" />

@@ -29,9 +29,9 @@ export function LazyTabPanel({
       style={{
         display: isActive ? 'flex' : 'none',
         flexDirection: 'column',
-        flex: 1,
+        flex: '1 0 auto',
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'visible',
       }}
       {...other}
     >
@@ -41,9 +41,9 @@ export function LazyTabPanel({
             pt: { xs: 0.5, sm: 1 },
             display: 'flex',
             flexDirection: 'column',
-            flex: 1,
+            flex: '1 0 auto',
             minHeight: 0,
-            overflow: 'auto',
+            overflow: 'visible',
           }}
         >
           {children}

@@ -91,7 +91,7 @@ const ConfigurationsPage = () => {
   };
 
   return (
-    <PageContainer sx={{ mt: 4, mb: 4 }}>
+    <PageContainer sx={{ mt: { xs: 1, sm: 1.5 }, mb: 1.5 }}>
       <Breadcrumbs />
 
       {/* Header */}
@@ -100,16 +100,24 @@ const ConfigurationsPage = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 4,
+          mb: 1,
           flexWrap: 'wrap',
-          gap: 2,
+          gap: 1,
         }}
       >
         <Box>
-          <Typography variant="h4" gutterBottom>
+          <Typography
+            variant="h4"
+            sx={{
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              lineHeight: 1.2,
+              fontWeight: 600,
+              mb: 0.25,
+            }}
+          >
             {t('configuration:pages.title')}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body2" color="text.secondary">
             {t('configuration:pages.subtitle')}
           </Typography>
         </Box>
@@ -124,7 +132,7 @@ const ConfigurationsPage = () => {
       </Box>
 
       {/* Search and Filter Controls */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={2} sx={{ p: 1, mb: 1 }}>
         <Box
           sx={{
             display: 'grid',
@@ -132,7 +140,7 @@ const ConfigurationsPage = () => {
               xs: '1fr',
               md: 'minmax(0, 1fr) 220px 200px 160px',
             },
-            gap: 2,
+            gap: 1,
             alignItems: 'center',
           }}
         >
@@ -214,7 +222,7 @@ const ConfigurationsPage = () => {
       {error && (
         <Alert
           severity="error"
-          sx={{ mb: 3 }}
+          sx={{ mb: 1 }}
           action={
             !error.message.toLowerCase().includes('connection refused') && (
               <Button color="inherit" onClick={() => window.location.reload()}>
@@ -243,7 +251,7 @@ const ConfigurationsPage = () => {
 
       {/* Loading State */}
       {isLoading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
           <CircularProgress />
         </Box>
       )}
@@ -253,7 +261,7 @@ const ConfigurationsPage = () => {
         <Paper
           elevation={0}
           sx={{
-            p: 8,
+            p: 3,
             textAlign: 'center',
             backgroundColor: 'background.default',
           }}
@@ -263,7 +271,7 @@ const ConfigurationsPage = () => {
               ? t('configuration:empty.noConfigurationsFound')
               : t('configuration:empty.noConfigurationsYet')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             {search || strategyTypeFilter !== 'all'
               ? t('configuration:empty.tryAdjustingFilters')
               : t('configuration:empty.createFirstConfig')}
@@ -292,7 +300,7 @@ const ConfigurationsPage = () => {
                 md: 'repeat(2, 1fr)',
                 lg: 'repeat(3, 1fr)',
               },
-              gap: 3,
+              gap: 1,
             }}
           >
             {configurations.map((config) => (
@@ -302,7 +310,7 @@ const ConfigurationsPage = () => {
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}>
               <Pagination
                 count={totalPages}
                 page={page}

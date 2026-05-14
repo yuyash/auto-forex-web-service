@@ -493,7 +493,6 @@ export const BacktestTaskDetail: React.FC = () => {
             : s.tick
         }
         timezone={timezone}
-        isMobile={isMobile}
         progress={
           isViewingHistorical
             ? (executionDetail?.progress ?? 0)
