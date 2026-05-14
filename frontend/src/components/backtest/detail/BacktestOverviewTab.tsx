@@ -23,6 +23,7 @@ import {
   getStrategyConfigSnapshotName,
   getStrategyConfigSnapshotRevision,
   getStrategyConfigSnapshotType,
+  isStrategyConfigSnapshotCurrent,
 } from '../../../utils/strategyConfigRevision';
 
 const BACKTEST_PERIOD_SETTING_KEYS = new Set([
@@ -83,6 +84,15 @@ export function BacktestOverviewTab({
   const isSuperuser = Boolean(user?.is_superuser);
   const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
   const hasExecutionConfigSnapshot = Boolean(historicalStrategyConfig);
+  const canEditDisplayedStrategyConfig = Boolean(
+    task.config_id &&
+      historicalStrategyConfig?.id === task.config_id &&
+      isStrategyConfigSnapshotCurrent(
+        historicalStrategyConfig,
+        task.config_revision,
+        task.config_hash
+      )
+  );
 
   // Prefer execution snapshots when available, including the current run.
   const effectiveStartTime =
@@ -334,6 +344,11 @@ export function BacktestOverviewTab({
         onClose={() => setHistoricalConfigOpen(false)}
         config={historicalStrategyConfig}
         strategies={strategies}
+        editHref={
+          canEditDisplayedStrategyConfig
+            ? `/configurations/${task.config_id}/edit`
+            : undefined
+        }
       />
     </Box>
   );

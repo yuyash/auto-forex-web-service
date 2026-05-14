@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import { Link as RouterLink } from 'react-router-dom';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import type { TaskExecution } from '../../../types/execution';
@@ -18,6 +21,7 @@ interface HistoricalStrategyConfigDialogProps {
   onClose: () => void;
   config?: HistoricalStrategyConfig | null;
   strategies: Strategy[];
+  editHref?: string;
 }
 
 function resolveSnapshot(config?: HistoricalStrategyConfig | null): {
@@ -51,8 +55,9 @@ export function HistoricalStrategyConfigDialog({
   onClose,
   config,
   strategies,
+  editHref,
 }: HistoricalStrategyConfigDialogProps) {
-  const { t, i18n } = useTranslation(['common']);
+  const { t, i18n } = useTranslation(['common', 'configuration']);
   const snapshot = useMemo(() => resolveSnapshot(config), [config]);
 
   const schemaProperties = useMemo(() => {
@@ -90,6 +95,18 @@ export function HistoricalStrategyConfigDialog({
       labels={{
         strategyType: t('common:labels.strategyType'),
       }}
+      actions={
+        editHref ? (
+          <Button
+            component={RouterLink}
+            to={editHref}
+            variant="contained"
+            startIcon={<EditIcon />}
+          >
+            {t('configuration:card.editConfiguration')}
+          </Button>
+        ) : undefined
+      }
     />
   );
 }

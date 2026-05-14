@@ -1,12 +1,14 @@
 import {
   Box,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { orderConfigEntries } from '../../../utils/configFieldOrder';
 import { isParameterVisible } from '../../../utils/strategySchemaDependsOn';
@@ -25,6 +27,7 @@ interface StrategyParameterDialogProps {
   labels: {
     strategyType: string;
   };
+  actions?: ReactNode;
 }
 
 function formatParameterValue(
@@ -74,6 +77,7 @@ export function StrategyParameterDialog({
   snapshotSchemaProperties,
   paramLabelMap,
   labels,
+  actions,
 }: StrategyParameterDialogProps) {
   const { i18n } = useTranslation();
   const parameterGroups = (() => {
@@ -178,6 +182,7 @@ export function StrategyParameterDialog({
           </Box>
         ))}
       </DialogContent>
+      {actions ? <DialogActions>{actions}</DialogActions> : null}
     </Dialog>
   );
 }
