@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.3...backend-v1.53.4) (2026-05-14)
+
+
+### Bug Fixes
+
+* **trading:** retry transient DNS failures during broker drift checks ([#710](https://github.com/yuyash/auto-forex-web-service/issues/710)) ([3c979f8](https://github.com/yuyash/auto-forex-web-service/commit/3c979f80cd7bf7064f77ed45221b64bd6a57645f))
+
 ## [1.53.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.2...backend-v1.53.3) (2026-05-14)
 
 
