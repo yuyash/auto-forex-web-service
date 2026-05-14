@@ -6,10 +6,11 @@ from collections.abc import Callable
 from decimal import Decimal
 
 from apps.trading.dataclasses.tick import Tick
+from apps.trading.money import AccountCurrency
 from apps.trading.models.state import ExecutionState
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.utils import Instrument
 
 
 class SnowballAccountMetricsUpdater:

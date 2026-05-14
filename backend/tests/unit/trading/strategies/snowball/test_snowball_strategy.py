@@ -24,13 +24,9 @@ from apps.trading.events import (
 )
 from apps.trading.strategies.snowball import strategy as snowball_strategy_module
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    SnowballCycle,
-    SnowballStrategyState,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 # ------------------------------------------------------------------
@@ -193,7 +189,7 @@ class TestInitialisation:
         s = _strategy()
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        from apps.trading.strategies.snowball.models import SnowballStrategyState
+        from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         for cycle in ss.active_cycles():
@@ -895,10 +891,13 @@ class TestCounterCloses:
         assert layer.slot_at(2).entry is None
 
     def test_non_primary_layer_r0_close_removes_empty_layer(self):
-        from apps.trading.strategies.snowball.models import (
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
             SnowballCycle,
             SnowballStrategyState,
         )
+        from apps.trading.strategies.snowball.entries import Entry
+        from apps.trading.strategies.snowball.grid_models import Layer
 
         s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
@@ -974,7 +973,13 @@ class TestCounterCloses:
         closes = _close_events(result)
         assert any(e.layer_number == 3 and e.retracement_count == 0 for e in closes)
 
-        from apps.trading.strategies.snowball.models import SnowballStrategyState
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
+            SnowballCycle,
+            SnowballStrategyState,
+        )
+        from apps.trading.strategies.snowball.entries import Entry
+        from apps.trading.strategies.snowball.grid_models import Layer
 
         updated = SnowballStrategyState.from_strategy_state(state.strategy_state)
         updated_cycle = updated.cycles[0]
@@ -1125,10 +1130,13 @@ class TestShrinkMode:
 
     def test_shrink_head_shifts_after_close(self):
         """After shrink closes L0/R0, the cycle head should shift dynamically."""
-        from apps.trading.strategies.snowball.models import (
+        from apps.trading.enums import Direction
+        from apps.trading.strategies.snowball.cycle_state import (
             SnowballCycle,
             SnowballStrategyState,
         )
+        from apps.trading.strategies.snowball.entries import Entry
+        from apps.trading.strategies.snowball.grid_models import Layer
 
         # Directly construct state with known entries — no on_tick needed
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))

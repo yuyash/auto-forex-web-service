@@ -19,6 +19,7 @@ from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_all_strategies, registry
+from apps.trading.utils import pip_size_for_instrument
 
 logger: Logger = getLogger(name=__name__)
 
@@ -33,7 +34,7 @@ class TradingEngine:
     def __init__(
         self,
         instrument: str,
-        pip_size: Decimal,
+        pip_size: Decimal | None,
         strategy_config: StrategyConfiguration,
         account_currency: str = "",
         hedging_enabled: bool = True,
@@ -48,7 +49,7 @@ class TradingEngine:
             hedging_enabled: Whether hedging (simultaneous long/short) is allowed
         """
         self.instrument = instrument
-        self.pip_size = pip_size
+        self.pip_size = pip_size or pip_size_for_instrument(instrument)
         self.strategy_config = strategy_config
         self.account_currency = account_currency
         self.hedging_enabled = hedging_enabled
@@ -63,7 +64,7 @@ class TradingEngine:
         logger.info(
             "Initialized TradingEngine: instrument=%s, pip_size=%s, strategy=%s",
             instrument,
-            pip_size,
+            self.pip_size,
             strategy_config.strategy_type,
         )
 

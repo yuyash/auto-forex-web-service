@@ -8,15 +8,9 @@ from decimal import Decimal
 from apps.trading.enums import Direction
 from apps.trading.services.strategy_cycles import _load_cycle_statuses
 from apps.trading.services.strategy_grid_state import build_cycle_grid_state_map
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    PositionGrid,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-    StopLossClosedEntry,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid, Slot
 
 
 def _entry(*, entry_id: int, layer: int, slot: int, is_rebuild: bool = False) -> Entry:

@@ -83,8 +83,10 @@ import {
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
 import { useTaskExecution } from '../../hooks/useTaskExecutions';
 import { BacktestBalanceAdjustmentDialog } from './BacktestBalanceAdjustmentDialog';
+import { formatMoneyPayload } from '../../utils/numberFormat';
 
 const TaskMetricsTab = React.lazy(() =>
   import('../tasks/detail/TaskMetricsTab').then((module) => ({
@@ -351,9 +353,18 @@ export const BacktestTaskDetail: React.FC = () => {
     reason?: string;
   }) => {
     try {
-      await adjustBalance.mutate({ id: taskId, data });
+      const result = await adjustBalance.mutate({ id: taskId, data });
       setBalanceDialogOpen(false);
-      showSuccess(t('backtest:toast.balanceAdjustedSuccessfully'));
+      showSuccess(
+        t('backtest:toast.balanceAdjustedSuccessfullyWithBalance', {
+          balance: formatMoneyPayload(
+            result.current_balance_display_money ?? result.current_balance_money
+          ),
+          defaultValue: `Backtest balance updated to ${formatMoneyPayload(
+            result.current_balance_display_money ?? result.current_balance_money
+          )}`,
+        })
+      );
       await Promise.all([
         refreshTask(),
         refreshOverviewSummary(),
@@ -401,9 +412,13 @@ export const BacktestTaskDetail: React.FC = () => {
   const activeExecutionId = effectiveExecutionId;
   const enableRealtime =
     !isViewingHistorical && shouldEnableRealtimeTaskUpdates(currentStatus);
-  const pnlCurrency = detailTask.instrument?.includes('_')
-    ? detailTask.instrument.split('_')[1]
-    : 'N/A';
+  const pnlCurrency =
+    s.pnl.currency ||
+    quoteCurrencyFromInstrument(detailTask.instrument) ||
+    detailTask.display_currency ||
+    s.execution.accountCurrency ||
+    detailTask.account_currency ||
+    'N/A';
   const canAdjustBalance =
     (currentStatus === TaskStatus.PAUSED ||
       currentStatus === TaskStatus.STOPPED) &&
@@ -690,7 +705,13 @@ export const BacktestTaskDetail: React.FC = () => {
                 data={metricsResult.data}
                 isLoading={metricsResult.isLoading}
                 error={metricsResult.error}
-                currency={s.execution.accountCurrency || 'USD'}
+                currency={
+                  s.execution.displayCurrency ||
+                  s.execution.accountCurrency ||
+                  detailTask.display_currency ||
+                  detailTask.account_currency ||
+                  'USD'
+                }
                 dataSource={metricsResult.dataSource}
                 resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
                 consistencyWarnings={metricsResult.consistencyWarnings}
@@ -758,7 +779,18 @@ export const BacktestTaskDetail: React.FC = () => {
         <BacktestBalanceAdjustmentDialog
           open={balanceDialogOpen}
           currentBalance={s.execution.currentBalance}
-          accountCurrency={s.execution.accountCurrency || pnlCurrency || 'USD'}
+          accountCurrency={
+            s.execution.currentBalanceMoney?.currency ||
+            s.execution.currentBalanceCurrency ||
+            s.execution.accountCurrency ||
+            pnlCurrency ||
+            'USD'
+          }
+          currentBalanceMoney={s.execution.currentBalanceMoney}
+          currentBalanceDisplayMoney={s.execution.currentBalanceDisplayMoney}
+          currentBalanceDisplayConversionContext={
+            s.execution.currentBalanceDisplayConversionContext
+          }
           isLoading={adjustBalance.isLoading}
           onCancel={() => setBalanceDialogOpen(false)}
           onConfirm={handleBalanceConfirm}

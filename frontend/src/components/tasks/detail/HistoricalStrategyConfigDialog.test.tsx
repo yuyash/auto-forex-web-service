@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import type { Strategy } from '../../../services/api/strategies';
 import type { TaskExecution } from '../../../types/execution';
 import { HistoricalStrategyConfigDialog } from './HistoricalStrategyConfigDialog';
@@ -69,5 +70,46 @@ describe('HistoricalStrategyConfigDialog', () => {
     expect(screen.getByText('Entry Price Buffer')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
+  });
+
+  it('renders an edit link when the displayed snapshot is current', () => {
+    const config: NonNullable<TaskExecution['strategy_config']> = {
+      id: 'config-1',
+      name: 'Current Config',
+      strategy_type: 'snowball',
+      configuration_revision: 3,
+      configuration_hash: 'hash-3',
+      parameters: {
+        reseed_on_all_pending: true,
+      },
+      current: {
+        id: 'config-1',
+        name: 'Current Config',
+        strategy_type: 'snowball',
+        configuration_revision: 3,
+        configuration_hash: 'hash-3',
+        parameters: {
+          reseed_on_all_pending: true,
+        },
+      },
+      initial: {},
+      revisions: [],
+    };
+
+    render(
+      <MemoryRouter>
+        <HistoricalStrategyConfigDialog
+          open
+          onClose={() => undefined}
+          config={config}
+          strategies={strategies}
+          editHref="/configurations/config-1/edit"
+        />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole('link', { name: /edit configuration/i })
+    ).toHaveAttribute('href', '/configurations/config-1/edit');
   });
 });

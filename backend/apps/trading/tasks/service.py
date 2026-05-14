@@ -22,6 +22,7 @@ from apps.trading.models import (
     BacktestTask,
     TradingTask,
 )
+from apps.trading.services.task_policy import ACCOUNT_BLOCKING_STATUSES
 from apps.trading.tasks.lifecycle_commands import TaskLifecycleCommands
 from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
 from apps.trading.tasks.lifecycle_writes import TaskLifecycleWriter
@@ -247,16 +248,10 @@ class TaskService:
 
     @staticmethod
     def _ensure_trading_account_available(task: TradingTask) -> None:
-        active_statuses = [
-            TaskStatus.STARTING,
-            TaskStatus.RUNNING,
-            TaskStatus.PAUSED,
-            TaskStatus.STOPPING,
-        ]
         active_task = (
             TradingTask.objects.filter(
                 oanda_account=task.oanda_account,
-                status__in=active_statuses,
+                status__in=ACCOUNT_BLOCKING_STATUSES,
             )
             .exclude(pk=task.pk)
             .first()

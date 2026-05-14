@@ -2,13 +2,13 @@
 
 from decimal import Decimal
 from typing import Any
-from uuid import uuid4
 
 from django.db import models
 
 from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus, TradingMode
-from apps.trading.models.base import ExecutableTaskBehaviorMixin, UUIDModel
+from apps.trading.models.base import ExecutableTaskModel
+from apps.trading.services.task_policy import ACCOUNT_BLOCKING_STATUSES
 
 
 class TradingTaskManager(models.Manager["TradingTask"]):
@@ -35,7 +35,7 @@ class TradingTaskManager(models.Manager["TradingTask"]):
         return self.filter(config=config)
 
 
-class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
+class TradingTask(ExecutableTaskModel):
     """
     Persistent live trading task with reusable configuration.
 
@@ -68,86 +68,6 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
         related_name="trading_tasks",
         help_text="OANDA account used for trading",
     )
-    name = models.CharField(
-        max_length=255,
-        help_text="Human-readable name for this trading task",
-    )
-    description = models.TextField(
-        blank=True,
-        default="",
-        help_text="Optional description of this trading task",
-    )
-    status = models.CharField(
-        max_length=20,
-        default=TaskStatus.CREATED,
-        choices=TaskStatus.choices,
-        db_index=True,
-        help_text="Current task status",
-    )
-
-    # Execution tracking.  ``execution_id`` identifies the logical execution
-    # run and is used as the scope key for all execution-scoped data
-    # (ExecutionState, positions, events, trades, etc.).  It is preserved
-    # across resume so the new run can load the previous run's state.
-    execution_id = models.UUIDField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="UUID identifying the current execution run",
-    )
-    # ``celery_task_id`` is the physical Celery job identifier passed to
-    # ``apply_async(task_id=...)``.  It is rotated on every resume so the
-    # new Celery task is not suppressed by the revoke list of the previous
-    # run.  Rotating this instead of ``execution_id`` keeps the execution
-    # state continuous across resumes.
-    celery_task_id = models.UUIDField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Celery task_id for the current worker invocation",
-    )
-    dispatch_idempotency_key = models.UUIDField(
-        default=uuid4,
-        db_index=True,
-        help_text=(
-            "Idempotency key rotated for each dispatch. "
-            "Workers skip stale redeliveries with mismatched keys."
-        ),
-    )
-
-    # Execution State
-    started_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when the task execution started",
-    )
-    completed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when the task execution completed",
-    )
-
-    # Error Tracking
-    error_message = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Error message if task failed",
-    )
-    error_traceback = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Full error traceback if task failed",
-    )
-    debug_options = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text='Debug settings. Supported: {"tracemalloc": true}',
-    )
-
-    sell_on_stop = models.BooleanField(
-        default=False,
-        help_text="Close all positions when task is stopped",
-    )
     dry_run = models.BooleanField(
         default=False,
         help_text="Simulate order execution without placing real orders on OANDA",
@@ -162,7 +82,7 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
         decimal_places=5,
         null=True,
         blank=True,
-        default=Decimal("0.01"),
+        default=None,
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
     trading_mode = models.CharField(
@@ -206,35 +126,6 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
         help_text="Cap on the backoff delay between retries (seconds).",
     )
 
-    # Drain-on-stop settings.  DRAIN mode keeps the task running but refuses
-    # new entries while incrementally closing open positions that are at
-    # breakeven or better.  Once all positions are closed the task stops on
-    # its own.  Hours == 0 means drain forever (no timeout).
-    drain_duration_hours = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Maximum duration in hours for drain-on-stop before forcing a stop. "
-            "Set to 0 to wait indefinitely for positions to reach breakeven."
-        ),
-    )
-
-    # Market-aware idle mode.  When the forex market closes the task can
-    # switch to IDLE, skipping tick processing and trade decisions, and then
-    # resume automatically once the market reopens. Values in minutes.
-    market_idle_pre_close_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Switch to IDLE this many minutes before the market closes. "
-            "0 disables pre-close idling."
-        ),
-    )
-    market_idle_resume_delay_minutes = models.PositiveIntegerField(
-        default=0,
-        help_text=(
-            "Wait this many minutes after the market reopens before resuming trading. "
-            "0 disables the resume delay."
-        ),
-    )
     live_tick_stale_guard_enabled = models.BooleanField(
         default=True,
         help_text=(
@@ -272,16 +163,7 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
             ),
             models.UniqueConstraint(
                 fields=["oanda_account"],
-                condition=models.Q(
-                    status__in=[
-                        TaskStatus.STARTING,
-                        TaskStatus.RUNNING,
-                        TaskStatus.PAUSED,
-                        TaskStatus.IDLE,
-                        TaskStatus.DRAINING,
-                        TaskStatus.STOPPING,
-                    ]
-                ),
+                condition=models.Q(status__in=ACCOUNT_BLOCKING_STATUSES),
                 name="uniq_active_trading_task_per_account",
             ),
             models.CheckConstraint(
@@ -316,6 +198,16 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
+    @property
+    def account_currency(self) -> str:
+        """Return the account base currency supplied by the linked OANDA account."""
+        return str(getattr(self.oanda_account, "currency", "") or "").strip().upper()
+
+    @property
+    def display_currency(self) -> str:
+        """Trading tasks display account values in their OANDA account currency."""
+        return self.account_currency
+
     def copy(self, new_name: str) -> "TradingTask":
         """
         Create a copy of this task with a new name.
@@ -338,20 +230,9 @@ class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
         if TradingTask.objects.filter(user=self.user, name=new_name).exists():
             raise ValueError(f"A trading task with name '{new_name}' already exists")
 
-        # Create copy
-        new_task = TradingTask.objects.create(
-            user=self.user,
-            config=self.config,
-            oanda_account=self.oanda_account,
-            name=new_name,
-            description=self.description,
-            status=TaskStatus.CREATED,
-            dry_run=self.dry_run,
-            trading_mode=self.trading_mode,
-            hedging_enabled=self.hedging_enabled,
-            instrument=self.instrument,
-            pip_size=self.pip_size,
-        )
+        copy_values = self.copy_values()
+        copy_values.update(name=new_name, status=TaskStatus.CREATED)
+        new_task = TradingTask.objects.create(**copy_values)
 
         return new_task
 

@@ -30,6 +30,7 @@ import {
   Clear as ClearIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import {
@@ -45,8 +46,14 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
-import { formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatMoneyAmount,
+  formatMoneyPayload,
+} from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { TableFilterBar } from '../../common/TableFilterBar';
 import {
@@ -80,10 +87,11 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   strategyType,
 }) => {
   const { t } = useTranslation('common');
-  const { formatDateTime } = useDateTimeFormatter({
+  const { timezone, language, formatDateTime } = useDateTimeFormatter({
     includeSeconds: true,
     includeTimezone: true,
   });
+  const { separators } = useNumberFormatter();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [sortField, setSortField] = useState('timestamp');
@@ -176,6 +184,73 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     },
     []
   );
+
+  const formatCurrencyPrefix = useCallback(
+    (currency?: string | null): string => {
+      const symbol = currency ? currencySymbol(currency) : '';
+      return symbol.length > 2 ? `${symbol} ` : symbol;
+    },
+    []
+  );
+
+  const formatSignedMoney = useCallback(
+    (value: number, currency?: string | null): string =>
+      formatMoneyAmount(
+        value,
+        currency,
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+          signed: true,
+        },
+        separators
+      ),
+    [separators]
+  );
+
+  const formatPriceWithCurrency = useCallback(
+    (
+      value: string | number | null | undefined,
+      currency?: string | null,
+      digits = 5
+    ): string => {
+      const formatted = formatPrice(value, digits);
+      return formatted === '-'
+        ? formatted
+        : `${formatCurrencyPrefix(currency)}${formatted}`;
+    },
+    [formatCurrencyPrefix, formatPrice]
+  );
+
+  const formatTradePnl = useCallback(
+    (row: TaskTrade): string => {
+      const money = row.pnl_display_money ?? row.pnl_money;
+      if (money) {
+        return formatMoneyPayload(
+          money,
+          {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+            signed: true,
+          },
+          separators
+        );
+      }
+      if (row.pnl == null || row.pnl === '') return '-';
+      const value = parseFloat(row.pnl);
+      if (!Number.isFinite(value)) return '-';
+      return formatSignedMoney(value, row.pnl_currency || row.price_currency);
+    },
+    [formatSignedMoney, separators]
+  );
+
+  const tradePnlNumericValue = useCallback((row: TaskTrade): number | null => {
+    const rawAmount =
+      row.pnl_display_money?.amount ?? row.pnl_money?.amount ?? row.pnl;
+    if (rawAmount == null || rawAmount === '') return null;
+    const value = Number(rawAmount);
+    return Number.isFinite(value) ? value : null;
+  }, []);
 
   const columns: Column<TaskTrade>[] = [
     {
@@ -290,7 +365,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 120,
       minWidth: 120,
       align: 'right',
-      render: (row: TaskTrade) => formatPrice(row.price, 5),
+      render: (row: TaskTrade) =>
+        formatPriceWithCurrency(row.price, row.price_currency, 5),
     },
     {
       id: 'pnl',
@@ -299,17 +375,28 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 90,
       align: 'right',
       render: (row: TaskTrade) => {
-        if (row.pnl == null || row.pnl === '') return '-';
-        const value = parseFloat(row.pnl);
-        if (!Number.isFinite(value)) return '-';
+        const value = tradePnlNumericValue(row);
+        if (value == null) return '-';
         return (
-          <Typography
-            variant="body2"
-            color={value >= 0 ? 'success.main' : 'error.main'}
-            fontWeight="bold"
-          >
-            {`¥${formatAppNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 0, signed: true })}`}
-          </Typography>
+          <MoneyAmountText
+            money={row.pnl_display_money ?? row.pnl_money}
+            fallbackAmount={value}
+            fallbackCurrency={row.pnl_currency || row.price_currency}
+            options={{
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+              signed: true,
+            }}
+            separators={separators}
+            conversionContext={row.display_conversion_context}
+            timezone={timezone}
+            language={language}
+            typographyProps={{
+              variant: 'body2',
+              color: value >= 0 ? 'success.main' : 'error.main',
+              fontWeight: 'bold',
+            }}
+          />
         );
       },
     },
@@ -407,7 +494,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 90,
       align: 'right',
       render: (row: TaskTrade) =>
-        row.stop_loss_price ? `¥${formatPrice(row.stop_loss_price, 3)}` : '-',
+        row.stop_loss_price
+          ? formatPriceWithCurrency(row.stop_loss_price, row.price_currency, 3)
+          : '-',
     },
     {
       id: 'is_rebuild',
@@ -477,13 +566,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       replayed_at: (r) =>
         r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
       units: (r) => (r.units != null ? formatAppNumber(Number(r.units)) : '-'),
-      price: (r) => formatPrice(r.price, 5),
-      pnl: (r) => {
-        if (r.pnl == null || r.pnl === '') return '-';
-        const value = parseFloat(r.pnl);
-        if (!Number.isFinite(value)) return '-';
-        return `¥${formatAppNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 0, signed: true })}`;
-      },
+      price: (r) => formatPriceWithCurrency(r.price, r.price_currency, 5),
+      pnl: (r) => formatTradePnl(r),
       pips: (r) => {
         if (!pipSize || !r.entry_price || !r.price) return '-';
         const isClose =
@@ -510,7 +594,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         r.retracement_count != null ? String(r.retracement_count) : '-',
       description: (r) => r.description || '-',
       stop_loss_price: (r) =>
-        r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
+        r.stop_loss_price
+          ? formatPriceWithCurrency(r.stop_loss_price, r.price_currency, 3)
+          : '-',
       is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
     };
     const { headers, formatRow } = buildCopyHandler(
@@ -520,7 +606,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
   }, [
-    formatPrice,
+    formatPriceWithCurrency,
+    formatTradePnl,
     formatTimestamp,
     pageRowIds,
     pipSize,

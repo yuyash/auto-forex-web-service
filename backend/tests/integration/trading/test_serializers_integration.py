@@ -13,6 +13,7 @@ from rest_framework.test import APIRequestFactory
 
 from apps.market.models import TickData
 from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.money import Money
 from apps.trading.models import ExecutionState
 from apps.trading.serializers.backtest import (
     BacktestTaskCreateSerializer,
@@ -59,6 +60,21 @@ class TestBacktestTaskSerializer:
         assert data["status"] == task.status
         assert data["max_tick_gap_hours"] == task.max_tick_gap_hours
         assert "initial_balance" in data
+        assert (
+            data["initial_balance_money"]
+            == Money.coerce(task.initial_balance, task.account_currency).as_dict()
+        )
+        assert (
+            data["commission_per_trade_money"]
+            == Money.coerce(task.commission_per_trade, task.account_currency).as_dict()
+        )
+        assert data["instrument_context"]["instrument"] == task.instrument
+        assert data["instrument_context"]["effective_pip_size"] == "0.01"
+        assert data["instrument_context"]["pip_size_matches_instrument"] is True
+        assert data["money_context"]["account_currency"] == task.account_currency
+        assert data["money_context"]["display_currency"] == task.effective_display_currency
+        assert data["money_context"]["initial_balance_money"] == data["initial_balance_money"]
+        assert data["money_context"]["display_uses_account_currency"] is True
         assert "start_time" in data
         assert "end_time" in data
         assert "created_at" in data
@@ -66,6 +82,7 @@ class TestBacktestTaskSerializer:
         assert "progress" not in data
         assert "current_tick" not in data
         assert "account_currency" in data
+        assert "display_currency" in data
 
 
 @pytest.mark.django_db
@@ -112,6 +129,8 @@ class TestBacktestTaskCreateSerializer:
         assert task.user == user
         assert task.config == config
         assert task.name == "Test Backtest"
+        assert task.account_currency == "USD"
+        assert task.display_currency == "USD"
         assert task.max_tick_gap_hours == 120
 
     def test_create_persists_max_tick_gap_hours(self):
@@ -297,8 +316,15 @@ class TestTradingTaskSerializer:
         assert data["strategy_type"] == task.config.strategy_type
         assert data["account_id"] == task.oanda_account.pk
         assert data["account_name"] == task.oanda_account.account_id
+        assert data["account_currency"] == task.oanda_account.currency
+        assert data["display_currency"] == task.oanda_account.currency
         assert data["name"] == task.name
         assert data["status"] == task.status
+        assert data["instrument_context"]["instrument"] == task.instrument
+        assert data["instrument_context"]["effective_pip_size"] == "0.01"
+        assert data["money_context"]["account_currency"] == task.oanda_account.currency
+        assert data["money_context"]["display_currency"] == task.oanda_account.currency
+        assert data["money_context"]["account_currency_source"] == "oanda_account"
         assert "has_strategy_state" in data
         assert "can_resume" in data
         # current_tick is now served via /summary/ endpoint only
@@ -494,6 +520,11 @@ class TestTradingTaskSummary:
         )
 
         assert result.execution.account_currency == "JPY"
+        assert result.execution.display_currency == "JPY"
+        assert result.execution.current_balance_display_money == {
+            "amount": "3000000",
+            "currency": "JPY",
+        }
         assert result.execution.recovery_status == "warning"
         assert result.execution.recovery_warnings == ["broker drift warning"]
         assert result.execution.resume_cursor_timestamp is not None

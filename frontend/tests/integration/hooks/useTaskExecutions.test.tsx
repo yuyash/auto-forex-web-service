@@ -30,7 +30,7 @@ describe('useTaskExecution', () => {
       started_at: '2026-01-01T00:00:00Z',
       completed_at: '2026-01-01T00:05:00Z',
       error_message: null,
-      error_traceback: null,
+      error_code: null,
       duration: 300,
       created_at: '2026-01-01T00:00:00Z',
     });
@@ -60,7 +60,7 @@ describe('useTaskExecution', () => {
       started_at: '2026-01-01T00:00:00Z',
       completed_at: null,
       error_message: null,
-      error_traceback: null,
+      error_code: null,
       duration: null,
       created_at: '2026-01-01T00:00:00Z',
     });

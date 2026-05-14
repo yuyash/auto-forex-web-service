@@ -172,6 +172,7 @@
     "currentBalance": "現在残高",
     "adjustBalance": "残高変更",
     "newCurrentBalance": "変更後の現在残高",
+    "newCurrentBalanceWithCurrency": "変更後の現在残高（{{currency}}）",
     "balanceAdjustmentTitle": "バックテスト残高を変更",
     "balanceAdjustmentReason": "理由",
     "balanceAdjustmentInvalid": "0以上の残高を入力してください。",
@@ -202,6 +203,7 @@
     "pipSizeOptional": "Pipサイズ（任意）",
     "pipSizeHelperText": "空欄にするとOANDAアカウントから自動取得します",
     "pipSizeHelperTextLong": "空欄にすると通貨ペアから自動導出します。一般的な値：0.0001（EUR_USD）、0.01（USD_JPY）",
+    "pipSizeMetadataHelperText": "{{instrument}} の既定Pipサイズは {{pipSize}}（{{base}}/{{quote}}）です。",
     "instrumentPlaceholder": "例：EUR_USD、USD_JPY",
     "instrumentHelperText": "バックテストする通貨ペア",
     "tickGranularity": "リプレイ粒度",
@@ -302,6 +304,7 @@
     "resumedSuccessfully": "バックテストタスクが正常に再開されました",
     "restartedSuccessfully": "バックテストタスクが正常に再起動されました",
     "balanceAdjustedSuccessfully": "バックテスト残高を更新しました",
+    "balanceAdjustedSuccessfullyWithBalance": "バックテスト残高を {{balance}} に更新しました",
     "deletedSuccessfully": "バックテストタスクが正常に削除されました",
     "cannotDeleteRunning": "実行中のタスクは削除できません。先に停止してください。"
   },

@@ -2,14 +2,23 @@
 
 import logging
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
 from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
+from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.serializers.money import TaskMoneyContextSerializer
+from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
+from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
+)
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,11 +39,16 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    account_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.CharField(read_only=True)
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
-    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -50,17 +64,22 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
+            "money_context",
             "name",
             "description",
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
             "pip_size",
+            "instrument_context",
             "status",
             "execution_id",
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             # Broker API retry policy
             "api_retry_max_attempts",
             "api_retry_backoff_base_seconds",
@@ -93,12 +112,17 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
             "status",
             "execution_id",
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "pip_size",
+            "instrument_context",
+            "money_context",
             "has_strategy_state",
             "can_resume",
             "action_policy",
@@ -118,6 +142,24 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="trading").as_dict()
 
+    def get_error_message(self, obj: TradingTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: TradingTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
+
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="trading").as_dict()
+
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
     """
@@ -134,7 +176,13 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    account_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.CharField(read_only=True)
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -150,17 +198,22 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "account_id",
             "account_name",
             "account_type",
+            "account_currency",
+            "display_currency",
+            "money_context",
             "name",
             "description",
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
             "pip_size",
+            "instrument_context",
             "status",
             "execution_id",
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "api_retry_max_attempts",
             "api_retry_backoff_base_seconds",
             "api_retry_backoff_max_seconds",
@@ -180,6 +233,24 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     def get_action_policy(self, obj: TradingTask) -> dict[str, bool]:
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="trading").as_dict()
+
+    def get_error_message(self, obj: TradingTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: TradingTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
+
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: TradingTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="trading").as_dict()
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):

@@ -262,8 +262,6 @@ class UserLoginView(APIView):
         user.reset_failed_login()
         RateLimiter.reset_failed_attempts(ip_address)
 
-        token = JWTService().generate_token(user)
-
         self.security_events.log_login_success(
             user=user,
             ip_address=ip_address,
@@ -283,6 +281,7 @@ class UserLoginView(APIView):
             ip_address=ip_address,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
+        token = jwt_service.generate_token(user, session=user_session)
 
         response = Response(
             {

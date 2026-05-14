@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -24,6 +30,7 @@ import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
+import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
 import {
@@ -39,8 +46,17 @@ import { logger } from '../../utils/logger';
 import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import {
+  currencyCodeSchema,
+  optionalCurrencyCodeSchema,
+} from '../tasks/forms/currencyValidation';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
-import { useFirstTick } from '../../hooks/useMarketConfig';
+import {
+  useFirstTick,
+  useSupportedInstruments,
+} from '../../hooks/useMarketConfig';
+import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
+import { normalizeInstrumentName } from '../../utils/instruments';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -122,6 +138,8 @@ const backtestTaskUpdateSchema = z
         message: 'Initial balance must be a number',
       })
       .positive('Initial balance must be greater than zero'),
+    account_currency: currencyCodeSchema,
+    display_currency: optionalCurrencyCodeSchema,
     commission_per_trade: z.coerce
       .number({
         message: 'Commission must be a number',
@@ -304,6 +322,12 @@ export default function BacktestTaskUpdateForm({
       ...initialData,
       name: taskName,
       description: taskDescription ?? '',
+      account_currency:
+        initialData.account_currency || DEFAULT_ACCOUNT_CURRENCY,
+      display_currency:
+        initialData.display_currency ||
+        initialData.account_currency ||
+        DEFAULT_ACCOUNT_CURRENCY,
     },
   });
 
@@ -352,6 +376,25 @@ export default function BacktestTaskUpdateForm({
   const selectedTickWindowValueMode = watch('tick_window_value_mode');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
+  const watchedAccountCurrency =
+    watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
+  const watchedDisplayCurrency = watch('display_currency') || '';
+  const previousAccountCurrencyRef = useRef(watchedAccountCurrency);
+
+  useEffect(() => {
+    const previousAccountCurrency = previousAccountCurrencyRef.current;
+    if (
+      watchedAccountCurrency &&
+      (!watchedDisplayCurrency ||
+        watchedDisplayCurrency === previousAccountCurrency)
+    ) {
+      setValue('display_currency', watchedAccountCurrency, {
+        shouldDirty: watchedDisplayCurrency !== watchedAccountCurrency,
+        shouldValidate: false,
+      });
+    }
+    previousAccountCurrencyRef.current = watchedAccountCurrency;
+  }, [setValue, watchedAccountCurrency, watchedDisplayCurrency]);
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
@@ -362,6 +405,21 @@ export default function BacktestTaskUpdateForm({
   } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
     enabled: watchedInitialPositionsEnabled === true,
   });
+  const { instruments: availableInstruments, metadata: instrumentMetadata } =
+    useSupportedInstruments();
+  const selectedInstrumentMetadata = watchedInstrument
+    ? instrumentMetadata[normalizeInstrumentName(watchedInstrument)]
+    : undefined;
+  const pipSizeHelperText = selectedInstrumentMetadata
+    ? t('backtest:form.pipSizeMetadataHelperText', {
+        defaultValue:
+          'Default pip size for {{instrument}} is {{pipSize}} ({{base}}/{{quote}}).',
+        instrument: selectedInstrumentMetadata.normalized_name,
+        pipSize: selectedInstrumentMetadata.pip_size,
+        base: selectedInstrumentMetadata.base_currency,
+        quote: selectedInstrumentMetadata.quote_currency,
+      })
+    : t('backtest:form.pipSizeHelperText');
   const replaySettingsChanged =
     selectedTickGranularity !== initialTickGranularity ||
     selectedTickWindowValueMode !== initialTickWindowValueMode;
@@ -586,8 +644,12 @@ export default function BacktestTaskUpdateForm({
               <InstrumentSelector
                 value={field.value}
                 onChange={field.onChange}
+                availableInstrument={availableInstruments}
                 error={errors.instrument?.message}
-                helperText={errors.instrument?.message as string}
+                helperText={
+                  (errors.instrument?.message as string) ||
+                  t('backtest:form.instrumentHelperText')
+                }
               />
             )}
           />
@@ -602,9 +664,48 @@ export default function BacktestTaskUpdateForm({
                 value={field.value}
                 onChange={field.onChange}
                 label={t('backtest:detail.initialBalance')}
-                currency="USD"
+                currency={watchedAccountCurrency}
                 error={errors.initial_balance?.message}
                 helperText={errors.initial_balance?.message}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Controller
+            name="account_currency"
+            control={control}
+            render={({ field }) => (
+              <CurrencyCodeField
+                id="backtest-update-account-currency"
+                label={t('common:labels.accountCurrency', {
+                  defaultValue: 'Account currency',
+                })}
+                value={field.value}
+                onChange={field.onChange}
+                error={!!errors.account_currency}
+                helperText={errors.account_currency?.message}
+                required
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Controller
+            name="display_currency"
+            control={control}
+            render={({ field }) => (
+              <CurrencyCodeField
+                id="backtest-update-display-currency"
+                label={t('common:labels.displayCurrency', {
+                  defaultValue: 'Display currency',
+                })}
+                value={field.value || watchedAccountCurrency}
+                onChange={field.onChange}
+                error={!!errors.display_currency}
+                helperText={errors.display_currency?.message}
               />
             )}
           />
@@ -642,10 +743,7 @@ export default function BacktestTaskUpdateForm({
                 inputMode="decimal"
                 inputProps={{ min: 0, step: 0.00001 }}
                 error={!!errors.pip_size}
-                helperText={
-                  errors.pip_size?.message ||
-                  t('backtest:form.pipSizeHelperText')
-                }
+                helperText={errors.pip_size?.message || pipSizeHelperText}
               />
             )}
           />

@@ -1,6 +1,12 @@
 // Backtest Task types
 import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
+import type { TaskInstrumentContext } from './instrument';
+import type {
+  CurrencyConversionContext,
+  MoneyAmount,
+  TaskMoneyContext,
+} from './money';
 
 export type BacktestInitialPositionStatus =
   | 'open'
@@ -38,9 +44,14 @@ export interface BacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  initial_balance_money?: MoneyAmount;
   account_currency?: string;
+  display_currency?: string;
+  money_context?: TaskMoneyContext;
   commission_per_trade: string;
+  commission_per_trade_money?: MoneyAmount;
   pip_size?: string;
+  instrument_context?: TaskInstrumentContext;
   instrument: string;
   tick_granularity: string;
   tick_window_value_mode: string;
@@ -66,6 +77,7 @@ export interface BacktestTask {
   started_at?: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;
@@ -79,6 +91,8 @@ export interface BacktestTaskCreateData {
   start_time: string;
   end_time: string;
   initial_balance: number | string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument: string;
@@ -109,6 +123,8 @@ export interface BacktestTaskFormData {
   start_time: string;
   end_time: string;
   initial_balance: number;
+  account_currency: string;
+  display_currency?: string;
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
@@ -137,6 +153,8 @@ export interface BacktestTaskUpdateData {
   start_time?: string;
   end_time?: string;
   initial_balance?: number | string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument?: string;
@@ -167,8 +185,19 @@ export interface BacktestBalanceAdjustmentResult {
   task_id: string;
   execution_id: string;
   previous_balance: string;
+  previous_balance_currency: string;
+  previous_balance_money: MoneyAmount;
+  previous_balance_display_money?: MoneyAmount | null;
   current_balance: string;
+  current_balance_currency: string;
+  current_balance_money: MoneyAmount;
+  current_balance_display_money?: MoneyAmount | null;
   adjustment: string;
+  adjustment_currency: string;
+  adjustment_money: MoneyAmount;
+  adjustment_display_money?: MoneyAmount | null;
+  display_conversion_context?: CurrencyConversionContext | null;
+  currency: string;
   state_version: number;
 }
 

@@ -26,6 +26,7 @@ import {
   getStrategyConfigSnapshotName,
   getStrategyConfigSnapshotRevision,
   getStrategyConfigSnapshotType,
+  isStrategyConfigSnapshotCurrent,
 } from '../../../utils/strategyConfigRevision';
 
 interface TradingOverviewTabProps {
@@ -75,6 +76,15 @@ export function TradingOverviewTab({
   const isSuperuser = Boolean(user?.is_superuser);
   const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
   const hasExecutionConfigSnapshot = Boolean(historicalStrategyConfig);
+  const canEditDisplayedStrategyConfig = Boolean(
+    task.config_id &&
+      historicalStrategyConfig?.id === task.config_id &&
+      isStrategyConfigSnapshotCurrent(
+        historicalStrategyConfig,
+        task.config_revision,
+        task.config_hash
+      )
+  );
 
   // When viewing a historical execution, prefer snapshot values
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
@@ -281,6 +291,11 @@ export function TradingOverviewTab({
         onClose={() => setHistoricalConfigOpen(false)}
         config={historicalStrategyConfig}
         strategies={strategies}
+        editHref={
+          canEditDisplayedStrategyConfig
+            ? `/configurations/${task.config_id}/edit`
+            : undefined
+        }
       />
     </Box>
   );

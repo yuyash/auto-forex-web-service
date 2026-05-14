@@ -17,14 +17,10 @@ from apps.trading.strategies.snowball.calculators import (
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
-from apps.trading.strategies.snowball.grid_policy import preceding_entry_bound
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-)
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY, SnowballGridPolicy
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.entries import Entry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 
 logger = getLogger(__name__)
@@ -462,10 +458,12 @@ class CounterSlotSelector:
         *,
         calculator_provider: SnowballCalculatorProvider | None = None,
         price_service: CounterPriceService | None = None,
+        grid_policy: SnowballGridPolicy | None = None,
         logger_: Logger | None = None,
     ) -> None:
         self.calculator_provider = calculator_provider or SnowballCalculatorProvider()
         self.price_service = price_service or CounterPriceService()
+        self.grid_policy = grid_policy or SNOWBALL_GRID_POLICY
         self.logger = logger_ or logger
 
     def head_context(self, *, cycle: SnowballCycle, layer: Layer) -> CounterHeadContext | None:
@@ -596,7 +594,7 @@ class CounterSlotSelector:
         new_price: Decimal,
     ) -> bool:
         """Return True when opening at new_price would break cross-layer order."""
-        bound = preceding_entry_bound(cycle, layer, slot.index)
+        bound = self.grid_policy.preceding_entry_bound(cycle, layer, slot.index)
         if bound is None:
             return False
         if cycle.direction == Direction.LONG:
@@ -887,9 +885,14 @@ class SnowballCounterAddProcessor:
         slot_selector: CounterSlotSelector | None = None,
         entry_factory: CounterEntryFactory | None = None,
         price_service: CounterPriceService | None = None,
+        grid_policy: SnowballGridPolicy | None = None,
     ) -> None:
         self.price_service = price_service or CounterPriceService()
-        self.slot_selector = slot_selector or CounterSlotSelector(price_service=self.price_service)
+        self.grid_policy = grid_policy or SNOWBALL_GRID_POLICY
+        self.slot_selector = slot_selector or CounterSlotSelector(
+            price_service=self.price_service,
+            grid_policy=self.grid_policy,
+        )
         self.entry_factory = entry_factory or CounterEntryFactory(price_service=self.price_service)
 
     def process(

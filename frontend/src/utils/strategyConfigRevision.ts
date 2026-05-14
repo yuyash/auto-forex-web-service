@@ -33,6 +33,24 @@ export function getStrategyConfigSnapshotHash(
   );
 }
 
+export function isStrategyConfigSnapshotCurrent(
+  config: StrategyConfigSnapshot | null | undefined,
+  currentRevision?: number | null,
+  currentHash?: string | null
+): boolean {
+  const snapshotHash = getStrategyConfigSnapshotHash(config);
+  if (snapshotHash && currentHash) {
+    return snapshotHash === currentHash;
+  }
+
+  const snapshotRevision = getStrategyConfigSnapshotRevision(config);
+  return Boolean(
+    snapshotRevision &&
+      currentRevision &&
+      Number(snapshotRevision) === Number(currentRevision)
+  );
+}
+
 export function formatStrategyConfigRevisionLabel(
   name: string,
   revision?: number | null

@@ -56,7 +56,12 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
-import { currencySymbol, formatAppNumber } from '../../utils/numberFormat';
+import {
+  formatMoneyAmount,
+  formatMoneyPayload,
+} from '../../utils/numberFormat';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BacktestTaskCardProps {
@@ -336,21 +341,38 @@ export default function BacktestTaskCard({
   });
   const { summary } = summaryData;
   const progress = summary.task.progress;
-  const quoteCurrency = currencySymbol(
-    currentTask.instrument.split('_').at(-1) ||
-      summary.execution.displayCurrency ||
-      currentTask.account_currency ||
-      ''
-  );
+  const pnlCurrency =
+    summary.pnl.currency ||
+    quoteCurrencyFromInstrument(currentTask.instrument) ||
+    currentTask.display_currency ||
+    summary.execution.accountCurrency ||
+    currentTask.account_currency ||
+    '';
   const realizedPnl = summary.pnl.realized;
   const unrealizedPnl = summary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
-  const formatPnl = (value: number): string =>
-    `${formatAppNumber(value, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-      signed: true,
-    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
+  const pnlDisplayMoney = {
+    total: summary.pnl.totalDisplayMoney,
+    realized: summary.pnl.realizedDisplayMoney,
+    unrealized: summary.pnl.unrealizedDisplayMoney,
+  };
+  const pnlConversionTooltip = formatCurrencyConversionContext(
+    summary.pnl.displayConversionContext,
+    { language, separators: appSettings, t, timezone }
+  );
+  const formatPnl = (
+    value: number,
+    money?: { amount: string; currency: string } | null
+  ): string =>
+    money
+      ? formatMoneyPayload(money, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        })
+      : formatMoneyAmount(value, pnlCurrency, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        });
   const pnlItems = [
     {
       key: 'total',
@@ -508,18 +530,29 @@ export default function BacktestTaskCard({
                   >
                     {item.label}
                   </Typography>
-                  <Typography
-                    variant="body1"
-                    component="div"
-                    color={item.value >= 0 ? 'success.main' : 'error.main'}
-                    sx={{
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      overflowWrap: 'anywhere',
-                    }}
+                  <Tooltip
+                    title={pnlConversionTooltip}
+                    arrow
+                    disableHoverListener={!pnlConversionTooltip}
                   >
-                    {formatPnl(item.value)}
-                  </Typography>
+                    <Typography
+                      variant="body1"
+                      component="div"
+                      color={item.value >= 0 ? 'success.main' : 'error.main'}
+                      sx={{
+                        fontWeight: 700,
+                        lineHeight: 1.25,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {formatPnl(
+                        item.value,
+                        pnlDisplayMoney[
+                          item.key as keyof typeof pnlDisplayMoney
+                        ]
+                      )}
+                    </Typography>
+                  </Tooltip>
                 </Box>
               </Grid>
             ))}

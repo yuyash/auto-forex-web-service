@@ -9,6 +9,12 @@ from urllib.parse import urlencode
 
 from rest_framework.request import Request
 
+from apps.trading.services.metric_money import (
+    MONEY_COMPANION_KEYS,
+    money_related_keys,
+    requested_money_roots,
+)
+
 
 def ensure_metrics_dict(value: Any) -> dict:
     """Ensure a metrics value is a dict, including double-encoded JSON strings."""
@@ -25,10 +31,31 @@ def ensure_metrics_dict(value: Any) -> dict:
 
 
 def filter_metrics(metrics: dict, metric_keys: tuple[str, ...]) -> dict:
-    """Return only requested metric keys when a metrics key filter is present."""
+    """Return requested metric keys and their currency/money companions."""
     if not metric_keys:
         return metrics
-    return {key: metrics[key] for key in metric_keys if key in metrics}
+
+    filtered: dict[str, Any] = {}
+    requested_roots = requested_money_roots(metric_keys)
+    requested_keys = set(metric_keys)
+    for key in metric_keys:
+        if key in metrics:
+            filtered[key] = metrics[key]
+
+    for root in requested_roots:
+        for key in money_related_keys(root):
+            if key in metrics:
+                filtered[key] = metrics[key]
+
+    if requested_roots:
+        for key in MONEY_COMPANION_KEYS:
+            if key in metrics:
+                filtered[key] = metrics[key]
+        for key in requested_keys:
+            if key.endswith("_currency") and key in metrics:
+                filtered[key] = metrics[key]
+
+    return filtered
 
 
 def paginated_envelope(

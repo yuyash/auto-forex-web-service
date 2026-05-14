@@ -122,6 +122,8 @@ export interface BacktestTaskRequest {
   description?: string;
   data_source?: DataSourceEnum;
   initial_balance?: string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: string;
   instrument?: string;
   initial_positions_enabled?: boolean;
@@ -136,6 +138,8 @@ export interface PatchedBacktestTaskCreateRequest {
   description?: string;
   data_source?: DataSourceEnum;
   initial_balance?: string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: string;
   instrument?: string;
   initial_positions_enabled?: boolean;

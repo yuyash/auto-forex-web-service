@@ -2,6 +2,8 @@
 export * from './auth';
 export * from './backtest';
 export * from './chart';
+export * from './money';
+export * from './instrument';
 
 // Export specific types from order to avoid conflicts with chart
 export type { OrderFilters, OrdersResponse } from './order';

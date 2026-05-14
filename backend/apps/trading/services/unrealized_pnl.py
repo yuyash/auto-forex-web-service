@@ -21,6 +21,7 @@ def update_unrealized_pnl(
     bid_price: Decimal,
     ask_price: Decimal,
     execution_id=None,
+    pnl_currency: str = "",
 ) -> int:
     """Bulk-update unrealized_pnl for all open positions of a task.
 
@@ -34,6 +35,7 @@ def update_unrealized_pnl(
         bid_price: Latest executable bid price from the tick.
         ask_price: Latest executable ask price from the tick.
         execution_id: Optional execution UUID filter.
+        pnl_currency: Currency code for the calculated quote-currency PnL.
 
     Returns:
         Number of rows updated.
@@ -51,8 +53,8 @@ def update_unrealized_pnl(
         default=F("units"),
     )
 
-    return Position.objects.filter(**filters).update(
-        unrealized_pnl=Case(
+    update_values: dict[str, object] = {
+        "unrealized_pnl": Case(
             When(
                 direction="long",
                 then=(Value(bid_price) - F("entry_price")) * abs_units,
@@ -62,5 +64,9 @@ def update_unrealized_pnl(
                 then=(F("entry_price") - Value(ask_price)) * abs_units,
             ),
             default=Value(Decimal("0")),
-        )
-    )
+        ),
+    }
+    if pnl_currency:
+        update_values["unrealized_pnl_currency"] = str(pnl_currency).upper()
+
+    return Position.objects.filter(**filters).update(**update_values)

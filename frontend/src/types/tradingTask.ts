@@ -1,6 +1,8 @@
 // Trading Task types
 import type { TaskActionPolicy, TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
+import type { TaskInstrumentContext } from './instrument';
+import type { TaskMoneyContext } from './money';
 
 export interface TradingTask {
   id: string;
@@ -14,6 +16,9 @@ export interface TradingTask {
   account_id: string;
   account_name: string;
   account_type: 'live' | 'practice';
+  account_currency: string;
+  display_currency: string;
+  money_context?: TaskMoneyContext;
   name: string;
   description: string;
   status: TaskStatus;
@@ -38,7 +43,9 @@ export interface TradingTask {
   started_at?: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   pip_size?: string;
+  instrument_context?: TaskInstrumentContext;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

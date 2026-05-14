@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import logging
 import secrets
-from hashlib import sha256
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 import jwt
@@ -51,7 +51,7 @@ class JWTService:
             else settings.JWT_EXPIRATION_DELTA
         )
 
-    def generate_token(self, user: Any) -> str:
+    def generate_token(self, user: Any, *, session: Any | None = None) -> str:
         """Generate a JWT for the given user."""
         now = datetime.now(UTC)
         expiration = now + timedelta(seconds=int(self._expiration_delta_seconds))
@@ -59,9 +59,13 @@ class JWTService:
         payload = {
             "user_id": user.id,
             "is_staff": user.is_staff,
+            "jti": secrets.token_urlsafe(24),
+            "auth_version": int(getattr(user, "auth_token_version", 0) or 0),
             "iat": int(now.timestamp()),
             "exp": int(expiration.timestamp()),
         }
+        if session is not None and getattr(session, "pk", None):
+            payload["sid"] = int(session.pk)
 
         token = jwt.encode(payload, self._secret_key, algorithm=self._algorithm)
         if isinstance(token, memoryview):
@@ -84,16 +88,45 @@ class JWTService:
 
     def get_user_from_token(self, token: str) -> Any | None:
         """Return user from token if valid."""
-        from apps.accounts.models import User
-
         payload = self.decode_token(token)
         if not payload:
             return None
+        return self.get_user_from_payload(payload)
+
+    def get_user_from_payload(self, payload: dict[str, Any]) -> Any | None:
+        """Return the token user after server-side revocation checks."""
+        from apps.accounts.models import User
+        from apps.accounts.models.security import UserSession
+
+        user_id = payload.get("user_id")
+        if user_id is None:
+            return None
 
         try:
-            return User.objects.get(id=payload["user_id"])
+            user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return None
+
+        auth_version = payload.get("auth_version")
+        if auth_version is not None:
+            try:
+                token_version_matches = int(auth_version) == int(user.auth_token_version)
+            except (TypeError, ValueError):
+                return None
+            if not token_version_matches:
+                return None
+
+        session_id = payload.get("sid")
+        if session_id is not None:
+            session_is_active = UserSession.objects.filter(
+                pk=session_id,
+                user=user,
+                is_active=True,
+            ).exists()
+            if not session_is_active:
+                return None
+
+        return user
 
     def refresh_token(self, token: str) -> str | None:
         """Refresh an existing JWT token."""
@@ -158,8 +191,8 @@ class JWTService:
 
         with transaction.atomic():
             rt = (
-                RefreshToken.objects.select_for_update()
-                .select_related("user")
+                RefreshToken.objects.select_for_update(of=("self",))
+                .select_related("user", "session")
                 .filter(token=token_hash)
                 .first()
             )
@@ -168,8 +201,8 @@ class JWTService:
                 # hashing migration. Once all environments are migrated, these
                 # rows should no longer exist.
                 rt = (
-                    RefreshToken.objects.select_for_update()
-                    .select_related("user")
+                    RefreshToken.objects.select_for_update(of=("self",))
+                    .select_related("user", "session")
                     .filter(token=refresh_token_value)
                     .first()
                 )
@@ -197,13 +230,15 @@ class JWTService:
             user = rt.user
             if not user.is_active or getattr(user, "is_locked", False):
                 return None
+            if rt.session_id and not rt.session.is_active:
+                return None
 
             # Revoke old token while the row lock is held to serialize rotation.
             rt.revoke()
 
             # Issue new pair within the same transaction so competing refreshes
             # observe the revoked state after the first rotation commits.
-            new_access = self.generate_token(user)
+            new_access = self.generate_token(user, session=rt.session)
             new_refresh = self.create_refresh_token(
                 user,
                 session=rt.session,

@@ -172,6 +172,7 @@
     "currentBalance": "Current Balance",
     "adjustBalance": "Adjust Balance",
     "newCurrentBalance": "New Current Balance",
+    "newCurrentBalanceWithCurrency": "New Current Balance ({{currency}})",
     "balanceAdjustmentTitle": "Adjust Backtest Balance",
     "balanceAdjustmentReason": "Reason",
     "balanceAdjustmentInvalid": "Enter a balance of zero or greater.",
@@ -202,6 +203,7 @@
     "pipSizeOptional": "Pip Size (Optional)",
     "pipSizeHelperText": "Leave empty to auto-fetch from OANDA account",
     "pipSizeHelperTextLong": "Leave empty to auto-derive from instrument. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)",
+    "pipSizeMetadataHelperText": "Default pip size for {{instrument}} is {{pipSize}} ({{base}}/{{quote}}).",
     "instrumentPlaceholder": "e.g., EUR_USD, USD_JPY",
     "instrumentHelperText": "Trading pair to backtest",
     "tickGranularity": "Replay Granularity",
@@ -302,6 +304,7 @@
     "resumedSuccessfully": "Backtest task resumed successfully",
     "restartedSuccessfully": "Backtest task restarted successfully",
     "balanceAdjustedSuccessfully": "Backtest balance updated successfully",
+    "balanceAdjustedSuccessfullyWithBalance": "Backtest balance updated to {{balance}}",
     "deletedSuccessfully": "Backtest task deleted successfully",
     "cannotDeleteRunning": "Cannot delete running task. Stop it first."
   },

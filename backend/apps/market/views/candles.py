@@ -339,9 +339,10 @@ class CandleDataView(APIView):
 
     def _build_oanda_error_response(self, *, oanda_status: int, body: Any) -> Response:
         """Translate OANDA error status to API response."""
-        upstream_message = ""
-        if isinstance(body, dict):
-            upstream_message = str(body.get("errorMessage") or body.get("message") or "")
+        logger.warning(
+            "OANDA candles request failed",
+            extra={"oanda_status": oanda_status, "upstream_body_type": type(body).__name__},
+        )
 
         if oanda_status in (401, 403):
             return Response(
@@ -349,7 +350,6 @@ class CandleDataView(APIView):
                     "error": "OANDA authentication/authorization failed",
                     "error_code": "OANDA_AUTH_FAILED",
                     "oanda_status": oanda_status,
-                    "details": upstream_message or None,
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
@@ -364,7 +364,6 @@ class CandleDataView(APIView):
                     "error": "Invalid request to OANDA candles endpoint",
                     "error_code": "OANDA_BAD_REQUEST",
                     "oanda_status": oanda_status,
-                    "details": upstream_message or None,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )

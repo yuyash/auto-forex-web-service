@@ -57,6 +57,7 @@ class TickData(models.Model):
             # Single field indexes for basic queries
             models.Index(fields=["instrument"]),
             models.Index(fields=["timestamp"]),
+            models.Index(fields=["instrument", "-timestamp"], name="tick_instr_ts_desc_idx"),
             # Index for data retention cleanup
             models.Index(fields=["created_at"]),
         ]

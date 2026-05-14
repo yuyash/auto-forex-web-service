@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { DataSource } from '../../../types/common';
+import {
+  currencyCodeSchema,
+  optionalCurrencyCodeSchema,
+} from './currencyValidation';
 
 // Data source values array for Zod validation
 const dataSourceValues = [
@@ -75,6 +79,8 @@ export const backtestTaskSchema = z
         message: 'Initial balance must be a number',
       })
       .positive('Initial balance must be greater than zero'),
+    account_currency: currencyCodeSchema,
+    display_currency: optionalCurrencyCodeSchema,
     commission_per_trade: z.coerce
       .number({
         message: 'Commission must be a number',
@@ -306,6 +312,8 @@ export type BacktestTaskSchemaOutput = {
   start_time: string;
   end_time: string;
   initial_balance: number;
+  account_currency: string;
+  display_currency?: string;
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;

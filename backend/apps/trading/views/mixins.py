@@ -22,6 +22,8 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.serializers.lifecycle import PositionLifecycleResponseSerializer
+from apps.trading.services.position_money import PositionMoneyEnricher
 from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
@@ -248,6 +250,11 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
         )
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            page = PositionMoneyEnricher.for_task(
+                task=task,
+                task_type_label=self.task_type_label,
+            ).enrich_positions(list(page))
         serializer = PositionSerializer(
             page,
             many=True,
@@ -259,16 +266,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
         tags=["Trading"],
         parameters=[PositionLifecycleQueryParamsSchemaSerializer],
         responses={
-            200: inline_serializer(
-                "TaskPositionLifecycleResponse",
-                fields={
-                    "requested_position_id": serializers.CharField(),
-                    "matched_position_id": serializers.UUIDField(),
-                    "position_ids": serializers.ListField(child=serializers.UUIDField()),
-                    "positions": serializers.ListField(child=serializers.DictField()),
-                    "chain_realized_pnl": serializers.CharField(allow_null=True),
-                },
-            )
+            200: PositionLifecycleResponseSerializer,
         },
         description="Retrieve the full lifecycle chain for one position, including rebuild links.",
     )
@@ -296,6 +294,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
                     task_id=task.pk,
                     execution_id=query.execution_id,
                     position_id_query=query.position_id,
+                    task=task,
                 )
             )
         except ValueError as exc:

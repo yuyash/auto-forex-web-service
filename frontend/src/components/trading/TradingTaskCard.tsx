@@ -53,9 +53,14 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
-import { formatAppNumber, currencySymbol } from '../../utils/numberFormat';
+import {
+  formatMoneyAmount,
+  formatMoneyPayload,
+} from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
+import { quoteCurrencyFromInstrument } from '../../utils/instrumentCurrency';
+import { formatCurrencyConversionContext } from '../../utils/currencyConversion';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -377,23 +382,44 @@ export default function TradingTaskCard({
     });
   };
 
-  const quoteCurrency = currencySymbol(
-    currentTask.instrument.split('_').at(-1) ||
-      currentTask.latest_execution?.quote_currency ||
-      taskSummary.execution.displayCurrency ||
-      'JPY'
-  );
+  const pnlCurrency =
+    taskSummary.pnl.currency ||
+    currentTask.latest_execution?.quote_currency ||
+    quoteCurrencyFromInstrument(currentTask.instrument) ||
+    currentTask.display_currency ||
+    currentTask.account_currency ||
+    taskSummary.execution.displayCurrency ||
+    taskSummary.execution.accountCurrency ||
+    '';
   const formatPnl = (value: number): string => {
-    return `${formatAppNumber(value, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    return formatMoneyAmount(value, pnlCurrency, {
       signed: true,
-    })}${quoteCurrency ? ` ${quoteCurrency}` : ''}`;
+      currencyPlacement: 'suffix',
+    });
   };
 
   const realizedPnl = taskSummary.pnl.realized;
   const unrealizedPnl = taskSummary.pnl.unrealized;
   const totalPnl = realizedPnl + unrealizedPnl;
+  const pnlDisplayMoney = {
+    total: taskSummary.pnl.totalDisplayMoney,
+    realized: taskSummary.pnl.realizedDisplayMoney,
+    unrealized: taskSummary.pnl.unrealizedDisplayMoney,
+  };
+  const pnlConversionTooltip = formatCurrencyConversionContext(
+    taskSummary.pnl.displayConversionContext,
+    { language, separators: appSettings, t, timezone }
+  );
+  const formatPnlItem = (
+    value: number,
+    money?: { amount: string; currency: string } | null
+  ): string =>
+    money
+      ? formatMoneyPayload(money, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        })
+      : formatPnl(value);
   const pnlItems = [
     {
       key: 'total',
@@ -561,18 +587,29 @@ export default function TradingTaskCard({
                   >
                     {item.label}
                   </Typography>
-                  <Typography
-                    variant="body1"
-                    component="div"
-                    color={item.value >= 0 ? 'success.main' : 'error.main'}
-                    sx={{
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      overflowWrap: 'anywhere',
-                    }}
+                  <Tooltip
+                    title={pnlConversionTooltip}
+                    arrow
+                    disableHoverListener={!pnlConversionTooltip}
                   >
-                    {formatPnl(item.value)}
-                  </Typography>
+                    <Typography
+                      variant="body1"
+                      component="div"
+                      color={item.value >= 0 ? 'success.main' : 'error.main'}
+                      sx={{
+                        fontWeight: 700,
+                        lineHeight: 1.25,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {formatPnlItem(
+                        item.value,
+                        pnlDisplayMoney[
+                          item.key as keyof typeof pnlDisplayMoney
+                        ]
+                      )}
+                    </Typography>
+                  </Tooltip>
                 </Box>
               </Grid>
             ))}

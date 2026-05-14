@@ -1,11 +1,20 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
+import type {
+  CurrencyConversionContext,
+  MoneyAmount,
+  TaskMoneyContext,
+} from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
 import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
+import type { TaskInstrumentContext } from '../../types/instrument';
+
+export type BackendMoneyAmount = MoneyAmount;
 
 export interface BackendExecutionMetrics {
   total_return?: string;
   total_pnl?: string;
+  realized_pnl?: string;
   unrealized_pnl?: string;
   total_pnl_quote?: string;
   realized_pnl_quote?: string;
@@ -15,7 +24,30 @@ export interface BackendExecutionMetrics {
   losing_trades?: number;
   win_rate?: string;
   pnl_currency?: string;
+  account_currency?: string;
   quote_currency?: string;
+  display_currency?: string;
+  current_balance?: string;
+  initial_balance?: string;
+  current_balance_currency?: string;
+  initial_balance_currency?: string;
+  total_pnl_money?: BackendMoneyAmount;
+  realized_pnl_money?: BackendMoneyAmount;
+  unrealized_pnl_money?: BackendMoneyAmount;
+  total_pnl_quote_money?: BackendMoneyAmount;
+  realized_pnl_quote_money?: BackendMoneyAmount;
+  unrealized_pnl_quote_money?: BackendMoneyAmount;
+  total_pnl_display_money?: BackendMoneyAmount;
+  realized_pnl_display_money?: BackendMoneyAmount;
+  unrealized_pnl_display_money?: BackendMoneyAmount;
+  current_balance_money?: BackendMoneyAmount;
+  current_balance_display_money?: BackendMoneyAmount;
+  initial_balance_money?: BackendMoneyAmount;
+  display_conversion_context?: CurrencyConversionContext;
+  quote_to_account_rate?: string;
+  quote_to_account_rate_source?: string;
+  quote_to_account_rate_as_of?: string | null;
+  quote_to_account_rate_path?: string[];
 }
 
 export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
@@ -32,7 +64,7 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
-  error_traceback?: string | null;
+  error_code?: string | null;
   duration?: number | null;
   created_at: string;
 }
@@ -62,9 +94,14 @@ export interface BackendBacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  initial_balance_money?: BackendMoneyAmount;
   account_currency?: string;
+  display_currency?: string;
+  money_context?: TaskMoneyContext;
   commission_per_trade: string;
+  commission_per_trade_money?: BackendMoneyAmount;
   pip_size?: string | null;
+  instrument_context?: TaskInstrumentContext;
   instrument: string;
   hedging_enabled: boolean;
   sell_on_stop: boolean;
@@ -75,6 +112,7 @@ export interface BackendBacktestTask {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
   can_resume?: boolean;
   action_policy?: TaskActionPolicy;
@@ -106,17 +144,22 @@ export interface BackendTradingTask {
   account_id: number;
   account_name: string;
   account_type: 'live' | 'practice';
+  account_currency: string;
+  display_currency: string;
+  money_context?: TaskMoneyContext;
   name: string;
   description: string;
   sell_on_stop: boolean;
   dry_run: boolean;
   hedging_enabled: boolean;
   pip_size?: string | null;
+  instrument_context?: TaskInstrumentContext;
   status: string;
   execution_id?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
   has_strategy_state: boolean;
   can_resume: boolean;

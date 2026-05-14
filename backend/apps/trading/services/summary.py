@@ -12,15 +12,24 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import cast
+from typing import Any, cast
 
 from django.core.cache import cache
-from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, F, IntegerField, Sum, Value, When
 
+from apps.trading.money import AccountCurrency, Money
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.utils import AccountCurrency, Instrument
+from apps.trading.services.conversion_context import CurrencyConversionContext
+from apps.trading.services.display_money import DISPLAY_MONEY
+from apps.trading.services.fx_rates import FX_CONVERSION, FxConversionService
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
+from apps.trading.utils import Instrument
 
 
 @dataclass(frozen=True)
@@ -71,12 +80,32 @@ class PnlInfo:
 
     realized: Decimal
     unrealized: Decimal
+    currency: str | None
+    realized_display_money: dict[str, str] | None = None
+    unrealized_display_money: dict[str, str] | None = None
+    total_display_money: dict[str, str] | None = None
+    display_conversion_context: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready PnL data."""
+        total = self.realized + self.unrealized
         return {
             "realized": self.realized,
             "unrealized": self.unrealized,
+            "currency": self.currency,
+            "realized_money": (
+                Money.coerce(self.realized, self.currency).as_dict() if self.currency else None
+            ),
+            "unrealized_money": (
+                Money.coerce(self.unrealized, self.currency).as_dict() if self.currency else None
+            ),
+            "total_money": (
+                Money.coerce(total, self.currency).as_dict() if self.currency else None
+            ),
+            "realized_display_money": self.realized_display_money,
+            "unrealized_display_money": self.unrealized_display_money,
+            "total_display_money": self.total_display_money,
+            "display_conversion_context": self.display_conversion_context,
         }
 
 
@@ -112,8 +141,11 @@ class ExecutionInfo:
     current_balance: Decimal | None
     ticks_processed: int
     account_currency: str | None
+    current_balance_currency: str | None
+    current_balance_money: dict[str, str] | None
     current_balance_display: Decimal | None
     display_currency: str | None
+    current_balance_display_money: dict[str, str] | None
     resume_cursor_timestamp: str | None
     margin_ratio: Decimal | None
     current_atr: Decimal | None
@@ -122,6 +154,7 @@ class ExecutionInfo:
     recovery_blockers: list[str]
     reconciled_at: str | None
     tick_delivery: TickDeliveryInfo | None
+    current_balance_display_conversion_context: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return serializer-ready execution data."""
@@ -129,8 +162,14 @@ class ExecutionInfo:
             "current_balance": self.current_balance,
             "ticks_processed": self.ticks_processed,
             "account_currency": self.account_currency,
+            "current_balance_currency": self.current_balance_currency,
+            "current_balance_money": self.current_balance_money,
             "current_balance_display": self.current_balance_display,
             "display_currency": self.display_currency,
+            "current_balance_display_money": self.current_balance_display_money,
+            "current_balance_display_conversion_context": (
+                self.current_balance_display_conversion_context
+            ),
             "resume_cursor_timestamp": self.resume_cursor_timestamp,
             "margin_ratio": self.margin_ratio,
             "current_atr": self.current_atr,
@@ -152,6 +191,7 @@ class TaskInfo:
     started_at: str | None
     completed_at: str | None
     error_message: str | None
+    error_code: str | None
     stop_reason: str | None
     progress: int
 
@@ -162,6 +202,7 @@ class TaskInfo:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "error_message": self.error_message,
+            "error_code": self.error_code,
             "stop_reason": self.stop_reason,
             "progress": self.progress,
         }
@@ -341,6 +382,7 @@ def compute_task_summary(
             )
         )
         .aggregate(
+            closed_position_count=Count("pk"),
             realized_pnl=Sum("_pnl_value"),
             winning_trades=Sum(
                 Case(
@@ -361,13 +403,13 @@ def compute_task_summary(
     realized_pnl = realized_agg["realized_pnl"] or Decimal("0")
     winning_trades = int(realized_agg["winning_trades"] or 0)
     losing_trades = int(realized_agg["losing_trades"] or 0)
+    closed_position_count = int(realized_agg["closed_position_count"] or 0)
 
     # Unrealized PnL: sum of open positions' unrealized_pnl
     open_qs = Position.objects.filter(**base_filter, is_open=True)
-    unrealized_agg = open_qs.aggregate(unrealized_pnl=Sum("unrealized_pnl"))
-    unrealized_pnl = unrealized_agg["unrealized_pnl"] or Decimal("0")
-    open_position_count = open_qs.count()
-    open_size_agg = open_qs.aggregate(
+    open_agg = open_qs.aggregate(
+        unrealized_pnl=Sum("unrealized_pnl"),
+        open_position_count=Count("pk"),
         open_long_units=Sum(
             Case(
                 When(direction="long", then=_abs_units()),
@@ -383,9 +425,8 @@ def compute_task_summary(
             )
         ),
     )
-
-    # Closed position count
-    closed_position_count = Position.objects.filter(**base_filter, is_open=False).count()
+    unrealized_pnl = open_agg["unrealized_pnl"] or Decimal("0")
+    open_position_count = int(open_agg["open_position_count"] or 0)
 
     # Total trade count
     trade_filter: dict = {"task_type": task_type, "task_id": task_id}
@@ -400,9 +441,14 @@ def compute_task_summary(
     tick_bid = None
     tick_ask = None
     tick_mid = None
+    tick_as_of = None
     account_currency: str | None = None
+    current_balance_currency: str | None = None
+    current_balance_money: dict[str, str] | None = None
     current_balance_display: Decimal | None = None
     display_currency: str | None = None
+    current_balance_display_money: dict[str, str] | None = None
+    current_balance_display_conversion_context: dict[str, object] | None = None
     resume_cursor_timestamp: str | None = None
     margin_ratio: Decimal | None = None
     current_atr: Decimal | None = None
@@ -421,8 +467,10 @@ def compute_task_summary(
     state = ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()
     if state:
         current_balance = state.current_balance
+        current_balance_currency = str(state.current_balance_currency or "").upper() or None
         ticks_processed = state.ticks_processed
         if state.last_tick_timestamp:
+            tick_as_of = state.last_tick_timestamp
             tick_timestamp = state.last_tick_timestamp.isoformat()
         if state.resume_cursor_timestamp:
             resume_cursor_timestamp = state.resume_cursor_timestamp.isoformat()
@@ -478,11 +526,14 @@ def compute_task_summary(
     error_message = None
 
     task_obj = _get_task(task_type, task_id)
+    quote_ccy: str | None = None
     if task_obj:
         status = task_obj.status
         started_at = task_obj.started_at.isoformat() if task_obj.started_at else None
         completed_at = task_obj.completed_at.isoformat() if task_obj.completed_at else None
-        error_message = task_obj.error_message
+        error_message = task_public_error_message(task_obj.status)
+        quote_ccy = Instrument(getattr(task_obj, "instrument", "")).quote_currency or None
+    error_code = task_public_error_code(status)
 
     stop_reason = _compute_stop_reason(
         task_type=task_type,
@@ -510,41 +561,87 @@ def compute_task_summary(
             unrealized_pnl = runtime_unrealized_quote
 
     # Currency conversion for display
+    fx_conversion = FX_CONVERSION.with_cache()
     if task_obj:
         if task_type == "backtest":
             account_currency = getattr(task_obj, "account_currency", None)
         else:
             account = getattr(task_obj, "oanda_account", None)
             account_currency = getattr(account, "currency", None)
+    account_currency = str(account_currency or "").upper() or None
+    current_balance_currency = current_balance_currency or account_currency
+    if current_balance is not None and current_balance_currency:
+        current_balance_money = Money.coerce(current_balance, current_balance_currency).as_dict()
 
+    instrument = Instrument(getattr(task_obj, "instrument", "") if task_obj else "")
+    preferred_display_currency = ""
+    if task_obj:
+        preferred_display_currency = (
+            str(
+                getattr(task_obj, "effective_display_currency", "")
+                or getattr(task_obj, "display_currency", "")
+                or ""
+            )
+            .strip()
+            .upper()
+        )
     if task_obj and task_type == "backtest":
-        instrument = Instrument(getattr(task_obj, "instrument", ""))
-        quote_ccy = instrument.quote_currency
-        account = AccountCurrency(account_currency or "")
-        if (
-            account.is_known
-            and quote_ccy
-            and not account.matches(quote_ccy)
-            and current_balance is not None
-            and tick_mid is not None
-            and tick_mid > 0
-        ):
-            display_currency = quote_ccy
-            current_balance_display = current_balance * tick_mid
-        elif account.is_known and quote_ccy and account.matches(quote_ccy):
-            # Account currency matches quote currency — no conversion needed
-            display_currency = account.code
-            current_balance_display = current_balance
+        quote_ccy = quote_ccy or instrument.quote_currency
+        account = AccountCurrency(current_balance_currency or account_currency or "")
+        if not preferred_display_currency and account.is_known:
+            preferred_display_currency = account.code
+    elif task_obj and task_type == "trading":
+        account = AccountCurrency(current_balance_currency or account_currency or "")
+        if account.is_known:
+            preferred_display_currency = account.code
+    else:
+        account = AccountCurrency(current_balance_currency or account_currency or "")
+
+    if current_balance is not None and account.is_known and preferred_display_currency:
+        converted_balance = DISPLAY_MONEY.convert_many(
+            {"current_balance": Money.coerce(current_balance, account.code)},
+            target_currency=preferred_display_currency,
+            instrument=instrument.name,
+            mid_price=tick_mid,
+            as_of=tick_as_of,
+            fx_conversion=fx_conversion,
+        )
+        current_balance_display_money = converted_balance.values["current_balance"]
+        if current_balance_display_money is not None:
+            display_currency = current_balance_display_money["currency"]
+            current_balance_display = Decimal(current_balance_display_money["amount"])
+        current_balance_display_conversion_context = converted_balance.conversion_context
+
+    pnl_currency = quote_ccy or current_balance_currency or account_currency
+    display_currency = display_currency or preferred_display_currency or account_currency
+    pnl_display_money = _pnl_display_money(
+        realized=realized_pnl,
+        unrealized=unrealized_pnl,
+        source_currency=pnl_currency,
+        target_currency=display_currency,
+        instrument=instrument.name,
+        mid_price=tick_mid,
+        as_of=tick_as_of,
+        fx_conversion=fx_conversion,
+    )
 
     return TaskSummary(
         timestamp=tick_timestamp,
-        pnl=PnlInfo(realized=realized_pnl, unrealized=unrealized_pnl),
+        pnl=PnlInfo(
+            realized=realized_pnl,
+            unrealized=unrealized_pnl,
+            currency=pnl_currency,
+            realized_display_money=pnl_display_money["realized"],
+            unrealized_display_money=pnl_display_money["unrealized"],
+            total_display_money=pnl_display_money["total"],
+            display_conversion_context=pnl_display_money["conversion_context"],
+        ),
         counts=CountsInfo(
             total_trades=total_trades,
             open_positions=open_position_count,
             closed_positions=closed_position_count,
-            open_long_units=int(open_size_agg["open_long_units"] or 0),
-            open_short_units=int(open_size_agg["open_short_units"] or 0),
+            open_long_units=int(open_agg["open_long_units"] or 0),
+            open_short_units=int(open_agg["open_short_units"] or 0),
             winning_trades=winning_trades,
             losing_trades=losing_trades,
         ),
@@ -552,8 +649,12 @@ def compute_task_summary(
             current_balance=current_balance,
             ticks_processed=ticks_processed,
             account_currency=account_currency,
+            current_balance_currency=current_balance_currency,
+            current_balance_money=current_balance_money,
             current_balance_display=current_balance_display,
             display_currency=display_currency,
+            current_balance_display_money=current_balance_display_money,
+            current_balance_display_conversion_context=(current_balance_display_conversion_context),
             resume_cursor_timestamp=resume_cursor_timestamp,
             margin_ratio=margin_ratio,
             current_atr=current_atr,
@@ -574,6 +675,7 @@ def compute_task_summary(
             started_at=started_at,
             completed_at=completed_at,
             error_message=error_message,
+            error_code=error_code,
             stop_reason=stop_reason,
             progress=_compute_progress(task_type, task_obj, state),
         ),
@@ -634,6 +736,51 @@ def _metric_decimal(metrics: dict[str, object], key: str) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def _pnl_display_money(
+    *,
+    realized: Decimal,
+    unrealized: Decimal,
+    source_currency: str | None,
+    target_currency: str | None,
+    instrument: str,
+    mid_price: Decimal | None,
+    as_of: datetime | None,
+    fx_conversion: FxConversionService = FX_CONVERSION,
+) -> dict[str, Any]:
+    """Return realized/unrealized/total PnL converted to display currency."""
+    if not source_currency or not target_currency:
+        return {
+            "realized": None,
+            "unrealized": None,
+            "total": None,
+            "conversion_context": CurrencyConversionContext.unavailable(
+                source_currency=source_currency,
+                target_currency=target_currency,
+            ).as_dict(),
+        }
+
+    source = AccountCurrency(source_currency)
+    target = AccountCurrency(target_currency)
+    converted = DISPLAY_MONEY.convert_many(
+        {
+            "realized": Money.coerce(realized, source.code),
+            "unrealized": Money.coerce(unrealized, source.code),
+            "total": Money.coerce(realized + unrealized, source.code),
+        },
+        target_currency=target.code,
+        instrument=instrument,
+        mid_price=mid_price,
+        as_of=as_of,
+        fx_conversion=fx_conversion,
+    )
+    return {
+        "realized": converted.values["realized"],
+        "unrealized": converted.values["unrealized"],
+        "total": converted.values["total"],
+        "conversion_context": converted.conversion_context,
+    }
 
 
 def _tick_delivery_info(raw: object) -> TickDeliveryInfo | None:
@@ -778,9 +925,7 @@ def _compute_stop_reason(
     """Derive a human-readable stop reason for the overview tab.
 
     Priority:
-    1. For FAILED tasks, surface ``task.error_message`` (populated by the
-       executor). Fall back to the ``CeleryTaskStatus.status_message`` if
-       the DB field is empty.
+    1. For FAILED tasks, surface only a fixed public failure message.
     2. For terminal states (STOPPED/COMPLETED/PAUSED), return the
        ``CeleryTaskStatus.status_message`` from the matching execution
        when available (e.g. "Execution completed successfully",
@@ -803,12 +948,7 @@ def _compute_stop_reason(
     )
 
     if status == "failed":
-        err = (getattr(task, "error_message", None) or "").strip()
-        if err:
-            return err
-        if status_message and not _is_progress_only_status_message(status_message):
-            return status_message
-        return None
+        return task_public_error_message(status)
 
     if status_message and not _is_progress_only_status_message(status_message):
         return status_message

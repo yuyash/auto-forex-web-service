@@ -25,6 +25,7 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
@@ -41,8 +42,13 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
-import { formatAppNumber } from '../../../utils/numberFormat';
+import {
+  currencySymbol,
+  formatAppNumber,
+  formatMoneyAmount,
+} from '../../../utils/numberFormat';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
+import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { TaskPositionViewHeader } from './TaskPositionViewHeader';
@@ -76,10 +82,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   strategyType,
 }) => {
   const { t } = useTranslation('common');
-  const { formatDateTime } = useDateTimeFormatter({
+  const { timezone, language, formatDateTime } = useDateTimeFormatter({
     includeSeconds: true,
     includeTimezone: true,
   });
+  const { separators } = useNumberFormatter();
   const { strategies } = useStrategies();
   const strategyCloseReasonLabels = useMemo(
     () =>
@@ -152,9 +159,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const {
     summary: {
       pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
+      execution: { displayCurrency, accountCurrency },
     },
     refresh: refreshPnl,
   } = useTaskSummary(String(taskId), taskType, executionRunId);
+  const summaryCurrency = displayCurrency || accountCurrency;
 
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);
   React.useEffect(() => {
@@ -213,12 +222,84 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       useGrouping: false,
     });
 
-  const formatSignedYen = (value: number): string =>
-    `¥${formatAppNumber(value, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-      signed: true,
-    })}`;
+  const formatCurrencyPrefix = (currency?: string | null): string => {
+    const symbol = currency ? currencySymbol(currency) : '';
+    return symbol.length > 2 ? `${symbol} ` : symbol;
+  };
+
+  const formatPriceWithCurrency = (
+    value: string | number | null | undefined,
+    currency?: string | null,
+    digits = 3
+  ): string => {
+    const formatted = formatPrice(value, digits);
+    return formatted === '-'
+      ? formatted
+      : `${formatCurrencyPrefix(currency)}${formatted}`;
+  };
+
+  const formatSignedMoney = (value: number, currency?: string | null): string =>
+    formatMoneyAmount(
+      value,
+      currency,
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        signed: true,
+      },
+      separators
+    );
+
+  type PositionPnlKind = 'realized' | 'unrealized';
+
+  const positionPnlMoney = (row: TaskPosition, kind: PositionPnlKind) =>
+    kind === 'realized'
+      ? (row.realized_pnl_display_money ?? row.realized_pnl_money)
+      : (row.unrealized_pnl_display_money ?? row.unrealized_pnl_money);
+
+  const positionPnlNumericValue = (
+    row: TaskPosition,
+    kind: PositionPnlKind,
+    fallbackValue: number
+  ): number => {
+    const rawAmount = positionPnlMoney(row, kind)?.amount ?? fallbackValue;
+    const value = Number(rawAmount);
+    return Number.isFinite(value) ? value : fallbackValue;
+  };
+
+  const renderPositionPnl = (
+    row: TaskPosition,
+    kind: PositionPnlKind,
+    fallbackValue: number,
+    fallbackCurrency?: string | null
+  ) => {
+    const value = positionPnlNumericValue(row, kind, fallbackValue);
+    const conversionContext =
+      kind === 'realized'
+        ? row.realized_pnl_display_conversion_context
+        : row.unrealized_pnl_display_conversion_context;
+    return (
+      <MoneyAmountText
+        money={positionPnlMoney(row, kind)}
+        fallbackAmount={fallbackValue}
+        fallbackCurrency={fallbackCurrency}
+        options={{
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+          signed: true,
+        }}
+        separators={separators}
+        conversionContext={conversionContext}
+        timezone={timezone}
+        language={language}
+        typographyProps={{
+          variant: 'body2',
+          color: value >= 0 ? 'success.main' : 'error.main',
+          fontWeight: 'bold',
+        }}
+      />
+    );
+  };
 
   // --- Shared column fragments ---
   const idCol: Column<TaskPosition> = {
@@ -353,7 +434,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 110,
     minWidth: 80,
     align: 'right',
-    render: (r) => (r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-'),
+    render: (r) =>
+      formatPriceWithCurrency(r.entry_price, r.unrealized_pnl_currency, 3),
   };
   const exitPriceCol: Column<TaskPosition> = {
     id: 'exit_price',
@@ -361,7 +443,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 110,
     minWidth: 80,
     align: 'right',
-    render: (r) => (r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-'),
+    render: (r) =>
+      formatPriceWithCurrency(r.exit_price, r.unrealized_pnl_currency, 3),
   };
   const plannedExitPriceCol: Column<TaskPosition> = {
     id: 'planned_exit_price',
@@ -370,7 +453,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 90,
     align: 'right',
     render: (r) =>
-      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
+      formatPriceWithCurrency(
+        r.planned_exit_price,
+        r.unrealized_pnl_currency,
+        3
+      ),
   };
   const plannedExitFormulaCol: Column<TaskPosition> = {
     id: 'planned_exit_price_formula',
@@ -395,7 +482,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 90,
     align: 'right',
     render: (r) =>
-      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
+      formatPriceWithCurrency(r.stop_loss_price, r.unrealized_pnl_currency, 3),
   };
   const oandaTradeIdCol: Column<TaskPosition> = {
     id: 'oanda_trade_id',
@@ -549,33 +636,40 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     render: (r) => {
       const dir = knownDir ?? r.direction;
       if (!r.is_open && r.exit_price && r.entry_price) {
-        const ep = parseFloat(r.entry_price),
-          xp = parseFloat(r.exit_price),
-          u = Math.abs(r.units ?? 0);
-        const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
-        return (
-          <Typography
-            variant="body2"
-            color={val >= 0 ? 'success.main' : 'error.main'}
-            fontWeight="bold"
-          >
-            {formatSignedYen(val)}
-          </Typography>
+        const val =
+          r.realized_pnl != null
+            ? parseFloat(r.realized_pnl)
+            : (() => {
+                const ep = parseFloat(r.entry_price);
+                const xp = parseFloat(r.exit_price);
+                const u = Math.abs(r.units ?? 0);
+                return dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
+              })();
+        return renderPositionPnl(
+          r,
+          'realized',
+          val,
+          r.realized_pnl_currency || r.unrealized_pnl_currency
         );
       }
-      if (r.is_open && currentPrice != null && r.entry_price) {
-        const ep = parseFloat(r.entry_price),
-          u = Math.abs(r.units ?? 0);
+      if (
+        r.is_open &&
+        (r.unrealized_pnl != null || (currentPrice != null && r.entry_price))
+      ) {
         const val =
-          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
-        return (
-          <Typography
-            variant="body2"
-            color={val >= 0 ? 'success.main' : 'error.main'}
-            fontWeight="bold"
-          >
-            {formatSignedYen(val)}
-          </Typography>
+          r.unrealized_pnl != null
+            ? parseFloat(r.unrealized_pnl)
+            : (() => {
+                const ep = parseFloat(r.entry_price);
+                const u = Math.abs(r.units ?? 0);
+                const price = currentPrice ?? 0;
+                return dir === 'long' ? (price - ep) * u : (ep - price) * u;
+              })();
+        return renderPositionPnl(
+          r,
+          'unrealized',
+          val,
+          r.unrealized_pnl_currency
         );
       }
       return '-';
@@ -590,18 +684,20 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     align: 'right',
     render: (r) => {
       if (!r.exit_price || !r.entry_price) return '-';
-      const ep = parseFloat(r.entry_price),
-        xp = parseFloat(r.exit_price),
-        u = Math.abs(r.units ?? 0);
-      const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
-      return (
-        <Typography
-          variant="body2"
-          color={val >= 0 ? 'success.main' : 'error.main'}
-          fontWeight="bold"
-        >
-          {formatSignedYen(val)}
-        </Typography>
+      const val =
+        r.realized_pnl != null
+          ? parseFloat(r.realized_pnl)
+          : (() => {
+              const ep = parseFloat(r.entry_price);
+              const xp = parseFloat(r.exit_price);
+              const u = Math.abs(r.units ?? 0);
+              return dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
+            })();
+      return renderPositionPnl(
+        r,
+        'realized',
+        val,
+        r.realized_pnl_currency || r.unrealized_pnl_currency
       );
     },
   });
@@ -613,20 +709,18 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 100,
     align: 'right',
     render: (r) => {
-      if (currentPrice == null || !r.entry_price) return '-';
-      const ep = parseFloat(r.entry_price),
-        u = Math.abs(r.units ?? 0);
+      if (r.unrealized_pnl == null && (currentPrice == null || !r.entry_price))
+        return '-';
       const val =
-        dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
-      return (
-        <Typography
-          variant="body2"
-          color={val >= 0 ? 'success.main' : 'error.main'}
-          fontWeight="bold"
-        >
-          {formatSignedYen(val)}
-        </Typography>
-      );
+        r.unrealized_pnl != null
+          ? parseFloat(r.unrealized_pnl)
+          : (() => {
+              const ep = parseFloat(r.entry_price);
+              const u = Math.abs(r.units ?? 0);
+              const price = currentPrice ?? 0;
+              return dir === 'long' ? (price - ep) * u : (ep - price) * u;
+            })();
+      return renderPositionPnl(r, 'unrealized', val, r.unrealized_pnl_currency);
     },
   });
 
@@ -911,7 +1005,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             fontWeight="bold"
             color={pnlValue >= 0 ? 'success.main' : 'error.main'}
           >
-            {pnlLabel}: {formatSignedYen(pnlValue)}
+            {pnlLabel}: {formatSignedMoney(pnlValue, summaryCurrency)}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -1119,7 +1213,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 fontWeight="bold"
                 color={pnlValue >= 0 ? 'success.main' : 'error.main'}
               >
-                {pnlLabel}: {formatSignedYen(pnlValue)}
+                {pnlLabel}: {formatSignedMoney(pnlValue, summaryCurrency)}
               </Typography>
             )}
             <Tooltip title={t('common:columnConfig.configureColumns')}>
@@ -1302,7 +1396,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         totalPnl={totalPnl}
-        formattedTotalPnl={formatSignedYen(totalPnl)}
+        formattedTotalPnl={formatSignedMoney(totalPnl, summaryCurrency)}
       />
 
       <TaskPositionModeViews

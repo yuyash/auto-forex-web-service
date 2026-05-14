@@ -30,6 +30,12 @@ import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+} from '../../../types/money';
+import { MoneyAmountText } from '../../common/MoneyAmountText';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -66,6 +72,10 @@ interface PositionLifecycleEvent {
   description?: string | null;
   close_reason?: string | null;
   realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
+  realized_pnl_money?: MoneyAmountLike | null;
+  realized_pnl_display_money?: MoneyAmountLike | null;
+  realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
 }
 
 interface PositionLifecycleSummary {
@@ -86,6 +96,10 @@ interface PositionLifecycleSummary {
   stop_loss_price?: string | null;
   close_reason?: string | null;
   realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
+  realized_pnl_money?: MoneyAmountLike | null;
+  realized_pnl_display_money?: MoneyAmountLike | null;
+  realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
 }
 
 interface PositionLifecycleItem {
@@ -102,6 +116,18 @@ interface PositionLifecycleResponse {
   position_ids: string[];
   positions: PositionLifecycleItem[];
   chain_realized_pnl?: string | null;
+  chain_realized_pnl_currency?: string | null;
+  chain_realized_pnl_money?: MoneyAmountLike | null;
+  chain_realized_pnl_display_money?: MoneyAmountLike | null;
+  chain_realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
+}
+
+interface LifecycleRealizedPnlCarrier {
+  realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
+  realized_pnl_money?: MoneyAmountLike | null;
+  realized_pnl_display_money?: MoneyAmountLike | null;
+  realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
 }
 
 const formatTimestamp = (
@@ -119,15 +145,9 @@ const shortId = (value?: string | null): string =>
 
 function quoteCurrencySymbol(instrument?: string): string {
   if (!instrument) return '';
-  const quote = instrument.split('_')[1] ?? '';
+  const quote = quoteCurrencyFromInstrument(instrument) ?? '';
   const symbol = currencySymbol(quote);
   return symbol === quote ? `${quote} ` : symbol;
-}
-
-function quoteCurrencyDecimals(instrument?: string): number {
-  if (!instrument) return 3;
-  const quote = instrument.split('_')[1] ?? '';
-  return quote === 'JPY' ? 0 : 2;
 }
 
 const formatPrice = (value?: string | null, instrument?: string): string => {
@@ -142,22 +162,26 @@ const formatPrice = (value?: string | null, instrument?: string): string => {
     : value;
 };
 
-const formatSignedPnl = (
-  value?: string | null,
+const realizedPnlMoney = (
+  value: LifecycleRealizedPnlCarrier
+): MoneyAmountLike | null | undefined =>
+  value.realized_pnl_display_money ?? value.realized_pnl_money;
+
+const realizedPnlFallbackCurrency = (
+  value: LifecycleRealizedPnlCarrier,
   instrument?: string
-): string => {
-  if (!value) return '-';
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return value;
-  const sym = quoteCurrencySymbol(instrument);
-  const decimals = quoteCurrencyDecimals(instrument);
-  const text = `${sym}${formatAppNumber(Math.abs(parsed), {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}`;
-  if (parsed > 0) return `+${text}`;
-  if (parsed < 0) return `-${text}`;
-  return text;
+): string | null | undefined =>
+  value.realized_pnl_currency ?? quoteCurrencyFromInstrument(instrument);
+
+const hasRealizedPnl = (value: LifecycleRealizedPnlCarrier): boolean =>
+  value.realized_pnl != null || realizedPnlMoney(value) != null;
+
+const realizedPnlNumericValue = (
+  value: LifecycleRealizedPnlCarrier
+): number | null => {
+  const rawAmount = realizedPnlMoney(value)?.amount ?? value.realized_pnl;
+  const parsed = Number(rawAmount);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 function eventColor(
@@ -253,6 +277,7 @@ const LifecycleEventRow: React.FC<{
   closeReasonLabels?: Record<string, string>;
 }> = ({ event, timezone = 'UTC', instrument, closeReasonLabels }) => {
   const { t, i18n } = useTranslation('common');
+  const pnlValue = realizedPnlNumericValue(event);
   const relatedLabel =
     event.kind === 'rebuilt'
       ? t('tables.positions.lifecycle.fields.rebuiltFrom')
@@ -330,21 +355,28 @@ const LifecycleEventRow: React.FC<{
             value={formatPrice(event.planned_exit_price, instrument)}
           />
         ) : null}
-        {event.realized_pnl ? (
+        {hasRealizedPnl(event) ? (
           <LifecycleField
             label={t('tables.positions.realizedPnl')}
             value={
-              <Typography
-                component="span"
-                color={
-                  Number(event.realized_pnl) >= 0
-                    ? 'success.main'
-                    : 'error.main'
+              <MoneyAmountText
+                money={realizedPnlMoney(event)}
+                fallbackAmount={pnlValue}
+                fallbackCurrency={realizedPnlFallbackCurrency(
+                  event,
+                  instrument
+                )}
+                options={{ signed: true }}
+                conversionContext={
+                  event.realized_pnl_display_conversion_context
                 }
-                fontWeight={700}
-              >
-                {formatSignedPnl(event.realized_pnl, instrument)}
-              </Typography>
+                timezone={timezone}
+                language={i18n.language}
+                typographyProps={{
+                  color: (pnlValue ?? 0) >= 0 ? 'success.main' : 'error.main',
+                  fontWeight: 700,
+                }}
+              />
             }
           />
         ) : null}
@@ -398,7 +430,7 @@ const PositionCard: React.FC<{
 }> = ({ item, timezone = 'UTC', closeReasonLabels }) => {
   const { t, i18n } = useTranslation('common');
   const summary = item.summary;
-  const pnlValue = summary.realized_pnl ? Number(summary.realized_pnl) : null;
+  const pnlValue = realizedPnlNumericValue(summary);
 
   return (
     <Card variant="outlined">
@@ -463,13 +495,25 @@ const PositionCard: React.FC<{
                 {summary.position_id}
               </Typography>
             </Box>
-            {pnlValue != null ? (
-              <Typography
-                variant="h6"
-                color={pnlValue >= 0 ? 'success.main' : 'error.main'}
-              >
-                {formatSignedPnl(summary.realized_pnl, summary.instrument)}
-              </Typography>
+            {hasRealizedPnl(summary) ? (
+              <MoneyAmountText
+                money={realizedPnlMoney(summary)}
+                fallbackAmount={pnlValue}
+                fallbackCurrency={realizedPnlFallbackCurrency(
+                  summary,
+                  summary.instrument
+                )}
+                options={{ signed: true }}
+                conversionContext={
+                  summary.realized_pnl_display_conversion_context
+                }
+                timezone={timezone}
+                language={i18n.language}
+                typographyProps={{
+                  variant: 'h6',
+                  color: (pnlValue ?? 0) >= 0 ? 'success.main' : 'error.main',
+                }}
+              />
             ) : null}
           </Stack>
 
@@ -616,7 +660,7 @@ export const PositionLifecycleDialog: React.FC<
   timezone,
   closeReasonLabels,
 }) => {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const { user } = useAuth();
   const resolvedTimezone = timezone || user?.timezone || 'UTC';
   const [searchValue, setSearchValue] = useState(initialPositionId ?? '');
@@ -681,6 +725,19 @@ export const PositionLifecycleDialog: React.FC<
   }, [activePositionId, executionRunId, open, taskId, taskType]);
 
   const positions = useMemo(() => data?.positions ?? [], [data]);
+  const chainPnlCarrier: LifecycleRealizedPnlCarrier | null = data
+    ? {
+        realized_pnl: data.chain_realized_pnl,
+        realized_pnl_currency: data.chain_realized_pnl_currency,
+        realized_pnl_money: data.chain_realized_pnl_money,
+        realized_pnl_display_money: data.chain_realized_pnl_display_money,
+        realized_pnl_display_conversion_context:
+          data.chain_realized_pnl_display_conversion_context,
+      }
+    : null;
+  const chainPnlValue = chainPnlCarrier
+    ? realizedPnlNumericValue(chainPnlCarrier)
+    : null;
 
   const handleSearch = () => {
     const trimmed = searchValue.trim();
@@ -782,7 +839,7 @@ export const PositionLifecycleDialog: React.FC<
                       >
                         {data.matched_position_id}
                       </Typography>
-                      {data.chain_realized_pnl != null ? (
+                      {chainPnlCarrier && hasRealizedPnl(chainPnlCarrier) ? (
                         <Stack
                           direction="row"
                           spacing={1}
@@ -797,16 +854,33 @@ export const PositionLifecycleDialog: React.FC<
                           <Typography
                             variant="subtitle1"
                             color={
-                              Number(data.chain_realized_pnl) >= 0
+                              (chainPnlValue ?? 0) >= 0
                                 ? 'success.main'
                                 : 'error.main'
                             }
                             fontWeight={700}
                           >
-                            {formatSignedPnl(
-                              data.chain_realized_pnl,
-                              positions[0]?.summary.instrument
-                            )}
+                            <MoneyAmountText
+                              money={realizedPnlMoney(chainPnlCarrier)}
+                              fallbackAmount={chainPnlValue}
+                              fallbackCurrency={realizedPnlFallbackCurrency(
+                                chainPnlCarrier,
+                                positions[0]?.summary.instrument
+                              )}
+                              options={{ signed: true }}
+                              conversionContext={
+                                chainPnlCarrier.realized_pnl_display_conversion_context
+                              }
+                              timezone={resolvedTimezone}
+                              language={i18n.language}
+                              typographyProps={{
+                                color:
+                                  (chainPnlValue ?? 0) >= 0
+                                    ? 'success.main'
+                                    : 'error.main',
+                                fontWeight: 700,
+                              }}
+                            />
                           </Typography>
                         </Stack>
                       ) : null}

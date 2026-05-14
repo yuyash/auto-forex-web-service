@@ -101,6 +101,7 @@ class TestGetQueryset:
 
         vs.get_queryset()
         MockModel.objects.filter.assert_called_once_with(user=1)
+        qs.select_related.assert_called_once_with("config", "user", "oanda_account")
 
     @patch("apps.trading.views.trading.TradingTask")
     def test_filters_by_status(self, MockModel):
@@ -115,6 +116,7 @@ class TestGetQueryset:
         qs.order_by.return_value = qs
 
         vs.get_queryset()
+        qs.select_related.assert_called_once_with("config", "user", "oanda_account")
         qs.filter.assert_any_call(status="running")
 
     @patch("apps.trading.views.trading.TradingTask")
@@ -130,6 +132,7 @@ class TestGetQueryset:
         qs.order_by.return_value = qs
 
         vs.get_queryset()
+        qs.select_related.assert_called_once_with("config", "user", "oanda_account")
         qs.filter.assert_any_call(config_id=5)
 
     @patch("apps.trading.views.trading.TradingTask")
@@ -145,6 +148,7 @@ class TestGetQueryset:
         qs.order_by.return_value = qs
 
         vs.get_queryset()
+        qs.select_related.assert_called_once_with("config", "user", "oanda_account")
         qs.filter.assert_any_call(oanda_account_id=10)
 
 

@@ -18,12 +18,16 @@ from django.db.models import QuerySet
 from django.db.models.expressions import RawSQL
 
 from apps.trading.models.metrics import ExecutionMetricAggregate, Metrics
+from apps.trading.services.metric_money import MetricMoneyEnricher
 from apps.trading.services.strategy_data_common import (
     DEFAULT_PAGE_SIZE,
     StrategyDataQuery,
     granularity_seconds,
 )
-from apps.trading.services.task_metrics import ensure_metrics_dict, filter_metrics
+from apps.trading.services.task_metrics import (
+    ensure_metrics_dict,
+    filter_metrics,
+)
 
 
 def load_paginated_metric_points(
@@ -45,10 +49,13 @@ def load_paginated_metric_points(
 
     qs = _base_queryset(task=task, task_type_label=task_type_label, query=query)
 
+    enricher = MetricMoneyEnricher.for_task(task=task, task_type_label=task_type_label)
+
     if seconds is None:
         return _load_raw_page(
             qs=qs,
             query=query,
+            enricher=enricher,
             descending=descending,
             limit=limit,
             offset=offset,
@@ -58,6 +65,7 @@ def load_paginated_metric_points(
         return _load_bucketed_page_postgres(
             qs=qs,
             query=query,
+            enricher=enricher,
             seconds=seconds,
             descending=descending,
             limit=limit,
@@ -67,6 +75,7 @@ def load_paginated_metric_points(
     return _load_bucketed_page_in_memory(
         qs=qs,
         query=query,
+        enricher=enricher,
         seconds=seconds,
         descending=descending,
         limit=limit,
@@ -94,10 +103,12 @@ def load_latest_metric_point(
         and isinstance(aggregate.latest_metrics, dict)
         and _timestamp_matches_query(aggregate.latest_timestamp, query)
     ):
+        enricher = MetricMoneyEnricher.for_task(task=task, task_type_label=task_type_label)
         return _serialize_row(
             aggregate.latest_timestamp,
             aggregate.latest_metrics,
             query.metric_keys,
+            enricher=enricher,
         )
 
     row = (
@@ -109,7 +120,8 @@ def load_latest_metric_point(
     if row is None:
         return None
     timestamp, metrics = row
-    return _serialize_row(timestamp, metrics, query.metric_keys)
+    enricher = MetricMoneyEnricher.for_task(task=task, task_type_label=task_type_label)
+    return _serialize_row(timestamp, metrics, query.metric_keys, enricher=enricher)
 
 
 def load_metric_points(
@@ -118,8 +130,9 @@ def load_metric_points(
     """Load every metric row for an execution into memory (legacy helper)."""
 
     qs = _base_queryset(task=task, task_type_label=task_type_label, query=query)
+    enricher = MetricMoneyEnricher.for_task(task=task, task_type_label=task_type_label)
     return [
-        _serialize_row(timestamp, metrics, query.metric_keys)
+        _serialize_row(timestamp, metrics, query.metric_keys, enricher=enricher)
         for timestamp, metrics in qs.order_by("timestamp").values_list("timestamp", "metrics")
     ]
 
@@ -176,11 +189,24 @@ def _empty_ohlc_layers() -> dict[str, Any]:
     }
 
 
-def _serialize_row(timestamp: Any, metrics: Any, metric_keys: tuple[str, ...]) -> dict[str, Any]:
+def _serialize_row(
+    timestamp: Any,
+    metrics: Any,
+    metric_keys: tuple[str, ...],
+    *,
+    enricher: MetricMoneyEnricher | None = None,
+) -> dict[str, Any]:
+    metrics_dict = ensure_metrics_dict(metrics)
+    if enricher is not None:
+        metrics_dict = enricher.enrich(
+            metrics_dict,
+            timestamp=timestamp,
+            metric_keys=metric_keys,
+        )
     return {
         "t": int(timestamp.timestamp()),
         "timestamp": timestamp.isoformat(),
-        "metrics": filter_metrics(ensure_metrics_dict(metrics), metric_keys),
+        "metrics": filter_metrics(metrics_dict, metric_keys),
     }
 
 
@@ -211,6 +237,7 @@ def _load_raw_page(
     *,
     qs: QuerySet[Metrics],
     query: StrategyDataQuery,
+    enricher: MetricMoneyEnricher,
     descending: bool,
     limit: int,
     offset: int,
@@ -218,7 +245,9 @@ def _load_raw_page(
     total = qs.count()
     order = "-timestamp" if descending else "timestamp"
     window = qs.order_by(order).values_list("timestamp", "metrics")[offset : offset + limit]
-    rows = [_serialize_row(ts, metrics, query.metric_keys) for ts, metrics in window]
+    rows = [
+        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher) for ts, metrics in window
+    ]
     return rows, total
 
 
@@ -226,6 +255,7 @@ def _load_bucketed_page_postgres(
     *,
     qs: QuerySet[Metrics],
     query: StrategyDataQuery,
+    enricher: MetricMoneyEnricher,
     seconds: int,
     descending: bool,
     limit: int,
@@ -262,13 +292,16 @@ def _load_bucketed_page_postgres(
         cursor.execute(page_sql, [*collapsed_params, limit, offset])
         rows = cursor.fetchall()
 
-    return [_serialize_row(ts, metrics, query.metric_keys) for ts, metrics in rows], total
+    return [
+        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher) for ts, metrics in rows
+    ], total
 
 
 def _load_bucketed_page_in_memory(
     *,
     qs: QuerySet[Metrics],
     query: StrategyDataQuery,
+    enricher: MetricMoneyEnricher,
     seconds: int,
     descending: bool,
     limit: int,
@@ -282,5 +315,8 @@ def _load_bucketed_page_in_memory(
         bucketed[bucket] = (ts, metrics)
     ordered = sorted(bucketed.items(), key=lambda item: item[0], reverse=descending)
     page = ordered[offset : offset + limit]
-    rows = [_serialize_row(ts, metrics, query.metric_keys) for _, (ts, metrics) in page]
+    rows = [
+        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher)
+        for _, (ts, metrics) in page
+    ]
     return rows, len(ordered)

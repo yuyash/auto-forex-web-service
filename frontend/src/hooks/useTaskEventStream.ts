@@ -16,6 +16,7 @@ interface TaskSnapshot {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   updated_at?: string | null;
 }
 
@@ -27,6 +28,7 @@ type StreamTask = {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  error_code?: string | null;
   updated_at?: string | null;
 };
 
@@ -75,6 +77,7 @@ function applySnapshot<TTask extends StreamTask>(
     started_at: snapshot.started_at ?? current.started_at,
     completed_at: snapshot.completed_at ?? current.completed_at,
     error_message: snapshot.error_message ?? current.error_message,
+    error_code: snapshot.error_code ?? current.error_code,
     updated_at: snapshot.updated_at ?? current.updated_at,
   } satisfies TTask;
   return applyTaskStatusTransition(taskType, merged);
@@ -101,6 +104,7 @@ function applySnapshotToList<TTask extends StreamTask>(
       started_at: snapshot.started_at ?? task.started_at,
       completed_at: snapshot.completed_at ?? task.completed_at,
       error_message: snapshot.error_message ?? task.error_message,
+      error_code: snapshot.error_code ?? task.error_code,
       updated_at: snapshot.updated_at ?? task.updated_at,
     });
   });

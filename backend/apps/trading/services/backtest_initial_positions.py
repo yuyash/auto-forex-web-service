@@ -26,6 +26,7 @@ from apps.trading.models import (
     Trade,
     TradingEvent,
 )
+from apps.trading.money import AccountCurrency
 from apps.trading.order import OrderService
 from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.cycle_state import (
@@ -36,11 +37,11 @@ from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.grid_models import Layer
-from apps.trading.strategies.snowball.parameters import parse_config
+from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.tasks.event_persistence import persist_strategy_events
 from apps.trading.tasks.event_replay import mark_event_processed
-from apps.trading.utils import AccountCurrency, Instrument, pip_size_for_instrument
+from apps.trading.utils import DEFAULT_PIP_SIZE, Instrument, pip_size_for_instrument
 
 PREVIEW_STATE_MARKER = "_initial_position_seed_preview"
 SEED_VERSION = 1
@@ -109,7 +110,7 @@ def _is_preview_execution(*, task_id: Any, execution_id: Any) -> bool:
     return is_initial_position_preview_state(state)
 
 
-def validate_initial_position_cycles(
+def _validate_initial_position_cycles_impl(
     *,
     task: BacktestTask | None,
     config: Any,
@@ -135,7 +136,7 @@ def validate_initial_position_cycles(
             }
         )
 
-    cfg = parse_config(config)
+    cfg = SNOWBALL_PARAMETER_SERVICE.parse_config(config)
     resolved_pip_size = _resolve_pip_size(task=task, pip_size=pip_size)
 
     normalized_cycles: list[NormalizedSeedCycle] = []
@@ -237,8 +238,54 @@ def validate_initial_position_cycles(
     return normalized_cycles
 
 
+class InitialPositionCycleValidator:
+    """Validate and normalize requested initial-position cycle payloads."""
+
+    def validate(
+        self,
+        *,
+        task: BacktestTask | None,
+        config: Any,
+        cycles: Any,
+        pip_size: Decimal | None = None,
+    ) -> list[NormalizedSeedCycle]:
+        """Validate and normalize the requested initial Snowball cycle payload."""
+        return _validate_initial_position_cycles_impl(
+            task=task,
+            config=config,
+            cycles=cycles,
+            pip_size=pip_size,
+        )
+
+
+INITIAL_POSITION_CYCLE_VALIDATOR = InitialPositionCycleValidator()
+
+
+def validate_initial_position_cycles(
+    *,
+    task: BacktestTask | None,
+    config: Any,
+    cycles: Any,
+    pip_size: Decimal | None = None,
+) -> list[NormalizedSeedCycle]:
+    """Validate and normalize the requested initial Snowball cycle payload."""
+    return INITIAL_POSITION_CYCLE_VALIDATOR.validate(
+        task=task,
+        config=config,
+        cycles=cycles,
+        pip_size=pip_size,
+    )
+
+
 class BacktestInitialPositionService:
     """Synchronize Snowball seed settings with preview execution records."""
+
+    def __init__(
+        self,
+        *,
+        validator: InitialPositionCycleValidator | None = None,
+    ) -> None:
+        self.validator = validator or INITIAL_POSITION_CYCLE_VALIDATOR
 
     def sync_for_task(self, task: BacktestTask) -> None:
         """Create or clear the preview execution data for a backtest task."""
@@ -249,7 +296,7 @@ class BacktestInitialPositionService:
             self.clear_preview(task)
             return
 
-        normalized_cycles = validate_initial_position_cycles(
+        normalized_cycles = self.validator.validate(
             task=task,
             config=task.config,
             cycles=task.initial_position_cycles,
@@ -336,6 +383,7 @@ class BacktestInitialPositionService:
             execution_id=task.execution_id,
             strategy_state={},
             current_balance=task.initial_balance,
+            current_balance_currency=str(task.account_currency or "").upper(),
             ticks_processed=0,
             last_tick_timestamp=seed_timestamp,
             resume_cursor_timestamp=task.start_time,
@@ -497,6 +545,8 @@ class BacktestInitialPositionService:
                 state.current_balance = (
                     Decimal(str(state.current_balance)) + result.realized_pnl_delta
                 )
+                if result.realized_pnl_delta_currency:
+                    state.current_balance_currency = result.realized_pnl_delta_currency
             binding = result.entry_binding
             if binding is not None:
                 _apply_entry_binding(
@@ -972,7 +1022,9 @@ def _resolve_pip_size(*, task: BacktestTask | None, pip_size: Decimal | None) ->
         return Decimal(str(pip_size))
     if task is not None and getattr(task, "pip_size", None):
         return Decimal(str(task.pip_size))
-    instrument = getattr(task, "instrument", "USD_JPY") if task is not None else "USD_JPY"
+    instrument = getattr(task, "instrument", "") if task is not None else ""
+    if not instrument:
+        return DEFAULT_PIP_SIZE
     return Decimal(str(pip_size_for_instrument(instrument)))
 
 

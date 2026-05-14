@@ -19,6 +19,8 @@ from apps.market.services.instruments import (
     OandaInstrumentCatalogService,
 )
 from apps.market.services.oanda_retry import OandaApiRequestExecutor
+from apps.trading import utils as trading_utils
+from apps.trading.serializers.instrument import InstrumentMetadataSerializer
 
 logger: Logger = getLogger(name=__name__)
 
@@ -26,10 +28,29 @@ INSTRUMENTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 INSTRUMENT_DETAIL_CACHE_TTL_SECONDS = 60 * 60
 
 
+class InstrumentMetadataPresenter:
+    """Derive display-safe instrument metadata from canonical value objects."""
+
+    def for_instrument(self, instrument_name: str) -> dict[str, str | bool]:
+        """Return base/quote/pip metadata for one instrument."""
+        return trading_utils.Instrument(instrument_name).as_metadata()
+
+    def for_many(self, instrument_names: list[str]) -> dict[str, dict[str, str | bool]]:
+        """Return metadata keyed by normalized instrument name."""
+        metadata: dict[str, dict[str, str | bool]] = {}
+        for instrument_name in instrument_names:
+            item = self.for_instrument(instrument_name)
+            normalized_name = str(item["normalized_name"])
+            if item["base_currency"] and item["quote_currency"]:
+                metadata[normalized_name] = item
+        return metadata
+
+
 class OandaInstrumentServiceMixin:
     """Build instrument services with view-level injectable collaborators."""
 
     request_executor = OandaApiRequestExecutor()
+    metadata_presenter = InstrumentMetadataPresenter()
 
     def _instrument_service(self) -> OandaInstrumentCatalogService:
         """Return the service object used by instrument endpoints."""
@@ -86,6 +107,7 @@ class SupportedInstrumentsView(OandaInstrumentServiceMixin, APIView):
                     "instruments": serializers.ListField(child=serializers.CharField()),
                     "count": serializers.IntegerField(),
                     "source": serializers.CharField(),
+                    "metadata": serializers.DictField(child=InstrumentMetadataSerializer()),
                 },
             ),
         },
@@ -108,6 +130,7 @@ class SupportedInstrumentsView(OandaInstrumentServiceMixin, APIView):
                     "instruments": instruments,
                     "count": len(instruments),
                     "source": "oanda",
+                    "metadata": self.metadata_presenter.for_many(instruments),
                 }
             )
 
@@ -118,6 +141,7 @@ class SupportedInstrumentsView(OandaInstrumentServiceMixin, APIView):
                 "instruments": self.FALLBACK_INSTRUMENTS,
                 "count": len(self.FALLBACK_INSTRUMENTS),
                 "source": "fallback",
+                "metadata": self.metadata_presenter.for_many(self.FALLBACK_INSTRUMENTS),
             }
         )
 
@@ -174,6 +198,11 @@ class InstrumentDetailView(OandaInstrumentServiceMixin, APIView):
                     "margin_rate": serializers.CharField(),
                     "leverage": serializers.CharField(),
                     "source": serializers.CharField(),
+                    "normalized_name": serializers.CharField(),
+                    "base_currency": serializers.CharField(),
+                    "quote_currency": serializers.CharField(),
+                    "pip_size": serializers.CharField(),
+                    "is_high_value_quote": serializers.BooleanField(),
                 },
             ),
             404: inline_serializer(
@@ -201,6 +230,7 @@ class InstrumentDetailView(OandaInstrumentServiceMixin, APIView):
         instrument_data = self._fetch_instrument_details(request, instrument)
 
         if instrument_data:
+            instrument_data.update(self.metadata_presenter.for_instrument(instrument))
             instrument_data["source"] = "oanda"
             return Response(instrument_data, status=status.HTTP_200_OK)
 

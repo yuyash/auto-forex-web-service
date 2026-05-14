@@ -44,12 +44,13 @@ import {
 import {
   formatAppNumber,
   formatAppPercent,
-  currencySymbol,
+  formatMoneyAmount,
 } from '../../../../utils/numberFormat';
 import {
   formatDateTimeInTimezone,
   type DateTimeFormatOptions,
 } from '../../../../utils/timezone';
+import { quoteCurrencyFromInstrument } from '../../../../utils/instrumentCurrency';
 import { useAppSettings } from '../../../../hooks/useAppSettings';
 
 export interface TaskStrategyTabProps {
@@ -75,9 +76,7 @@ function formatDateTime(
 }
 
 function getPnlCurrencyCode(instrument?: string): string | null {
-  if (!instrument || !instrument.includes('_')) return null;
-  const [, quoteCurrency] = instrument.split('_');
-  return quoteCurrency?.trim().toUpperCase() || null;
+  return quoteCurrencyFromInstrument(instrument);
 }
 
 function formatSignedCurrency(
@@ -85,29 +84,11 @@ function formatSignedCurrency(
   currencyCode: string | null,
   fractionDigits = 1
 ): string {
-  const sign = value >= 0 ? '+' : '-';
-  const absoluteValue = Math.abs(value);
-  const symbol = currencySymbol(currencyCode);
-
-  if (!symbol) {
-    return formatAppNumber(value, {
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-      signed: true,
-    });
-  }
-
-  try {
-    return `${sign}${symbol} ${formatAppNumber(absoluteValue, {
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    })}`;
-  } catch {
-    return `${sign}${symbol} ${formatAppNumber(absoluteValue, {
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    })}`;
-  }
+  return formatMoneyAmount(value, currencyCode, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+    signed: true,
+  });
 }
 
 function getStatusColor(
@@ -1358,19 +1339,16 @@ function TradeRow({
           ? (() => {
               const pnlValue = parseFloat(trade.pnl!);
               if (!Number.isFinite(pnlValue)) return null;
-              const symbol = currencySymbol(currencyCode) || '';
-              const sign = pnlValue >= 0 ? '+' : '-';
               return (
                 <Typography
                   variant="caption"
                   sx={{ fontWeight: 700, fontFamily: 'monospace' }}
                   color={pnlValue >= 0 ? 'success.main' : 'error.main'}
                 >
-                  {sign}
-                  {symbol}
-                  {formatAppNumber(Math.abs(pnlValue), {
+                  {formatMoneyAmount(pnlValue, currencyCode, {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
+                    signed: true,
                   })}
                 </Typography>
               );

@@ -209,12 +209,32 @@ class TestBacktestTasks:
         assert resp.data["previous_balance"] == "10000.0000000000"
         assert resp.data["current_balance"] == "12500.5000000000"
         assert resp.data["adjustment"] == "2500.5000000000"
+        assert resp.data["previous_balance_display_money"] == {
+            "amount": "10000.0000000000",
+            "currency": "USD",
+        }
+        assert resp.data["current_balance_display_money"] == {
+            "amount": "12500.5000000000",
+            "currency": "USD",
+        }
+        assert resp.data["adjustment_display_money"] == {
+            "amount": "2500.5000000000",
+            "currency": "USD",
+        }
+        assert resp.data["display_conversion_context"]["source_currency"] == "USD"
+        assert resp.data["display_conversion_context"]["target_currency"] == "USD"
+        assert resp.data["display_conversion_context"]["conversion_policy"] == "identity"
         log = TaskLog.objects.get(
             task_id=task.pk,
             component="backtest.balance_adjustment",
         )
         assert log.execution_id == execution_id
         assert log.details["reason"] == "manual deposit"
+        assert log.details["current_balance_display_money"] == {
+            "amount": "12500.5",
+            "currency": "USD",
+        }
+        assert log.details["display_conversion_context"]["conversion_policy"] == "identity"
 
     def test_adjust_balance_updates_stopped_execution_state(
         self, authenticated_client, strategy_config

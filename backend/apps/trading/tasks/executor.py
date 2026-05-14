@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import InvalidOperation
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from logging import Logger, getLogger
 from typing import Any, List, cast
 
@@ -29,8 +28,17 @@ from apps.trading.services.runtime_metrics import (
     config_int,
 )
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
+from apps.trading.tasks.broker_read_outage import BrokerReadOutageCoordinator
 from apps.trading.tasks.diagnostics import ExecutionDiagnostics
 from apps.trading.tasks.drain import TaskDrainCoordinator, record_final_stop_metrics
+from apps.trading.tasks.event_processor import TaskEventProcessor
+from apps.trading.tasks.event_replay import (
+    EventReplayExecutor,
+    classify_replay_event,
+    event_already_applied,
+    mark_event_processed,
+    mark_event_processing_error,
+)
 from apps.trading.tasks.execution_collaborators import (
     ExecutionEventDispatcher,
     ExecutionStateRepository,
@@ -49,25 +57,17 @@ from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
-from apps.trading.tasks.broker_read_outage import BrokerReadOutageCoordinator
-from apps.trading.tasks.event_processor import TaskEventProcessor
-from apps.trading.tasks.event_replay import (
-    EventReplayExecutor,
-    classify_replay_event,
-    event_already_applied,
-    mark_event_processed,
-    mark_event_processing_error,
-)
-from apps.trading.tasks.market_session import is_forex_market_closed
 from apps.trading.tasks.market_idle import MarketIdleCoordinator
+from apps.trading.tasks.market_session import is_forex_market_closed
 from apps.trading.tasks.metric_resume import (
     RuntimeMetricResumeCoordinator,
     to_decimal_metric,
     to_int_metric,
 )
+from apps.trading.tasks.progress_flush import ProgressFlushPolicy
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
-from apps.trading.utils import format_money
+from apps.trading.utils import Instrument, format_money, pip_size_for_instrument
 
 logger: Logger = getLogger(name=__name__)
 
@@ -153,8 +153,9 @@ class TaskExecutor:
 
         # Extract properties from task
         self.instrument = task.instrument
-        self.pip_size = task.pip_size
+        self.pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
         self.initial_balance = self._get_initial_balance()
+        self.account_currency = self._get_account_currency()
 
         self.event_handler = self.engine.create_event_handler(
             order_service=order_service,
@@ -164,6 +165,7 @@ class TaskExecutor:
         self._event_dispatcher = ExecutionEventDispatcher(self)
         self._state_repository = ExecutionStateRepository(self)
         self._tick_loop = ExecutionTickLoop(self)
+        self._progress_flush_policy = ProgressFlushPolicy.for_task_type(self.task_type)
 
         from apps.trading.services.metrics_aggregator import MetricsAggregator
 
@@ -256,9 +258,7 @@ class TaskExecutor:
         raw_config_dict = getattr(task_config, "config_dict", {}) or {}
         config_dict = raw_config_dict if isinstance(raw_config_dict, dict) else {}
         strategy_type = str(getattr(task_config, "strategy_type", "") or "")
-        account_currency = getattr(self.task, "account_currency", "") or getattr(
-            getattr(self.task, "oanda_account", None), "currency", ""
-        )
+        account_currency = self.account_currency
         atr_period = config_int(config_dict, "atr_period", 14)
         snowball_net_atr_periods = self._snowball_net_atr_periods(
             strategy_type=strategy_type,
@@ -289,6 +289,14 @@ class TaskExecutor:
             volatility_lock_multiplier=config_decimal(config_dict, "volatility_lock_multiplier"),
             initial_balance=self.initial_balance,
         )
+
+    def _get_account_currency(self) -> str:
+        """Return the currency code for account-denominated execution values."""
+        return str(
+            getattr(self.task, "account_currency", "")
+            or getattr(getattr(self.task, "oanda_account", None), "currency", "")
+            or ""
+        ).upper()
 
     @staticmethod
     def _uses_snowball_net_atr_config(*, strategy_type: str, config_dict: dict[str, Any]) -> bool:
@@ -1007,6 +1015,11 @@ class TaskExecutor:
 
     def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
         """Persist state/metrics and emit periodic telemetry."""
+        if not self._progress_flush_policy.should_flush(batch_count=loop.batch_count):
+            self._emit_batch_telemetry(loop)
+            if self._tracemalloc_enabled:
+                self._check_memory(loop)
+            return
         logger.debug(
             "Saving state after batch - task_id=%s, batch_count=%d, ticks_processed=%d",
             self.task.pk,
@@ -1031,6 +1044,7 @@ class TaskExecutor:
             bid_price=Decimal(str(state.last_tick_bid)),
             ask_price=Decimal(str(state.last_tick_ask)),
             execution_id=self.task.execution_id,
+            pnl_currency=Instrument(self.instrument).quote_currency,
         )
 
     def _emit_batch_telemetry(self, loop: ExecutionLoopState) -> None:

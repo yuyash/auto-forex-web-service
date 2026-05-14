@@ -108,6 +108,8 @@
     "description": "Description",
     "instrument": "Instrument",
     "pipSize": "Pip Size",
+    "pipSizeOverrideValue": "{{value}} (override, default {{defaultPipSize}})",
+    "currencyRuntimeFxValue": "{{currency}} (runtime FX)",
     "marginRatio": "Margin Closeout Ratio",
     "currentAtr": "ATR",
     "status": "Status",
@@ -116,6 +118,8 @@
     "strategyType": "Strategy Type",
     "strategyConfiguration": "Strategy Configuration",
     "accountCurrency": "Account Currency",
+    "displayCurrency": "Display Currency",
+    "currency": "Currency",
     "oandaAccount": "OANDA Account",
     "hedgingEnabled": "Hedging Enabled",
     "sellOnStop": "Sell on Stop",
@@ -136,6 +140,16 @@
     "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
     "pageSize": "Page size"
+  },
+  "currencyConversion": {
+    "tooltip": "{{policy}}: {{source}} to {{target}}, rate {{rate}}, source {{rateSource}}, as of {{rateAsOf}}, path {{ratePath}}",
+    "unavailable": "Conversion unavailable for {{source}} to {{target}}",
+    "rateTimeUnavailable": "rate time unavailable",
+    "policies": {
+      "identity": "No conversion",
+      "runtime_fx_rate": "Runtime FX conversion",
+      "unavailable": "Conversion unavailable"
+    }
   },
   "dateRange": {
     "startDate": "Start Date",
@@ -638,7 +652,11 @@
       "timestampFrom": "From",
       "timestampTo": "To",
       "noLogs": "No logs available",
-      "resetFilters": "Reset Filters"
+      "resetFilters": "Reset Filters",
+      "currentBalanceDisplayMoney": "Display balance",
+      "currentBalanceMoney": "Account balance",
+      "adjustmentDisplayMoney": "Display adjustment",
+      "adjustmentMoney": "Account adjustment"
     },
     "executions": {
       "title": "Execution History",

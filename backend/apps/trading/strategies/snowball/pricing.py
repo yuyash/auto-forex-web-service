@@ -7,7 +7,8 @@ from decimal import Decimal
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.calculators import SnowballCalculator
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import Entry, Layer, StopLossClosedEntry
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer
 
 
 class SnowballPricingService:

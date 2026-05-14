@@ -83,6 +83,7 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
         startedAt: null,
         completedAt: null,
         errorMessage: null,
+        errorCode: null,
         progress: 0,
       },
     },

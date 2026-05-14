@@ -95,8 +95,8 @@ import {
 import { getCandleColors } from '../../../../utils/candleColors';
 import { SequencePositionLine } from '../../../../utils/SequencePositionLine';
 import {
-  currencySymbol,
   formatAppNumber,
+  formatMoneyAmount,
   formatAppPercent,
 } from '../../../../utils/numberFormat';
 import {
@@ -104,6 +104,10 @@ import {
   readStoredValue,
   writeStoredValue,
 } from '../../../../utils/persistentState';
+import {
+  baseCurrencyFromInstrument,
+  quoteCurrencyFromInstrument,
+} from '../../../../utils/instrumentCurrency';
 import {
   measureContainer,
   measureContainerWidth,
@@ -449,13 +453,6 @@ function normalizeCurrencyCode(value: unknown): string | null {
   return normalized ? normalized : null;
 }
 
-function quoteCurrencyFromInstrument(
-  instrument?: string | null
-): string | null {
-  if (!instrument || !instrument.includes('_')) return null;
-  return normalizeCurrencyCode(instrument.split('_').at(-1));
-}
-
 function pnlCurrencyCode(data: SnowballNetChartResponse): string | null {
   return (
     normalizeCurrencyCode(data.current.pnl_currency) ??
@@ -474,16 +471,17 @@ function formatNumberWithUnit(
   options: Parameters<typeof formatAppNumber>[1] = {}
 ): string {
   if (!unit) return formatAppNumber(value, options);
+  const normalizedUnit = unit.trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(normalizedUnit)) {
+    return formatMoneyAmount(value, normalizedUnit, options);
+  }
 
   const sign = options.signed ? (value >= 0 ? '+' : '-') : value < 0 ? '-' : '';
   const formatted = formatAppNumber(Math.abs(value), {
     ...options,
     signed: false,
   });
-  const symbol = currencySymbol(unit);
-  return symbol && symbol !== unit
-    ? `${sign}${symbol} ${formatted}`
-    : `${sign}${formatted} ${unit}`;
+  return `${sign}${formatted} ${unit}`;
 }
 
 function formatNullablePnl(value: number | null, unit?: string | null): string {
@@ -2734,7 +2732,8 @@ function CurrentChips({
   const unrealizedPnl = toNumber(current.unrealized_pnl);
   const price = toNumber(current.current_price ?? current.mid);
   const pnlCurrency = pnlCurrencyCode(data);
-  const suffix = instrument ? ` ${instrument.split('_')[0] ?? ''}` : '';
+  const baseCurrency = baseCurrencyFromInstrument(instrument);
+  const suffix = baseCurrency ? ` ${baseCurrency}` : '';
   return (
     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
       {directionLabel ? (

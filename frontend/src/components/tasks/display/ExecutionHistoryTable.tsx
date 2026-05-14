@@ -48,15 +48,17 @@ import type { TaskExecution } from '../../../types/execution';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import {
-  formatAppNumber,
   formatAppPercent,
-  currencySymbol,
+  formatMoneyAmount,
+  formatMoneyPayload,
 } from '../../../utils/numberFormat';
 import {
   getStrategyConfigSnapshotHash,
   getStrategyConfigSnapshotRevision,
 } from '../../../utils/strategyConfigRevision';
+import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { formatCurrencyConversionContext } from '../../../utils/currencyConversion';
 import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 
 interface ExecutionHistoryTableProps {
@@ -155,18 +157,24 @@ export function ExecutionHistoryTable({
     return `${s}s`;
   };
 
-  const fmt = (v: string | number | undefined | null): string => {
-    if (v == null) return '-';
-    const n = typeof v === 'string' ? parseFloat(v) : v;
-    return isNaN(n)
-      ? '-'
-      : formatAppNumber(n, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
+  const pnlCurrency = quoteCurrencyFromInstrument(instrument) ?? '';
+  const formatMetricMoney = (
+    money:
+      | { amount?: string | number | null; currency?: string | null }
+      | null
+      | undefined,
+    fallbackValue: number,
+    fallbackCurrency: string
+  ) =>
+    money
+      ? formatMoneyPayload(money, {
+          signed: true,
+          currencyPlacement: 'suffix',
+        })
+      : formatMoneyAmount(fallbackValue, fallbackCurrency, {
+          signed: true,
+          currencyPlacement: 'suffix',
         });
-  };
-
-  const pnlCurrency = instrument?.includes('_') ? instrument.split('_')[1] : '';
 
   const columns: Column<TaskExecution>[] = useMemo(() => {
     const baseColumns: Column<TaskExecution>[] = [
@@ -310,33 +318,48 @@ export function ExecutionHistoryTable({
           if (isNaN(v)) return '-';
           const acctCcy = row.metrics?.pnl_currency || '';
           const quoteCcy = row.metrics?.quote_currency || pnlCurrency || '';
-          const suffix = acctCcy ? ` ${currencySymbol(acctCcy)}` : '';
           const hasQuote =
             row.metrics?.total_pnl_quote != null &&
             quoteCcy &&
             quoteCcy !== acctCcy;
+          const conversionTooltip = formatCurrencyConversionContext(
+            row.metrics?.display_conversion_context,
+            { language, separators: appSettings, t, timezone }
+          );
           const qv = hasQuote
             ? parseFloat(String(row.metrics.total_pnl_quote))
             : NaN;
           return (
             <Box>
-              <Typography
-                variant="body2"
-                color={v >= 0 ? 'success.main' : 'error.main'}
-                sx={{ whiteSpace: 'nowrap' }}
+              <Tooltip
+                title={conversionTooltip}
+                arrow
+                disableHoverListener={!conversionTooltip}
               >
-                {v >= 0 ? '+' : ''}
-                {fmt(v)}
-                {suffix}
-              </Typography>
+                <Typography
+                  variant="body2"
+                  color={v >= 0 ? 'success.main' : 'error.main'}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {formatMetricMoney(
+                    row.metrics?.total_pnl_display_money ??
+                      row.metrics?.total_pnl_money,
+                    v,
+                    acctCcy
+                  )}
+                </Typography>
+              </Tooltip>
               {hasQuote && !isNaN(qv) && (
                 <Typography
                   variant="caption"
                   color="text.secondary"
                   sx={{ whiteSpace: 'nowrap' }}
                 >
-                  {qv >= 0 ? '+' : ''}
-                  {fmt(qv)} {currencySymbol(quoteCcy)}
+                  {formatMetricMoney(
+                    row.metrics?.total_pnl_quote_money,
+                    qv,
+                    quoteCcy
+                  )}
                 </Typography>
               )}
             </Box>
@@ -452,7 +475,7 @@ export function ExecutionHistoryTable({
     }
 
     return baseColumns;
-  }, [formatDate, pnlCurrency, t, taskType]);
+  }, [appSettings, formatDate, language, pnlCurrency, t, taskType, timezone]);
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);
   const storageKey = `exec_history_${taskType}_v3`;

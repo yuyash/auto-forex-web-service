@@ -12,6 +12,8 @@ export interface BacktestTaskPayloadFormData {
   start_time: string;
   end_time: string;
   initial_balance: number | string;
+  account_currency?: string;
+  display_currency?: string;
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument: string;
@@ -41,6 +43,8 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     start_time: data.start_time,
     end_time: data.end_time,
     initial_balance: data.initial_balance,
+    account_currency: data.account_currency,
+    display_currency: data.display_currency,
     commission_per_trade: data.commission_per_trade,
     ...(data.pip_size != null && { pip_size: data.pip_size }),
     instrument: data.instrument,

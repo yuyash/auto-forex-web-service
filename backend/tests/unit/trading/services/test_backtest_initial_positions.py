@@ -14,7 +14,7 @@ from apps.trading.services.backtest_initial_positions import (
     is_initial_position_preview_state,
     validate_initial_position_cycles,
 )
-from apps.trading.strategies.snowball.parameters import default_parameters
+from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from tests.integration.factories import (
     BacktestTaskFactory,
     StrategyConfigurationFactory,
@@ -23,7 +23,7 @@ from tests.integration.factories import (
 
 
 def _snowball_config(user):
-    parameters = default_parameters()
+    parameters = SNOWBALL_PARAMETER_SERVICE.default_parameters()
     parameters.update(
         {
             "instrument": "USD_JPY",

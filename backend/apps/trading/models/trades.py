@@ -68,6 +68,12 @@ class Trade(models.Model):
         decimal_places=10,
         help_text="Execution price",
     )
+    price_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Quote currency code for price and instrument-denominated trade amounts.",
+    )
     execution_method = models.CharField(
         max_length=64,
         help_text="Event type that triggered trade (e.g., OPEN_POSITION, CLOSE_POSITION)",

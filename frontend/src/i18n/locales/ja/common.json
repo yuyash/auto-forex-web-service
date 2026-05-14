@@ -108,6 +108,8 @@
     "description": "説明",
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
+    "pipSizeOverrideValue": "{{value}}（上書き、既定 {{defaultPipSize}}）",
+    "currencyRuntimeFxValue": "{{currency}}（実行時FX）",
     "marginRatio": "証拠金精算割合",
     "currentAtr": "ATR",
     "status": "ステータス",
@@ -116,6 +118,8 @@
     "strategyType": "戦略タイプ",
     "strategyConfiguration": "戦略設定",
     "accountCurrency": "口座通貨",
+    "displayCurrency": "表示通貨",
+    "currency": "通貨",
     "oandaAccount": "OANDAアカウント",
     "hedgingEnabled": "両建て有効",
     "sellOnStop": "停止時に売却",
@@ -136,6 +140,16 @@
     "executionStatus": "実行状況",
     "strategySnapshot": "戦略スナップショット",
     "pageSize": "ページサイズ"
+  },
+  "currencyConversion": {
+    "tooltip": "{{policy}}: {{source}} から {{target}}、レート {{rate}}、取得元 {{rateSource}}、基準時刻 {{rateAsOf}}、経路 {{ratePath}}",
+    "unavailable": "{{source}} から {{target}} への換算を利用できません",
+    "rateTimeUnavailable": "レート時刻なし",
+    "policies": {
+      "identity": "換算なし",
+      "runtime_fx_rate": "実行時FX換算",
+      "unavailable": "換算不可"
+    }
   },
   "dateRange": {
     "startDate": "開始日",
@@ -638,7 +652,11 @@
       "timestampFrom": "開始日時",
       "timestampTo": "終了日時",
       "noLogs": "ログなし",
-      "resetFilters": "フィルターリセット"
+      "resetFilters": "フィルターリセット",
+      "currentBalanceDisplayMoney": "表示残高",
+      "currentBalanceMoney": "口座残高",
+      "adjustmentDisplayMoney": "表示調整額",
+      "adjustmentMoney": "口座調整額"
     },
     "executions": {
       "title": "実行履歴",

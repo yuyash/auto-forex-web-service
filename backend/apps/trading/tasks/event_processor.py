@@ -128,6 +128,8 @@ class TaskEventProcessor:
             state.current_balance = (
                 Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
             )
+            if execution_result.realized_pnl_delta_currency:
+                state.current_balance_currency = execution_result.realized_pnl_delta_currency
             executor._runtime_metrics.record_position_closed(
                 execution_result.realized_pnl_delta,
                 realized_pnl_quote=execution_result.realized_pnl_delta_quote,

@@ -17,7 +17,7 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
     SnowballCycleReseeder,
 )
 from apps.trading.strategies.snowball.enums import ProtectionLevel
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION, ProtectionStrategy
 
 

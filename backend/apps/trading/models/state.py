@@ -56,6 +56,12 @@ class ExecutionState(UUIDModel):
         decimal_places=10,
         help_text="Current account balance",
     )
+    current_balance_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Currency code for current_balance.",
+    )
     ticks_processed = models.IntegerField(
         default=0,
         help_text="Number of ticks processed so far",

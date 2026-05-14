@@ -12,6 +12,7 @@
  */
 
 import type { TaskType } from '../types/common';
+import type { CurrencyConversionContext } from '../types/money';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
@@ -36,6 +37,19 @@ export interface TickDeliveryInfo {
 export interface PnlInfo {
   realized: number;
   unrealized: number;
+  currency: string | null;
+  realizedMoney: MoneyInfo | null;
+  unrealizedMoney: MoneyInfo | null;
+  totalMoney: MoneyInfo | null;
+  realizedDisplayMoney: MoneyInfo | null;
+  unrealizedDisplayMoney: MoneyInfo | null;
+  totalDisplayMoney: MoneyInfo | null;
+  displayConversionContext: CurrencyConversionContext | null;
+}
+
+export interface MoneyInfo {
+  amount: string;
+  currency: string;
 }
 
 export interface CountsInfo {
@@ -50,9 +64,13 @@ export interface CountsInfo {
 
 export interface ExecutionInfo {
   currentBalance: number | null;
+  currentBalanceMoney: MoneyInfo | null;
   ticksProcessed: number;
   accountCurrency: string | null;
+  currentBalanceCurrency: string | null;
   currentBalanceDisplay: number | null;
+  currentBalanceDisplayMoney: MoneyInfo | null;
+  currentBalanceDisplayConversionContext: CurrencyConversionContext | null;
   displayCurrency: string | null;
   resumeCursorTimestamp: string | null;
   marginRatio: number | null;
@@ -69,6 +87,7 @@ export interface TaskInfo {
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  errorCode: string | null;
   stopReason: string | null;
   progress: number;
 }
@@ -97,7 +116,18 @@ export interface UseTaskSummaryResult {
 
 const INITIAL_SUMMARY: TaskSummary = {
   timestamp: null,
-  pnl: { realized: 0, unrealized: 0 },
+  pnl: {
+    realized: 0,
+    unrealized: 0,
+    currency: null,
+    realizedMoney: null,
+    unrealizedMoney: null,
+    totalMoney: null,
+    realizedDisplayMoney: null,
+    unrealizedDisplayMoney: null,
+    totalDisplayMoney: null,
+    displayConversionContext: null,
+  },
   counts: {
     totalTrades: 0,
     openPositions: 0,
@@ -109,9 +139,13 @@ const INITIAL_SUMMARY: TaskSummary = {
   },
   execution: {
     currentBalance: null,
+    currentBalanceMoney: null,
     ticksProcessed: 0,
     accountCurrency: null,
+    currentBalanceCurrency: null,
     currentBalanceDisplay: null,
+    currentBalanceDisplayMoney: null,
+    currentBalanceDisplayConversionContext: null,
     displayCurrency: null,
     resumeCursorTimestamp: null,
     marginRatio: null,
@@ -128,6 +162,7 @@ const INITIAL_SUMMARY: TaskSummary = {
     startedAt: null,
     completedAt: null,
     errorMessage: null,
+    errorCode: null,
     stopReason: null,
     progress: 0,
   },

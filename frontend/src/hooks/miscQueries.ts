@@ -4,11 +4,12 @@ import { authApi, type UserSettingsResponse } from '../services/api/auth';
 import { healthApi, strategiesApi, type Strategy } from '../services/api';
 import {
   marketApi,
+  type GranularityOption,
   type TickDataPoint,
   type TickDataRange,
 } from '../services/api/market';
 import type { StrategyConfig } from '../types/strategy';
-import type { GranularityOption } from '../services/api/market';
+import type { InstrumentsResponse } from '../types/instrument';
 
 export function createUserSettingsQuery(options?: {
   enabled?: boolean;
@@ -71,13 +72,10 @@ export function createStrategyDefaultsQuery(
   };
 }
 
-export function createSupportedInstrumentsQuery(): UseQueryOptions<string[]> {
+export function createSupportedInstrumentsQuery(): UseQueryOptions<InstrumentsResponse> {
   return {
     queryKey: queryKeys.marketConfig.instruments(),
-    queryFn: async () => {
-      const response = await marketApi.getSupportedInstruments();
-      return response.instruments ?? [];
-    },
+    queryFn: () => marketApi.getSupportedInstruments(),
   };
 }
 

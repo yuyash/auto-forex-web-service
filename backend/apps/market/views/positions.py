@@ -27,6 +27,7 @@ from apps.market.services.oanda import (
 )
 from apps.market.views.account_helpers import get_user_accounts
 from apps.market.views.order_errors import order_error_response
+from apps.market.views.upstream_lists import fetch_account_lists, upstream_history_count
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -65,6 +66,36 @@ class MarketPositionListItemSerializer(serializers.Serializer):  # pylint: disab
     account_name = serializers.CharField()
     account_db_id = serializers.IntegerField()
     status = serializers.CharField()
+
+
+def _positive_int(raw: str | int | None, *, default: int, max_value: int | None = None) -> int:
+    try:
+        value = int(raw) if raw not in (None, "") else default
+    except (TypeError, ValueError):
+        value = default
+    value = max(value, 1)
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
+
+
+def _format_trade_position(trade: OpenTrade, account: OandaAccounts) -> dict:
+    is_open = str(trade.state).upper() == "OPEN"
+    pnl_value = trade.unrealized_pnl if is_open else (trade.realized_pnl or Decimal("0"))
+    return {
+        "id": trade.trade_id,
+        "instrument": trade.instrument,
+        "direction": trade.direction.value,
+        "units": str(trade.units),
+        "entry_price": str(trade.entry_price),
+        "unrealized_pnl": str(pnl_value),
+        "open_time": trade.open_time.isoformat() if trade.open_time else None,
+        "close_time": trade.close_time.isoformat() if trade.close_time else None,
+        "state": trade.state,
+        "account_name": account.account_id,
+        "account_db_id": account.pk,
+        "status": "open" if is_open else "closed",
+    }
 
 
 def _filter_positions_by_overlap(
@@ -289,51 +320,31 @@ class PositionView(APIView):
         if not accounts:
             return Response({"count": 0, "next": None, "previous": None, "results": []})
 
-        all_positions = []
-        failed_accounts: list[str] = []
+        page_number = _positive_int(request.query_params.get("page"), default=1)
+        page_size = _positive_int(
+            request.query_params.get("page_size"),
+            default=StandardPagination.page_size,
+            max_value=StandardPagination.max_page_size,
+        )
+        history_count = upstream_history_count(page=page_number, page_size=page_size)
 
-        for account in accounts:
-            try:
-                client = OandaService(account)
-
-                if position_status == "open":
-                    trades = client.get_open_trades(instrument=instrument)
-                else:
-                    trades = client.get_trades(instrument=instrument, state="ALL")
-
-                for trade in trades:
-                    is_open = str(trade.state).upper() == "OPEN"
-                    if position_status == "closed" and is_open:
-                        continue
-                    pnl_value = (
-                        trade.unrealized_pnl if is_open else (trade.realized_pnl or Decimal("0"))
-                    )
-                    all_positions.append(
-                        {
-                            "id": trade.trade_id,
-                            "instrument": trade.instrument,
-                            "direction": trade.direction.value,
-                            "units": str(trade.units),
-                            "entry_price": str(trade.entry_price),
-                            "unrealized_pnl": str(pnl_value),
-                            "open_time": trade.open_time.isoformat() if trade.open_time else None,
-                            "close_time": (
-                                trade.close_time.isoformat() if trade.close_time else None
-                            ),
-                            "state": trade.state,
-                            "account_name": account.account_id,
-                            "account_db_id": account.pk,
-                            "status": "open" if is_open else "closed",
-                        }
-                    )
-
-            except OandaAPIError as e:
-                logger.error(
-                    "Failed to fetch positions from OANDA for account %s: %s",
-                    account.account_id,
-                    str(e),
+        def fetch_positions(account: OandaAccounts) -> list[dict]:
+            client = OandaService(account)
+            if position_status == "open":
+                trades = client.get_open_trades(instrument=instrument)
+            else:
+                trades = client.get_trades(
+                    instrument=instrument,
+                    state="ALL",
+                    count=history_count,
                 )
-                failed_accounts.append(str(account.account_id))
+            return [
+                _format_trade_position(trade, account)
+                for trade in trades
+                if position_status != "closed" or str(trade.state).upper() != "OPEN"
+            ]
+
+        all_positions, failed_accounts = fetch_account_lists(accounts, fetch_positions)
 
         # If every account failed, report the upstream error to the caller.
         if failed_accounts and len(failed_accounts) == len(accounts):

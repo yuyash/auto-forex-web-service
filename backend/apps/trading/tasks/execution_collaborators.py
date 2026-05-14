@@ -113,6 +113,7 @@ class ExecutionStateRepository:
             execution_id=task.execution_id,
             strategy_state={},
             current_balance=executor.initial_balance,
+            current_balance_currency=executor.account_currency,
             ticks_processed=0,
             last_tick_timestamp=initial_timestamp,
             resume_cursor_timestamp=initial_timestamp,

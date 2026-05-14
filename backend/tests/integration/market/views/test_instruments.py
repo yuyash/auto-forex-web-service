@@ -42,6 +42,8 @@ class TestSupportedInstrumentsView:
 
         assert response.status_code == status.HTTP_200_OK
         assert "instruments" in response.data
+        assert "metadata" in response.data
+        assert response.data["metadata"]["EUR_USD"]["base_currency"] == "EUR"
         assert response.data["source"] in ["oanda", "fallback"]
 
     def test_get_instruments_fallback(self, user: Any) -> None:
@@ -55,6 +57,7 @@ class TestSupportedInstrumentsView:
         assert "instruments" in response.data
         assert response.data["source"] == "fallback"
         assert "EUR_USD" in response.data["instruments"]
+        assert response.data["metadata"]["EUR_USD"]["pip_size"] == "0.0001"
 
     @patch("apps.market.views.instruments.v20.Context")
     def test_get_instruments_does_not_use_other_users_account(

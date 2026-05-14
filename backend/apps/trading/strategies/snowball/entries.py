@@ -8,17 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal
 
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.state_parsing import (
-    optional_decimal,
-    optional_int,
-    optional_str,
-    parse_datetime,
-    require,
-    require_dict,
-    strict_bool,
-    strict_decimal,
-    strict_int,
-)
+from apps.trading.strategies.snowball.state_parsing import SNOWBALL_STATE_PARSER
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses.tick import Tick
@@ -182,44 +172,62 @@ class Entry:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Entry":
-        d = require_dict(d, field_name="entry")
-        raw_direction = require(d, "direction")
+        d = SNOWBALL_STATE_PARSER.require_dict(d, field_name="entry")
+        raw_direction = SNOWBALL_STATE_PARSER.require(d, "direction")
         direction = (
             raw_direction
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
-        opened_at = parse_datetime(require(d, "opened_at"), field_name="opened_at")
+        opened_at = SNOWBALL_STATE_PARSER.parse_datetime(
+            SNOWBALL_STATE_PARSER.require(d, "opened_at"), field_name="opened_at"
+        )
 
         return Entry(
-            entry_id=strict_int(require(d, "entry_id"), field_name="entry_id"),
-            step=strict_int(require(d, "step"), field_name="step"),
+            entry_id=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "entry_id"), field_name="entry_id"
+            ),
+            step=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "step"), field_name="step"
+            ),
             direction=direction,
-            entry_price=strict_decimal(require(d, "entry_price"), field_name="entry_price"),
-            close_price=strict_decimal(require(d, "close_price"), field_name="close_price"),
-            units=strict_int(require(d, "units"), field_name="units"),
+            entry_price=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "entry_price"), field_name="entry_price"
+            ),
+            close_price=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "close_price"), field_name="close_price"
+            ),
+            units=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "units"), field_name="units"
+            ),
             opened_at=opened_at,
-            role=require(d, "role"),
-            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
-            retracement_count=strict_int(
-                require(d, "retracement_count"),
+            role=SNOWBALL_STATE_PARSER.require(d, "role"),
+            layer_number=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "layer_number"), field_name="layer_number"
+            ),
+            retracement_count=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "retracement_count"),
                 field_name="retracement_count",
             ),
-            root_entry_id=optional_int(d, "root_entry_id"),
-            parent_entry_id=optional_int(d, "parent_entry_id"),
-            position_id=optional_str(d, "position_id"),
-            expected_interval_pips=optional_decimal(d, "expected_interval_pips"),
-            actual_interval_pips=optional_decimal(d, "actual_interval_pips"),
-            expected_tp_pips=optional_decimal(d, "expected_tp_pips"),
-            validation_status=str(require(d, "validation_status")),
-            stop_loss_price=optional_decimal(d, "stop_loss_price"),
-            is_rebuild=strict_bool(require(d, "is_rebuild"), field_name="is_rebuild"),
-            lifecycle_realized_pnl=strict_decimal(
-                require(d, "lifecycle_realized_pnl"),
+            root_entry_id=SNOWBALL_STATE_PARSER.optional_int(d, "root_entry_id"),
+            parent_entry_id=SNOWBALL_STATE_PARSER.optional_int(d, "parent_entry_id"),
+            position_id=SNOWBALL_STATE_PARSER.optional_str(d, "position_id"),
+            expected_interval_pips=SNOWBALL_STATE_PARSER.optional_decimal(
+                d, "expected_interval_pips"
+            ),
+            actual_interval_pips=SNOWBALL_STATE_PARSER.optional_decimal(d, "actual_interval_pips"),
+            expected_tp_pips=SNOWBALL_STATE_PARSER.optional_decimal(d, "expected_tp_pips"),
+            validation_status=str(SNOWBALL_STATE_PARSER.require(d, "validation_status")),
+            stop_loss_price=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_price"),
+            is_rebuild=SNOWBALL_STATE_PARSER.strict_bool(
+                SNOWBALL_STATE_PARSER.require(d, "is_rebuild"), field_name="is_rebuild"
+            ),
+            lifecycle_realized_pnl=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "lifecycle_realized_pnl"),
                 field_name="lifecycle_realized_pnl",
             ),
-            lifecycle_stop_loss_count=strict_int(
-                require(d, "lifecycle_stop_loss_count"),
+            lifecycle_stop_loss_count=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "lifecycle_stop_loss_count"),
                 field_name="lifecycle_stop_loss_count",
             ),
         )
@@ -291,41 +299,54 @@ class StopLossClosedEntry:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "StopLossClosedEntry":
-        d = require_dict(d, field_name="pending_rebuild")
-        raw_dir = require(d, "direction")
+        d = SNOWBALL_STATE_PARSER.require_dict(d, field_name="pending_rebuild")
+        raw_dir = SNOWBALL_STATE_PARSER.require(d, "direction")
         direction = (
             raw_dir if isinstance(raw_dir, Direction) else Direction(str(raw_dir).strip().lower())
         )
         return StopLossClosedEntry(
-            entry_price=strict_decimal(require(d, "entry_price"), field_name="entry_price"),
-            close_price=strict_decimal(require(d, "close_price"), field_name="close_price"),
-            units=strict_int(require(d, "units"), field_name="units"),
+            entry_price=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "entry_price"), field_name="entry_price"
+            ),
+            close_price=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "close_price"), field_name="close_price"
+            ),
+            units=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "units"), field_name="units"
+            ),
             direction=direction,
-            role=require(d, "role"),
-            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
-            retracement_count=strict_int(
-                require(d, "retracement_count"),
+            role=SNOWBALL_STATE_PARSER.require(d, "role"),
+            layer_number=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "layer_number"), field_name="layer_number"
+            ),
+            retracement_count=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "retracement_count"),
                 field_name="retracement_count",
             ),
-            step=strict_int(require(d, "step"), field_name="step"),
-            root_entry_id=optional_int(d, "root_entry_id"),
-            parent_entry_id=optional_int(d, "parent_entry_id"),
-            cycle_id=strict_int(require(d, "cycle_id"), field_name="cycle_id"),
-            position_id=optional_str(d, "position_id"),
-            stop_loss_price=optional_decimal(d, "stop_loss_price"),
-            stop_loss_exit_price=optional_decimal(d, "stop_loss_exit_price"),
+            step=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "step"), field_name="step"
+            ),
+            root_entry_id=SNOWBALL_STATE_PARSER.optional_int(d, "root_entry_id"),
+            parent_entry_id=SNOWBALL_STATE_PARSER.optional_int(d, "parent_entry_id"),
+            cycle_id=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "cycle_id"), field_name="cycle_id"
+            ),
+            position_id=SNOWBALL_STATE_PARSER.optional_str(d, "position_id"),
+            stop_loss_price=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_price"),
+            stop_loss_exit_price=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_exit_price"),
             closed_at=(
-                parse_datetime(d["closed_at"], field_name="closed_at")
+                SNOWBALL_STATE_PARSER.parse_datetime(d["closed_at"], field_name="closed_at")
                 if d.get("closed_at") not in (None, "")
                 else None
             ),
-            lifecycle_realized_pnl=strict_decimal(
-                require(d, "lifecycle_realized_pnl"),
+            lifecycle_realized_pnl=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(d, "lifecycle_realized_pnl"),
                 field_name="lifecycle_realized_pnl",
             ),
-            lifecycle_stop_loss_count=strict_int(
-                require(d, "lifecycle_stop_loss_count"),
+            lifecycle_stop_loss_count=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(d, "lifecycle_stop_loss_count"),
                 field_name="lifecycle_stop_loss_count",
             ),
-            stop_loss_loss_pips=optional_decimal(d, "stop_loss_loss_pips") or Decimal("0"),
+            stop_loss_loss_pips=SNOWBALL_STATE_PARSER.optional_decimal(d, "stop_loss_loss_pips")
+            or Decimal("0"),
         )

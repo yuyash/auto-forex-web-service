@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -173,6 +174,13 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
         pnl=PnlInfo(
             realized=_to_decimal(pnl.get("realized")),
             unrealized=_to_decimal(pnl.get("unrealized")),
+            currency=_to_str_or_none(pnl.get("currency")),
+            realized_display_money=_to_money_dict(pnl.get("realized_display_money")),
+            unrealized_display_money=_to_money_dict(pnl.get("unrealized_display_money")),
+            total_display_money=_to_money_dict(pnl.get("total_display_money")),
+            display_conversion_context=_to_conversion_context(
+                pnl.get("display_conversion_context")
+            ),
         ),
         counts=CountsInfo(
             total_trades=int(counts.get("total_trades") or 0),
@@ -187,8 +195,16 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             current_balance=_to_optional_decimal(execution.get("current_balance")),
             ticks_processed=int(execution.get("ticks_processed") or 0),
             account_currency=_to_str_or_none(execution.get("account_currency")),
+            current_balance_currency=_to_str_or_none(execution.get("current_balance_currency")),
+            current_balance_money=_to_money_dict(execution.get("current_balance_money")),
             current_balance_display=_to_optional_decimal(execution.get("current_balance_display")),
             display_currency=_to_str_or_none(execution.get("display_currency")),
+            current_balance_display_money=_to_money_dict(
+                execution.get("current_balance_display_money")
+            ),
+            current_balance_display_conversion_context=_to_conversion_context(
+                execution.get("current_balance_display_conversion_context")
+            ),
             resume_cursor_timestamp=_to_str_or_none(execution.get("resume_cursor_timestamp")),
             margin_ratio=_to_optional_decimal(execution.get("margin_ratio")),
             current_atr=_to_optional_decimal(execution.get("current_atr")),
@@ -213,6 +229,7 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             started_at=_to_str_or_none(task.get("started_at")),
             completed_at=_to_str_or_none(task.get("completed_at")),
             error_message=_to_str_or_none(task.get("error_message")),
+            error_code=_to_str_or_none(task.get("error_code")),
             stop_reason=_to_str_or_none(task.get("stop_reason")),
             progress=int(task.get("progress") or 0),
         ),
@@ -230,6 +247,31 @@ def _deserialize_tick_delivery(raw: Any) -> TickDeliveryInfo | None:
         max_age_seconds=_to_optional_int(raw.get("max_age_seconds")),
         message=_to_str_or_none(raw.get("message")),
     )
+
+
+def _to_money_dict(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    amount = value.get("amount")
+    currency = value.get("currency")
+    if amount is None or currency is None:
+        return None
+    return {"amount": str(amount), "currency": str(currency)}
+
+
+def _to_conversion_context(value: Any) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        "source_currency": str(value.get("source_currency") or ""),
+        "target_currency": str(value.get("target_currency") or ""),
+        "rate": value.get("rate"),
+        "rate_source": str(value.get("rate_source") or ""),
+        "rate_as_of": value.get("rate_as_of"),
+        "rate_path": [str(item) for item in value.get("rate_path", [])],
+        "conversion_available": bool(value.get("conversion_available", False)),
+        "conversion_policy": str(value.get("conversion_policy") or "unavailable"),
+    }
 
 
 def _to_decimal(value: Any) -> Decimal:
@@ -261,11 +303,13 @@ def _to_optional_int(value: Any) -> int | None:
 
 
 class _DecimalEncoder(json.JSONEncoder):
-    """JSON encoder that converts Decimal to string."""
+    """JSON encoder that converts Decimal and datetime values to JSON-safe strings."""
 
     def default(self, o: Any) -> Any:
         if isinstance(o, Decimal):
             return str(o)
+        if isinstance(o, datetime | date):
+            return o.isoformat()
         return super().default(o)
 
 

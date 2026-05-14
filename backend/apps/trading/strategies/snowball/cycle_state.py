@@ -10,16 +10,7 @@ from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.entries import Entry
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid
-from apps.trading.strategies.snowball.state_parsing import (
-    optional_decimal,
-    optional_str,
-    require,
-    require_dict,
-    require_list,
-    strict_bool,
-    strict_decimal,
-    strict_int,
-)
+from apps.trading.strategies.snowball.state_parsing import SNOWBALL_STATE_PARSER
 
 # ---------------------------------------------------------------------------
 # Cycle
@@ -199,34 +190,40 @@ class SnowballCycle:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SnowballCycle":
-        data = require_dict(data, field_name="cycle")
-        raw_direction = require(data, "direction")
+        data = SNOWBALL_STATE_PARSER.require_dict(data, field_name="cycle")
+        raw_direction = SNOWBALL_STATE_PARSER.require(data, "direction")
         direction = (
             raw_direction
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
 
-        grid = PositionGrid.from_dict(require(data, "grid"))
+        grid = PositionGrid.from_dict(SNOWBALL_STATE_PARSER.require(data, "grid"))
 
-        raw_status = require(data, "status")
+        raw_status = SNOWBALL_STATE_PARSER.require(data, "status")
         status = CycleStatus(str(raw_status).strip().lower())
 
         return SnowballCycle(
-            cycle_id=strict_int(require(data, "cycle_id"), field_name="cycle_id"),
+            cycle_id=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(data, "cycle_id"), field_name="cycle_id"
+            ),
             direction=direction,
             grid=grid,
             hedge_entries=[
                 Entry.from_dict(e)
-                for e in require_list(require(data, "hedge_entries"), field_name="hedge_entries")
+                for e in SNOWBALL_STATE_PARSER.require_list(
+                    SNOWBALL_STATE_PARSER.require(data, "hedge_entries"), field_name="hedge_entries"
+                )
             ],
-            counter_close_count=strict_int(
-                require(data, "counter_close_count"),
+            counter_close_count=SNOWBALL_STATE_PARSER.strict_int(
+                SNOWBALL_STATE_PARSER.require(data, "counter_close_count"),
                 field_name="counter_close_count",
             ),
             status=status,
-            trade_cycle_id=optional_str(data, "trade_cycle_id"),
-            realized_pnl=strict_decimal(require(data, "realized_pnl"), field_name="realized_pnl"),
+            trade_cycle_id=SNOWBALL_STATE_PARSER.optional_str(data, "trade_cycle_id"),
+            realized_pnl=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(data, "realized_pnl"), field_name="realized_pnl"
+            ),
         )
 
 
@@ -301,34 +298,48 @@ class SnowballStrategyState:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SnowballStrategyState":
-        data = require_dict(data, field_name="strategy_state")
-        raw_cycles = require_list(require(data, "cycles"), field_name="cycles")
+        data = SNOWBALL_STATE_PARSER.require_dict(data, field_name="strategy_state")
+        raw_cycles = SNOWBALL_STATE_PARSER.require_list(
+            SNOWBALL_STATE_PARSER.require(data, "cycles"), field_name="cycles"
+        )
         cycles = [SnowballCycle.from_dict(c) for c in raw_cycles]
-        raw_metrics = require(data, "metrics")
+        raw_metrics = SNOWBALL_STATE_PARSER.require(data, "metrics")
         if not isinstance(raw_metrics, dict):
             raise ValueError("Snowball state field metrics must be an object")
 
         return SnowballStrategyState(
-            protection_level=ProtectionLevel(require(data, "protection_level")),
-            initialised=strict_bool(require(data, "initialised"), field_name="initialised"),
+            protection_level=ProtectionLevel(
+                SNOWBALL_STATE_PARSER.require(data, "protection_level")
+            ),
+            initialised=SNOWBALL_STATE_PARSER.strict_bool(
+                SNOWBALL_STATE_PARSER.require(data, "initialised"), field_name="initialised"
+            ),
             cycles=cycles,
             next_entry_id=max(
-                1, strict_int(require(data, "next_entry_id"), field_name="next_entry_id")
+                1,
+                SNOWBALL_STATE_PARSER.strict_int(
+                    SNOWBALL_STATE_PARSER.require(data, "next_entry_id"), field_name="next_entry_id"
+                ),
             ),
             lock_hedge_ids=[
-                strict_int(i, field_name="lock_hedge_ids")
-                for i in require_list(require(data, "lock_hedge_ids"), field_name="lock_hedge_ids")
+                SNOWBALL_STATE_PARSER.strict_int(i, field_name="lock_hedge_ids")
+                for i in SNOWBALL_STATE_PARSER.require_list(
+                    SNOWBALL_STATE_PARSER.require(data, "lock_hedge_ids"),
+                    field_name="lock_hedge_ids",
+                )
             ],
-            lock_entered_at=optional_str(data, "lock_entered_at"),
-            cooldown_until=optional_str(data, "cooldown_until"),
-            last_bid=optional_decimal(data, "last_bid"),
-            last_ask=optional_decimal(data, "last_ask"),
-            last_mid=optional_decimal(data, "last_mid"),
-            account_balance=strict_decimal(
-                require(data, "account_balance"),
+            lock_entered_at=SNOWBALL_STATE_PARSER.optional_str(data, "lock_entered_at"),
+            cooldown_until=SNOWBALL_STATE_PARSER.optional_str(data, "cooldown_until"),
+            last_bid=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_bid"),
+            last_ask=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_ask"),
+            last_mid=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_mid"),
+            account_balance=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(data, "account_balance"),
                 field_name="account_balance",
             ),
-            account_nav=strict_decimal(require(data, "account_nav"), field_name="account_nav"),
+            account_nav=SNOWBALL_STATE_PARSER.strict_decimal(
+                SNOWBALL_STATE_PARSER.require(data, "account_nav"), field_name="account_nav"
+            ),
             metrics=dict(raw_metrics),
         )
 

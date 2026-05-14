@@ -8,6 +8,10 @@
 
 import { useCallback, useMemo } from 'react';
 import type { TaskType } from '../types/common';
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+} from '../types/money';
 import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
@@ -28,6 +32,15 @@ export interface TaskPosition {
   oanda_trade_id?: string | null;
   replayed_at?: string | null;
   unrealized_pnl?: string | null;
+  unrealized_pnl_currency?: string | null;
+  unrealized_pnl_money?: MoneyAmountLike | null;
+  unrealized_pnl_display_money?: MoneyAmountLike | null;
+  unrealized_pnl_display_conversion_context?: CurrencyConversionContext | null;
+  realized_pnl?: string | null;
+  realized_pnl_currency?: string | null;
+  realized_pnl_money?: MoneyAmountLike | null;
+  realized_pnl_display_money?: MoneyAmountLike | null;
+  realized_pnl_display_conversion_context?: CurrencyConversionContext | null;
   is_open: boolean;
   layer_index?: number | null;
   retracement_count?: number | null;

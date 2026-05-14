@@ -13,6 +13,13 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.serializers.fx import FxRateQuerySerializer, FxRateResponseSerializer
+from apps.trading.serializers.lifecycle import PositionLifecycleResponseSerializer
+from apps.trading.serializers.money import (
+    CurrencyConversionContextSerializer,
+    MoneySerializer,
+    TaskMoneyContextSerializer,
+)
 from apps.trading.serializers.strategy import (
     StrategyConfigCreateSerializer,
     StrategyConfigDetailSerializer,
@@ -48,6 +55,13 @@ __all__ = [
     "TradingEventSerializer",
     "StrategyEventSerializer",
     "TradeSerializer",
+    # Money and FX
+    "FxRateQuerySerializer",
+    "FxRateResponseSerializer",
+    "PositionLifecycleResponseSerializer",
+    "CurrencyConversionContextSerializer",
+    "MoneySerializer",
+    "TaskMoneyContextSerializer",
     # Strategy
     "StrategyConfigCreateSerializer",
     "StrategyConfigDetailSerializer",

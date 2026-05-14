@@ -86,6 +86,7 @@ class Command(BaseCommand):
             with transaction.atomic():
                 user.set_password(password)
                 user.reset_failed_login()
+                user.auth_token_version += 1
 
                 if unlock and user.is_locked:
                     user.unlock_account()

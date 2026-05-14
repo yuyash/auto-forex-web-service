@@ -21,6 +21,7 @@ Close ordering:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
@@ -45,34 +46,28 @@ from apps.trading.strategies.snowball.counter_flow import (
     SnowballCounterCloseProcessor,
 )
 from apps.trading.strategies.snowball.decisions import SnowballDecisionEngine
-from apps.trading.strategies.snowball.entry_lifecycle import close_entry
+from apps.trading.strategies.snowball.entry_lifecycle import SNOWBALL_ENTRY_LIFECYCLE
 from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS
 from apps.trading.strategies.snowball.execution_binding import (
     apply_event_execution_result as apply_snowball_execution_result,
 )
-from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
+from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
-from apps.trading.strategies.snowball.models import (
-    Entry,
-    Layer,
-    Slot,
-    SnowballCycle,
-    SnowballStrategyState,
-    StopLossClosedEntry,
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_lifecycle import (
+    SnowballCycleFactory,
+    SnowballLayerInitialPlanner,
 )
-from apps.trading.strategies.snowball.parameters import (
-    config_to_parameters,
-    default_parameters,
-    normalize_parameters,
-    parse_config,
-    validate_parameters,
-)
+from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
+from apps.trading.strategies.snowball.grid_models import Layer, Slot
+from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION
 from apps.trading.strategies.snowball.stop_loss_flow import (
     StopLossAssigner,
     StopLossCloseProcessor,
     StopLossProtectionPolicy,
+    StopLossRebuildPricePlanner,
     StopLossRebuildProcessor,
 )
 from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
@@ -107,6 +102,97 @@ class SnowballResumeParameterCompatibility:
         return int(value)
 
 
+@dataclass(frozen=True, slots=True)
+class SnowballRegistryFacade:
+    """Own Snowball's Strategy registry-facing adapters."""
+
+    parameter_service: Any = SNOWBALL_PARAMETER_SERVICE
+    resume_compatibility: SnowballResumeParameterCompatibility = (
+        SnowballResumeParameterCompatibility()
+    )
+
+    def parse_config(self, strategy_config: Any) -> SnowballStrategyConfig:
+        """Parse persisted strategy configuration."""
+        return self.parameter_service.parse_config(strategy_config)
+
+    def config_to_parameters(self, config: SnowballStrategyConfig) -> dict[str, Any]:
+        """Return persisted parameters for a config."""
+        return self.parameter_service.config_to_parameters(config)
+
+    def normalize_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Normalize strategy parameters."""
+        return self.parameter_service.normalize_parameters(parameters)
+
+    def default_parameters(self) -> dict[str, Any]:
+        """Return strategy defaults."""
+        return self.parameter_service.default_parameters()
+
+    def validate_parameters(
+        self,
+        *,
+        parameters: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Validate strategy parameters."""
+        self.parameter_service.validate_parameters(
+            parameters=parameters,
+            config_schema=config_schema,
+        )
+
+    def reconcile_broker_positions(
+        self,
+        *,
+        state: ExecutionState,
+        open_positions: list[Any],
+        report: Any,
+        strategy_config: Any | None = None,
+    ) -> None:
+        """Reconcile persisted Snowball state with broker positions."""
+        from apps.trading.strategies.snowball.reconciliation import SNOWBALL_RECONCILER
+
+        SNOWBALL_RECONCILER.reconcile(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+            strategy_config=strategy_config,
+        )
+
+    def build_cycle_grid_state_map(
+        self,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        """Build cycle grid visualization payloads."""
+        from apps.trading.strategies.snowball.visualization import SNOWBALL_VISUALIZATION
+
+        return SNOWBALL_VISUALIZATION.cycle_grid_state_map(strategy_state=strategy_state)
+
+    def build_cycle_status_map(
+        self,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        """Build cycle status visualization payloads."""
+        from apps.trading.strategies.snowball.visualization import SNOWBALL_VISUALIZATION
+
+        return SNOWBALL_VISUALIZATION.cycle_status_map(strategy_state=strategy_state)
+
+    def validate_resume_parameter_compatibility(
+        self,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        """Validate Snowball resume compatibility."""
+        self.resume_compatibility.validate(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
+
+
+SNOWBALL_REGISTRY_FACADE = SnowballRegistryFacade()
+
+
 @register_strategy(
     id="snowball",
     schema="trading/schemas/snowball.json",
@@ -132,6 +218,7 @@ class SnowballStrategy(Strategy):
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
+        self.grid_policy = SNOWBALL_GRID_POLICY
         self.decision_engine = SnowballDecisionEngine(
             invariant_validator=SnowballInvariantValidator(config=config),
         )
@@ -143,14 +230,20 @@ class SnowballStrategy(Strategy):
         )
         self.counter_add_processor = SnowballCounterAddProcessor(
             price_service=self.counter_price_service,
+            grid_policy=self.grid_policy,
         )
+        self.cycle_factory = SnowballCycleFactory()
+        self.layer_initial_planner = SnowballLayerInitialPlanner()
         self.counter_add_description = SnowballCounterAddDescription()
+        self.entry_lifecycle = SNOWBALL_ENTRY_LIFECYCLE
         self.stop_loss_assigner = StopLossAssigner()
         self.stop_loss_protection_policy = StopLossProtectionPolicy()
         self.stop_loss_close_processor = StopLossCloseProcessor(
             protection_policy=self.stop_loss_protection_policy,
         )
-        self.stop_loss_rebuild_processor = StopLossRebuildProcessor()
+        self.stop_loss_rebuild_processor = StopLossRebuildProcessor(
+            price_planner=StopLossRebuildPricePlanner(grid_policy=self.grid_policy),
+        )
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -163,19 +256,19 @@ class SnowballStrategy(Strategy):
 
     @staticmethod
     def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-        return parse_config(strategy_config)
+        return SNOWBALL_REGISTRY_FACADE.parse_config(strategy_config)
 
     @staticmethod
     def _config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:
-        return config_to_parameters(config)
+        return SNOWBALL_REGISTRY_FACADE.config_to_parameters(config)
 
     @classmethod
     def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
-        return normalize_parameters(parameters)
+        return SNOWBALL_REGISTRY_FACADE.normalize_parameters(parameters)
 
     @classmethod
     def default_parameters(cls) -> dict[str, Any]:
-        return default_parameters()
+        return SNOWBALL_REGISTRY_FACADE.default_parameters()
 
     @classmethod
     def validate_parameters(
@@ -184,7 +277,10 @@ class SnowballStrategy(Strategy):
         parameters: dict[str, Any],
         config_schema: dict[str, Any] | None = None,
     ) -> None:
-        validate_parameters(parameters=parameters, config_schema=config_schema)
+        SNOWBALL_REGISTRY_FACADE.validate_parameters(
+            parameters=parameters,
+            config_schema=config_schema,
+        )
 
     @property
     def strategy_type(self) -> StrategyType:
@@ -245,11 +341,7 @@ class SnowballStrategy(Strategy):
         report: Any,
         strategy_config: Any | None = None,
     ) -> None:
-        from apps.trading.strategies.snowball.reconciliation import (
-            reconcile_broker_positions,
-        )
-
-        reconcile_broker_positions(
+        SNOWBALL_REGISTRY_FACADE.reconcile_broker_positions(
             state=state,
             open_positions=open_positions,
             report=report,
@@ -262,11 +354,7 @@ class SnowballStrategy(Strategy):
         *,
         strategy_state: dict[str, Any] | None,
     ) -> dict[str, dict[str, Any]]:
-        from apps.trading.strategies.snowball.visualization import (
-            build_cycle_grid_state_map,
-        )
-
-        return build_cycle_grid_state_map(strategy_state=strategy_state)
+        return SNOWBALL_REGISTRY_FACADE.build_cycle_grid_state_map(strategy_state=strategy_state)
 
     @classmethod
     def build_cycle_status_map(
@@ -274,11 +362,7 @@ class SnowballStrategy(Strategy):
         *,
         strategy_state: dict[str, Any] | None,
     ) -> dict[str, str]:
-        from apps.trading.strategies.snowball.visualization import (
-            build_cycle_status_map,
-        )
-
-        return build_cycle_status_map(strategy_state=strategy_state)
+        return SNOWBALL_REGISTRY_FACADE.build_cycle_status_map(strategy_state=strategy_state)
 
     @classmethod
     def validate_resume_parameter_compatibility(
@@ -287,7 +371,7 @@ class SnowballStrategy(Strategy):
         previous_params: dict[str, Any],
         current_params: dict[str, Any],
     ) -> None:
-        SnowballResumeParameterCompatibility().validate(
+        SNOWBALL_REGISTRY_FACADE.validate_resume_parameter_compatibility(
             previous_params=previous_params,
             current_params=current_params,
         )
@@ -315,7 +399,7 @@ class SnowballStrategy(Strategy):
         margin_ratio: Decimal | None = None,
         cycle: SnowballCycle | None = None,
     ) -> ClosePositionEvent:
-        return close_entry(
+        return self.entry_lifecycle.close(
             self,
             logger,
             tick,
@@ -339,53 +423,12 @@ class SnowballStrategy(Strategy):
         direction: Direction,
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
         """Create a new cycle with an initial entry at L0/R0."""
-        cfg = self.config
-        units = cfg.trend_lot_size * cfg.base_units
-        price = tick.ask if direction == Direction.LONG else tick.bid
-        if direction == Direction.LONG:
-            close_price = price + cfg.m_pips * self.pip_size
-            formula = f"{price} + {cfg.m_pips} * {self.pip_size}"
-        else:
-            close_price = price - cfg.m_pips * self.pip_size
-            formula = f"{price} - {cfg.m_pips} * {self.pip_size}"
-
-        entry = Entry.open(
+        return self.cycle_factory.create(
+            strategy=self,
             state=ss,
             tick=tick,
             direction=direction,
-            units=units,
-            step=1,
-            close_price=close_price,
-            role="initial",
-            layer_number=1,
-            retracement_count=0,
         )
-        entry.expected_tp_pips = cfg.m_pips
-        entry.validation_status = "pass"
-
-        # Compute stop-loss for this entry at creation time
-        if cfg.stop_loss_enabled:
-            self._assign_configured_stop_loss(entry, 1)
-
-        evt = SNOWBALL_EVENTS.entry_open_event(
-            entry,
-            timestamp=tick.timestamp,
-            planned_exit_price_formula=formula,
-            description=(
-                f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.3f}"
-                + (f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else "")
-            ),
-        )
-
-        cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
-        # L1 with R0 (initial) + R1…R(r_max) counter slots
-        layer0 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
-        slot0 = layer0.slot_at(0)
-        assert slot0 is not None  # noqa: S101
-        slot0.fill(entry)
-        cycle.add_layer(layer0)
-        ss.cycles.append(cycle)
-        return [evt], cycle
 
     def _close_and_reenter(
         self,
@@ -529,7 +572,7 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        self._grid_order_violation = validate_grid_ordering(
+        self._grid_order_violation = self.grid_policy.validate_ordering(
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
         )
@@ -939,25 +982,20 @@ class SnowballStrategy(Strategy):
         rebuild), fall back to the current market price — there is no
         anchor to snap to.
         """
-        highest = prev_layer.highest_present_slot()
-        if highest is None:
-            return market_price
-
-        if highest.entry is not None:
-            ref_price = highest.entry.entry_price
-        elif highest.pending_rebuild is not None:
-            ref_price = highest.pending_rebuild.entry_price
-        else:
-            return market_price
-
         # Interval that the gate uses for "the next slot past ``highest``":
         # ``counter_interval_pips(k)`` is 1-based, k == highest.index + 1
         # advances into the next retracement slot.
+        highest = prev_layer.highest_present_slot()
+        if highest is None:
+            return market_price
         interval = self.calculator.counter_interval_pips(highest.index + 1)
-        offset = interval * self.pip_size
-        if direction == Direction.LONG:
-            return ref_price - offset
-        return ref_price + offset
+        return self.layer_initial_planner.anchor_price(
+            prev_layer=prev_layer,
+            direction=direction,
+            market_price=market_price,
+            interval_pips=interval,
+            pip_size=self.pip_size,
+        )
 
     # ------------------------------------------------------------------
     # Stop-loss protection

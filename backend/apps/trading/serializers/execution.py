@@ -2,12 +2,15 @@
 
 from rest_framework import serializers
 
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
+
 
 class TaskExecutionMetricsSerializer(serializers.Serializer):
     """Serializer for execution-level aggregate metrics."""
 
     total_return = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     total_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    realized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     unrealized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     total_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     realized_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
@@ -19,7 +22,37 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     losing_trades = serializers.IntegerField(required=False)
     win_rate = serializers.DecimalField(max_digits=10, decimal_places=4, required=False)
     pnl_currency = serializers.CharField(required=False)
+    account_currency = serializers.CharField(required=False)
     quote_currency = serializers.CharField(required=False)
+    display_currency = serializers.CharField(required=False)
+    current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    initial_balance = serializers.CharField(required=False)
+    current_balance_currency = serializers.CharField(required=False)
+    initial_balance_currency = serializers.CharField(required=False)
+    total_pnl_money = MoneySerializer(required=False)
+    realized_pnl_money = MoneySerializer(required=False)
+    unrealized_pnl_money = MoneySerializer(required=False)
+    total_pnl_quote_money = MoneySerializer(required=False)
+    realized_pnl_quote_money = MoneySerializer(required=False)
+    unrealized_pnl_quote_money = MoneySerializer(required=False)
+    current_balance_money = MoneySerializer(required=False)
+    current_balance_display_money = MoneySerializer(required=False)
+    initial_balance_money = MoneySerializer(required=False)
+    total_pnl_display_money = MoneySerializer(required=False)
+    realized_pnl_display_money = MoneySerializer(required=False)
+    unrealized_pnl_display_money = MoneySerializer(required=False)
+    display_conversion_context = CurrencyConversionContextSerializer(required=False)
+    quote_to_account_rate = serializers.DecimalField(
+        max_digits=24,
+        decimal_places=12,
+        required=False,
+    )
+    quote_to_account_rate_source = serializers.CharField(required=False)
+    quote_to_account_rate_as_of = serializers.DateTimeField(allow_null=True, required=False)
+    quote_to_account_rate_path = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
 
 
 class TaskExecutionSerializer(serializers.Serializer):
@@ -34,7 +67,7 @@ class TaskExecutionSerializer(serializers.Serializer):
     started_at = serializers.DateTimeField(allow_null=True)
     completed_at = serializers.DateTimeField(allow_null=True, required=False)
     error_message = serializers.CharField(allow_null=True, required=False)
-    error_traceback = serializers.CharField(allow_null=True, required=False)
+    error_code = serializers.CharField(allow_null=True, required=False)
     duration = serializers.FloatField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     notes = serializers.CharField(allow_blank=True, required=False, default="")

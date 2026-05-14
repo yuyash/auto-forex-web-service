@@ -13,6 +13,10 @@ from apps.trading.enums import TaskStatus
 from apps.trading.models import CeleryTaskStatus
 from apps.trading.services.execution_metrics import build_execution_metrics
 from apps.trading.services.execution_snapshots import get_metrics_snapshot
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 from apps.trading.services.summary import TASK_SUMMARY_READ_MODEL
 
 
@@ -33,7 +37,7 @@ class TaskExecutionRow:
     started_at: str | None
     completed_at: str | None
     error_message: str | None
-    error_traceback: str | None
+    error_code: str | None
     duration: float | None
     created_at: str
     metrics: dict[str, Any] | None = None
@@ -155,11 +159,11 @@ def _load_execution_index(
             continue
         by_run_id[run_id] = {
             "status": _map_celery_status(str(row["status"])),
-            "error_message": str(row["status_message"]) if row["status"] == "failed" else None,
+            "error_message": task_public_error_message(_map_celery_status(str(row["status"]))),
+            "error_code": task_public_error_code(_map_celery_status(str(row["status"]))),
             "started_at": row["started_at"],
             "completed_at": row["stopped_at"],
             "created_at": row["created_at"],
-            "error_traceback": None,
         }
 
     current_run_id = str(getattr(task, "execution_id", None) or "")
@@ -168,10 +172,9 @@ def _load_execution_index(
         current.update(
             {
                 "status": str(task.status),
-                "error_message": task.error_message or current.get("error_message"),
-                "error_traceback": task.error_traceback
-                if task.status == TaskStatus.FAILED
-                else current.get("error_traceback"),
+                "error_message": task_public_error_message(task.status)
+                or current.get("error_message"),
+                "error_code": task_public_error_code(task.status) or current.get("error_code"),
                 "started_at": task.started_at or current.get("started_at"),
                 "completed_at": task.completed_at or current.get("completed_at"),
                 "created_at": current.get("created_at") or task.created_at,
@@ -198,8 +201,8 @@ def _load_execution_meta(*, task, task_type: str, run_id: str) -> dict[str, Any]
     if run_id == current_run_id:
         current_meta = {
             "status": str(task.status),
-            "error_message": task.error_message or None,
-            "error_traceback": task.error_traceback if task.status == TaskStatus.FAILED else None,
+            "error_message": task_public_error_message(task.status),
+            "error_code": task_public_error_code(task.status),
             "started_at": task.started_at,
             "completed_at": task.completed_at,
             "created_at": task.created_at,
@@ -227,18 +230,18 @@ def _load_execution_meta(*, task, task_type: str, run_id: str) -> dict[str, Any]
 
     meta = {
         "status": _map_celery_status(str(row["status"])),
-        "error_message": str(row["status_message"]) if row["status"] == "failed" else None,
+        "error_message": task_public_error_message(_map_celery_status(str(row["status"]))),
+        "error_code": task_public_error_code(_map_celery_status(str(row["status"]))),
         "started_at": row["started_at"],
         "completed_at": row["stopped_at"],
         "created_at": row["created_at"],
-        "error_traceback": None,
     }
     if current_meta:
         meta.update(
             {
                 "status": current_meta["status"],
                 "error_message": current_meta["error_message"] or meta.get("error_message"),
-                "error_traceback": current_meta["error_traceback"],
+                "error_code": current_meta["error_code"] or meta.get("error_code"),
                 "started_at": current_meta["started_at"] or meta.get("started_at"),
                 "completed_at": current_meta["completed_at"] or meta.get("completed_at"),
                 "created_at": meta.get("created_at") or current_meta["created_at"],
@@ -288,7 +291,7 @@ def _serialize_execution_row(
             started_at=started_at.isoformat() if started_at else None,
             completed_at=completed_at.isoformat() if completed_at else None,
             error_message=meta.get("error_message"),
-            error_traceback=meta.get("error_traceback"),
+            error_code=meta.get("error_code"),
             duration=_compute_duration_seconds(started_at, completed_at),
             created_at=(meta.get("created_at") or task.created_at).isoformat(),
             metrics=None,

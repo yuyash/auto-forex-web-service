@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from rest_framework import serializers
 
 from apps.trading.enums import Direction, EventType
 from apps.trading.models import StrategyEventRecord, TradingEvent
+from apps.trading.serializers.money import CurrencyConversionContextSerializer, MoneySerializer
 
 
 class TradingEventSerializer(serializers.ModelSerializer):
@@ -96,6 +98,7 @@ class TradeSerializer(serializers.Serializer):
     units = serializers.IntegerField()
     instrument = serializers.CharField()
     price = serializers.DecimalField(max_digits=20, decimal_places=10)
+    price_currency = serializers.CharField(required=False, allow_blank=True)
     execution_method = serializers.ChoiceField(choices=EventType.choices)
     execution_method_display = serializers.SerializerMethodField(
         help_text="Human-readable display name for the execution method.",
@@ -115,6 +118,17 @@ class TradeSerializer(serializers.Serializer):
     pnl = serializers.DecimalField(
         max_digits=20,
         decimal_places=10,
+        required=False,
+        allow_null=True,
+    )
+    pnl_currency = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    pnl_money = MoneySerializer(required=False, allow_null=True)
+    pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    display_conversion_context = CurrencyConversionContextSerializer(
         required=False,
         allow_null=True,
     )
@@ -181,6 +195,29 @@ class PositionSerializer(serializers.Serializer):
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     is_rebuild = serializers.BooleanField(required=False, default=False)
+    unrealized_pnl = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        required=False,
+    )
+    unrealized_pnl_currency = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    unrealized_pnl_money = MoneySerializer(required=False, allow_null=True)
+    unrealized_pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    unrealized_pnl_display_conversion_context = CurrencyConversionContextSerializer(
+        required=False,
+        allow_null=True,
+    )
+    realized_pnl = serializers.SerializerMethodField()
+    realized_pnl_currency = serializers.SerializerMethodField()
+    realized_pnl_money = MoneySerializer(required=False, allow_null=True)
+    realized_pnl_display_money = MoneySerializer(required=False, allow_null=True)
+    realized_pnl_display_conversion_context = CurrencyConversionContextSerializer(
+        required=False,
+        allow_null=True,
+    )
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
@@ -208,6 +245,9 @@ class PositionSerializer(serializers.Serializer):
             return None
         if getattr(obj, "is_open", True):
             return None
+        annotated_reason = getattr(obj, "_close_reason", None)
+        if annotated_reason:
+            return annotated_reason
         # Use prefetched trades if available
         if hasattr(obj, "prefetched_close_reason"):
             return obj.prefetched_close_reason  # type: ignore[return-value]
@@ -242,6 +282,32 @@ class PositionSerializer(serializers.Serializer):
         if hasattr(obj, "trades"):
             return list(obj.trades.values_list("id", flat=True))  # type: ignore[union-attr]
         return []
+
+    def get_realized_pnl(self, obj: object) -> str | None:
+        """Return realized PnL for closed positions when available."""
+        value = None
+        if isinstance(obj, dict):
+            value = cast(dict[str, Any], obj).get("realized_pnl")
+        else:
+            value = getattr(obj, "_realized_pnl", None)
+        if value is None:
+            return None
+        try:
+            return str(Decimal(str(value)).quantize(Decimal("0.0000000001")))
+        except (InvalidOperation, TypeError, ValueError):
+            return str(value)
+
+    def get_realized_pnl_currency(self, obj: object) -> str:
+        """Return the currency for realized PnL values."""
+        if isinstance(obj, dict):
+            data = cast(dict[str, Any], obj)
+            return str(
+                data.get("realized_pnl_currency") or data.get("unrealized_pnl_currency") or ""
+            )
+        explicit = getattr(obj, "realized_pnl_currency", None)
+        if explicit:
+            return str(explicit)
+        return str(getattr(obj, "unrealized_pnl_currency", "") or "")
 
 
 class OrderSerializer(serializers.Serializer):

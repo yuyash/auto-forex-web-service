@@ -10,16 +10,11 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.market.models import CeleryTaskStatus as MarketCeleryTaskStatus
-from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
-
-
-ACTIVE_TASK_STATUSES = (
-    TaskStatus.STARTING,
-    TaskStatus.RUNNING,
-    TaskStatus.PAUSED,
-    TaskStatus.STOPPING,
+from apps.trading.services.task_policy import (
+    CAPACITY_ACTIVE_STATUSES as ACTIVE_TASK_STATUSES,
 )
+
 ACTIVE_MARKET_STATUSES = (
     MarketCeleryTaskStatus.Status.RUNNING,
     MarketCeleryTaskStatus.Status.STOPPING,

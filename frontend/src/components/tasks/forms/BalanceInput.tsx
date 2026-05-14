@@ -2,9 +2,9 @@ import React from 'react';
 import { TextField, InputAdornment, FormHelperText } from '@mui/material';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import {
-  currencySymbol,
   formatAppNumber,
-  type FormatAppNumberOptions,
+  formatMoneyAmount,
+  type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
 
 interface BalanceInputProps {
@@ -66,10 +66,10 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
 
     if (!isNaN(numValue)) {
       if (numValue < min) {
-        return `Balance must be at least ${formatCurrency(min, currency, formatNumber)}`;
+        return `Balance must be at least ${formatCurrency(min, currency, separators)}`;
       }
       if (max !== undefined && numValue > max) {
-        return `Balance must not exceed ${formatCurrency(max, currency, formatNumber)}`;
+        return `Balance must not exceed ${formatCurrency(max, currency, separators)}`;
       }
       if (numValue <= 0) {
         return 'Balance must be greater than zero';
@@ -83,7 +83,7 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
     min,
     max,
     currency,
-    formatNumber,
+    separators,
     decimalSeparator,
   ]);
 
@@ -153,7 +153,7 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
       />
       {!displayError && !helperText && isValid && (
         <FormHelperText>
-          {formatCurrency(numValue, currency, formatNumber)}
+          {formatCurrency(numValue, currency, separators)}
         </FormHelperText>
       )}
     </>
@@ -163,15 +163,17 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
 function formatCurrency(
   value: number,
   currency: string,
-  formatNumber: (value: number, options?: FormatAppNumberOptions) => string
+  separators?: NumberFormatSeparators
 ): string {
-  const symbol = currencySymbol(currency);
-  const prefix =
-    symbol === currency.trim().toUpperCase() ? `${symbol} ` : symbol;
-  return `${prefix}${formatNumber(value, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoneyAmount(
+    value,
+    currency,
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+    separators
+  );
 }
 
 function normalizeEditableNumber(value: string, decimalSeparator: '.' | ',') {

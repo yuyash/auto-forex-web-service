@@ -6,8 +6,12 @@ import {
 } from './taskSettingsFormat';
 import {
   formatAppNumber,
+  formatMoneyAmount,
+  formatMoneyPayload,
   type NumberFormatSeparators,
 } from '../../../utils/numberFormat';
+import type { TaskInstrumentContext } from '../../../types/instrument';
+import type { MoneyAmount, TaskMoneyContext } from '../../../types/money';
 
 function formatBooleanWithTranslation(t: TFunction) {
   return (value: TaskSettingValue): string =>
@@ -16,20 +20,87 @@ function formatBooleanWithTranslation(t: TFunction) {
 
 function formatPipSize(
   value: TaskSettingValue,
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>,
+  t?: TFunction,
   separators?: NumberFormatSeparators
 ): string {
-  if (value === null || value === undefined || value === '') return '-';
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return String(value);
-  return formatAppNumber(
+  const context = instrumentContext(source, task);
+  const rawValue = context?.effective_pip_size || value;
+  if (rawValue === null || rawValue === undefined || rawValue === '')
+    return '-';
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return String(rawValue);
+  const formatted = formatAppNumber(
     numericValue,
     {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8,
       useGrouping: false,
     },
     separators
   );
+  if (!context || context.pip_size_source !== 'task_override') {
+    return formatted;
+  }
+  const defaultFormatted = formatAppNumber(
+    Number(context.default_pip_size),
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8,
+      useGrouping: false,
+    },
+    separators
+  );
+  return (
+    t?.('common:labels.pipSizeOverrideValue', {
+      defaultValue: '{{value}} (override, default {{defaultPipSize}})',
+      value: formatted,
+      defaultPipSize: defaultFormatted,
+    }) ?? `${formatted} (override, default ${defaultFormatted})`
+  );
+}
+
+function instrumentContext(
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>
+): TaskInstrumentContext | null {
+  const context = source?.instrument_context ?? task?.instrument_context;
+  if (!context || typeof context !== 'object') return null;
+  return context as TaskInstrumentContext;
+}
+
+function taskMoneyContext(
+  source?: Record<string, unknown>,
+  task?: Record<string, unknown>
+): TaskMoneyContext | null {
+  const context = source?.money_context ?? task?.money_context;
+  if (!context || typeof context !== 'object') return null;
+  return context as TaskMoneyContext;
+}
+
+function formatCurrencyWithMoneyContext(
+  value: TaskSettingValue,
+  source: Record<string, unknown>,
+  task: Record<string, unknown>,
+  field: 'account_currency' | 'display_currency',
+  t: TFunction
+): string {
+  const context = taskMoneyContext(source, task);
+  const currency =
+    field === 'account_currency'
+      ? context?.account_currency
+      : context?.display_currency;
+  const code = currency || value;
+  if (code === null || code === undefined || code === '') return '-';
+  const text = String(code);
+  if (field === 'display_currency' && context?.display_requires_conversion) {
+    return t('common:labels.currencyRuntimeFxValue', {
+      defaultValue: '{{currency}} (runtime FX)',
+      currency: text,
+    });
+  }
+  return text;
 }
 
 function formatWeekday(t: TFunction) {
@@ -58,19 +129,65 @@ function formatInitialBalance(
   separators?: NumberFormatSeparators
 ): string {
   if (value === null || value === undefined || value === '') return '-';
+  const context = taskMoneyContext(source, task);
+  const money =
+    context?.initial_balance_money ??
+    source.initial_balance_money ??
+    task.initial_balance_money;
+  if (money && typeof money === 'object') {
+    return formatMoneyPayload(
+      money as MoneyAmount,
+      { currencyPlacement: 'suffix' },
+      separators
+    );
+  }
   const numericValue = Number(value);
-  const formatted = Number.isFinite(numericValue)
-    ? formatAppNumber(
-        numericValue,
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2,
-        },
-        separators
-      )
-    : String(value);
-  const currency = source.account_currency ?? task.account_currency;
-  return currency ? `${formatted} ${String(currency)}` : formatted;
+  const currency =
+    context?.account_currency ??
+    source.account_currency ??
+    task.account_currency;
+  if (!Number.isFinite(numericValue)) return String(value);
+  return formatMoneyAmount(
+    numericValue,
+    currency ? String(currency) : undefined,
+    {
+      currencyPlacement: 'suffix',
+    },
+    separators
+  );
+}
+
+function formatCommissionPerTrade(
+  value: TaskSettingValue,
+  source: Record<string, unknown>,
+  task: Record<string, unknown>,
+  separators?: NumberFormatSeparators
+): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const context = taskMoneyContext(source, task);
+  const money =
+    context?.commission_per_trade_money ??
+    source.commission_per_trade_money ??
+    task.commission_per_trade_money;
+  if (money && typeof money === 'object') {
+    return formatMoneyPayload(
+      money as MoneyAmount,
+      { currencyPlacement: 'suffix' },
+      separators
+    );
+  }
+  const numericValue = Number(value);
+  const currency =
+    context?.account_currency ??
+    source.account_currency ??
+    task.account_currency;
+  if (!Number.isFinite(numericValue)) return String(value);
+  return formatMoneyAmount(
+    numericValue,
+    currency ? String(currency) : undefined,
+    { currencyPlacement: 'suffix' },
+    separators
+  );
 }
 
 function formatInitialPositionCycles(t: TFunction) {
@@ -122,7 +239,8 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: (value) => formatPipSize(value, options.numberSeparators),
+      render: (value, { source, task }) =>
+        formatPipSize(value, source, task, t, options.numberSeparators),
     },
     {
       key: 'start_time',
@@ -143,10 +261,32 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'account_currency',
       label: t('common:labels.accountCurrency', 'Account currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'account_currency',
+          t
+        ),
+    },
+    {
+      key: 'display_currency',
+      label: t('common:labels.displayCurrency', 'Display currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'display_currency',
+          t
+        ),
     },
     {
       key: 'commission_per_trade',
       label: t('backtest:detail.commissionPerTrade'),
+      render: (value, { source, task }) =>
+        formatCommissionPerTrade(value, source, task, options.numberSeparators),
     },
     {
       key: 'hedging_enabled',
@@ -259,12 +399,37 @@ export function buildTradingTaskSettingDefinitions(
     {
       key: 'pip_size',
       label: t('common:labels.pipSize'),
-      format: (value) => formatPipSize(value, options.numberSeparators),
+      render: (value, { source, task }) =>
+        formatPipSize(value, source, task, t, options.numberSeparators),
     },
     { key: 'account_name', label: t('trading:detail.account', 'Account') },
     {
       key: 'account_type',
       label: t('trading:detail.accountType', 'Account type'),
+    },
+    {
+      key: 'account_currency',
+      label: t('common:labels.accountCurrency', 'Account currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'account_currency',
+          t
+        ),
+    },
+    {
+      key: 'display_currency',
+      label: t('common:labels.displayCurrency', 'Display currency'),
+      render: (value, { source, task }) =>
+        formatCurrencyWithMoneyContext(
+          value,
+          source,
+          task,
+          'display_currency',
+          t
+        ),
     },
     {
       key: 'sell_on_stop',

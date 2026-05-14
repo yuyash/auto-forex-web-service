@@ -35,9 +35,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 django.setup()
 
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig  # noqa: E402
-from apps.trading.strategies.snowball.models import (  # noqa: E402
-    SnowballStrategyState,
-)
+from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState  # noqa: E402
 from apps.trading.strategies.snowball.strategy import SnowballStrategy  # noqa: E402
 
 

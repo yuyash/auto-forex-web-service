@@ -3,6 +3,10 @@ import {
   type TickDataPoint,
   type TickDataRange,
 } from '../services/api/market';
+import type {
+  InstrumentMetadata,
+  InstrumentsResponse,
+} from '../types/instrument';
 import {
   createFirstTickQuery,
   createSupportedGranularitiesQuery,
@@ -10,6 +14,10 @@ import {
   createTickDataRangeQuery,
 } from './miscQueries';
 import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
+import {
+  buildInstrumentMetadataMap,
+  normalizeInstrumentName,
+} from '../utils/instruments';
 
 const FALLBACK_INSTRUMENTS = [
   'EUR_USD',
@@ -49,17 +57,48 @@ const FALLBACK_GRANULARITIES: GranularityOption[] = [
   { value: 'M', label: 'Monthly' },
 ];
 
+const FALLBACK_INSTRUMENT_METADATA =
+  buildInstrumentMetadataMap(FALLBACK_INSTRUMENTS);
+
+function metadataForInstruments(
+  instruments: string[],
+  apiMetadata?: Record<string, InstrumentMetadata>
+): Record<string, InstrumentMetadata> {
+  if (!apiMetadata) {
+    return buildInstrumentMetadataMap(instruments);
+  }
+  return {
+    ...buildInstrumentMetadataMap(instruments),
+    ...Object.fromEntries(
+      Object.entries(apiMetadata).map(([instrument, metadata]) => [
+        normalizeInstrumentName(instrument),
+        metadata,
+      ])
+    ),
+  };
+}
+
 /**
  * Hook to fetch supported currency pairs from backend
  */
 export const useSupportedInstruments = () => {
   const query = useSimpleQueryState(createSupportedInstrumentsQuery());
 
-  return mapQueryStateFields(query, (data, state) => ({
-    instruments: data ?? FALLBACK_INSTRUMENTS,
-    error: state.error instanceof Error ? state.error.message : null,
-    usingFallback: !state.isLoading && !data && !!state.error,
-  }));
+  return mapQueryStateFields(
+    query,
+    (data: InstrumentsResponse | null, state) => {
+      const instruments = data?.instruments ?? FALLBACK_INSTRUMENTS;
+      return {
+        instruments,
+        metadata: data
+          ? metadataForInstruments(instruments, data.metadata)
+          : FALLBACK_INSTRUMENT_METADATA,
+        source: data?.source ?? null,
+        error: state.error instanceof Error ? state.error.message : null,
+        usingFallback: !state.isLoading && !data && !!state.error,
+      };
+    }
+  );
 };
 
 /**

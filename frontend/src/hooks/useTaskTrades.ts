@@ -11,6 +11,10 @@
  */
 
 import type { TaskType } from '../types/common';
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+} from '../types/money';
 import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
@@ -22,6 +26,7 @@ export interface TaskTrade {
   direction: 'long' | 'short' | null | '';
   units: string;
   price: string;
+  price_currency?: string | null;
   layer_index?: number | null;
   retracement_count?: number | null;
   execution_method?: string;
@@ -35,6 +40,10 @@ export interface TaskTrade {
   is_rebuild?: boolean;
   stop_loss_price?: string | null;
   pnl?: string | null;
+  pnl_currency?: string | null;
+  pnl_money?: MoneyAmountLike | null;
+  pnl_display_money?: MoneyAmountLike | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   entry_price?: string | null;
   replayed_at?: string | null;
   updated_at?: string | null;

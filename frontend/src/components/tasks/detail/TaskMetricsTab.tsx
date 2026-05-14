@@ -29,12 +29,17 @@ import {
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
 import { layoutTokens, spacingTokens } from '../../../theme/density';
 import { useAppSettings } from '../../../hooks/useAppSettings';
+import type { MoneyAmountLike } from '../../../types/money';
 import {
   formatDateInTimezone,
   formatDateTimeInTimezone,
   type DateTimeFormatOptions,
 } from '../../../utils/timezone';
-import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
+import {
+  formatAppNumber,
+  formatAppPercent,
+  formatMoneyAmount,
+} from '../../../utils/numberFormat';
 import { measureContainer } from '../../../utils/measureContainer';
 
 interface TaskMetricsTabProps {
@@ -186,6 +191,92 @@ const LOSS_CUT_OVERLAY_KEYS = new Set([
   'margin_ratio',
   'snowball_net_margin_ratio_pct',
 ]);
+
+type MetricChartValue = {
+  value: number;
+  currency?: string | null;
+};
+
+function isMoneyAmountLike(value: unknown): value is MoneyAmountLike {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    'amount' in value &&
+    'currency' in value
+  );
+}
+
+function metricMoney(
+  metrics: Record<string, unknown>,
+  key: string
+): MoneyAmountLike | null {
+  const displayMoney = metrics[`${key}_display_money`];
+  if (isMoneyAmountLike(displayMoney) && displayMoney.amount != null) {
+    return displayMoney;
+  }
+  const money = metrics[`${key}_money`];
+  if (isMoneyAmountLike(money) && money.amount != null) return money;
+  return null;
+}
+
+function metricCurrency(
+  metrics: Record<string, unknown>,
+  key: string,
+  fallback?: string
+): string | undefined {
+  const money = metricMoney(metrics, key);
+  if (typeof money?.currency === 'string' && money.currency) {
+    return money.currency;
+  }
+  const explicit = metrics[`${key}_currency`];
+  if (typeof explicit === 'string' && explicit) return explicit;
+  if (key.endsWith('_quote') && typeof metrics.quote_currency === 'string') {
+    return metrics.quote_currency;
+  }
+  if (
+    key === 'current_balance' &&
+    typeof metrics.current_balance_currency === 'string'
+  ) {
+    return metrics.current_balance_currency;
+  }
+  if (typeof metrics.pnl_currency === 'string' && metrics.pnl_currency) {
+    return metrics.pnl_currency;
+  }
+  if (
+    typeof metrics.account_currency === 'string' &&
+    metrics.account_currency
+  ) {
+    return metrics.account_currency;
+  }
+  return fallback;
+}
+
+function metricChartValue(
+  metrics: Record<string, unknown>,
+  metric: ChartMetric,
+  fallbackCurrency?: string
+): MetricChartValue | null {
+  if (metric.format === 'currency') {
+    const money = metricMoney(metrics, metric.key);
+    const amount = Number(money?.amount);
+    if (Number.isFinite(amount)) {
+      return { value: amount, currency: money?.currency ?? fallbackCurrency };
+    }
+  }
+
+  const val = metrics[metric.key];
+  if (val == null || val === '') return null;
+  const num = Number(val);
+  if (isNaN(num)) return null;
+  const scale = RATIO_KEYS.has(metric.key) ? 100 : 1;
+  return {
+    value: num * scale,
+    currency:
+      metric.format === 'currency'
+        ? metricCurrency(metrics, metric.key, fallbackCurrency)
+        : undefined,
+  };
+}
 
 function chartSeries(chart: MetricChartDefinition): ChartMetric[] {
   return chart.series ?? [chart];
@@ -477,16 +568,18 @@ export function TaskMetricsTab({
     if (data.length === 0) return [];
     const keysWithData = new Set<string>();
     for (const point of data) {
-      for (const [k, v] of Object.entries(point.metrics)) {
-        if (v != null && v !== '' && !isNaN(Number(v))) {
-          keysWithData.add(k);
+      for (const chart of chartMetricDefinitions) {
+        for (const metric of chartSeries(chart)) {
+          if (metricChartValue(point.metrics, metric, currency) != null) {
+            keysWithData.add(metric.key);
+          }
         }
       }
     }
     return chartMetricDefinitions.filter((chart) =>
       chartSeries(chart).some((series) => keysWithData.has(series.key))
     );
-  }, [chartMetricDefinitions, data]);
+  }, [chartMetricDefinitions, currency, data]);
 
   // Build the list of all chart keys (OHLC first, then metrics) for ordering
   const allChartKeys = useMemo(() => {
@@ -529,9 +622,14 @@ export function TaskMetricsTab({
       string,
       {
         x: Date[];
-        series: { metric: ChartMetric; y: Array<number | null> }[];
+        series: {
+          metric: ChartMetric;
+          y: Array<number | null>;
+          currency?: string | null;
+        }[];
         yValues: number[];
         lastValue: number;
+        lastCurrency?: string | null;
       }
     > = {};
     for (const chart of availableCharts) {
@@ -539,36 +637,45 @@ export function TaskMetricsTab({
       const x: Date[] = [];
       const yBySeries = seriesMetrics.map(() => [] as Array<number | null>);
       const hasValueBySeries = seriesMetrics.map(() => false);
+      const currencyBySeries = seriesMetrics.map(
+        () => undefined as string | null | undefined
+      );
       const yValues: number[] = [];
       const valueKey = chart.valueKey ?? chart.key;
       let lastValue: number | null = null;
+      let lastCurrency: string | null | undefined;
       let fallbackLastValue: number | null = null;
+      let fallbackLastCurrency: string | null | undefined;
       for (const point of data) {
-        const values = seriesMetrics.map((metric) => {
-          const val = point.metrics[metric.key];
-          if (val == null || val === '') return null;
-          const num = Number(val);
-          if (isNaN(num)) return null;
-          const scale = RATIO_KEYS.has(metric.key) ? 100 : 1;
-          return num * scale;
-        });
+        const values = seriesMetrics.map((metric) =>
+          metricChartValue(point.metrics, metric, currency)
+        );
         if (values.some((value) => value != null)) {
           x.push(new Date(point.t * 1000));
           values.forEach((value, index) => {
-            yBySeries[index].push(value);
+            yBySeries[index].push(value?.value ?? null);
             if (value != null) {
               hasValueBySeries[index] = true;
-              yValues.push(value);
-              fallbackLastValue = value;
+              if (value.currency && currencyBySeries[index] == null) {
+                currencyBySeries[index] = value.currency;
+              }
+              yValues.push(value.value);
+              fallbackLastValue = value.value;
+              fallbackLastCurrency = value.currency;
               if (seriesMetrics[index].key === valueKey) {
-                lastValue = value;
+                lastValue = value.value;
+                lastCurrency = value.currency;
               }
             }
           });
         }
       }
       const series = seriesMetrics
-        .map((metric, index) => ({ metric, y: yBySeries[index] }))
+        .map((metric, index) => ({
+          metric,
+          y: yBySeries[index],
+          currency: currencyBySeries[index],
+        }))
         .filter((_, index) => hasValueBySeries[index]);
       const finalLastValue = lastValue ?? fallbackLastValue;
       if (x.length > 0 && series.length > 0 && finalLastValue != null) {
@@ -577,11 +684,12 @@ export function TaskMetricsTab({
           series,
           yValues,
           lastValue: finalLastValue,
+          lastCurrency: lastCurrency ?? fallbackLastCurrency,
         };
       }
     }
     return map;
-  }, [data, availableCharts]);
+  }, [data, availableCharts, currency]);
 
   // Compute per-chart Y-axis width so each chart uses only the space
   // its own labels need, avoiding wasted horizontal space.
@@ -717,16 +825,20 @@ export function TaskMetricsTab({
     );
   }
 
-  const currencySuffix = currency ? ` ${currency}` : '';
-
-  const formatValue = (val: number, format?: MetricFormat) => {
+  const formatValue = (
+    val: number,
+    format?: MetricFormat,
+    valueCurrency?: string | null
+  ) => {
     if (format === 'pct') return formatAppPercent(val, 1);
     if (format === 'int')
       return formatAppNumber(Math.round(val), { maximumFractionDigits: 0 });
     if (format === 'currency')
-      return `${formatAppNumber(val, {
+      return formatMoneyAmount(val, valueCurrency ?? currency, {
+        minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-      })}${currencySuffix}`;
+        currencyPlacement: 'suffix',
+      });
     return formatAppNumber(val, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
@@ -858,7 +970,7 @@ export function TaskMetricsTab({
                 title={t(`metrics.${chart.key}`, {
                   defaultValue: chart.key.replace(/_/g, ' '),
                 })}
-                valueLabel={formatValue(lastVal, chart.format)}
+                valueLabel={formatValue(lastVal, chart.format, cd.lastCurrency)}
                 height={CHART_CARD_HEIGHT}
                 headerPrefix={
                   <DragIndicatorIcon
@@ -909,16 +1021,20 @@ export function TaskMetricsTab({
                         v != null ? formatYLabel(v, chart.format) : '',
                     },
                   ]}
-                  series={cd.series.map(({ metric, y }) => ({
-                    data: y,
-                    color: metric.color,
-                    label: t(`metrics.${metric.key}`, {
-                      defaultValue: metric.key.replace(/_/g, ' '),
-                    }),
-                    showMark: false,
-                    valueFormatter: (v: number | null) =>
-                      v != null ? formatValue(v, metric.format) : '',
-                  }))}
+                  series={cd.series.map(
+                    ({ metric, y, currency: seriesCurrency }) => ({
+                      data: y,
+                      color: metric.color,
+                      label: t(`metrics.${metric.key}`, {
+                        defaultValue: metric.key.replace(/_/g, ' '),
+                      }),
+                      showMark: false,
+                      valueFormatter: (v: number | null) =>
+                        v != null
+                          ? formatValue(v, metric.format, seriesCurrency)
+                          : '',
+                    })
+                  )}
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   margin={{

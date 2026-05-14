@@ -21,6 +21,10 @@ from rest_framework.views import APIView
 
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import BacktestTask, ExecutionState, TradingTask
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +166,6 @@ class TaskEventStreamView(APIView):
                 "execution_id",
                 "started_at",
                 "completed_at",
-                "error_message",
                 "updated_at",
             ]
             if task_type == TaskType.BACKTEST:
@@ -191,7 +194,8 @@ class TaskEventStreamView(APIView):
             "execution_id": str(task.execution_id) if task.execution_id else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "error_message": task.error_message,
+            "error_message": task_public_error_message(task.status),
+            "error_code": task_public_error_code(task.status),
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
         }
 

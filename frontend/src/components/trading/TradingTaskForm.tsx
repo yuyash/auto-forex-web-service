@@ -44,8 +44,7 @@ import {
 import { useSupportedInstruments } from '../../hooks/useMarketConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
-import { useNumberFormatter } from '../../hooks/useNumberFormatter';
-import { currencySymbol } from '../../utils/numberFormat';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 
 const steps = [
   'trading:form.steps.account',
@@ -131,7 +130,6 @@ export default function TradingTaskForm({
 }: TradingTaskFormProps) {
   const { t } = useTranslation(['trading', 'common']);
   const { user } = useAuth();
-  const { formatNumber } = useNumberFormatter();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
@@ -236,13 +234,6 @@ export default function TradingTaskForm({
   const selectedAccount = accountDetail
     ? (accountDetail as Account)
     : selectedAccountFromList;
-  const selectedAccountCurrencySymbol = selectedAccount
-    ? currencySymbol(selectedAccount.currency)
-    : '';
-  const selectedAccountCurrencyPrefix =
-    selectedAccountCurrencySymbol === selectedAccount?.currency?.toUpperCase()
-      ? `${selectedAccountCurrencySymbol} `
-      : selectedAccountCurrencySymbol;
 
   const { strategies } = useStrategies();
 
@@ -465,7 +456,8 @@ export default function TradingTaskForm({
                         </MenuItem>
                         {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
-                            {account.account_id} ({account.api_type})
+                            {account.account_id} ({account.api_type},{' '}
+                            {account.currency})
                           </MenuItem>
                         ))}
                       </Select>
@@ -502,11 +494,14 @@ export default function TradingTaskForm({
                     </Typography>
                     <Typography variant="body2">
                       <strong>{t('trading:form.balance')}:</strong>{' '}
-                      {selectedAccountCurrencyPrefix}
-                      {formatNumber(parseFloat(selectedAccount.balance), {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatMoneyAmount(
+                        parseFloat(selectedAccount.balance),
+                        selectedAccount.currency,
+                        {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }
+                      )}
                     </Typography>
                     <Typography variant="body2">
                       <strong>{t('trading:form.currency')}:</strong>{' '}
@@ -1145,13 +1140,25 @@ export default function TradingTaskForm({
                       {selectedAccount ? (
                         <>
                           {selectedAccount.account_id} (
-                          {selectedAccount.api_type})
+                          {selectedAccount.api_type}, {selectedAccount.currency}
+                          )
                         </>
                       ) : selectedAccountId ? (
                         t('trading:form.loadingAccounts')
                       ) : (
                         t('trading:form.noAccountsAvailable')
                       )}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('common:labels.accountCurrency', {
+                        defaultValue: 'Account currency',
+                      })}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {selectedAccount?.currency ?? '—'}
                     </Typography>
                   </Box>
 

@@ -1,5 +1,6 @@
 // Task Execution types
 import type { TaskStatus, TaskType } from './common';
+import type { CurrencyConversionContext, MoneyAmount } from './money';
 
 export interface ExecutionLog {
   timestamp: string;
@@ -21,7 +22,7 @@ export interface TaskExecution {
   started_at: string;
   completed_at?: string;
   error_message?: string;
-  error_traceback?: string;
+  error_code?: string;
   logs?: ExecutionLog[];
   duration?: string;
   created_at: string;
@@ -58,7 +59,15 @@ export interface ExecutionMetrics {
   execution_id: string;
   total_return: string;
   total_pnl: string;
+  total_pnl_money?: MoneyAmount;
+  total_pnl_display_money?: MoneyAmount | null;
   unrealized_pnl?: string;
+  unrealized_pnl_money?: MoneyAmount;
+  unrealized_pnl_display_money?: MoneyAmount | null;
+  realized_pnl?: string;
+  realized_pnl_money?: MoneyAmount;
+  realized_pnl_display_money?: MoneyAmount | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
@@ -120,7 +129,12 @@ export interface StrategyEvent {
 export interface EquityPoint {
   timestamp: string;
   balance: number;
+  balance_money?: MoneyAmount;
+  balance_display_money?: MoneyAmount | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   unrealized_pnl?: number;
+  unrealized_pnl_money?: MoneyAmount;
+  unrealized_pnl_display_money?: MoneyAmount | null;
 }
 
 export interface Trade {
@@ -132,7 +146,12 @@ export interface Trade {
   entry_price: number;
   exit_price: number;
   pnl: number;
+  pnl_money?: MoneyAmount;
+  pnl_display_money?: MoneyAmount | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   unrealized_pnl?: number;
+  unrealized_pnl_money?: MoneyAmount;
+  unrealized_pnl_display_money?: MoneyAmount | null;
   duration?: string;
   // Layered strategy specific fields
   layer_number?: number;
@@ -150,17 +169,27 @@ export interface ExecutionSummary {
   started_at: string;
   completed_at?: string;
   error_message?: string;
+  error_code?: string;
   total_return?: string;
   total_pnl?: string;
   total_pnl_quote?: string;
   realized_pnl_quote?: string;
   unrealized_pnl_quote?: string;
+  total_pnl_money?: MoneyAmount;
+  total_pnl_quote_money?: MoneyAmount;
+  total_pnl_display_money?: MoneyAmount;
+  display_conversion_context?: CurrencyConversionContext;
   total_trades?: number;
   winning_trades?: number;
   losing_trades?: number;
   win_rate?: string;
   pnl_currency?: string;
   quote_currency?: string;
+  display_currency?: string;
+  quote_to_account_rate?: string;
+  quote_to_account_rate_source?: string;
+  quote_to_account_rate_as_of?: string | null;
+  quote_to_account_rate_path?: string[];
 }
 
 export interface ExecutionListParams {

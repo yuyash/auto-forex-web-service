@@ -53,6 +53,13 @@ class TestRuntimeMetricsTracker:
 
         assert Decimal(metrics["margin_ratio"]) > Decimal("0")
         assert Decimal(metrics["margin_ratio"]) < Decimal("1")
+        assert metrics["current_balance_money"] == {
+            "amount": "100000",
+            "currency": "JPY",
+        }
+        assert metrics["total_pnl_money"]["currency"] == "JPY"
+        assert metrics["total_pnl_quote_money"]["currency"] == "JPY"
+        assert metrics["mid_price"] == "150.11"
 
     def test_build_metrics_includes_current_atr_without_strategy_specific_metrics(self):
         tracker = RuntimeMetricsTracker(
@@ -123,3 +130,7 @@ class TestRuntimeMetricsTracker:
         assert Decimal(metrics["realized_pnl_quote"]) == Decimal("0")
         assert Decimal(metrics["unrealized_pnl"]) == Decimal("-69.000")
         assert Decimal(metrics["total_pnl"]) == Decimal("-69.000")
+        assert metrics["unrealized_pnl_money"] == {
+            "amount": "-69",
+            "currency": "JPY",
+        }

@@ -3,14 +3,28 @@
 import logging
 from decimal import Decimal
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.trading.enums import TaskStatus
+from apps.trading.money import Money
 from apps.trading.models import BacktestTask, StrategyConfiguration
 from apps.trading.services.task_policy import (
     action_policy_for_task,
     task_update_validation_error,
 )
+from apps.trading.services.public_errors import (
+    task_public_error_code,
+    task_public_error_message,
+)
+from apps.trading.serializers.money import (
+    CurrencyConversionContextSerializer,
+    MoneySerializer,
+    TaskMoneyContextSerializer,
+)
+from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
+from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +40,12 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     can_resume = serializers.SerializerMethodField()
     action_policy = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
+    error_code = serializers.SerializerMethodField()
+    initial_balance_money = serializers.SerializerMethodField()
+    commission_per_trade_money = serializers.SerializerMethodField()
+    instrument_context = serializers.SerializerMethodField()
+    money_context = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -43,9 +63,14 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "initial_balance_money",
             "account_currency",
+            "display_currency",
+            "money_context",
             "commission_per_trade",
+            "commission_per_trade_money",
             "pip_size",
+            "instrument_context",
             "instrument",
             "hedging_enabled",
             "tick_granularity",
@@ -67,6 +92,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "created_at",
             "updated_at",
             "debug_options",
@@ -86,8 +112,13 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "error_code",
             "created_at",
             "updated_at",
+            "initial_balance_money",
+            "commission_per_trade_money",
+            "instrument_context",
+            "money_context",
             "can_resume",
             "action_policy",
         ]
@@ -100,20 +131,47 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
         """Return task action permissions."""
         return action_policy_for_task(obj, task_type="backtest").as_dict()
 
+    def get_error_message(self, obj: BacktestTask) -> str | None:
+        """Return a fixed public failure message without internal details."""
+        return task_public_error_message(obj.status)
+
+    def get_error_code(self, obj: BacktestTask) -> str | None:
+        """Return the stable public failure code."""
+        return task_public_error_code(obj.status)
+
+    @extend_schema_field(MoneySerializer)
+    def get_initial_balance_money(self, obj: BacktestTask) -> dict[str, str]:
+        """Return the initial balance with its account currency."""
+        return Money.coerce(obj.initial_balance, obj.account_currency).as_dict()
+
+    @extend_schema_field(MoneySerializer)
+    def get_commission_per_trade_money(self, obj: BacktestTask) -> dict[str, str]:
+        """Return the per-trade commission with its account currency."""
+        return Money.coerce(obj.commission_per_trade, obj.account_currency).as_dict()
+
+    @extend_schema_field(TaskInstrumentContextSerializer)
+    def get_instrument_context(self, obj: BacktestTask) -> dict[str, object]:
+        """Return instrument metadata and pip-size diagnostics."""
+        return TASK_INSTRUMENT_CONTEXT.build(obj).as_dict()
+
+    @extend_schema_field(TaskMoneyContextSerializer)
+    def get_money_context(self, obj: BacktestTask) -> dict[str, object]:
+        """Return task currency choices and money DTOs."""
+        return TASK_MONEY_CONTEXT.build(obj, task_type="backtest").as_dict()
+
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):
     """Serializer for BacktestTask list view (summary only).
 
     Inherits all fields from BacktestTaskSerializer but drops
-    ``commission_per_trade`` and ``execution_id``, and marks everything
-    read-only.
+    commission details and ``execution_id``, and marks everything read-only.
     """
 
     class Meta(BacktestTaskSerializer.Meta):
         fields = [
             f
             for f in BacktestTaskSerializer.Meta.fields
-            if f not in {"commission_per_trade", "execution_id"}
+            if f not in {"commission_per_trade", "commission_per_trade_money", "execution_id"}
         ]
         read_only_fields = fields
 
@@ -141,8 +199,22 @@ class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
     task_id = serializers.UUIDField()
     execution_id = serializers.UUIDField()
     previous_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    previous_balance_currency = serializers.CharField(max_length=3)
+    previous_balance_money = MoneySerializer()
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10)
+    current_balance_currency = serializers.CharField(max_length=3)
+    current_balance_money = MoneySerializer()
+    current_balance_display_money = MoneySerializer(allow_null=True, required=False)
     adjustment = serializers.DecimalField(max_digits=20, decimal_places=10)
+    adjustment_currency = serializers.CharField(max_length=3)
+    adjustment_money = MoneySerializer()
+    adjustment_display_money = MoneySerializer(allow_null=True, required=False)
+    previous_balance_display_money = MoneySerializer(allow_null=True, required=False)
+    display_conversion_context = CurrencyConversionContextSerializer(
+        allow_null=True,
+        required=False,
+    )
+    currency = serializers.CharField(max_length=3)
     state_version = serializers.IntegerField()
 
 
@@ -160,6 +232,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time",
             "initial_balance",
             "account_currency",
+            "display_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -188,6 +261,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "end_time": {"required": False},
             "initial_balance": {"required": False},
             "account_currency": {"required": False},
+            "display_currency": {"required": False},
             "commission_per_trade": {"required": False},
             "pip_size": {"required": False},
             "instrument": {"required": False},
@@ -237,6 +311,20 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Initial balance must be positive")
         return value
+
+    def validate_account_currency(self, value: str) -> str:
+        """Normalize account currency codes."""
+        currency = str(value or "").strip().upper()
+        if len(currency) != 3:
+            raise serializers.ValidationError("Account currency must be a 3-letter code")
+        return currency
+
+    def validate_display_currency(self, value: str) -> str:
+        """Normalize optional display currency codes."""
+        currency = str(value or "").strip().upper()
+        if currency and len(currency) != 3:
+            raise serializers.ValidationError("Display currency must be a 3-letter code")
+        return currency
 
     def validate_pip_size(self, value: Decimal | None) -> Decimal | None:
         """Validate pip size is positive if provided."""
@@ -400,6 +488,11 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         user = self.context["request"].user
         validated_data["user"] = user
+        account_currency = str(validated_data.get("account_currency") or "USD").strip().upper()
+        validated_data["account_currency"] = account_currency
+        validated_data["display_currency"] = (
+            str(validated_data.get("display_currency") or account_currency).strip().upper()
+        )
 
         # Auto-populate pip_size from instrument when not explicitly provided
         instrument = validated_data.get("instrument")
@@ -427,6 +520,26 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(error)
 
         changes = changed_field_values(instance, validated_data)
+        if "account_currency" in validated_data:
+            new_account_currency = str(validated_data["account_currency"]).strip().upper()
+            previous_display_currency = str(instance.display_currency or "").strip().upper()
+            previous_account_currency = str(instance.account_currency or "").strip().upper()
+            if "display_currency" not in validated_data and (
+                not previous_display_currency
+                or previous_display_currency == previous_account_currency
+            ):
+                validated_data["display_currency"] = new_account_currency
+                changes.update(
+                    changed_field_values(instance, {"display_currency": new_account_currency})
+                )
+        if "display_currency" in validated_data:
+            display_currency = str(validated_data["display_currency"] or "").strip().upper()
+            account_currency = (
+                str(validated_data.get("account_currency", instance.account_currency) or "")
+                .strip()
+                .upper()
+            )
+            validated_data["display_currency"] = display_currency or account_currency
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
             for field in ("tick_granularity", "tick_window_value_mode")

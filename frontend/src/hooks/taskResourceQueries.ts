@@ -19,6 +19,7 @@ import {
   applyTaskStatusTransition,
 } from './taskStatusTransitions';
 import type { StrategyCyclesResponse } from '../types/strategyVisualization';
+import type { CurrencyConversionContext } from '../types/money';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import type { TaskSummary } from './useTaskSummary';
 
@@ -27,6 +28,32 @@ interface TaskSummaryResponse {
   pnl?: {
     realized?: string | number | null;
     unrealized?: string | number | null;
+    currency?: string | null;
+    realized_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    unrealized_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    total_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    realized_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    unrealized_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    total_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    display_conversion_context?: CurrencyConversionContext | null;
   };
   counts?: {
     total_trades?: number;
@@ -39,9 +66,19 @@ interface TaskSummaryResponse {
   };
   execution?: {
     current_balance?: string | number | null;
+    current_balance_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
     ticks_processed?: number;
     account_currency?: string | null;
+    current_balance_currency?: string | null;
     current_balance_display?: string | number | null;
+    current_balance_display_money?: {
+      amount?: string | number | null;
+      currency?: string | null;
+    } | null;
+    current_balance_display_conversion_context?: CurrencyConversionContext | null;
     display_currency?: string | null;
     resume_cursor_timestamp?: string | null;
     margin_ratio?: string | number | null;
@@ -70,6 +107,7 @@ interface TaskSummaryResponse {
     started_at?: string | null;
     completed_at?: string | null;
     error_message?: string | null;
+    error_code?: string | null;
     stop_reason?: string | null;
     progress?: number;
   };
@@ -97,6 +135,22 @@ function parseNullableNumber(
   if (value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeMoney(
+  value:
+    | {
+        amount?: string | number | null;
+        currency?: string | null;
+      }
+    | null
+    | undefined
+): { amount: string; currency: string } | null {
+  if (!value) return null;
+  return {
+    amount: String(value.amount ?? ''),
+    currency: value.currency ?? '',
+  };
 }
 
 export function shouldPollTaskStatus(status: string | undefined): boolean {
@@ -187,6 +241,16 @@ export function createTaskSummaryQuery(
           pnl: {
             realized: parseNumber(d.pnl?.realized),
             unrealized: parseNumber(d.pnl?.unrealized),
+            currency: d.pnl?.currency ?? null,
+            realizedMoney: normalizeMoney(d.pnl?.realized_money),
+            unrealizedMoney: normalizeMoney(d.pnl?.unrealized_money),
+            totalMoney: normalizeMoney(d.pnl?.total_money),
+            realizedDisplayMoney: normalizeMoney(d.pnl?.realized_display_money),
+            unrealizedDisplayMoney: normalizeMoney(
+              d.pnl?.unrealized_display_money
+            ),
+            totalDisplayMoney: normalizeMoney(d.pnl?.total_display_money),
+            displayConversionContext: d.pnl?.display_conversion_context ?? null,
           },
           counts: {
             totalTrades: d.counts?.total_trades ?? 0,
@@ -199,11 +263,21 @@ export function createTaskSummaryQuery(
           },
           execution: {
             currentBalance: parseNullableNumber(d.execution?.current_balance),
+            currentBalanceMoney: normalizeMoney(
+              d.execution?.current_balance_money
+            ),
             ticksProcessed: d.execution?.ticks_processed ?? 0,
             accountCurrency: d.execution?.account_currency ?? null,
+            currentBalanceCurrency:
+              d.execution?.current_balance_currency ?? null,
             currentBalanceDisplay: parseNullableNumber(
               d.execution?.current_balance_display
             ),
+            currentBalanceDisplayMoney: normalizeMoney(
+              d.execution?.current_balance_display_money
+            ),
+            currentBalanceDisplayConversionContext:
+              d.execution?.current_balance_display_conversion_context ?? null,
             displayCurrency: d.execution?.display_currency ?? null,
             resumeCursorTimestamp: d.execution?.resume_cursor_timestamp ?? null,
             marginRatio: parseNullableNumber(d.execution?.margin_ratio),
@@ -243,6 +317,7 @@ export function createTaskSummaryQuery(
             startedAt: d.task?.started_at ?? null,
             completedAt: d.task?.completed_at ?? null,
             errorMessage: d.task?.error_message ?? null,
+            errorCode: d.task?.error_code ?? null,
             stopReason: d.task?.stop_reason ?? null,
             progress: d.task?.progress ?? 0,
           },

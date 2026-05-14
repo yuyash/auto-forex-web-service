@@ -23,11 +23,13 @@ class Command(BaseCommand):
         statements = [
             # backtest_tasks
             "ALTER TABLE backtest_tasks ADD COLUMN IF NOT EXISTS account_currency VARCHAR(3) NOT NULL DEFAULT 'USD'",
+            "ALTER TABLE backtest_tasks ADD COLUMN IF NOT EXISTS display_currency VARCHAR(3) NOT NULL DEFAULT ''",
             "ALTER TABLE backtest_tasks ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
             # trading_tasks
             "ALTER TABLE trading_tasks ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
             # execution_state
             "ALTER TABLE execution_state ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE execution_state ADD COLUMN IF NOT EXISTS current_balance_currency VARCHAR(3) NOT NULL DEFAULT ''",
             "ALTER TABLE execution_state ADD COLUMN IF NOT EXISTS last_tick_price NUMERIC(20, 10)",
             "ALTER TABLE execution_state ADD COLUMN IF NOT EXISTS last_tick_bid NUMERIC(20, 10)",
             "ALTER TABLE execution_state ADD COLUMN IF NOT EXISTS last_tick_ask NUMERIC(20, 10)",
@@ -39,6 +41,7 @@ class Command(BaseCommand):
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS position_id UUID",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS order_id UUID",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS oanda_trade_id VARCHAR(64)",
+            "ALTER TABLE trades ADD COLUMN IF NOT EXISTS price_currency VARCHAR(3) NOT NULL DEFAULT ''",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
             "ALTER TABLE trades ALTER COLUMN direction DROP NOT NULL",
@@ -47,6 +50,7 @@ class Command(BaseCommand):
             "ALTER TABLE positions ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE positions ADD COLUMN IF NOT EXISTS retracement_count INTEGER",
             "ALTER TABLE positions ADD COLUMN IF NOT EXISTS oanda_trade_id VARCHAR(64)",
+            "ALTER TABLE positions ADD COLUMN IF NOT EXISTS unrealized_pnl_currency VARCHAR(3) NOT NULL DEFAULT ''",
             # orders
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS celery_task_id VARCHAR(255)",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
