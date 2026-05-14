@@ -218,6 +218,7 @@ class SnowballStrategy(Strategy):
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
         self._grid_order_violation: str | None = None
+        self._last_tolerated_grid_order_violation: str | None = None
         self.grid_policy = SNOWBALL_GRID_POLICY
         self.decision_engine = SnowballDecisionEngine(
             invariant_validator=SnowballInvariantValidator(config=config),
@@ -576,15 +577,28 @@ class SnowballStrategy(Strategy):
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
         )
-        if self._grid_order_violation:
-            if self.config.grid_order_validation_enabled:
-                logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
-            else:
-                logger.warning(
-                    "Grid ordering violation ignored because "
-                    "grid_order_validation_enabled=false; continuing strategy: %s",
-                    self._grid_order_violation,
-                )
+        if not self._grid_order_violation:
+            self._last_tolerated_grid_order_violation = None
+            return
+
+        if self.config.grid_order_validation_enabled:
+            logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
+            return
+
+        if self._grid_order_violation == self._last_tolerated_grid_order_violation:
+            logger.debug(
+                "Grid ordering violation still tolerated because "
+                "grid_order_validation_enabled=false: %s",
+                self._grid_order_violation,
+            )
+            return
+
+        self._last_tolerated_grid_order_violation = self._grid_order_violation
+        logger.info(
+            "Grid ordering violation tolerated because "
+            "grid_order_validation_enabled=false; pausing counter adds until ordering recovers: %s",
+            self._grid_order_violation,
+        )
 
     # ------------------------------------------------------------------
     # Per-cycle tick processing

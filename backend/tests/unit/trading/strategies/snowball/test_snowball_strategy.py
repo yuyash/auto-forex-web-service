@@ -1426,7 +1426,7 @@ class TestGridOrderingValidation:
 
         state = DummyState(strategy_state=ss.to_dict())
         with caplog.at_level(
-            logging.WARNING,
+            logging.INFO,
             logger="apps.trading.strategies.snowball.strategy",
         ):
             result = s.on_tick(
@@ -1438,7 +1438,7 @@ class TestGridOrderingValidation:
         assert result.is_error is False
         assert result.stop_reason == ""
         assert any(
-            "Grid ordering violation ignored" in record.getMessage() for record in caplog.records
+            "Grid ordering violation tolerated" in record.getMessage() for record in caplog.records
         )
 
     def test_cycle_tp_uses_dynamic_head_after_front_slot_removed(self):
@@ -1722,7 +1722,7 @@ class TestGridOrderingValidation:
         ss.cycles.append(cycle)
 
         state = DummyState(strategy_state=ss.to_dict())
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             result = s.on_tick(
                 tick=_tick(T0 + timedelta(minutes=1), "159.50", "159.52"),
                 state=state,
@@ -1738,6 +1738,7 @@ class TestGridOrderingValidation:
             "Skipping Snowball counter adds while grid ordering is violated" in record.getMessage()
             for record in caplog.records
         )
+        assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
     def test_out_of_order_layer_closes_preserve_layer_until_present_slots_clear(self):
         s = _strategy(

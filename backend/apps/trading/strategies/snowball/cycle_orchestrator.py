@@ -268,7 +268,7 @@ class SnowballActiveCycleProcessor:
                     is_error=True,
                 )
             if strategy._grid_order_violation:
-                self.logger.warning(
+                self.logger.debug(
                     "Skipping Snowball counter adds while grid ordering is violated: %s",
                     strategy._grid_order_violation,
                 )
