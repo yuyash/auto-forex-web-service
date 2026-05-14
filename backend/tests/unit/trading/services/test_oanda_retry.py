@@ -184,3 +184,104 @@ class TestOandaRetryService:
         assert snapshot.terminal == 0
         assert snapshot.exhausted == 0
         cold_recorder.reset()
+
+
+@pytest.mark.django_db
+class TestOandaRetryClassifierTransientFailures:
+    """Regression tests covering DNS / SDK transport failures.
+
+    These were previously misclassified as terminal because the v20 SDK and
+    ``requests`` raise high-level wrappers (``V20ConnectionError``,
+    ``ConnectionError``) whose ``str()`` does not contain any of the
+    transient markers used by :class:`OandaRetryClassifier`. The classifier
+    now also inspects ``internal_detail``, which the request executor
+    populates with the full ``__cause__`` / ``__context__`` chain so DNS
+    blips are retryable end-to-end.
+    """
+
+    def test_classifies_dns_failure_chain_as_retryable(self) -> None:
+        classifier = OandaRetryClassifier()
+        # Mirrors the production failure observed for trading task
+        # a22ce941-62f5-4932-9ad2-fc685cb8f728: gaierror -> NameResolutionError
+        # -> MaxRetryError -> requests.ConnectionError -> V20ConnectionError.
+        internal_detail = (
+            "V20ConnectionError: Connection to v20 REST server at "
+            "https://api-fxpractice.oanda.com:443/v3/accounts/123/pendingOrders failed | "
+            "ConnectionError: HTTPSConnectionPool(host='api-fxpractice.oanda.com', port=443): "
+            "Max retries exceeded with url: /v3/accounts/123/pendingOrders | "
+            "MaxRetryError: HTTPSConnectionPool(host='api-fxpractice.oanda.com', port=443): "
+            "Max retries exceeded ... | "
+            "NameResolutionError: HTTPSConnection(host='api-fxpractice.oanda.com', port=443): "
+            "Failed to resolve 'api-fxpractice.oanda.com' "
+            "([Errno -3] Temporary failure in name resolution) | "
+            "gaierror: [Errno -3] Temporary failure in name resolution"
+        )
+        error = OandaAPIError(
+            "Error fetching pending orders",
+            internal_detail=internal_detail,
+        )
+
+        assert classifier.is_retryable(error) is True
+
+    def test_classifies_v20_connection_wrapper_as_retryable(self) -> None:
+        """Even the bare wrapper text alone must look retryable now."""
+        classifier = OandaRetryClassifier()
+        error = OandaAPIError(
+            "Error fetching pending orders",
+            internal_detail=(
+                "Connection to v20 REST server at "
+                "https://api-fxpractice.oanda.com:443/v3/accounts/123/pendingOrders failed"
+            ),
+        )
+
+        assert classifier.is_retryable(error) is True
+
+
+@pytest.mark.django_db
+class TestRequestExecutorExceptionChain:
+    """Validate the executor surfaces the full cause chain to the classifier."""
+
+    def test_internal_detail_contains_root_cause(self) -> None:
+        from apps.market.services.oanda_retry import OandaApiRequestExecutor
+
+        # Build the same chain the v20 SDK + requests raises for a DNS blip.
+        try:
+            try:
+                try:
+                    raise OSError("[Errno -3] Temporary failure in name resolution")
+                except OSError as gai:
+                    raise ConnectionError(
+                        "HTTPSConnectionPool(host='api-fxpractice.oanda.com', port=443): "
+                        "Max retries exceeded with url: /v3/accounts/123/pendingOrders"
+                    ) from gai
+            except ConnectionError as conn:
+                raise RuntimeError(
+                    "Connection to v20 REST server at "
+                    "https://api-fxpractice.oanda.com:443/v3/accounts/123/pendingOrders failed"
+                ) from conn
+        except RuntimeError as v20_error:
+            captured: Exception = v20_error
+
+        executor = OandaApiRequestExecutor(
+            retry_service=OandaRetryService(
+                policy=OandaRetryPolicy(max_attempts=1, backoff_base_seconds=0),
+                raise_runtime_error=False,
+            ),
+        )
+
+        def _failing_call() -> None:
+            raise captured
+
+        try:
+            executor.request(
+                _failing_call,
+                label="Fetch pending orders",
+                exception_message="Error fetching pending orders",
+            )
+        except OandaAPIError as exc:
+            detail = exc.internal_detail
+            assert "Temporary failure in name resolution" in detail
+            assert "v20 REST server" in detail
+            assert OandaRetryClassifier().is_retryable(exc) is True
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError("Expected OandaAPIError")

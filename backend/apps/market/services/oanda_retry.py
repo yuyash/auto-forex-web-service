@@ -22,6 +22,28 @@ _T = TypeVar("_T")
 OANDA_RETRY_COUNTER_NAMES = ("retry_scheduled", "recovered", "terminal", "exhausted")
 
 
+def _format_exception_chain(exc: BaseException, *, max_depth: int = 6) -> str:
+    """Render an exception together with its ``__cause__`` / ``__context__`` chain.
+
+    The v20 SDK and ``requests`` raise high-level wrapper exceptions whose
+    ``str()`` only mentions the wrapper (e.g. ``"Connection to v20 REST
+    server ... failed"``). The transient root cause (DNS failure, connection
+    refused, timeout, ...) is reachable only via the cause/context chain.
+    Including it in ``internal_detail`` allows ``OandaRetryClassifier`` to
+    classify the failure correctly.
+    """
+    parts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    depth = 0
+    while current is not None and depth < max_depth and id(current) not in seen:
+        seen.add(id(current))
+        parts.append(f"{type(current).__name__}: {current}")
+        current = current.__cause__ or current.__context__
+        depth += 1
+    return " | ".join(parts)
+
+
 @dataclass(frozen=True, slots=True)
 class OandaRetryPolicy:
     """Controls how OANDA API calls recover from transient failures."""
@@ -140,6 +162,16 @@ class OandaRetryClassifier:
         "remote end closed connection",
         "eof occurred in violation of protocol",
         "temporary failure",
+        # DNS / transport failures observed from the v20 SDK + requests/urllib3
+        # stack (e.g. transient `gaierror` / `NameResolutionError`).
+        "name resolution",
+        "failed to resolve",
+        "nodename nor servname",
+        "name or service not known",
+        "max retries exceeded",
+        "v20 rest server",
+        "newconnectionerror",
+        "newconnection",
     )
     non_retryable_markers: tuple[str, ...] = (
         "status 400",
@@ -588,7 +620,7 @@ class OandaApiRequestExecutor:
             except Exception as exc:
                 raise OandaAPIError(
                     exception_message or failure_message or f"{label} failed",
-                    internal_detail=str(exc),
+                    internal_detail=_format_exception_chain(exc),
                 ) from exc
 
             status = getattr(response, "status", None)

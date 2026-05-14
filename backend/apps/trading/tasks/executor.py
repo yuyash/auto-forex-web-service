@@ -220,13 +220,18 @@ class TaskExecutor:
         else:
             # For trading tasks, fetch live balance from OANDA API.
             # The DB-stored balance may be stale (default 0).
+            #
+            # Use the short retry policy here rather than the task-level
+            # policy: this is a one-shot startup probe, the DB fallback is
+            # safe, and we don't want to block executor construction for the
+            # full transient-outage budget on this single request.
             try:
                 from apps.market.services.oanda import OandaService
                 from apps.market.services.oanda_retry import OandaRetryPolicy
 
                 client = OandaService(
                     self.task.oanda_account,
-                    retry_policy=OandaRetryPolicy.from_task(self.task),
+                    retry_policy=OandaRetryPolicy.short_default(),
                 )
                 details = client.get_account_details()
                 return details.balance
