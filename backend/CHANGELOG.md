@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.2...backend-v1.53.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* **snowball:** reduce grid violation warning noise ([#708](https://github.com/yuyash/auto-forex-web-service/issues/708)) ([16d2ea8](https://github.com/yuyash/auto-forex-web-service/commit/16d2ea8401d13ed4694424005fb359d2fa87280f))
+
 ## [1.53.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.1...backend-v1.53.2) (2026-05-14)
 
 
