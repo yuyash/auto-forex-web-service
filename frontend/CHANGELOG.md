@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.1...frontend-v1.68.2) (2026-05-14)
+
+
+### Refactoring
+
+* backend snowball ([#701](https://github.com/yuyash/auto-forex-web-service/issues/701)) ([dd5ecf0](https://github.com/yuyash/auto-forex-web-service/commit/dd5ecf0df8241bc21925ff9bd71043db2cd7b81a))
+
 ## [1.68.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.0...frontend-v1.68.1) (2026-05-10)
 
 ### Bug Fixes

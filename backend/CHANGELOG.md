@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.1...backend-v1.53.2) (2026-05-14)
+
+
+### Refactoring
+
+* backend snowball ([#701](https://github.com/yuyash/auto-forex-web-service/issues/701)) ([dd5ecf0](https://github.com/yuyash/auto-forex-web-service/commit/dd5ecf0df8241bc21925ff9bd71043db2cd7b81a))
+
 ## [1.53.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.0...backend-v1.53.1) (2026-05-10)
 
 
