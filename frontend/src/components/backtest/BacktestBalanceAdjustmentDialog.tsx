@@ -104,7 +104,6 @@ export function BacktestBalanceAdjustmentDialog({
                 money={currentBalanceDisplayMoney ?? currentBalanceMoney}
                 fallbackAmount={currentBalance}
                 fallbackCurrency={accountCurrency}
-                options={{ currencyPlacement: 'suffix' }}
                 separators={separators}
                 tooltip={conversionTooltip}
               />
@@ -120,7 +119,6 @@ export function BacktestBalanceAdjustmentDialog({
                     money={currentBalanceMoney}
                     fallbackAmount={currentBalance}
                     fallbackCurrency={accountCurrency}
-                    options={{ currencyPlacement: 'suffix' }}
                     separators={separators}
                   />
                   )

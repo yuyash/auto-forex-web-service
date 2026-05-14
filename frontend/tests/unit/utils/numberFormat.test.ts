@@ -69,7 +69,13 @@ describe('number formatting', () => {
         signed: true,
         currencyPlacement: 'suffix',
       })
-    ).toBe('-1,234.56 $');
+    ).toBe('-1,234.56 USD');
+    expect(
+      formatMoneyAmount(1234.56, 'JPY', {
+        currencyPlacement: 'suffix',
+        language: 'ja',
+      })
+    ).toBe('1,235 円');
   });
 
   it('uses zero minor units for JPY-style currencies by default', () => {
@@ -88,7 +94,7 @@ describe('number formatting', () => {
           maximumFractionDigits: 2,
         }
       )
-    ).toBe('+12.50 €');
+    ).toBe('+12.50 EUR');
     expect(formatMoneyPayload(null)).toBe('-');
   });
 });

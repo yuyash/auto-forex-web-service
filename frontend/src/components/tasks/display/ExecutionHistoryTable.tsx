@@ -169,11 +169,9 @@ export function ExecutionHistoryTable({
     money
       ? formatMoneyPayload(money, {
           signed: true,
-          currencyPlacement: 'suffix',
         })
       : formatMoneyAmount(fallbackValue, fallbackCurrency, {
           signed: true,
-          currencyPlacement: 'suffix',
         });
 
   const columns: Column<TaskExecution>[] = useMemo(() => {

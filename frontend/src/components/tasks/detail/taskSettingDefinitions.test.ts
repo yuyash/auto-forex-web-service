@@ -96,7 +96,7 @@ describe('task setting definition contracts', () => {
         snapshot: null,
         source: { initial_balance: '10000', account_currency: 'USD' },
       })
-    ).toBe('10,000.00 $');
+    ).toBe('$ 10,000.00');
     expect(
       initialBalance?.render?.('10000', {
         task: { account_currency: 'USD' },
@@ -117,7 +117,7 @@ describe('task setting definition contracts', () => {
           },
         },
       })
-    ).toBe('10,000 ¥');
+    ).toBe('¥ 10,000');
     expect(
       commission?.render?.('1.5', {
         task: { account_currency: 'USD' },
@@ -138,7 +138,7 @@ describe('task setting definition contracts', () => {
           },
         },
       })
-    ).toBe('1.50 €');
+    ).toBe('€ 1.50');
     expect(
       displayCurrency?.render?.('USD', {
         task: {},

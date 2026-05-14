@@ -49,7 +49,6 @@ export const fmtQuoteValue = (
       useCurrencySymbol: false,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-      currencyPlacement: 'suffix',
     });
   }
   const formatted = formatAppNumber(numericValue, {
@@ -66,8 +65,21 @@ export const fmtSignedQuoteValue = (
   if (value == null) return '\u2014';
   const numericValue = typeof value === 'string' ? Number(value) : value;
   if (Number.isNaN(numericValue)) return '\u2014';
+  const currency = resolveQuoteCurrency(instrument);
+  if (currency) {
+    return formatMoneyAmount(numericValue, currency, {
+      useCurrencySymbol: false,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: true,
+    });
+  }
   const sign = numericValue >= 0 ? '+' : '';
-  return `${sign}${fmtQuoteValue(numericValue, instrument)}`;
+  const formatted = formatAppNumber(numericValue, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${sign}${formatted}`;
 };
 
 export const fmtJson = (value: unknown) => {

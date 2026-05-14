@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
+import { formatMoneyAmount } from '../../../utils/numberFormat';
 
 interface LatestMetricsSummaryProps {
   latest: MetricPoint | null;
@@ -65,7 +66,7 @@ export function LatestMetricsSummary({
   summary,
 }: LatestMetricsSummaryProps) {
   const { t } = useTranslation('common');
-  const { formatNumber, formatPercent } = useNumberFormatter();
+  const { formatNumber, formatPercent, separators } = useNumberFormatter();
 
   if (!latest && !summary) return null;
 
@@ -78,10 +79,15 @@ export function LatestMetricsSummary({
     else if (format === 'int')
       display = formatNumber(Math.round(num), { maximumFractionDigits: 0 });
     else if (format === 'currency')
-      display = `${formatNumber(num, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })} ${pnlCurrency}`;
+      display = formatMoneyAmount(
+        num,
+        pnlCurrency,
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        },
+        separators
+      );
     else
       display = formatNumber(num, {
         minimumFractionDigits: 2,

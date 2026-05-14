@@ -43,7 +43,7 @@ import {
 import { useAccounts } from '../../hooks/useAccounts';
 import { logger } from '../../utils/logger';
 import { useNumberFormatter } from '../../hooks/useNumberFormatter';
-import { currencySymbol } from '../../utils/numberFormat';
+import { formatMoneyAmount } from '../../utils/numberFormat';
 
 interface AccountFormData {
   account_id: string;
@@ -63,7 +63,7 @@ const DEFAULT_MAX_ORDER_UNITS = '10000';
 
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const { formatNumber } = useNumberFormatter();
+  const { formatNumber, separators } = useNumberFormatter();
   const { showSuccess, showError } = useToast();
   const {
     data: rawAccounts,
@@ -375,14 +375,15 @@ const AccountManagement = () => {
     }
 
     const currencyCode = resolveCurrencyCode(currency);
-    const symbol = currencySymbol(currencyCode);
-    const prefix =
-      symbol === currencyCode.trim().toUpperCase() ? `${symbol} ` : symbol;
-
-    return `${prefix}${formatNumber(numericBalance, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    return formatMoneyAmount(
+      numericBalance,
+      currencyCode,
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+      separators
+    );
   };
 
   if (loading) {

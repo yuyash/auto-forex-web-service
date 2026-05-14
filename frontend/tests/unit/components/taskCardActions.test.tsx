@@ -347,11 +347,11 @@ describe('Task card control actions', () => {
     );
 
     expect(screen.getByText('Total PnL')).toBeInTheDocument();
-    expect(screen.getByText('+209.50 $')).toBeInTheDocument();
+    expect(screen.getByText('+$ 209.50')).toBeInTheDocument();
     expect(screen.getByText('Realized PnL')).toBeInTheDocument();
-    expect(screen.getByText('+250.00 $')).toBeInTheDocument();
+    expect(screen.getByText('+$ 250.00')).toBeInTheDocument();
     expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
-    expect(screen.getByText('-40.50 $')).toBeInTheDocument();
+    expect(screen.getByText('-$ 40.50')).toBeInTheDocument();
   });
 
   it('trading task card stops running tasks', async () => {
@@ -455,11 +455,11 @@ describe('Task card control actions', () => {
     );
 
     expect(screen.getByText('Total PnL')).toBeInTheDocument();
-    expect(screen.getByText('+100.25 $')).toBeInTheDocument();
+    expect(screen.getByText('+$ 100.25')).toBeInTheDocument();
     expect(screen.getByText('Realized PnL')).toBeInTheDocument();
-    expect(screen.getByText('+125.50 $')).toBeInTheDocument();
+    expect(screen.getByText('+$ 125.50')).toBeInTheDocument();
     expect(screen.getByText('Unrealized PnL')).toBeInTheDocument();
-    expect(screen.getByText('-25.25 $')).toBeInTheDocument();
+    expect(screen.getByText('-$ 25.25')).toBeInTheDocument();
   });
 
   it('backtest task card stops running tasks through the confirm dialog', async () => {

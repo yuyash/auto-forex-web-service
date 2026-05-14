@@ -367,11 +367,9 @@ export default function BacktestTaskCard({
     money
       ? formatMoneyPayload(money, {
           signed: true,
-          currencyPlacement: 'suffix',
         })
       : formatMoneyAmount(value, pnlCurrency, {
           signed: true,
-          currencyPlacement: 'suffix',
         });
   const pnlItems = [
     {

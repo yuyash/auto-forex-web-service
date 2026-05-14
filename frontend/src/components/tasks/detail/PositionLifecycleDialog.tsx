@@ -29,7 +29,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import type { TaskType } from '../../../types/common';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import { currencySymbol, formatAppNumber } from '../../../utils/numberFormat';
+import { formatMoneyAmount } from '../../../utils/numberFormat';
 import { quoteCurrencyFromInstrument } from '../../../utils/instrumentCurrency';
 import type {
   CurrencyConversionContext,
@@ -143,22 +143,15 @@ const formatTimestamp = (
 const shortId = (value?: string | null): string =>
   value ? value.slice(0, 8) : '-';
 
-function quoteCurrencySymbol(instrument?: string): string {
-  if (!instrument) return '';
-  const quote = quoteCurrencyFromInstrument(instrument) ?? '';
-  const symbol = currencySymbol(quote);
-  return symbol === quote ? `${quote} ` : symbol;
-}
-
 const formatPrice = (value?: string | null, instrument?: string): string => {
   if (!value) return '-';
   const parsed = Number(value);
-  const symbol = quoteCurrencySymbol(instrument);
   return Number.isFinite(parsed)
-    ? `${symbol}${formatAppNumber(parsed, {
+    ? formatMoneyAmount(parsed, quoteCurrencyFromInstrument(instrument), {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
-      })}`
+        useGrouping: false,
+      })
     : value;
 };
 

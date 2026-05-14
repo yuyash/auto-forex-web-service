@@ -695,7 +695,6 @@ function formatResultMetric(
           key.includes('pnl') ||
           key === 'average_win' ||
           key === 'average_loss',
-        currencyPlacement: 'suffix',
       }),
       numeric: Number.isFinite(amount) ? amount : null,
     };
@@ -720,7 +719,6 @@ function formatResultMetric(
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
           signed: true,
-          currencyPlacement: 'suffix',
         }
       ),
       numeric,
@@ -733,7 +731,6 @@ function formatResultMetric(
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
         signed: true,
-        currencyPlacement: 'suffix',
       }),
       numeric,
     };
