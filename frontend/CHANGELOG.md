@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.2...frontend-v1.68.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* **frontend:** standardize currency placement ([#704](https://github.com/yuyash/auto-forex-web-service/issues/704)) ([6218437](https://github.com/yuyash/auto-forex-web-service/commit/6218437a8063bd3afe8b228c487263e9abf340b3))
+
 ## [1.68.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.1...frontend-v1.68.2) (2026-05-14)
 
 
