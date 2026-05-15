@@ -83,8 +83,7 @@ function formatCurrencyWithMoneyContext(
   value: TaskSettingValue,
   source: Record<string, unknown>,
   task: Record<string, unknown>,
-  field: 'account_currency' | 'display_currency',
-  t: TFunction
+  field: 'account_currency' | 'display_currency'
 ): string {
   const context = taskMoneyContext(source, task);
   const currency =
@@ -93,14 +92,7 @@ function formatCurrencyWithMoneyContext(
       : context?.display_currency;
   const code = currency || value;
   if (code === null || code === undefined || code === '') return '-';
-  const text = String(code);
-  if (field === 'display_currency' && context?.display_requires_conversion) {
-    return t('common:labels.currencyRuntimeFxValue', {
-      defaultValue: '{{currency}} (runtime FX)',
-      currency: text,
-    });
-  }
-  return text;
+  return String(code);
 }
 
 function formatWeekday(t: TFunction) {
@@ -252,25 +244,13 @@ export function buildBacktestTaskSettingDefinitions(
       key: 'account_currency',
       label: t('common:labels.accountCurrency', 'Account currency'),
       render: (value, { source, task }) =>
-        formatCurrencyWithMoneyContext(
-          value,
-          source,
-          task,
-          'account_currency',
-          t
-        ),
+        formatCurrencyWithMoneyContext(value, source, task, 'account_currency'),
     },
     {
       key: 'display_currency',
       label: t('common:labels.displayCurrency', 'Display currency'),
       render: (value, { source, task }) =>
-        formatCurrencyWithMoneyContext(
-          value,
-          source,
-          task,
-          'display_currency',
-          t
-        ),
+        formatCurrencyWithMoneyContext(value, source, task, 'display_currency'),
     },
     {
       key: 'commission_per_trade',
@@ -401,25 +381,13 @@ export function buildTradingTaskSettingDefinitions(
       key: 'account_currency',
       label: t('common:labels.accountCurrency', 'Account currency'),
       render: (value, { source, task }) =>
-        formatCurrencyWithMoneyContext(
-          value,
-          source,
-          task,
-          'account_currency',
-          t
-        ),
+        formatCurrencyWithMoneyContext(value, source, task, 'account_currency'),
     },
     {
       key: 'display_currency',
       label: t('common:labels.displayCurrency', 'Display currency'),
       render: (value, { source, task }) =>
-        formatCurrencyWithMoneyContext(
-          value,
-          source,
-          task,
-          'display_currency',
-          t
-        ),
+        formatCurrencyWithMoneyContext(value, source, task, 'display_currency'),
     },
     {
       key: 'sell_on_stop',

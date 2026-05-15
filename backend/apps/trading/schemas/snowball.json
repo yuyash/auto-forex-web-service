@@ -500,22 +500,25 @@
       "type": "string",
       "title": "Rebuild Stop Loss Mode",
       "title_ja": "再建後ロスカットモード",
-      "description": "How to set the stop-loss on rebuilt positions when loss cut after rebuild is allowed. Same reuses the absolute stop-loss price that closed the previous position. Manual uses a per-slot absolute pip distance from the rebuilt entry price.",
-      "description_ja": "再建後もロスカットを有効にする場合の、再建ポジションのロスカット設定方法です。Same は直前のポジションを決済したロスカット価格をそのまま再利用します。Manual は再建ポジションの建値からの絶対 pips 幅をスロットごとに使います。",
-      "enum": ["same", "manual"],
+      "description": "How to set the stop-loss on rebuilt positions when loss cut after rebuild is allowed. Same reuses the absolute stop-loss price that closed the previous position. Same Pips keeps the original stop-loss distance measured in pips. Manual uses a per-slot absolute pip distance from the rebuilt entry price.",
+      "description_ja": "再建後もロスカットを有効にする場合の、再建ポジションのロスカット設定方法です。Same は直前のポジションを決済したロスカット価格をそのまま再利用します。Same Pips は元のロスカット幅を pips 距離として維持します。Manual は再建ポジションの建値からの絶対 pips 幅をスロットごとに使います。",
+      "enum": ["same", "same_pips", "manual"],
       "enum_labels": {
         "same": "Same as Original SL Price",
+        "same_pips": "Same as Original SL Pips",
         "manual": "Manual"
       },
       "enum_labels_ja": {
         "same": "元のロスカット価格を再利用",
+        "same_pips": "元のロスカット幅を再利用",
         "manual": "手動"
       },
       "enum_descriptions": {
         "same": "Reuse the absolute stop-loss price that closed the previous position.",
+        "same_pips": "Reuse the stop-loss distance in pips from the stopped-out position, measured from the rebuilt entry price.",
         "manual": "Use per-slot absolute pip distances from the rebuilt entry price."
       },
-      "default": "same",
+      "default": "same_pips",
       "dependsOn": {
         "field": "rebuild_enabled",
         "values": [true],
@@ -548,10 +551,11 @@
       "type": "string",
       "title": "Rebuild Take-Profit Mode",
       "title_ja": "再建時 利確幅モード",
-      "description": "How to set the take-profit price on rebuilt positions. Same reuses the original absolute take-profit price. Other modes calculate a fresh take-profit distance from the rebuilt entry price.",
-      "description_ja": "再建ポジションの利確価格の設定方法です。Same は元の絶対利確価格を再利用します。その他のモードでは、再建時の建値から新しい利確幅を計算します。",
+      "description": "How to set the take-profit price on rebuilt positions. Same reuses the original absolute take-profit price. Same Pips keeps the original take-profit distance measured in pips. Other modes calculate a fresh take-profit distance from the rebuilt entry price.",
+      "description_ja": "再建ポジションの利確価格の設定方法です。Same は元の絶対利確価格を再利用します。Same Pips は元の利確幅を pips 距離として維持します。その他のモードでは、再建時の建値から新しい利確幅を計算します。",
       "enum": [
         "same",
+        "same_pips",
         "constant",
         "additive",
         "subtractive",
@@ -561,6 +565,7 @@
       ],
       "enum_labels": {
         "same": "Same as Original TP Price",
+        "same_pips": "Same as Original TP Pips",
         "constant": "Constant",
         "additive": "Additive",
         "subtractive": "Subtractive",
@@ -570,6 +575,7 @@
       },
       "enum_labels_ja": {
         "same": "元の利確価格を再利用",
+        "same_pips": "元の利確幅を再利用",
         "constant": "固定",
         "additive": "加算",
         "subtractive": "減算",
@@ -579,6 +585,7 @@
       },
       "enum_descriptions": {
         "same": "Reuse the absolute take-profit price from the stopped-out position.",
+        "same_pips": "Reuse the take-profit distance in pips from the stopped-out position, measured from the rebuilt entry price.",
         "constant": "Use the same take-profit distance for every rebuilt slot.",
         "additive": "Use the configured progression to widen the rebuild take-profit distance by slot.",
         "subtractive": "Use the configured progression to tighten the rebuild take-profit distance by slot.",
@@ -586,7 +593,7 @@
         "divisive": "Use the configured progression to reduce the rebuild take-profit distance by slot.",
         "manual": "Use explicit per-slot take-profit distances."
       },
-      "default": "same",
+      "default": "same_pips",
       "dependsOn": {
         "field": "rebuild_enabled",
         "values": [true],
@@ -676,37 +683,6 @@
       "itemLabel_ja": "再建 R{index} 利確幅（pips）"
     },
 
-    "rebuild_take_profit_recovery_enabled": {
-      "type": "boolean",
-      "title": "Recover Stop-Loss Pips On Rebuild",
-      "title_ja": "再建TPでロスカット分を最低回収",
-      "description": "When enabled, the rebuilt position's take-profit is extended at least far enough to recover the pips lost by the immediately preceding stop-loss. The strategy uses the farther of the normal rebuilt TP and the recovery TP, then applies the Rebuild Exit Buffer once.",
-      "description_ja": "有効時、再建ポジションの利確価格を、直前のロスカットで失った pips を最低限回収できる位置まで延長します。通常の再建TPと回収TPのうち、より遠い方を使い、その後に再建時 決済価格バッファを一度だけ適用します。",
-      "default": false,
-      "dependsOn": {
-        "field": "rebuild_enabled",
-        "values": [true],
-        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "rebuild_take_profit_recovery_mode": {
-      "type": "string",
-      "title": "Rebuild Recovery Mode",
-      "title_ja": "再建回収モード",
-      "description": "How to measure the minimum recovery target. Currently only pips is supported.",
-      "description_ja": "最低回収目標の測定方法です。現在は pips のみ対応しています。",
-      "enum": ["pips"],
-      "enum_labels": { "pips": "Pips" },
-      "enum_labels_ja": { "pips": "pips" },
-      "default": "pips",
-      "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
     "grid_order_validation_enabled": {
       "type": "boolean",
       "title": "Fail On Grid Ordering Violation",
@@ -716,7 +692,15 @@
       "default": true,
       "dependsOn": {
         "field": "rebuild_take_profit_mode",
-        "values": ["same", "constant", "additive", "subtractive", "multiplicative", "divisive"]
+        "values": [
+          "same",
+          "same_pips",
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
       },
       "group": "Rebuild",
       "group_ja": "再建"
@@ -779,12 +763,12 @@
       "type": "boolean",
       "title": "Adjust Rebuild Prices",
       "title_ja": "再建時の注文・決済価格を調整",
-      "description": "When enabled, optional entry and exit buffers can shift the rebuild trigger and inherited take-profit in the favourable direction while preserving grid ordering. Use Recover Stop-Loss Pips On Rebuild when the rebuild TP must cover the prior stop-loss loss.",
-      "description_ja": "有効時、任意の注文価格・決済価格バッファにより、再建の発動価格と引き継いだ利確価格を利益方向へ調整します。グリッド順序は維持されます。直前のロスカット損失を再建TPで回収したい場合は「再建TPでロスカット分を最低回収」を使います。",
+      "description": "When enabled, optional entry and exit buffers can shift the rebuild trigger and inherited take-profit in the favourable direction while preserving grid ordering.",
+      "description_ja": "有効時、任意の注文価格・決済価格バッファにより、再建の発動価格と引き継いだ利確価格を利益方向へ調整します。グリッド順序は維持されます。",
       "default": true,
       "dependsOn": {
         "field": "rebuild_take_profit_mode",
-        "values": ["same"],
+        "values": ["same", "same_pips"],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
       "group": "Rebuild",
@@ -811,8 +795,8 @@
       "type": "number",
       "title": "Rebuild Exit Buffer (pips)",
       "title_ja": "再建時 決済価格バッファ（pips）",
-      "description": "Additional safety buffer (in pips) applied once to the final rebuild take-profit in the favourable direction. When stop-loss recovery is enabled, this buffer is added after choosing the farther of the normal rebuilt TP and recovery TP. 0 means no buffer.",
-      "description_ja": "最終的な再建ポジションの利確価格に対して、利益方向へ一度だけ追加する安全バッファ（pips）です。ロスカット回収が有効な場合は、通常の再建TPと回収TPのうち遠い方を選んだ後に適用されます。0 はバッファなし。",
+      "description": "Additional safety buffer (in pips) applied once to the final rebuild take-profit in the favourable direction. 0 means no buffer.",
+      "description_ja": "最終的な再建ポジションの利確価格に対して、利益方向へ一度だけ追加する安全バッファ（pips）です。0 はバッファなし。",
       "default": 0,
       "minimum": 0,
       "dependsOn": {

@@ -93,6 +93,8 @@ class BacktestTickPublisherRunner:
     def __init__(self) -> None:
         """Initialize the backtest publisher runner."""
         self.task_service: CeleryTaskService | None = None
+        self._last_executor_stop_check_monotonic = 0.0
+        self._cached_executor_should_stop = False
 
     def run(
         self,
@@ -132,7 +134,9 @@ class BacktestTickPublisherRunner:
         self.task_service = CeleryTaskService(
             task_name=task_name,
             instance_key=instance_key,
-            stop_check_interval_seconds=1.0,
+            stop_check_interval_seconds=float(
+                getattr(settings, "MARKET_BACKTEST_STOP_CHECK_INTERVAL_SECONDS", 1.0)
+            ),
             heartbeat_interval_seconds=5.0,
         )
 
@@ -160,6 +164,13 @@ class BacktestTickPublisherRunner:
             getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK", 100_000)
         )
         low_watermark = int(getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK", 50_000))
+        backpressure_check_interval = self._backpressure_check_interval(
+            stream_maxlen=stream_maxlen,
+            high_watermark=high_watermark,
+            configured_interval=int(
+                getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_CHECK_INTERVAL", 100)
+            ),
+        )
         backpressure_sleep = float(
             getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS", 0.5)
         )
@@ -173,6 +184,7 @@ class BacktestTickPublisherRunner:
             f"stream={channel}, batch_size={batch_size}, "
             f"stream_maxlen={stream_maxlen}, "
             f"backpressure_high={high_watermark}, backpressure_low={low_watermark}, "
+            f"backpressure_check_interval={backpressure_check_interval}, "
             f"consumer_group={consumer_group}, "
             f"start_dt={start_dt}, end_dt={end_dt}, "
             f"tick_granularity={tick_granularity}, "
@@ -225,6 +237,7 @@ class BacktestTickPublisherRunner:
                 stream_maxlen=stream_maxlen,
                 high_watermark=high_watermark,
                 low_watermark=low_watermark,
+                backpressure_check_interval=backpressure_check_interval,
                 backpressure_sleep=backpressure_sleep,
                 consumer_group=consumer_group,
                 pip_size=pip_size,
@@ -323,6 +336,7 @@ class BacktestTickPublisherRunner:
         stream_maxlen: int = 200_000,
         high_watermark: int = 100_000,
         low_watermark: int = 50_000,
+        backpressure_check_interval: int = 100,
         backpressure_sleep: float = 0.5,
         consumer_group: str = "backtest",
         pip_size: str | None = None,
@@ -394,7 +408,9 @@ class BacktestTickPublisherRunner:
             )
 
         for row in rows_iter:
-            # Check stop signal before every tick.
+            # Check stop signal before every tick.  The service and executor
+            # status probes are cached internally, so this keeps stop
+            # responsiveness without issuing DB queries per row.
             if self._should_stop_publishing(request_id):
                 logger.info(
                     f"[PUBLISHER:PUBLISH] Stop signal received - request_id={request_id}, "
@@ -418,7 +434,11 @@ class BacktestTickPublisherRunner:
             # consumer reads, so it would hold the publisher indefinitely
             # after the first ``high_watermark`` entries have been
             # delivered.
-            if high_watermark > 0:
+            if high_watermark > 0 and self._should_check_backpressure(
+                published=published,
+                check_interval=backpressure_check_interval,
+                already_waiting=backpressure_waiting,
+            ):
                 backpressure_waiting = self._apply_backpressure(
                     client=client,
                     channel=channel,
@@ -430,7 +450,7 @@ class BacktestTickPublisherRunner:
                     consumer_group=consumer_group,
                 )
                 # If a stop signal arrived while we were waiting, bail out.
-                if self._should_stop_publishing(request_id):
+                if self._should_stop_publishing(request_id, force=True):
                     logger.info(
                         f"[PUBLISHER:PUBLISH] Stop signal received during backpressure - "
                         f"request_id={request_id}, published={published}"
@@ -499,6 +519,39 @@ class BacktestTickPublisherRunner:
             f"total_published={published}, last_ts={last_ts}"
         )
         return published, last_ts, False
+
+    @staticmethod
+    def _backpressure_check_interval(
+        *,
+        stream_maxlen: int,
+        high_watermark: int,
+        configured_interval: int,
+    ) -> int:
+        """Return a safe interval for Redis lag checks.
+
+        The publisher can overshoot the high watermark by at most this
+        interval.  Clamp it to half of the stream headroom so a slow
+        subscriber still has room before Redis MAXLEN trimming can remove
+        undelivered entries.
+        """
+        if high_watermark <= 0:
+            return 1
+        headroom = stream_maxlen - high_watermark
+        if headroom <= 1:
+            return 1
+        safe_interval = max(1, headroom // 2)
+        return max(1, min(int(configured_interval or 1), safe_interval))
+
+    @staticmethod
+    def _should_check_backpressure(
+        *,
+        published: int,
+        check_interval: int,
+        already_waiting: bool,
+    ) -> bool:
+        if already_waiting:
+            return True
+        return published % max(check_interval, 1) == 0
 
     @staticmethod
     def _ensure_consumer_group(
@@ -687,7 +740,7 @@ class BacktestTickPublisherRunner:
         while True:
             time.sleep(max(sleep_seconds, 0.01))
             # Allow the publisher to bail out during long pauses.
-            if self._should_stop_publishing(request_id):
+            if self._should_stop_publishing(request_id, force=True):
                 logger.info(
                     f"[PUBLISHER:BACKPRESSURE] Stop signal received while paused - "
                     f"request_id={request_id}, lag={lag}"
@@ -849,7 +902,7 @@ class BacktestTickPublisherRunner:
                 exc_info=True,
             )
 
-    def _should_stop_publishing(self, request_id: str) -> bool:
+    def _should_stop_publishing(self, request_id: str, *, force: bool = False) -> bool:
         """Check if publishing should stop.
 
         Checks both the publisher's own stop signal and the executor's status.
@@ -862,12 +915,25 @@ class BacktestTickPublisherRunner:
         """
         assert self.task_service is not None
 
-        # Force check to bypass throttling - we need immediate response
-        if self.task_service.should_stop(force=True):
+        if self.task_service.should_stop(force=force):
             logger.info(
                 f"[PUBLISHER:STOP_CHECK] Publisher stop signal detected - request_id={request_id}"
             )
             return True
+
+        if self._cached_executor_should_stop:
+            return True
+
+        now_monotonic = time.monotonic()
+        stop_check_interval_seconds = float(
+            getattr(self.task_service, "stop_check_interval_seconds", 1.0)
+        )
+        if (
+            not force
+            and (now_monotonic - self._last_executor_stop_check_monotonic)
+            < stop_check_interval_seconds
+        ):
+            return False
 
         # Check executor's status via BacktestTask
         try:
@@ -879,17 +945,22 @@ class BacktestTickPublisherRunner:
             )
 
             if task_status in (TaskStatus.STOPPING, TaskStatus.STOPPED, TaskStatus.FAILED):
+                self._cached_executor_should_stop = True
                 logger.info(
                     f"[PUBLISHER:STOP_CHECK] Executor stop detected - request_id={request_id}, "
                     f"task_status={task_status}"
                 )
                 return True
 
+            self._cached_executor_should_stop = False
+            self._last_executor_stop_check_monotonic = now_monotonic
+
         except Exception as exc:
             logger.warning(
                 f"[PUBLISHER:STOP_CHECK] Failed to check executor status - request_id={request_id}, "
                 f"error={exc}"
             )
+            self._last_executor_stop_check_monotonic = now_monotonic
 
         return False
 

@@ -1,6 +1,6 @@
 """Integration tests for backtest task."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from apps.market.models import CeleryTaskStatus, TickData
-from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
+from apps.market.services.backtest_ticks import (
+    _build_aggregation_sql,
+    iter_aggregated_backtest_ticks,
+)
 from apps.market.tasks.backtest import BacktestTickPublisherRunner
 from apps.trading.enums import TaskStatus
 
@@ -117,6 +120,7 @@ class TestBacktestTickPublisherRunnerIntegration:
         runner = BacktestTickPublisherRunner()
         mock_service = MagicMock()
         mock_service.should_stop.return_value = False
+        mock_service.stop_check_interval_seconds = 1.0
         runner.task_service = mock_service
 
         # Should not stop when task is running
@@ -127,21 +131,23 @@ class TestBacktestTickPublisherRunnerIntegration:
         task.save()
 
         # Should stop when task is stopping
-        assert runner._should_stop_publishing(request_id)
+        assert runner._should_stop_publishing(request_id, force=True)
 
         # Update task to stopped
         task.status = TaskStatus.STOPPED
         task.save()
+        runner._cached_executor_should_stop = False
 
         # Should stop when task is stopped
-        assert runner._should_stop_publishing(request_id)
+        assert runner._should_stop_publishing(request_id, force=True)
 
         # Update task to failed
         task.status = TaskStatus.FAILED
         task.save()
+        runner._cached_executor_should_stop = False
 
         # Should stop when task is failed
-        assert runner._should_stop_publishing(request_id)
+        assert runner._should_stop_publishing(request_id, force=True)
 
     def test_should_stop_publishing_checks_own_stop_signal(self) -> None:
         """Test that _should_stop_publishing checks its own stop signal."""
@@ -152,6 +158,48 @@ class TestBacktestTickPublisherRunnerIntegration:
 
         # Should stop when own stop signal is set
         assert runner._should_stop_publishing("test-request-999")
+
+    def test_should_stop_publishing_caches_executor_status(
+        self,
+        django_assert_num_queries,
+    ) -> None:
+        """Avoid one BacktestTask status query per published tick."""
+        from django.contrib.auth import get_user_model
+
+        from apps.trading.models import BacktestTask, StrategyConfiguration
+
+        User = get_user_model()
+        test_user = User.objects.create_user(  # type: ignore[attr-defined]
+            email="backtest-cache@example.com",
+            password="testpass123",
+            username="backtestcacheuser",
+        )
+        config = StrategyConfiguration.objects.create(
+            user=test_user,
+            name="Test Config Cache",
+            strategy_type="floor",
+            parameters={"instrument": "EUR_USD"},
+        )
+        task = BacktestTask.objects.create(
+            name="Test Backtest Cache",
+            user=test_user,
+            config=config,
+            instrument="EUR_USD",
+            start_time=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
+            end_time=datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC),
+            initial_balance=Decimal("10000.00"),
+            status=TaskStatus.RUNNING,
+        )
+
+        runner = BacktestTickPublisherRunner()
+        mock_service = MagicMock()
+        mock_service.should_stop.return_value = False
+        mock_service.stop_check_interval_seconds = 1.0
+        runner.task_service = mock_service
+
+        with django_assert_num_queries(1):
+            assert not runner._should_stop_publishing(str(task.id))
+            assert not runner._should_stop_publishing(str(task.id))
 
     @patch("apps.market.tasks.backtest.redis_client")
     @patch("apps.market.tasks.backtest.CeleryTaskService")
@@ -288,6 +336,65 @@ class TestBacktestTickPublisherRunnerIntegration:
         assert "30s" in message
         assert "80.0 pips" in message
         assert "test-wide-bar" in message
+
+    def test_iter_aggregated_backtest_ticks_rate_limits_wide_bar_warnings(
+        self,
+        settings,
+        caplog,
+    ) -> None:
+        """Repeated wide-bar warnings are capped and summarized."""
+        import logging
+
+        settings.MARKET_BACKTEST_BAR_RANGE_WARNING_LIMIT = 1
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        for bucket_index in range(3):
+            bucket_start = start + timedelta(seconds=bucket_index * 30)
+            for ts, bid, ask, mid in [
+                (bucket_start, "150.00", "150.02", "150.01"),
+                (bucket_start + timedelta(seconds=10), "150.80", "150.82", "150.81"),
+            ]:
+                TickData.objects.create(
+                    instrument="USD_JPY",
+                    timestamp=ts,
+                    bid=Decimal(bid),
+                    ask=Decimal(ask),
+                    mid=Decimal(mid),
+                )
+
+        with caplog.at_level(logging.WARNING, logger="apps.market.services.backtest_ticks"):
+            rows = list(
+                iter_aggregated_backtest_ticks(
+                    instrument="USD_JPY",
+                    start_dt=start,
+                    end_dt=start + timedelta(seconds=89),
+                    granularity="30s",
+                    mode="first",
+                    batch_size=1,
+                    range_warning_pips=Decimal("30"),
+                    pip_size=Decimal("0.01"),
+                    request_id="test-warning-limit",
+                )
+            )
+
+        assert len(rows) == 3
+        warnings = [
+            rec for rec in caplog.records if "range exceeds warning threshold" in rec.getMessage()
+        ]
+        summaries = [rec for rec in caplog.records if "warnings suppressed" in rec.getMessage()]
+        assert len(warnings) == 1
+        assert len(summaries) == 1
+        summary = summaries[0].getMessage()
+        assert "suppressed=2" in summary
+        assert "logged_limit=1" in summary
+
+    def test_aggregation_sql_omits_range_stats_when_warning_disabled(self) -> None:
+        sql = _build_aggregation_sql(mode="first", include_range_stats=False)
+
+        assert "MAX(" not in sql
+        assert "MIN(" not in sql
+        assert "ROW_NUMBER" not in sql
+        assert "DISTINCT ON" in sql
 
     def test_iter_aggregated_backtest_ticks_does_not_warn_when_threshold_disabled(
         self, caplog

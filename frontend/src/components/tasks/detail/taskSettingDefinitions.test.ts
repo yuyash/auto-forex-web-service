@@ -159,7 +159,7 @@ describe('task setting definition contracts', () => {
           },
         },
       })
-    ).toBe('USD (runtime FX)');
+    ).toBe('USD');
   });
 
   it('trading definitions contain user-facing lifecycle/config fields', () => {

@@ -146,23 +146,21 @@ else:
 | -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
 | `rebuild_enabled`                      | `true`  | SL されたスロットを `pending_rebuild` として保持し、価格が戻ったら再建する。                         |
 | `complete_cycle_when_empty`            | `false` | `rebuild_enabled=false` 時、全ポジション消滅後にサイクルを完了扱いにして新規サイクル作成を許可する。 |
-| `rebuild_stop_loss_mode`               | `same`  | 再建後も SL する場合、元の絶対 SL 価格を使うか、手動 pips 幅を使うか。                               |
+| `rebuild_stop_loss_mode`               | `same_pips` | 再建後も SL する場合、元の絶対 SL 価格、元の SL 幅、または手動 pips 幅を使うか。                 |
 | `rebuild_stop_loss_manual_pips`        | `[]`    | `rebuild_stop_loss_mode=manual` 時の R0..R(r_max) の SL 幅。                                         |
-| `rebuild_take_profit_mode`             | `same`  | 再建ポジションの TP。`same` は停止前の絶対 TP を引き継ぐ。                                           |
+| `rebuild_take_profit_mode`             | `same_pips` | 再建ポジションの TP。`same` は停止前の絶対 TP、`same_pips` は停止前の TP 幅を pips 距離として引き継ぐ。 |
 | `rebuild_take_profit_pips_head`        | `25`    | 再建TP幅の開始値。                                                                                   |
 | `rebuild_take_profit_pips_tail`        | `10`    | 再建TP幅の下限値。                                                                                   |
 | `rebuild_take_profit_pips_flat_steps`  | `0`     | 再建TP幅の減衰前に開始値を維持するスロット数。                                                       |
 | `rebuild_take_profit_pips_gamma`       | `1.4`   | 再建TP幅の減衰カーブ係数。                                                                           |
 | `rebuild_take_profit_manual_pips`      | `[]`    | `rebuild_take_profit_mode=manual` 時の R0..R(r_max) の TP 幅。                                       |
-| `rebuild_take_profit_recovery_enabled` | `false` | 直前 SL の実決済価格を再建発動価格にし、損失 pips と通常 TP 幅を含む TP 距離にする。                 |
-| `rebuild_take_profit_recovery_mode`    | `pips`  | 現在は `pips` のみ対応。                                                                             |
-| `rebuild_price_adjustment_enabled`     | `true`  | `rebuild_take_profit_mode=same` のとき、再建発動価格と TP にバッファを適用する。                     |
+| `rebuild_price_adjustment_enabled`     | `true`  | `rebuild_take_profit_mode=same` / `same_pips` のとき、再建発動価格と TP にバッファを適用する。        |
 | `rebuild_entry_price_buffer_pips`      | `0`     | 再建発動価格を利益方向にずらす pips。                                                                |
 | `rebuild_exit_price_buffer_pips`       | `0`     | 再建 TP を利益方向にずらす pips。                                                                    |
 | `reseed_on_all_pending`                | `false` | その方向の全サイクルが PENDING になったら新サイクルを作る。                                          |
 | `reseed_on_grid_exhausted`             | `false` | 全レイヤー全スロットが `pending_rebuild` になった場合だけ新サイクルを作る。                          |
 
-`rebuild_take_profit_mode` が `same` 以外の場合、`rebuild_price_adjustment_enabled` は正規化時に `false` へ落とされる。`reseed_on_all_pending` と `reseed_on_grid_exhausted` は同時に有効化できない。
+`rebuild_take_profit_mode` が `same` / `same_pips` 以外の場合、`rebuild_price_adjustment_enabled` は正規化時に `false` へ落とされる。`reseed_on_all_pending` と `reseed_on_grid_exhausted` は同時に有効化できない。
 
 ### 3.6 証拠金保護と検証
 
@@ -184,7 +182,7 @@ else:
 
 ### 3.7 正規化と検証
 
-`SnowballStrategyConfig.from_dict()` は入力をゆるく parse し、欠落値は既定値で補完する。`strict_from_dict()` は永続化済み設定向けで、原則として `to_dict()` に含まれる全フィールドを要求する。ただし `preserve_highest_retracement_enabled=false` の場合の `preserve_highest_r_from` と、再建TP回収関連の互換フィールドは省略を許容する。
+`SnowballStrategyConfig.from_dict()` は入力をゆるく parse し、欠落値は既定値で補完する。`strict_from_dict()` は永続化済み設定向けで、原則として `to_dict()` に含まれる全フィールドを要求する。ただし `preserve_highest_retracement_enabled=false` の場合の `preserve_highest_r_from` は省略を許容する。
 
 主な検証条件は以下。
 
@@ -201,12 +199,11 @@ else:
 - `0 <= refill_up_to < r_max` が必要。
 - `stop_loss_pips_head >= stop_loss_pips_tail > 0`、`0 <= stop_loss_pips_flat_steps < r_max`、`stop_loss_pips_gamma > 0` が必要。
 - `stop_loss_mode=manual` の `stop_loss_manual_pips` は少なくとも `r_max` 件、各値 `> 0` が必要。
-- `rebuild_stop_loss_mode` は `same` / `manual` のみ。`manual` では `rebuild_stop_loss_manual_pips` が少なくとも `r_max + 1` 件、各値 `> 0` が必要。
-- `rebuild_take_profit_mode` は `same` / `constant` / `additive` / `subtractive` / `multiplicative` / `divisive` / `manual` のみ。
+- `rebuild_stop_loss_mode` は `same` / `same_pips` / `manual` のみ。`manual` では `rebuild_stop_loss_manual_pips` が少なくとも `r_max + 1` 件、各値 `> 0` が必要。
+- `rebuild_take_profit_mode` は `same` / `same_pips` / `constant` / `additive` / `subtractive` / `multiplicative` / `divisive` / `manual` のみ。
 - `rebuild_take_profit_*` は head >= tail > 0、flat steps < r_max、gamma > 0 が必要。
 - `rebuild_take_profit_mode=manual` では `rebuild_take_profit_manual_pips` が少なくとも `r_max + 1` 件、各値 `> 0` が必要。
-- `rebuild_take_profit_recovery_mode` は `pips` のみ。
-- `rebuild_take_profit_mode != same` の場合、`rebuild_price_adjustment_enabled=false` が必要。
+- `rebuild_take_profit_mode` が `same` / `same_pips` 以外の場合、`rebuild_price_adjustment_enabled=false` が必要。
 - `rebuild_take_profit_mode=manual` の場合、`grid_order_validation_enabled=false` が必要。
 - `reseed_on_all_pending` と `reseed_on_grid_exhausted` は同時に有効化できない。
 - `rebuild_entry_price_buffer_pips` と `rebuild_exit_price_buffer_pips` は 0 以上が必要。
@@ -486,9 +483,9 @@ SLクローズ時:
 
 再建は `stop_loss_enabled=true` かつ `rebuild_enabled=true` の場合だけ行う。
 
-基本の再建発動価格は、停止前の `pending_rebuild.entry_price` である。`rebuild_take_profit_recovery_enabled=true` の場合は、直前 SL の実決済価格 `pending_rebuild.stop_loss_exit_price` を再建発動価格にする。古い state に実決済価格がない場合は、`pending_rebuild.entry_price` と `stop_loss_loss_pips` から推定する。SL で閉じた同一 tick では即時再建せず、次 tick 以降に発動判定する。
+基本の再建発動価格は、停止前の `pending_rebuild.entry_price` である。SL で閉じた同一 tick では即時再建せず、次 tick 以降に発動判定する。
 
-`rebuild_price_adjustment_enabled=true` かつ `rebuild_take_profit_mode=same` の場合、上記の発動価格を `rebuild_entry_price_buffer_pips` だけ利益方向にずらす。
+`rebuild_price_adjustment_enabled=true` かつ `rebuild_take_profit_mode=same` / `same_pips` の場合、上記の発動価格を `rebuild_entry_price_buffer_pips` だけ利益方向にずらす。
 
 | 方向  | 基本条件               |
 | ----- | ---------------------- |
@@ -513,8 +510,8 @@ SLクローズ時:
 再建TPは以下で決まる。
 
 - `rebuild_take_profit_mode=same`: 停止前の絶対 TP 価格を使う。
+- `rebuild_take_profit_mode=same_pips`: 停止前の建値から TP までの pips 距離を、再建建値から再適用する。
 - その他のモード: 再建建値から `rebuild_take_profit_pips()` で計算する。
-- `rebuild_take_profit_recovery_enabled=true`: 再建発動価格が直前 SL の実決済価格になるため、`same` では停止前の絶対 TP 価格までの距離が「直前 SL の損失 pips + 元の TP 幅」になる。その他の TP モードでは、通常TPと直前 SL の損失 pips を最低限回収できる TP を比較し、より遠い方を使う。
 - `rebuild_exit_price_buffer_pips` があれば利益方向に追加する。
 - グリッド順序を壊す場合は TP を clamp し、必要に応じて他の pending rebuild TP にも伝播する。
 
@@ -522,6 +519,7 @@ SLクローズ時:
 
 - `disable_loss_cut_after_rebuild=true`: SL を設定しない。
 - `rebuild_stop_loss_mode=same`: 停止前の絶対 SL 価格を再利用する。
+- `rebuild_stop_loss_mode=same_pips`: 停止前の建値から SL までの pips 距離を、再建建値から再適用する。
 - `rebuild_stop_loss_mode=manual`: `rebuild_stop_loss_manual_pips` を再建建値からの絶対距離として使う。
 
 ### 8.5 ライフサイクル損益
