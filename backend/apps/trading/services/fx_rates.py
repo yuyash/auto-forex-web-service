@@ -221,20 +221,54 @@ class TickDataFxRateProvider:
         )
         if not candidates:
             return {}
-        qs = TickData.objects.filter(instrument__in=candidates)
-        if as_of is not None:
-            qs = qs.filter(timestamp__lte=as_of)
+
+        return self._latest_tick_by_candidate(TickData, candidates, as_of=as_of)
+
+    def _latest_tick_by_candidate(
+        self,
+        tick_model: Any,
+        candidates: tuple[str, ...],
+        *,
+        as_of: datetime | None,
+    ) -> dict[str, dict[str, Any]]:
+        from django.db import connection
+
+        quote_name = connection.ops.quote_name
+        table = quote_name(tick_model._meta.db_table)
+        instrument_col = quote_name("instrument")
+        timestamp_col = quote_name("timestamp")
+        mid_col = quote_name("mid")
+
+        selects: list[str] = []
+        params: list[Any] = []
+        for index, candidate in enumerate(candidates):
+            predicates = [f"{instrument_col} = %s"]
+            params.append(candidate)
+            if as_of is not None:
+                predicates.append(f"{timestamp_col} <= %s")
+                params.append(as_of)
+            selects.append(
+                "SELECT "  # nosec B608
+                f"{instrument_col}, {timestamp_col}, {mid_col} "
+                "FROM ("
+                f"SELECT {instrument_col}, {timestamp_col}, {mid_col} "
+                f"FROM {table} "
+                f"WHERE {' AND '.join(predicates)} "
+                f"ORDER BY {timestamp_col} DESC "
+                "LIMIT 1"
+                f") AS latest_tick_{index}"
+            )
+
+        sql = " UNION ALL ".join(selects)
         latest: dict[str, dict[str, Any]] = {}
-        for row in qs.order_by("instrument", "-timestamp").values(
-            "instrument",
-            "timestamp",
-            "mid",
-        ):
-            instrument = str(row["instrument"])
-            if instrument not in latest:
-                latest[instrument] = row
-            if len(latest) == len(candidates):
-                break
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            for instrument, timestamp, mid in cursor.fetchall():
+                latest[str(instrument)] = {
+                    "instrument": instrument,
+                    "timestamp": timestamp,
+                    "mid": mid,
+                }
         return latest
 
     def _instrument_candidates(self, source_currency: str, target_currency: str) -> tuple[str, ...]:
