@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
+
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.events import StrategyEvent
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
@@ -40,6 +42,7 @@ class SnowballDecisionTrace:
     """Per-tick collection of Snowball phase decisions."""
 
     tick_timestamp: datetime
+    enabled: bool = False
     records: list[SnowballDecisionTraceRecord] = field(default_factory=list)
 
     def record(
@@ -52,6 +55,8 @@ class SnowballDecisionTrace:
         event_count: int = 0,
     ) -> None:
         """Append one decision trace record."""
+        if not self.enabled:
+            return
         self.records.append(
             SnowballDecisionTraceRecord(
                 phase=phase,
@@ -72,6 +77,8 @@ class SnowballDecisionTrace:
         no_event_reason: str,
     ) -> None:
         """Record whether a phase mutated state or skipped with a reason."""
+        if not self.enabled:
+            return
         if events:
             self.record(
                 phase=phase,
@@ -106,16 +113,28 @@ class SnowballDecisionTraceRecorder:
         *,
         metrics_key: str = "snowball_decision_trace",
         max_records: int = 64,
+        enabled: bool | None = None,
     ) -> None:
         self.metrics_key = metrics_key
         self.max_records = max_records
+        self.enabled = (
+            bool(getattr(settings, "SNOWBALL_DECISION_TRACE_ENABLED", False))
+            if enabled is None
+            else enabled
+        )
 
     def start_tick(self, *, tick: Tick) -> SnowballDecisionTrace:
         """Create an empty trace for the tick being processed."""
-        return SnowballDecisionTrace(tick_timestamp=tick.timestamp)
+        return SnowballDecisionTrace(
+            tick_timestamp=tick.timestamp,
+            enabled=self.enabled and self.max_records > 0,
+        )
 
     def persist(self, *, ss: SnowballStrategyState, trace: SnowballDecisionTrace) -> None:
         """Store the latest trace as compact JSON in Snowball metrics."""
+        if not trace.enabled:
+            ss.metrics.pop(self.metrics_key, None)
+            return
         ss.metrics[self.metrics_key] = json.dumps(
             trace.to_dict(max_records=self.max_records),
             separators=(",", ":"),

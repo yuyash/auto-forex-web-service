@@ -6,6 +6,8 @@ import logging
 import json
 from decimal import Decimal
 
+from django.test import override_settings
+
 from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from tests.unit.trading.strategies.snowball.production_scenarios import (
     SnowballProductionScenarioFactory,
@@ -67,6 +69,7 @@ class TestSnowballProductionScenarios:
         assert scenario.strategy._grid_order_violation is None
         assert persisted.initialised is True
 
+    @override_settings(SNOWBALL_DECISION_TRACE_ENABLED=True)
     def test_oanda_response_replay_runs_ticks_and_consumes_mocked_responses(self):
         replay = SnowballProductionScenarioFactory().oanda_response_replay()
 

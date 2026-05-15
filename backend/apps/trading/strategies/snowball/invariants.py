@@ -67,6 +67,8 @@ class SnowballInvariantValidator:
     ) -> None:
         seen: set[int] = set()
         for cycle in state.cycles:
+            if cycle.completed:
+                continue
             for entry in cycle.all_entries():
                 if entry.entry_id in seen:
                     violations.append(
@@ -83,6 +85,8 @@ class SnowballInvariantValidator:
     ) -> None:
         expected_slots = self.config.r_max + 1
         for cycle in state.cycles:
+            if cycle.completed:
+                continue
             if cycle.layer_count > self.config.f_max:
                 violations.append(
                     SnowballInvariantViolation(
