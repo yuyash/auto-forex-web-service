@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.4...backend-v1.53.5) (2026-05-15)
+
+
+### Bug Fixes
+
+* **trading:** refresh active execution snapshots ([#714](https://github.com/yuyash/auto-forex-web-service/issues/714)) ([9bacdb5](https://github.com/yuyash/auto-forex-web-service/commit/9bacdb5fa814e20e1c045e987014ac59997661b5))
+
 ## [1.53.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.3...backend-v1.53.4) (2026-05-14)
 
 
