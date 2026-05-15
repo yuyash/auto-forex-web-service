@@ -1200,7 +1200,12 @@ class TaskExecutor:
                 task_id=self.task.pk,
                 execution_id=execution_id,
             ).first()
-            defaults = build_config_snapshot_defaults(snapshot=snapshot, task=self.task)
+            defaults = {
+                **build_config_snapshot_defaults(snapshot=snapshot, task=self.task),
+                "completed_at": None,
+                "summary": {},
+                "metrics": {},
+            }
             TaskExecutionSnapshot.objects.update_or_create(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,

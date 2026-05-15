@@ -122,6 +122,30 @@ def test_tick_data_provider_respects_as_of_for_inverse_pair():
 
 
 @pytest.mark.django_db
+def test_tick_data_provider_limits_each_candidate_lookup():
+    base_time = datetime(2026, 1, 1, 12, tzinfo=UTC)
+    for minutes, mid in ((0, "150"), (1, "151"), (2, "152")):
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=base_time + timedelta(minutes=minutes),
+            bid=Decimal(mid) - Decimal("0.1"),
+            ask=Decimal(mid) + Decimal("0.1"),
+            mid=Decimal(mid),
+        )
+    service = FxConversionService()
+
+    with CaptureQueriesContext(connection) as queries:
+        converted = service.convert(Money.coerce("304", "JPY"), target_currency="USD")
+
+    assert converted is not None
+    assert converted.amount == Decimal("2")
+    lookup_sql = " ".join(query["sql"] for query in queries)
+    assert "UNION ALL" in lookup_sql
+    assert "LIMIT 1" in lookup_sql
+    assert "ORDER BY" in lookup_sql
+
+
+@pytest.mark.django_db
 def test_triangulated_tick_data_provider_uses_common_pivot_currency():
     timestamp = datetime(2026, 1, 1, 12, tzinfo=UTC)
     TickData.objects.create(

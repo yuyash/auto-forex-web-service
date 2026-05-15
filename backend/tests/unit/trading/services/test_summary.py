@@ -9,11 +9,12 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from apps.trading.enums import Direction, TaskType
+from apps.trading.enums import Direction, TaskStatus, TaskType
 from apps.trading.models import BacktestTask, StrategyConfiguration, TaskExecutionSnapshot
 from apps.trading.models.positions import Position
 from apps.trading.models.state import ExecutionState
 from apps.trading.models.trades import Trade
+from apps.trading.services.execution_snapshots import get_metrics_snapshot
 from apps.trading.services.summary import compute_cached_task_summary, compute_task_summary
 
 
@@ -296,3 +297,72 @@ def test_snowball_net_cached_summary_recomputes_stale_terminal_snapshot():
     )
 
     assert summary.pnl.realized == Decimal("750000")
+
+
+@pytest.mark.django_db
+def test_active_backtest_current_execution_ignores_persisted_summary_snapshot():
+    task = _make_task(strategy_type="snowball")
+    execution_id = uuid4()
+    task.execution_id = execution_id
+    task.status = TaskStatus.RUNNING
+    task.save(update_fields=["execution_id", "status"])
+    _create_state(
+        task=task,
+        execution_id=execution_id,
+        realized_account=Decimal("5"),
+        realized_quote=Decimal("5"),
+    )
+    TaskExecutionSnapshot.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=execution_id,
+        summary={
+            "timestamp": "2026-01-01T12:00:00+00:00",
+            "pnl": {"realized": "999", "unrealized": "0"},
+            "counts": {},
+            "execution": {"current_balance": "99999", "ticks_processed": 1},
+            "tick": {
+                "timestamp": "2026-01-01T12:00:00+00:00",
+                "bid": "149.00",
+                "ask": "149.02",
+                "mid": "149.01",
+            },
+            "task": {"status": "stopped"},
+        },
+        metrics={"ticks_processed": 1},
+    )
+
+    summary = compute_cached_task_summary(
+        task_type=TaskType.BACKTEST,
+        task_id=str(task.pk),
+        execution_id=execution_id,
+    )
+
+    assert summary.tick.timestamp == "2026-01-01T13:00:00+00:00"
+    assert summary.tick.mid == Decimal("150")
+    assert summary.execution.ticks_processed == 10
+    assert summary.task.status == TaskStatus.RUNNING
+
+
+@pytest.mark.django_db
+def test_active_backtest_current_execution_ignores_persisted_metrics_snapshot():
+    task = _make_task(strategy_type="snowball")
+    execution_id = uuid4()
+    task.execution_id = execution_id
+    task.status = TaskStatus.RUNNING
+    task.save(update_fields=["execution_id", "status"])
+    TaskExecutionSnapshot.objects.create(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=execution_id,
+        metrics={"ticks_processed": 1},
+    )
+
+    metrics = get_metrics_snapshot(
+        task=task,
+        task_type=TaskType.BACKTEST,
+        task_id=str(task.pk),
+        execution_id=str(execution_id),
+    )
+
+    assert metrics is None
