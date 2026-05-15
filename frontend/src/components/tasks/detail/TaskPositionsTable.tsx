@@ -155,14 +155,28 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   });
 
   // --- PnL summary ---
-  const {
-    summary: {
-      pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
-      execution: { displayCurrency, accountCurrency },
-    },
-    refresh: refreshPnl,
-  } = useTaskSummary(String(taskId), taskType, executionRunId);
-  const summaryCurrency = displayCurrency || accountCurrency;
+  const { summary: positionSummary, refresh: refreshPnl } = useTaskSummary(
+    String(taskId),
+    taskType,
+    executionRunId
+  );
+  const summaryRealizedMoney =
+    positionSummary.pnl.realizedDisplayMoney ??
+    positionSummary.pnl.realizedMoney;
+  const summaryUnrealizedMoney =
+    positionSummary.pnl.unrealizedDisplayMoney ??
+    positionSummary.pnl.unrealizedMoney;
+  const totalRealizedPnl = Number(
+    summaryRealizedMoney?.amount ?? positionSummary.pnl.realized
+  );
+  const totalUnrealizedPnl = Number(
+    summaryUnrealizedMoney?.amount ?? positionSummary.pnl.unrealized
+  );
+  const summaryCurrency =
+    summaryRealizedMoney?.currency ||
+    summaryUnrealizedMoney?.currency ||
+    positionSummary.execution.displayCurrency ||
+    positionSummary.execution.accountCurrency;
 
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);
   React.useEffect(() => {

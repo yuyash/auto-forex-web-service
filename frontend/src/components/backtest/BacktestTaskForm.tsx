@@ -58,7 +58,12 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { useToast } from '../common/useToast';
 import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
 import { formatMoneyAmount } from '../../utils/numberFormat';
-import { normalizeInstrumentName } from '../../utils/instruments';
+import {
+  currencyOptionsForInstrument,
+  normalizeInstrumentName,
+  preferredCurrencyForInstrument,
+  preferredCurrencyFromOptions,
+} from '../../utils/instruments';
 import {
   fromTimezonePickerDate,
   formatDateTimeInTimezone,
@@ -394,6 +399,10 @@ export default function BacktestTaskForm({
   }, [initialData?.start_time, initialData?.end_time, timezone]);
 
   const resolvedDefaultValues = useMemo(() => {
+    const defaultInstrument = initialData?.instrument || 'USD_JPY';
+    const defaultCurrency =
+      preferredCurrencyForInstrument(defaultInstrument, language) ||
+      DEFAULT_ACCOUNT_CURRENCY;
     const baseDefaults: BacktestTaskSchemaOutput = {
       config_id: '',
       name: '',
@@ -402,11 +411,11 @@ export default function BacktestTaskForm({
       start_time: defaultDateRange.start_time,
       end_time: defaultDateRange.end_time,
       initial_balance: 10000,
-      account_currency: DEFAULT_ACCOUNT_CURRENCY,
-      display_currency: DEFAULT_ACCOUNT_CURRENCY,
+      account_currency: defaultCurrency,
+      display_currency: defaultCurrency,
       commission_per_trade: 0,
       pip_size: undefined,
-      instrument: 'USD_JPY',
+      instrument: defaultInstrument,
       tick_granularity: 'tick',
       tick_window_value_mode: 'first',
       sell_at_completion: false,
@@ -430,7 +439,12 @@ export default function BacktestTaskForm({
       start_time: initialData?.start_time || baseDefaults.start_time,
       end_time: initialData?.end_time || baseDefaults.end_time,
     } as BacktestTaskSchemaOutput;
-  }, [defaultDateRange.end_time, defaultDateRange.start_time, initialData]);
+  }, [
+    defaultDateRange.end_time,
+    defaultDateRange.start_time,
+    initialData,
+    language,
+  ]);
 
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<BacktestTaskSchemaOutput>>(
@@ -471,22 +485,6 @@ export default function BacktestTaskForm({
   const watchedAccountCurrency =
     watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
   const watchedDisplayCurrency = watch('display_currency') || '';
-  const previousAccountCurrencyRef = useRef(watchedAccountCurrency);
-
-  useEffect(() => {
-    const previousAccountCurrency = previousAccountCurrencyRef.current;
-    if (
-      watchedAccountCurrency &&
-      (!watchedDisplayCurrency ||
-        watchedDisplayCurrency === previousAccountCurrency)
-    ) {
-      setValue('display_currency', watchedAccountCurrency, {
-        shouldDirty: watchedDisplayCurrency !== watchedAccountCurrency,
-        shouldValidate: false,
-      });
-    }
-    previousAccountCurrencyRef.current = watchedAccountCurrency;
-  }, [setValue, watchedAccountCurrency, watchedDisplayCurrency]);
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -548,6 +546,37 @@ export default function BacktestTaskForm({
   }, [setValue, strategySupportsHedging]);
 
   const watchedInstrument = watch('instrument');
+  const currencyOptions = useMemo(
+    () => currencyOptionsForInstrument(watchedInstrument || 'USD_JPY'),
+    [watchedInstrument]
+  );
+  const defaultCurrencyForSelectedInstrument =
+    preferredCurrencyFromOptions(currencyOptions, language) ||
+    DEFAULT_ACCOUNT_CURRENCY;
+  useEffect(() => {
+    if (!currencyOptions.length) return;
+    if (!currencyOptions.includes(watchedAccountCurrency)) {
+      setValue('account_currency', defaultCurrencyForSelectedInstrument, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    if (
+      !watchedDisplayCurrency ||
+      !currencyOptions.includes(watchedDisplayCurrency)
+    ) {
+      setValue('display_currency', defaultCurrencyForSelectedInstrument, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    currencyOptions,
+    defaultCurrencyForSelectedInstrument,
+    setValue,
+    watchedAccountCurrency,
+    watchedDisplayCurrency,
+  ]);
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
   const selectedInstrumentMetadata = watchedInstrument
@@ -1022,6 +1051,7 @@ export default function BacktestTaskForm({
                       })}
                       value={field.value}
                       onChange={field.onChange}
+                      options={currencyOptions}
                       error={!!errors.account_currency}
                       helperText={errors.account_currency?.message}
                       required
@@ -1040,8 +1070,11 @@ export default function BacktestTaskForm({
                       label={t('common:labels.displayCurrency', {
                         defaultValue: 'Display currency',
                       })}
-                      value={field.value || watchedAccountCurrency}
+                      value={
+                        field.value || defaultCurrencyForSelectedInstrument
+                      }
                       onChange={field.onChange}
+                      options={currencyOptions}
                       error={!!errors.display_currency}
                       helperText={errors.display_currency?.message}
                     />

@@ -18,6 +18,7 @@ class TaskMoneyContextSerializer(serializers.Serializer):
     account_currency_source = serializers.CharField()
     display_currency = serializers.CharField(max_length=3, allow_blank=True)
     display_currency_source = serializers.CharField()
+    currency_options = serializers.ListField(child=serializers.CharField(max_length=3))
     initial_balance_money = MoneySerializer(allow_null=True, required=False)
     commission_per_trade_money = MoneySerializer(allow_null=True, required=False)
     display_uses_account_currency = serializers.BooleanField()

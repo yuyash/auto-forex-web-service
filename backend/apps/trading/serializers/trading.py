@@ -10,6 +10,11 @@ from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
 from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
 from apps.trading.serializers.money import TaskMoneyContextSerializer
+from apps.trading.services.task_currencies import (
+    default_currency_for_language,
+    instrument_currency_options,
+    normalize_currency,
+)
 from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
 from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 from apps.trading.services.task_policy import (
@@ -40,7 +45,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     account_currency = serializers.CharField(read_only=True)
-    display_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.SerializerMethodField()
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
@@ -150,6 +155,10 @@ class TradingTaskSerializer(serializers.ModelSerializer):
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
 
+    def get_display_currency(self, obj: TradingTask) -> str:
+        """Return the effective display currency."""
+        return obj.effective_display_currency
+
     @extend_schema_field(TaskInstrumentContextSerializer)
     def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
         """Return instrument metadata and pip-size diagnostics."""
@@ -177,7 +186,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
     account_currency = serializers.CharField(read_only=True)
-    display_currency = serializers.CharField(read_only=True)
+    display_currency = serializers.SerializerMethodField()
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
@@ -242,6 +251,10 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
 
+    def get_display_currency(self, obj: TradingTask) -> str:
+        """Return the effective display currency."""
+        return obj.effective_display_currency
+
     @extend_schema_field(TaskInstrumentContextSerializer)
     def get_instrument_context(self, obj: TradingTask) -> dict[str, object]:
         """Return instrument metadata and pip-size diagnostics."""
@@ -280,6 +293,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "instrument",
+            "display_currency",
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
@@ -299,6 +313,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "name": {"required": False},
             "description": {"required": False},
             "instrument": {"required": False},
+            "display_currency": {"required": False},
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
             "hedging_enabled": {"required": False},
@@ -341,6 +356,15 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A trading task with this name already exists.")
         return value
 
+    def validate_display_currency(self, value: str) -> str:
+        """Normalize optional display currency codes."""
+        if value in (None, ""):
+            return ""
+        currency = normalize_currency(value)
+        if not currency:
+            raise serializers.ValidationError("Display currency must be a 3-letter code")
+        return currency
+
     def validate(self, attrs: dict) -> dict:
         """Validate configuration parameters."""
         # On create, config and oanda_account are required
@@ -351,6 +375,9 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"account_id": "This field is required."})
 
         config = attrs.get("config") or getattr(self.instance, "config", None)
+        instrument = self._resolve_instrument(attrs, config)
+        if instrument and "instrument" not in attrs and self.instance is None:
+            attrs["instrument"] = instrument
 
         # Validate hedging: if hedging_enabled, check account supports hedging
         hedging_enabled = attrs.get("hedging_enabled", True)
@@ -388,7 +415,68 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             if not is_valid:
                 raise serializers.ValidationError({"config_id": error_message})
 
+        if not instrument:
+            raise serializers.ValidationError({"instrument": "Instrument is required"})
+        self._apply_display_currency_default(attrs, instrument)
+        self._validate_display_currency_option(attrs, instrument)
+
         return attrs
+
+    def _request_language(self) -> str:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return str(getattr(user, "language", "") or "")
+
+    def _resolve_instrument(self, attrs: dict, config: StrategyConfiguration | None) -> str:
+        instrument = attrs.get("instrument")
+        if instrument:
+            return str(instrument)
+        if self.instance is not None:
+            return str(getattr(self.instance, "instrument", "") or "")
+        if config and config.parameters:
+            config_instrument = config.parameters.get("instrument")
+            if config_instrument:
+                return str(config_instrument)
+        return "USD_JPY"
+
+    def _apply_display_currency_default(self, attrs: dict, instrument: str) -> None:
+        options = instrument_currency_options(instrument)
+        default_currency = default_currency_for_language(instrument, self._request_language())
+        if self.instance is None:
+            attrs["display_currency"] = (
+                normalize_currency(attrs.get("display_currency")) or default_currency
+            )
+            return
+
+        if "instrument" in attrs and options:
+            current_display = normalize_currency(
+                attrs.get("display_currency", self.instance.display_currency)
+            )
+            if "display_currency" not in attrs and current_display not in options:
+                attrs["display_currency"] = default_currency
+
+        if "display_currency" in attrs:
+            attrs["display_currency"] = (
+                normalize_currency(attrs["display_currency"]) or default_currency
+            )
+
+    def _validate_display_currency_option(self, attrs: dict, instrument: str) -> None:
+        options = instrument_currency_options(instrument)
+        if not options:
+            return
+        if self.instance is not None and "display_currency" not in attrs:
+            return
+        display_currency = normalize_currency(attrs.get("display_currency"))
+        if not display_currency:
+            raise serializers.ValidationError({"display_currency": "Display currency is required."})
+        if display_currency not in options:
+            raise serializers.ValidationError(
+                {
+                    "display_currency": (
+                        f"Currency must be one of {', '.join(options)} for {instrument}."
+                    )
+                }
+            )
 
     def create(self, validated_data: dict) -> TradingTask:
         """Create trading task with user from context."""
@@ -414,6 +502,9 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         instrument = validated_data.get("instrument")
         if instrument:
             validated_data.setdefault("pip_size", pip_size_for_instrument(instrument))
+            validated_data["display_currency"] = normalize_currency(
+                validated_data.get("display_currency")
+            ) or default_currency_for_language(instrument, getattr(user, "language", ""))
 
         return TradingTask.objects.create(**validated_data)
 
@@ -436,6 +527,10 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             )
             changes.update(
                 changed_field_values(instance, {"trading_mode": validated_data["trading_mode"]})
+            )
+        if "display_currency" in validated_data:
+            validated_data["display_currency"] = normalize_currency(
+                validated_data["display_currency"]
             )
 
         for attr, value in validated_data.items():

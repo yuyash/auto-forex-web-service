@@ -1,3 +1,9 @@
+import type {
+  CurrencyConversionContext,
+  MoneyAmountLike,
+  TaskMoneyContext,
+} from './money';
+
 export type StrategyGridSlotState = 'filled' | 'stopped' | 'rebuilt' | 'empty';
 
 export interface StrategyGridSlot {
@@ -40,6 +46,9 @@ export interface CycleTrade {
   margin_ratio?: string | null;
   is_rebuild?: boolean;
   pnl?: string | null;
+  pnl_money?: MoneyAmountLike | null;
+  pnl_display_money?: MoneyAmountLike | null;
+  display_conversion_context?: CurrencyConversionContext | null;
 }
 
 export interface StrategyCycle {
@@ -58,6 +67,13 @@ export interface StrategyCycle {
   position_ids?: string[];
   realized_pnl?: string;
   unrealized_pnl?: string;
+  realized_pnl_money?: MoneyAmountLike | null;
+  unrealized_pnl_money?: MoneyAmountLike | null;
+  total_pnl_money?: MoneyAmountLike | null;
+  realized_pnl_display_money?: MoneyAmountLike | null;
+  unrealized_pnl_display_money?: MoneyAmountLike | null;
+  total_pnl_display_money?: MoneyAmountLike | null;
+  display_conversion_context?: CurrencyConversionContext | null;
   grid_state?: StrategyGridState | null;
   trades: CycleTrade[];
 }
@@ -89,6 +105,7 @@ export interface StrategyCyclesResponse {
   pagination: StrategyCyclesPagination | null;
   last_tick_timestamp: string | null;
   strategy_type?: string;
+  money_context?: TaskMoneyContext | null;
 }
 
 export interface StrategySnapshotCard {

@@ -17,6 +17,7 @@ interface TradingTaskCreateRequest {
   name: string;
   description?: string;
   instrument?: string;
+  display_currency?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
@@ -38,6 +39,7 @@ interface TradingTaskUpdateRequest {
   account_id?: string;
   name?: string;
   description?: string;
+  display_currency?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;

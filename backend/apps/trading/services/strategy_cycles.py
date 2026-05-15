@@ -16,8 +16,8 @@ Heavy full-trade serialisation is therefore avoided on every list render.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
-from decimal import Decimal
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
@@ -164,6 +164,7 @@ class StrategyCyclesService:
                 "summary": _empty_summary(),
                 "pagination": None,
                 "last_tick_timestamp": last_tick_ts,
+                "money_context": _task_money_context_dict(task=task, task_type=task_type),
             }
 
         metrics_by_minute = _load_metrics_for_trades(
@@ -183,6 +184,7 @@ class StrategyCyclesService:
             unrealized_pnl_by_position=unrealized_pnl_by_position,
             include_trades=True,
         )
+        _attach_cycle_display_money([cycle], task=task, task_type=task_type)
 
         return {
             "execution_id": execution_id,
@@ -192,6 +194,7 @@ class StrategyCyclesService:
             "pagination": None,
             "last_tick_timestamp": last_tick_ts,
             "strategy_type": strategy_type,
+            "money_context": _task_money_context_dict(task=task, task_type=task_type),
         }
 
     # ------------------------------------------------------------------
@@ -308,6 +311,7 @@ class StrategyCyclesService:
             )
             for cid in page_cycle_ids
         ]
+        _attach_cycle_display_money(cycles, task=task, task_type=task_type)
 
         # Step 6: summary counts over the full filtered universe.  Counts
         # come from the same cycle universe we paginated over so numbers
@@ -333,6 +337,7 @@ class StrategyCyclesService:
             },
             "last_tick_timestamp": last_tick_ts,
             "strategy_type": strategy_type,
+            "money_context": _task_money_context_dict(task=task, task_type=task_type),
         }
 
     def _empty_response(self, *, execution_id: str | None, strategy_type: str) -> dict[str, Any]:
@@ -343,6 +348,7 @@ class StrategyCyclesService:
             "pagination": None,
             "last_tick_timestamp": None,
             "strategy_type": strategy_type,
+            "money_context": None,
         }
 
 
@@ -690,6 +696,7 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
             "has_protection": False,
             "started_at": None,
             "last_timestamp": None,
+            "last_price": None,
             "still_open_position_ids": set(),
             "initial_is_closed": False,
             "has_unresolved_rebuilds": False,
@@ -775,6 +782,7 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
         "has_protection": protection_count > 0,
         "started_at": first["timestamp"],
         "last_timestamp": last["timestamp"],
+        "last_price": Decimal(str(last["price"])),
         "still_open_position_ids": still_open_position_ids,
         "initial_is_closed": initial_is_closed,
         "has_unresolved_rebuilds": has_unresolved_rebuilds,
@@ -815,6 +823,7 @@ def _build_list_cycle(
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
+        "_conversion_mid_price": str(aggregate.get("last_price") or ""),
         "grid_state": grid_state,
         "trades": [],
     }
@@ -879,6 +888,7 @@ def _build_cycle(
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
+        "_conversion_mid_price": str(aggregate.get("last_price") or ""),
         "grid_state": grid_state,
         "trades": [
             _serialize_trade(t, metrics_by_minute, open_price_by_pos, aggregate["direction"])
@@ -948,6 +958,95 @@ def _serialize_trade(
         "is_rebuild": bool(t.get("is_rebuild", False)),
         "pnl": pnl,
     }
+
+
+def _task_money_context_dict(*, task: Any, task_type: str) -> dict[str, Any]:
+    from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
+
+    task_type_label = "trading" if str(task_type) == "trading" else "backtest"
+    return TASK_MONEY_CONTEXT.build(task, task_type=task_type_label).as_dict()
+
+
+def _attach_cycle_display_money(
+    cycles: list[dict[str, Any]],
+    *,
+    task: Any,
+    task_type: str,
+) -> None:
+    if not cycles:
+        return
+
+    from apps.trading.money import Money
+    from apps.trading.services.display_money import DISPLAY_MONEY
+    from apps.trading.services.fx_rates import FX_CONVERSION
+    from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
+    from apps.trading.utils import Instrument
+
+    task_type_label = "trading" if str(task_type) == "trading" else "backtest"
+    money_context = TASK_MONEY_CONTEXT.build(task, task_type=task_type_label)
+    target_currency = money_context.display_currency
+    instrument = str(getattr(task, "instrument", "") or "").strip()
+    quote_currency = Instrument(instrument).quote_currency
+    if not target_currency or not quote_currency:
+        for cycle in cycles:
+            cycle.pop("_conversion_mid_price", None)
+        return
+
+    fx_conversion = FX_CONVERSION.with_cache()
+    for cycle in cycles:
+        realized = _decimal_or_none(cycle.get("realized_pnl")) or Decimal("0")
+        unrealized = _decimal_or_none(cycle.get("unrealized_pnl")) or Decimal("0")
+        total = realized + unrealized
+        source_values = {
+            "realized_pnl": Money.coerce(realized, quote_currency),
+            "unrealized_pnl": Money.coerce(unrealized, quote_currency),
+            "total_pnl": Money.coerce(total, quote_currency),
+        }
+        cycle["realized_pnl_money"] = source_values["realized_pnl"].as_dict()
+        cycle["unrealized_pnl_money"] = source_values["unrealized_pnl"].as_dict()
+        cycle["total_pnl_money"] = source_values["total_pnl"].as_dict()
+
+        converted = DISPLAY_MONEY.convert_many(
+            source_values,
+            target_currency=target_currency,
+            instrument=instrument,
+            mid_price=_decimal_or_none(cycle.pop("_conversion_mid_price", None)),
+            as_of=_cycle_pnl_as_of(cycle),
+            fx_conversion=fx_conversion,
+        )
+        cycle["realized_pnl_display_money"] = converted.values.get("realized_pnl")
+        cycle["unrealized_pnl_display_money"] = converted.values.get("unrealized_pnl")
+        cycle["total_pnl_display_money"] = converted.values.get("total_pnl")
+        if converted.conversion_context is not None:
+            cycle["display_conversion_context"] = converted.conversion_context
+
+
+def _cycle_pnl_as_of(cycle: dict[str, Any]) -> datetime | None:
+    for key in ("ended_at", "started_at"):
+        parsed = _datetime_or_none(cycle.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _datetime_or_none(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _decimal_or_none(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 def _empty_summary() -> dict[str, int]:

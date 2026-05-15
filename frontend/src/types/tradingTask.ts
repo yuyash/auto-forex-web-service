@@ -57,6 +57,7 @@ export interface TradingTaskCreateData {
   name: string;
   description?: string;
   instrument?: string;
+  display_currency?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
@@ -78,6 +79,7 @@ export interface TradingTaskUpdateData {
   name?: string;
   description?: string;
   account_id?: string;
+  display_currency?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;

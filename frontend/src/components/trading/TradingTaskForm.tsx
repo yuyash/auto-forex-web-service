@@ -27,6 +27,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
+import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
 import type { Account } from '../../types/strategy';
 import {
@@ -45,6 +46,11 @@ import { useSupportedInstruments } from '../../hooks/useMarketConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import { formatMoneyAmount } from '../../utils/numberFormat';
+import {
+  currencyOptionsForInstrument,
+  preferredCurrencyForInstrument,
+  preferredCurrencyFromOptions,
+} from '../../utils/instruments';
 
 const steps = [
   'trading:form.steps.account',
@@ -59,6 +65,11 @@ const tradingTaskSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   instrument: z.string().min(1, 'Instrument is required'),
+  display_currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Display currency must be a 3-letter code'),
   sell_on_stop: z.boolean().optional().default(false),
   dry_run: z.boolean().optional(),
   hedging_enabled: z.boolean().optional(),
@@ -130,6 +141,7 @@ export default function TradingTaskForm({
 }: TradingTaskFormProps) {
   const { t } = useTranslation(['trading', 'common']);
   const { user } = useAuth();
+  const language = user?.language;
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
@@ -156,6 +168,12 @@ export default function TradingTaskForm({
       name: initialData?.name || '',
       description: initialData?.description || '',
       instrument: initialData?.instrument || 'USD_JPY',
+      display_currency:
+        initialData?.display_currency ||
+        preferredCurrencyForInstrument(
+          initialData?.instrument || 'USD_JPY',
+          language
+        ),
       sell_on_stop: initialData?.sell_on_stop ?? false,
       dry_run: false,
       hedging_enabled: true,
@@ -200,6 +218,35 @@ export default function TradingTaskForm({
   });
 
   const selectedConfigId = useWatch({ control, name: 'config_id' });
+  const watchedInstrument = useWatch({ control, name: 'instrument' });
+  const watchedDisplayCurrency = useWatch({
+    control,
+    name: 'display_currency',
+  });
+  const currencyOptions = useMemo(
+    () => currencyOptionsForInstrument(watchedInstrument || 'USD_JPY'),
+    [watchedInstrument]
+  );
+  const defaultDisplayCurrency =
+    preferredCurrencyFromOptions(currencyOptions, language) || 'USD';
+
+  useEffect(() => {
+    if (!currencyOptions.length) return;
+    if (
+      !watchedDisplayCurrency ||
+      !currencyOptions.includes(watchedDisplayCurrency)
+    ) {
+      setValue('display_currency', defaultDisplayCurrency, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    currencyOptions,
+    defaultDisplayCurrency,
+    setValue,
+    watchedDisplayCurrency,
+  ]);
 
   const watchedName = useWatch({ control, name: 'name' });
 
@@ -292,7 +339,12 @@ export default function TradingTaskForm({
         fieldsToValidate = ['account_id'];
         break;
       case 1: // Configuration step
-        fieldsToValidate = ['config_id', 'name', 'instrument'];
+        fieldsToValidate = [
+          'config_id',
+          'name',
+          'instrument',
+          'display_currency',
+        ];
         break;
       default:
         // No validation needed for review step
@@ -341,6 +393,7 @@ export default function TradingTaskForm({
         name: completeData.name,
         description: completeData.description,
         instrument: completeData.instrument,
+        display_currency: completeData.display_currency,
         sell_on_stop: completeData.sell_on_stop ?? false,
         dry_run: completeData.dry_run,
         hedging_enabled:
@@ -390,6 +443,9 @@ export default function TradingTaskForm({
           account_id: t('trading:form.account'),
           config_id: t('common:labels.configuration'),
           name: t('trading:form.taskName'),
+          display_currency: t('common:labels.displayCurrency', {
+            defaultValue: 'Display currency',
+          }),
           sell_on_stop: t('common:labels.sellOnStop'),
           hedging_enabled: t('trading:form.hedgingEnabled'),
           live_tick_stale_guard_enabled: t(
@@ -611,6 +667,27 @@ export default function TradingTaskForm({
                         </FormHelperText>
                       )}
                     </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="display_currency"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyCodeField
+                      id="trading-display-currency"
+                      label={t('common:labels.displayCurrency', {
+                        defaultValue: 'Display currency',
+                      })}
+                      value={field.value || defaultDisplayCurrency}
+                      onChange={field.onChange}
+                      options={currencyOptions}
+                      error={!!errors.display_currency}
+                      helperText={errors.display_currency?.message}
+                      required
+                    />
                   )}
                 />
               </Grid>
@@ -1190,6 +1267,17 @@ export default function TradingTaskForm({
                       {formData.instrument
                         ? formData.instrument.replace('_', '/')
                         : '\u2014'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('common:labels.displayCurrency', {
+                        defaultValue: 'Display currency',
+                      })}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {formData.display_currency || defaultDisplayCurrency}
                     </Typography>
                   </Box>
 

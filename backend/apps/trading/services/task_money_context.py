@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from apps.trading.money import AccountCurrency, Money
+from apps.trading.services.task_currencies import instrument_currency_options
 
 TaskType = Literal["backtest", "trading"]
 CurrencySource = Literal[
@@ -28,6 +29,7 @@ class TaskMoneyContext:
     account_currency_source: CurrencySource
     display_currency: str
     display_currency_source: CurrencySource
+    currency_options: tuple[str, ...]
     initial_balance_money: dict[str, str] | None
     commission_per_trade_money: dict[str, str] | None
     display_uses_account_currency: bool
@@ -42,6 +44,7 @@ class TaskMoneyContext:
             "account_currency_source": self.account_currency_source,
             "display_currency": self.display_currency,
             "display_currency_source": self.display_currency_source,
+            "currency_options": list(self.currency_options),
             "initial_balance_money": self.initial_balance_money,
             "commission_per_trade_money": self.commission_per_trade_money,
             "display_uses_account_currency": self.display_uses_account_currency,
@@ -61,6 +64,7 @@ class TaskMoneyContextBuilder:
             task_type=task_type,
             account_currency=account_currency,
         )
+        currency_options = instrument_currency_options(getattr(task, "instrument", ""))
         display_uses_account_currency = bool(
             account_currency
             and display_currency
@@ -75,6 +79,7 @@ class TaskMoneyContextBuilder:
             account_currency_source=account_source,
             display_currency=display_currency,
             display_currency_source=display_source,
+            currency_options=currency_options,
             initial_balance_money=self._money_dict(
                 getattr(task, "initial_balance", None),
                 account_currency,
@@ -114,8 +119,10 @@ class TaskMoneyContextBuilder:
         account_currency: str,
     ) -> tuple[str, CurrencySource]:
         if task_type == "trading":
-            display_currency = _currency(getattr(task, "display_currency", "")) or account_currency
-            return display_currency, "oanda_account" if display_currency else "unknown"
+            raw_display_currency = _currency(getattr(task, "display_currency", ""))
+            if raw_display_currency:
+                return raw_display_currency, "task_display_currency"
+            return account_currency, "account_currency" if account_currency else "unknown"
 
         raw_display_currency = _currency(getattr(task, "display_currency", ""))
         if raw_display_currency:

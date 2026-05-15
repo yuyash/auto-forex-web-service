@@ -592,7 +592,7 @@ def compute_task_summary(
             preferred_display_currency = account.code
     elif task_obj and task_type == "trading":
         account = AccountCurrency(current_balance_currency or account_currency or "")
-        if account.is_known:
+        if not preferred_display_currency and account.is_known:
             preferred_display_currency = account.code
     else:
         account = AccountCurrency(current_balance_currency or account_currency or "")
