@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.54.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.54.0...backend-v1.54.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* reduce snowball replay overhead ([#721](https://github.com/yuyash/auto-forex-web-service/issues/721)) ([bf57c96](https://github.com/yuyash/auto-forex-web-service/commit/bf57c96769fa393713b8040b2f6641e6d4fef4a3))
+
+
+### Performance
+
+* **backtest:** reduce snowball replay overhead ([bf57c96](https://github.com/yuyash/auto-forex-web-service/commit/bf57c96769fa393713b8040b2f6641e6d4fef4a3))
+
 ## [1.54.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.5...backend-v1.54.0) (2026-05-15)
 
 
