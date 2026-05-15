@@ -17,6 +17,7 @@ import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
+import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { useUpdateTradingTask } from '../../hooks/useTradingTaskMutations';
 import { useConfiguration } from '../../hooks/useConfigurations';
 import { useAccount } from '../../hooks/useAccounts';
@@ -27,6 +28,11 @@ import {
 import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 import { useAuth } from '../../contexts/AuthContext';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
+import {
+  currencyOptionsForInstrument,
+  preferredCurrencyForInstrument,
+  preferredCurrencyFromOptions,
+} from '../../utils/instruments';
 
 // Update schema - editable fields for trading tasks
 const tradingTaskUpdateSchema = z.object({
@@ -39,6 +45,11 @@ const tradingTaskUpdateSchema = z.object({
     .max(500, 'Description must be less than 500 characters')
     .optional(),
   config_id: z.string().min(1, 'Configuration is required'),
+  display_currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Display currency must be a 3-letter code'),
   sell_on_stop: z.boolean().optional().default(false),
   hedging_enabled: z.boolean().optional(),
   api_retry_max_attempts: z.coerce
@@ -97,7 +108,7 @@ type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
 type TradingTaskUpdateInitialData = Omit<
   TradingTaskUpdateData,
   'name' | 'description'
->;
+> & { instrument: string };
 
 interface TradingTaskUpdateFormProps {
   taskId: string;
@@ -123,12 +134,25 @@ export default function TradingTaskUpdateForm({
   const { t } = useTranslation(['trading', 'common']);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const language = user?.language;
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tracemalloc, setTracemalloc] = useState(
     Boolean(debugOptions?.tracemalloc)
   );
   const isSuperuser = Boolean(user?.is_superuser);
   const updateTask = useUpdateTradingTask();
+
+  const currencyOptions = useMemo(
+    () => currencyOptionsForInstrument(initialData.instrument || 'USD_JPY'),
+    [initialData.instrument]
+  );
+  const defaultDisplayCurrency =
+    preferredCurrencyFromOptions(currencyOptions, language) ||
+    preferredCurrencyForInstrument(
+      initialData.instrument || 'USD_JPY',
+      language
+    ) ||
+    'USD';
 
   const {
     control,
@@ -144,6 +168,7 @@ export default function TradingTaskUpdateForm({
       ...initialData,
       name: taskName,
       description: taskDescription ?? '',
+      display_currency: initialData.display_currency || defaultDisplayCurrency,
     },
   });
 
@@ -164,6 +189,24 @@ export default function TradingTaskUpdateForm({
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
   const liveTickStaleGuardEnabled = watch('live_tick_stale_guard_enabled');
+  const watchedDisplayCurrency = watch('display_currency');
+  useEffect(() => {
+    if (!currencyOptions.length) return;
+    if (
+      !watchedDisplayCurrency ||
+      !currencyOptions.includes(watchedDisplayCurrency)
+    ) {
+      setValue('display_currency', defaultDisplayCurrency, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    currencyOptions,
+    defaultDisplayCurrency,
+    setValue,
+    watchedDisplayCurrency,
+  ]);
   const { data: selectedConfig } = useConfiguration(selectedConfigId);
   const selectedStrategy = useMemo(
     () =>
@@ -199,6 +242,7 @@ export default function TradingTaskUpdateForm({
           name: data.name,
           description: data.description,
           config: data.config_id,
+          display_currency: data.display_currency,
           sell_on_stop: data.sell_on_stop ?? false,
           hedging_enabled:
             accountHedgingEnabled === false || !strategySupportsHedging
@@ -237,6 +281,7 @@ export default function TradingTaskUpdateForm({
           config: 'Configuration',
           name: 'Task name',
           description: 'Description',
+          display_currency: 'Display currency',
           sell_on_stop: 'Sell on stop',
           hedging_enabled: 'Hedging',
           api_retry_max_attempts: 'OANDA retry attempts',
@@ -305,6 +350,34 @@ export default function TradingTaskUpdateForm({
                 : {accountCurrency}
               </Typography>
             ) : null}
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="display_currency"
+              control={control}
+              render={({ field }) => (
+                <CurrencyCodeField
+                  id="trading-update-display-currency"
+                  label={t('common:labels.displayCurrency', {
+                    defaultValue: 'Display currency',
+                  })}
+                  value={field.value || defaultDisplayCurrency}
+                  onChange={field.onChange}
+                  options={currencyOptions}
+                  error={!!errors.display_currency}
+                  helperText={errors.display_currency?.message}
+                  required
+                />
+              )}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              {t('common:labels.instrument')}
+            </Typography>
+            <Typography variant="body1">
+              {initialData.instrument.replace('_', '/')}
+            </Typography>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Controller

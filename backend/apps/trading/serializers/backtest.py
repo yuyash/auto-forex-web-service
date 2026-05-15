@@ -23,6 +23,11 @@ from apps.trading.serializers.money import (
     TaskMoneyContextSerializer,
 )
 from apps.trading.serializers.instrument import TaskInstrumentContextSerializer
+from apps.trading.services.task_currencies import (
+    default_currency_for_language,
+    instrument_currency_options,
+    normalize_currency,
+)
 from apps.trading.services.task_instrument_context import TASK_INSTRUMENT_CONTEXT
 from apps.trading.services.task_money_context import TASK_MONEY_CONTEXT
 
@@ -42,6 +47,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     action_policy = serializers.SerializerMethodField()
     error_message = serializers.SerializerMethodField()
     error_code = serializers.SerializerMethodField()
+    display_currency = serializers.SerializerMethodField()
     initial_balance_money = serializers.SerializerMethodField()
     commission_per_trade_money = serializers.SerializerMethodField()
     instrument_context = serializers.SerializerMethodField()
@@ -138,6 +144,10 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     def get_error_code(self, obj: BacktestTask) -> str | None:
         """Return the stable public failure code."""
         return task_public_error_code(obj.status)
+
+    def get_display_currency(self, obj: BacktestTask) -> str:
+        """Return the effective display currency."""
+        return obj.effective_display_currency
 
     @extend_schema_field(MoneySerializer)
     def get_initial_balance_money(self, obj: BacktestTask) -> dict[str, str]:
@@ -314,15 +324,17 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def validate_account_currency(self, value: str) -> str:
         """Normalize account currency codes."""
-        currency = str(value or "").strip().upper()
-        if len(currency) != 3:
+        currency = normalize_currency(value)
+        if not currency:
             raise serializers.ValidationError("Account currency must be a 3-letter code")
         return currency
 
     def validate_display_currency(self, value: str) -> str:
         """Normalize optional display currency codes."""
-        currency = str(value or "").strip().upper()
-        if currency and len(currency) != 3:
+        if value in (None, ""):
+            return ""
+        currency = normalize_currency(value)
+        if not currency:
             raise serializers.ValidationError("Display currency must be a 3-letter code")
         return currency
 
@@ -439,6 +451,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         instrument = attrs.get("instrument", getattr(self.instance, "instrument", None))
         if not instrument:
             raise serializers.ValidationError({"instrument": "Instrument is required"})
+        self._apply_currency_defaults(attrs, instrument)
+        self._validate_currency_options(attrs, instrument)
 
         # Validate tick data exists for the requested date range
         if start_time and end_time and instrument:
@@ -482,20 +496,80 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def _request_language(self) -> str:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return str(getattr(user, "language", "") or "")
+
+    def _apply_currency_defaults(self, attrs: dict, instrument: str) -> None:
+        options = instrument_currency_options(instrument)
+        default_currency = default_currency_for_language(instrument, self._request_language())
+        if self.instance is None:
+            attrs["account_currency"] = (
+                normalize_currency(attrs.get("account_currency")) or default_currency
+            )
+            attrs["display_currency"] = (
+                normalize_currency(attrs.get("display_currency")) or default_currency
+            )
+            return
+
+        if "instrument" in attrs and options:
+            current_account = normalize_currency(
+                attrs.get("account_currency", self.instance.account_currency)
+            )
+            current_display = normalize_currency(
+                attrs.get(
+                    "display_currency",
+                    self.instance.display_currency or self.instance.account_currency,
+                )
+            )
+            if "account_currency" not in attrs and current_account not in options:
+                attrs["account_currency"] = default_currency
+            if "display_currency" not in attrs and current_display not in options:
+                attrs["display_currency"] = default_currency
+
+        if "account_currency" in attrs:
+            attrs["account_currency"] = normalize_currency(attrs["account_currency"])
+        if "display_currency" in attrs:
+            attrs["display_currency"] = (
+                normalize_currency(attrs["display_currency"]) or default_currency
+            )
+
+    def _validate_currency_options(self, attrs: dict, instrument: str) -> None:
+        options = instrument_currency_options(instrument)
+        if not options:
+            return
+        errors: dict[str, str] = {}
+        for field in ("account_currency", "display_currency"):
+            if self.instance is not None and field not in attrs:
+                continue
+            currency = normalize_currency(attrs.get(field))
+            if not currency:
+                errors[field] = "Currency is required."
+            elif currency not in options:
+                errors[field] = f"Currency must be one of {', '.join(options)} for {instrument}."
+        if errors:
+            raise serializers.ValidationError(errors)
+
     def create(self, validated_data: dict) -> BacktestTask:
         """Create backtest task with user from context."""
         from apps.trading.utils import pip_size_for_instrument
 
         user = self.context["request"].user
         validated_data["user"] = user
-        account_currency = str(validated_data.get("account_currency") or "USD").strip().upper()
-        validated_data["account_currency"] = account_currency
+        instrument = validated_data.get("instrument") or "USD_JPY"
+        default_currency = default_currency_for_language(
+            instrument,
+            getattr(user, "language", ""),
+        )
+        validated_data["account_currency"] = (
+            normalize_currency(validated_data.get("account_currency")) or default_currency
+        )
         validated_data["display_currency"] = (
-            str(validated_data.get("display_currency") or account_currency).strip().upper()
+            normalize_currency(validated_data.get("display_currency")) or default_currency
         )
 
         # Auto-populate pip_size from instrument when not explicitly provided
-        instrument = validated_data.get("instrument")
         if instrument and not validated_data.get("pip_size"):
             validated_data["pip_size"] = pip_size_for_instrument(instrument)
 
@@ -521,25 +595,13 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
         changes = changed_field_values(instance, validated_data)
         if "account_currency" in validated_data:
-            new_account_currency = str(validated_data["account_currency"]).strip().upper()
-            previous_display_currency = str(instance.display_currency or "").strip().upper()
-            previous_account_currency = str(instance.account_currency or "").strip().upper()
-            if "display_currency" not in validated_data and (
-                not previous_display_currency
-                or previous_display_currency == previous_account_currency
-            ):
-                validated_data["display_currency"] = new_account_currency
-                changes.update(
-                    changed_field_values(instance, {"display_currency": new_account_currency})
-                )
-        if "display_currency" in validated_data:
-            display_currency = str(validated_data["display_currency"] or "").strip().upper()
-            account_currency = (
-                str(validated_data.get("account_currency", instance.account_currency) or "")
-                .strip()
-                .upper()
+            validated_data["account_currency"] = normalize_currency(
+                validated_data["account_currency"]
             )
-            validated_data["display_currency"] = display_currency or account_currency
+        if "display_currency" in validated_data:
+            validated_data["display_currency"] = normalize_currency(
+                validated_data["display_currency"]
+            )
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
             for field in ("tick_granularity", "tick_window_value_mode")

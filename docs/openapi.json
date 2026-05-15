@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.53.4",
+        "version": "1.53.5",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -7202,8 +7202,8 @@
                     },
                     "display_currency": {
                         "type": "string",
-                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
-                        "maxLength": 3
+                        "description": "Return the effective display currency.",
+                        "readOnly": true
                     },
                     "money_context": {
                         "allOf": [
@@ -7411,6 +7411,7 @@
                     "config_name",
                     "config_revision",
                     "created_at",
+                    "display_currency",
                     "end_time",
                     "error_code",
                     "error_message",
@@ -7680,8 +7681,8 @@
                     },
                     "display_currency": {
                         "type": "string",
-                        "readOnly": true,
-                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency."
+                        "description": "Return the effective display currency.",
+                        "readOnly": true
                     },
                     "money_context": {
                         "allOf": [
@@ -7949,11 +7950,6 @@
                         "type": "string",
                         "minLength": 1,
                         "description": "Account base currency (e.g., USD, JPY)",
-                        "maxLength": 3
-                    },
-                    "display_currency": {
-                        "type": "string",
-                        "description": "Preferred currency for displaying balances and PnL. Empty uses account currency.",
                         "maxLength": 3
                     },
                     "commission_per_trade": {
@@ -10627,6 +10623,11 @@
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
                     },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL.",
+                        "maxLength": 3
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when the task is stopped"
@@ -12541,6 +12542,13 @@
                     "display_currency_source": {
                         "type": "string"
                     },
+                    "currency_options": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 3
+                        }
+                    },
                     "initial_balance_money": {
                         "allOf": [
                             {
@@ -12571,6 +12579,7 @@
                     "account_currency",
                     "account_currency_source",
                     "conversion_policy",
+                    "currency_options",
                     "display_currency",
                     "display_currency_source",
                     "display_requires_conversion",
@@ -13468,6 +13477,7 @@
                     },
                     "display_currency": {
                         "type": "string",
+                        "description": "Return the effective display currency.",
                         "readOnly": true
                     },
                     "money_context": {
@@ -13708,6 +13718,11 @@
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
                     },
+                    "display_currency": {
+                        "type": "string",
+                        "description": "Preferred currency for displaying balances and PnL.",
+                        "maxLength": 3
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when the task is stopped"
@@ -13840,6 +13855,7 @@
                     },
                     "display_currency": {
                         "type": "string",
+                        "description": "Return the effective display currency.",
                         "readOnly": true
                     },
                     "money_context": {

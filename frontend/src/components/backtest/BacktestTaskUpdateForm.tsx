@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -56,7 +50,12 @@ import {
   useSupportedInstruments,
 } from '../../hooks/useMarketConfig';
 import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
-import { normalizeInstrumentName } from '../../utils/instruments';
+import {
+  currencyOptionsForInstrument,
+  normalizeInstrumentName,
+  preferredCurrencyForInstrument,
+  preferredCurrencyFromOptions,
+} from '../../utils/instruments';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -301,12 +300,19 @@ export default function BacktestTaskUpdateForm({
   const { user } = useAuth();
   const navigate = useNavigate();
   const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
   const isSuperuser = Boolean(user?.is_superuser);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tracemalloc, setTracemalloc] = useState(
     Boolean(debugOptions?.tracemalloc)
   );
   const updateTask = useUpdateBacktestTask();
+
+  const defaultCurrency =
+    preferredCurrencyForInstrument(
+      initialData.instrument || 'USD_JPY',
+      language
+    ) || DEFAULT_ACCOUNT_CURRENCY;
 
   const {
     control,
@@ -322,12 +328,8 @@ export default function BacktestTaskUpdateForm({
       ...initialData,
       name: taskName,
       description: taskDescription ?? '',
-      account_currency:
-        initialData.account_currency || DEFAULT_ACCOUNT_CURRENCY,
-      display_currency:
-        initialData.display_currency ||
-        initialData.account_currency ||
-        DEFAULT_ACCOUNT_CURRENCY,
+      account_currency: initialData.account_currency || defaultCurrency,
+      display_currency: initialData.display_currency || defaultCurrency,
     },
   });
 
@@ -379,23 +381,38 @@ export default function BacktestTaskUpdateForm({
   const watchedAccountCurrency =
     watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
   const watchedDisplayCurrency = watch('display_currency') || '';
-  const previousAccountCurrencyRef = useRef(watchedAccountCurrency);
-
+  const watchedInstrument = watch('instrument');
+  const currencyOptions = useMemo(
+    () => currencyOptionsForInstrument(watchedInstrument || 'USD_JPY'),
+    [watchedInstrument]
+  );
+  const defaultCurrencyForSelectedInstrument =
+    preferredCurrencyFromOptions(currencyOptions, language) ||
+    DEFAULT_ACCOUNT_CURRENCY;
   useEffect(() => {
-    const previousAccountCurrency = previousAccountCurrencyRef.current;
-    if (
-      watchedAccountCurrency &&
-      (!watchedDisplayCurrency ||
-        watchedDisplayCurrency === previousAccountCurrency)
-    ) {
-      setValue('display_currency', watchedAccountCurrency, {
-        shouldDirty: watchedDisplayCurrency !== watchedAccountCurrency,
-        shouldValidate: false,
+    if (!currencyOptions.length) return;
+    if (!currencyOptions.includes(watchedAccountCurrency)) {
+      setValue('account_currency', defaultCurrencyForSelectedInstrument, {
+        shouldDirty: true,
+        shouldValidate: true,
       });
     }
-    previousAccountCurrencyRef.current = watchedAccountCurrency;
-  }, [setValue, watchedAccountCurrency, watchedDisplayCurrency]);
-  const watchedInstrument = watch('instrument');
+    if (
+      !watchedDisplayCurrency ||
+      !currencyOptions.includes(watchedDisplayCurrency)
+    ) {
+      setValue('display_currency', defaultCurrencyForSelectedInstrument, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    currencyOptions,
+    defaultCurrencyForSelectedInstrument,
+    setValue,
+    watchedAccountCurrency,
+    watchedDisplayCurrency,
+  ]);
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
   const {
@@ -684,6 +701,7 @@ export default function BacktestTaskUpdateForm({
                 })}
                 value={field.value}
                 onChange={field.onChange}
+                options={currencyOptions}
                 error={!!errors.account_currency}
                 helperText={errors.account_currency?.message}
                 required
@@ -702,8 +720,9 @@ export default function BacktestTaskUpdateForm({
                 label={t('common:labels.displayCurrency', {
                   defaultValue: 'Display currency',
                 })}
-                value={field.value || watchedAccountCurrency}
+                value={field.value || defaultCurrencyForSelectedInstrument}
                 onChange={field.onChange}
+                options={currencyOptions}
                 error={!!errors.display_currency}
                 helperText={errors.display_currency?.message}
               />

@@ -64,6 +64,8 @@ export default function TradingTaskFormPage() {
               }
               initialData={{
                 config_id: task.config_id,
+                instrument: task.instrument,
+                display_currency: task.display_currency,
                 sell_on_stop: task.sell_on_stop ?? false,
                 hedging_enabled: task.hedging_enabled,
                 api_retry_max_attempts: task.api_retry_max_attempts,

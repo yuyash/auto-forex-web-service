@@ -112,11 +112,19 @@ function formatCyclePnl(
   total: string;
   color: string;
 } {
+  const displayMoney = cycle.total_pnl_display_money ?? cycle.total_pnl_money;
+  const moneyTotal = Number(displayMoney?.amount);
   const realized = parseFloat(cycle.realized_pnl ?? '0');
   const unrealized = parseFloat(cycle.unrealized_pnl ?? '0');
-  const total = realized + unrealized;
+  const total = Number.isFinite(moneyTotal)
+    ? moneyTotal
+    : realized + unrealized;
   return {
-    total: formatSignedCurrency(total, currencyCode, 1),
+    total: formatSignedCurrency(
+      total,
+      displayMoney?.currency ?? currencyCode,
+      1
+    ),
     color:
       total > 0 ? 'success.main' : total < 0 ? 'error.main' : 'text.secondary',
   };
@@ -389,6 +397,9 @@ export function TaskStrategyTab({
         position_id: trade.position_id ?? null,
         is_rebuild: trade.is_rebuild,
         pnl: trade.pnl ?? null,
+        pnl_money: trade.pnl_money ?? null,
+        pnl_display_money: trade.pnl_display_money ?? null,
+        display_conversion_context: trade.display_conversion_context ?? null,
       })),
     [pagedTradesRaw]
   );
@@ -1354,7 +1365,8 @@ function TradeRow({
         trade.execution_method !== 'open_position' &&
         trade.execution_method !== 'rebuild_position'
           ? (() => {
-              const pnlValue = parseFloat(trade.pnl!);
+              const pnlMoney = trade.pnl_display_money ?? trade.pnl_money;
+              const pnlValue = Number(pnlMoney?.amount ?? trade.pnl);
               if (!Number.isFinite(pnlValue)) return null;
               return (
                 <Typography
@@ -1362,11 +1374,15 @@ function TradeRow({
                   sx={{ fontWeight: 700, fontFamily: 'monospace' }}
                   color={pnlValue >= 0 ? 'success.main' : 'error.main'}
                 >
-                  {formatMoneyAmount(pnlValue, currencyCode, {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                    signed: true,
-                  })}
+                  {formatMoneyAmount(
+                    pnlValue,
+                    pnlMoney?.currency ?? currencyCode,
+                    {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                      signed: true,
+                    }
+                  )}
                 </Typography>
               );
             })()

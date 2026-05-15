@@ -77,6 +77,12 @@ class TradingTask(ExecutableTaskModel):
         default="USD_JPY",
         help_text="Trading instrument (e.g., EUR_USD, USD_JPY)",
     )
+    display_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Preferred currency for displaying balances and PnL.",
+    )
     pip_size = models.DecimalField(
         max_digits=10,
         decimal_places=5,
@@ -204,9 +210,9 @@ class TradingTask(ExecutableTaskModel):
         return str(getattr(self.oanda_account, "currency", "") or "").strip().upper()
 
     @property
-    def display_currency(self) -> str:
-        """Trading tasks display account values in their OANDA account currency."""
-        return self.account_currency
+    def effective_display_currency(self) -> str:
+        """Return the configured display currency, falling back to account currency."""
+        return str(self.display_currency or self.account_currency or "").strip().upper()
 
     def copy(self, new_name: str) -> "TradingTask":
         """

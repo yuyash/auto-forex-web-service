@@ -46,6 +46,7 @@ def test_backtest_money_context_defaults_display_to_account_currency():
 def test_trading_money_context_uses_oanda_account_currency():
     task = SimpleNamespace(
         oanda_account=SimpleNamespace(currency="gbp"),
+        display_currency="",
         initial_balance=None,
         commission_per_trade=None,
     )
@@ -55,7 +56,25 @@ def test_trading_money_context_uses_oanda_account_currency():
     assert context["account_currency"] == "GBP"
     assert context["account_currency_source"] == "oanda_account"
     assert context["display_currency"] == "GBP"
-    assert context["display_currency_source"] == "oanda_account"
+    assert context["display_currency_source"] == "account_currency"
     assert context["initial_balance_money"] is None
     assert context["commission_per_trade_money"] is None
     assert context["display_requires_conversion"] is False
+
+
+def test_trading_money_context_uses_task_display_currency():
+    task = SimpleNamespace(
+        oanda_account=SimpleNamespace(currency="jpy"),
+        display_currency="usd",
+        instrument="USD_JPY",
+        initial_balance=None,
+        commission_per_trade=None,
+    )
+
+    context = TASK_MONEY_CONTEXT.build(task, task_type="trading").as_dict()
+
+    assert context["account_currency"] == "JPY"
+    assert context["display_currency"] == "USD"
+    assert context["display_currency_source"] == "task_display_currency"
+    assert context["currency_options"] == ["USD", "JPY"]
+    assert context["display_requires_conversion"] is True

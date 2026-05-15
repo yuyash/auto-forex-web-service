@@ -26,6 +26,7 @@ export interface TaskMoneyContext {
   account_currency_source: TaskMoneyCurrencySource;
   display_currency: string;
   display_currency_source: TaskMoneyCurrencySource;
+  currency_options?: string[];
   initial_balance_money?: MoneyAmount | null;
   commission_per_trade_money?: MoneyAmount | null;
   display_uses_account_currency: boolean;

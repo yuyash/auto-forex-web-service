@@ -41,6 +41,47 @@ export function deriveInstrumentMetadata(
   };
 }
 
+export function currencyOptionsForInstrument(instrumentName: string): string[] {
+  const metadata = deriveInstrumentMetadata(instrumentName);
+  return Array.from(
+    new Set(
+      [metadata.base_currency, metadata.quote_currency].filter((currency) =>
+        /^[A-Z]{3}$/.test(currency)
+      )
+    )
+  );
+}
+
+export function preferredCurrencyFromOptions(
+  options: readonly string[],
+  language?: string | null
+): string {
+  const normalized = options
+    .map((currency) =>
+      String(currency || '')
+        .trim()
+        .toUpperCase()
+    )
+    .filter((currency) => /^[A-Z]{3}$/.test(currency));
+  const preferred = String(language || '')
+    .toLowerCase()
+    .startsWith('ja')
+    ? 'JPY'
+    : 'USD';
+  if (normalized.includes(preferred)) return preferred;
+  return normalized[normalized.length - 1] ?? '';
+}
+
+export function preferredCurrencyForInstrument(
+  instrumentName: string,
+  language?: string | null
+): string {
+  return preferredCurrencyFromOptions(
+    currencyOptionsForInstrument(instrumentName),
+    language
+  );
+}
+
 export function decimalPlacesForPipSize(
   pipSize: string | number | null | undefined,
   fallback = 4
