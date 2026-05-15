@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.54.1...backend-v1.55.0) (2026-05-15)
+
+
+### Features
+
+* **metrics:** add task throughput and return charts ([#722](https://github.com/yuyash/auto-forex-web-service/issues/722)) ([dd7c166](https://github.com/yuyash/auto-forex-web-service/commit/dd7c1665d71037b4371bd4e5a9ac739c85b036dd))
+
 ## [1.54.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.54.0...backend-v1.54.1) (2026-05-15)
 
 
