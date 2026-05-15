@@ -44,6 +44,9 @@ def ensure_execution_snapshot(
     execution_id: str | None,
 ) -> TaskExecutionSnapshot | None:
     """Return an existing snapshot or create one for the current terminal run."""
+    if _is_current_active_execution(task=task, execution_id=execution_id):
+        return None
+
     snapshot = _get_snapshot(
         task_type=task_type,
         task_id=str(task.pk),
@@ -161,6 +164,17 @@ def _get_snapshot(
         .only("summary", "metrics")
         .first()
     )
+
+
+def _is_current_active_execution(*, task, execution_id: str | None) -> bool:
+    """Return True when the requested run is the task's current non-terminal run."""
+    if task is None or execution_id is None:
+        return False
+    current_execution_id = getattr(task, "execution_id", None)
+    if str(current_execution_id or "") != str(execution_id):
+        return False
+    status = str(getattr(task, "status", "") or "").lower()
+    return status not in TERMINAL_SNAPSHOT_STATUSES
 
 
 def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
