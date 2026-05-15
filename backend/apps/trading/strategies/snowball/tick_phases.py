@@ -49,10 +49,20 @@ class SnowballExecutionStateBoundary:
 
     def load(self) -> SnowballStrategyState:
         """Convert raw persisted state into the Snowball domain model."""
-        return SnowballStrategyState.from_strategy_state(self.raw_strategy_state())
+        cached = getattr(self.state, "_snowball_strategy_state_cache", None)
+        if isinstance(cached, SnowballStrategyState):
+            return cached
+        snowball_state = SnowballStrategyState.from_strategy_state(self.raw_strategy_state())
+        if self._defer_serialization:
+            self._set_cached_state(snowball_state)
+        return snowball_state
 
     def persist(self, snowball_state: SnowballStrategyState) -> None:
         """Write the Snowball domain model back to the execution state."""
+        if self._defer_serialization:
+            self._set_cached_state(snowball_state)
+            self._merge_runtime_view(snowball_state)
+            return
         self.state.strategy_state = snowball_state.to_dict()
 
     def raw_strategy_state(self) -> dict[str, Any]:
@@ -61,6 +71,61 @@ class SnowballExecutionStateBoundary:
         if isinstance(raw, dict):
             return raw
         return {}
+
+    @property
+    def _defer_serialization(self) -> bool:
+        return bool(getattr(self.state, "_defer_snowball_state_serialization", False))
+
+    def _set_cached_state(self, snowball_state: SnowballStrategyState) -> None:
+        setattr(self.state, "_snowball_strategy_state_cache", snowball_state)
+        setattr(self.state, "_strategy_state_materializer", self.materialize)
+
+    def _merge_runtime_view(self, snowball_state: SnowballStrategyState) -> None:
+        """Keep cheap scalar/metrics fields visible without serializing grids."""
+        strategy_state = dict(self.raw_strategy_state())
+        strategy_state.pop("cycles", None)
+        strategy_state["protection_level"] = snowball_state.protection_level.value
+        strategy_state["initialised"] = snowball_state.initialised
+        strategy_state["next_entry_id"] = snowball_state.next_entry_id
+        strategy_state["lock_hedge_ids"] = list(snowball_state.lock_hedge_ids)
+        strategy_state["lock_entered_at"] = snowball_state.lock_entered_at
+        strategy_state["cooldown_until"] = snowball_state.cooldown_until
+        strategy_state["last_bid"] = (
+            str(snowball_state.last_bid) if snowball_state.last_bid is not None else None
+        )
+        strategy_state["last_ask"] = (
+            str(snowball_state.last_ask) if snowball_state.last_ask is not None else None
+        )
+        strategy_state["last_mid"] = (
+            str(snowball_state.last_mid) if snowball_state.last_mid is not None else None
+        )
+        strategy_state["account_balance"] = str(snowball_state.account_balance)
+        strategy_state["account_nav"] = str(snowball_state.account_nav)
+        metrics = (
+            dict(strategy_state.get("metrics", {}))
+            if isinstance(strategy_state.get("metrics"), dict)
+            else {}
+        )
+        metrics.update(snowball_state.metrics)
+        strategy_state["metrics"] = metrics
+        self.state.strategy_state = strategy_state
+
+    def materialize(self) -> None:
+        """Serialize the cached Snowball state before durable persistence."""
+        cached = getattr(self.state, "_snowball_strategy_state_cache", None)
+        if not isinstance(cached, SnowballStrategyState):
+            return
+        runtime_state = self.raw_strategy_state()
+        runtime_metrics = runtime_state.get("metrics", {})
+        if isinstance(runtime_metrics, dict):
+            merged_metrics = dict(cached.metrics)
+            merged_metrics.update(runtime_metrics)
+            cached.metrics = merged_metrics
+        strategy_state = cached.to_dict()
+        for key, value in runtime_state.items():
+            if key not in strategy_state:
+                strategy_state[key] = value
+        self.state.strategy_state = strategy_state
 
 
 @dataclass

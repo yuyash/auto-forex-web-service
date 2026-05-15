@@ -19,6 +19,10 @@ class ExecutionStateStore:
     """Persist execution state with optimistic locking."""
 
     def save(self, state: "ExecutionState") -> None:
+        materializer = getattr(state, "_strategy_state_materializer", None)
+        if callable(materializer):
+            materializer()
+
         update_fields: dict[str, object] = {
             "strategy_state": state.strategy_state,
             "current_balance": state.current_balance,

@@ -52,6 +52,37 @@ class TestExecutionStateStore:
         assert update_kwargs["resume_cursor_timestamp"] == timestamp
         assert state.state_version == 4
 
+    def test_save_materializes_cached_strategy_state_before_update(self):
+        manager = MagicMock()
+        manager.filter.return_value.update.return_value = 1
+        StateDouble.objects = manager
+
+        timestamp = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
+        state = StateDouble(
+            pk=uuid4(),
+            task_id=uuid4(),
+            execution_id=uuid4(),
+            state_version=3,
+            strategy_state={"stale": True},
+            current_balance=Decimal("10000"),
+            ticks_processed=25,
+            last_tick_timestamp=timestamp,
+            resume_cursor_timestamp=timestamp,
+            last_tick_price=Decimal("1.2500"),
+            last_tick_bid=Decimal("1.2499"),
+            last_tick_ask=Decimal("1.2501"),
+        )
+
+        def materialize():
+            state.strategy_state = {"fresh": True}
+
+        state._strategy_state_materializer = materialize
+
+        ExecutionStateStore().save(state)
+
+        update_kwargs = manager.filter.return_value.update.call_args.kwargs
+        assert update_kwargs["strategy_state"] == {"fresh": True}
+
     def test_save_raises_on_optimistic_lock_conflict(self):
         manager = MagicMock()
         manager.filter.return_value.update.return_value = 0

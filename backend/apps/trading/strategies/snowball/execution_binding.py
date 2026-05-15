@@ -7,8 +7,8 @@ from typing import Protocol
 from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.pricing import SNOWBALL_PRICING
+from apps.trading.strategies.snowball.tick_phases import SnowballExecutionStateBoundary
 
 
 class ExecutionBindingStrategy(Protocol):
@@ -22,7 +22,8 @@ def apply_event_execution_result(
     execution_result: EventExecutionResult,
 ) -> None:
     """Apply order execution feedback (position IDs, cycle IDs) to state."""
-    ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+    state_boundary = SnowballExecutionStateBoundary(state=state)
+    ss = state_boundary.load()
     if not execution_result:
         return
 
@@ -57,4 +58,4 @@ def apply_event_execution_result(
                     counter_tp_mode=strategy.config.counter_tp_mode,
                 )
 
-    state.strategy_state = ss.to_dict()
+    state_boundary.persist(ss)

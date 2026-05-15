@@ -1276,6 +1276,18 @@ class BacktestExecutor(TaskExecutor):
             state_manager=state_manager,
         )
 
+    def prepare_state_for_execution(
+        self,
+        *,
+        state: ExecutionState,
+        resumed: bool,
+    ) -> ExecutionState:
+        """Enable Snowball's cached state path for high-volume backtests."""
+        _ = resumed
+        if str(getattr(self.task.config, "strategy_type", "")) == "snowball":
+            setattr(state, "_defer_snowball_state_serialization", True)
+        return state
+
 
 class TradingExecutor(TaskExecutor):
     """Executor for live trading tasks."""

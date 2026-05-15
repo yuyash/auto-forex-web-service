@@ -176,6 +176,29 @@ class TestSnowballExecutionStateBoundary:
         assert state.strategy_state["initialised"] is True
         assert state.strategy_state["cycles"] == []
 
+    def test_deferred_persist_uses_cached_state_until_materialized(self) -> None:
+        state = ExecutionStateDouble()
+        state._defer_snowball_state_serialization = True  # type: ignore[attr-defined]
+        boundary = SnowballExecutionStateBoundary(state=state)
+
+        snowball_state = boundary.load()
+        snowball_state.initialised = True
+        snowball_state.metrics["margin_ratio"] = "0.25"
+        boundary.persist(snowball_state)
+        state.strategy_state["metrics"]["current_balance"] = "10000"
+        state.strategy_state["_idle_entered_at"] = "2026-05-15T00:00:00+00:00"
+
+        assert state.strategy_state["initialised"] is True
+        assert "cycles" not in state.strategy_state
+        assert boundary.load() is snowball_state
+
+        state._strategy_state_materializer()  # type: ignore[attr-defined]
+
+        assert state.strategy_state["cycles"] == []
+        assert state.strategy_state["_idle_entered_at"] == "2026-05-15T00:00:00+00:00"
+        assert state.strategy_state["metrics"]["margin_ratio"] == "0.25"
+        assert state.strategy_state["metrics"]["current_balance"] == "10000"
+
     def test_loads_empty_state_when_raw_value_is_malformed(self) -> None:
         state = ExecutionStateDouble(strategy_state="invalid")  # type: ignore[arg-type]
         boundary = SnowballExecutionStateBoundary(state=state)
