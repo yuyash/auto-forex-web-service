@@ -16,6 +16,7 @@ import {
 import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
+import { BarChart } from '@mui/x-charts/BarChart';
 import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { useTranslation } from 'react-i18next';
 import type { LossCutEvent, MetricPoint } from '../../../utils/fetchMetrics';
@@ -77,7 +78,7 @@ interface TaskMetricsTabProps {
   onToggleLossCutMarkers?: (next: boolean) => void;
 }
 
-type MetricFormat = 'pct' | 'int' | 'currency';
+type MetricFormat = 'pct' | 'int' | 'currency' | 'rate';
 
 type ChartMetric = {
   key: string;
@@ -88,6 +89,14 @@ type ChartMetric = {
 type MetricChartDefinition = ChartMetric & {
   series?: ChartMetric[];
   valueKey?: string;
+};
+
+type ReturnPeriod = 'day' | 'week' | 'month' | 'year';
+
+type ReturnBarChartDefinition = {
+  key: string;
+  period: ReturnPeriod;
+  color: string;
 };
 
 /** Metrics to chart and their display order */
@@ -114,6 +123,7 @@ const CHART_METRICS: MetricChartDefinition[] = [
   { key: 'winning_trades', color: '#2e7d32', format: 'int' },
   { key: 'losing_trades', color: '#c62828', format: 'int' },
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
+  { key: 'ticks_per_second', color: '#00695c', format: 'rate' },
 ];
 
 const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
@@ -177,7 +187,19 @@ const SNOWBALL_NET_CHART_METRICS: MetricChartDefinition[] = [
   { key: 'snowball_net_exposure_pct', color: '#ea580c', format: 'pct' },
   { key: 'total_trades', color: '#5d4037', format: 'int' },
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
+  { key: 'ticks_per_second', color: '#00695c', format: 'rate' },
 ];
+
+const RETURN_BAR_CHARTS: ReturnBarChartDefinition[] = [
+  { key: 'daily_return', period: 'day', color: '#2e7d32' },
+  { key: 'weekly_return', period: 'week', color: '#0288d1' },
+  { key: 'monthly_return', period: 'month', color: '#7b1fa2' },
+  { key: 'yearly_return', period: 'year', color: '#c2185b' },
+];
+
+const RETURN_BAR_CHART_KEY_SET = new Set(
+  RETURN_BAR_CHARTS.map((chart) => chart.key)
+);
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
@@ -278,8 +300,132 @@ function metricChartValue(
   };
 }
 
+function totalReturnValue(point: MetricPoint): number | null {
+  const raw = point.metrics.total_return;
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 function chartSeries(chart: MetricChartDefinition): ChartMetric[] {
   return chart.series ?? [chart];
+}
+
+function datePartsInTimezone(
+  date: Date,
+  timezone: string
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string | undefined>;
+  return {
+    year: Number(values.year ?? '1970'),
+    month: Number(values.month ?? '1'),
+    day: Number(values.day ?? '1'),
+  };
+}
+
+function periodKeyAndLabel(
+  date: Date,
+  period: ReturnPeriod,
+  timezone: string
+): { key: string; label: string } {
+  const { year, month, day } = datePartsInTimezone(date, timezone);
+  const monthText = String(month).padStart(2, '0');
+  const dayText = String(day).padStart(2, '0');
+  if (period === 'day') {
+    return {
+      key: `${year}-${monthText}-${dayText}`,
+      label: `${monthText}/${dayText}`,
+    };
+  }
+  if (period === 'month') {
+    return {
+      key: `${year}-${monthText}`,
+      label: `${year}-${monthText}`,
+    };
+  }
+  if (period === 'year') {
+    return { key: String(year), label: String(year) };
+  }
+
+  const localDate = new Date(Date.UTC(year, month - 1, day));
+  const weekday = localDate.getUTCDay() || 7;
+  localDate.setUTCDate(localDate.getUTCDate() + 4 - weekday);
+  const weekYear = localDate.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(weekYear, 0, 1));
+  const week = Math.ceil(
+    ((localDate.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7
+  );
+  const weekText = String(week).padStart(2, '0');
+  return {
+    key: `${weekYear}-W${weekText}`,
+    label: `${weekYear}-W${weekText}`,
+  };
+}
+
+function buildPeriodReturnData(
+  points: MetricPoint[],
+  period: ReturnPeriod,
+  timezone: string
+): { labels: string[]; values: number[]; lastValue: number } | null {
+  const sorted = [...points].sort((a, b) => a.t - b.t);
+  const labels: string[] = [];
+  const values: number[] = [];
+  let current: {
+    key: string;
+    label: string;
+    startReference: number;
+    last: number;
+  } | null = null;
+  let previousReturn: number | null = null;
+
+  const flushCurrent = () => {
+    if (!current) return;
+    labels.push(current.label);
+    values.push(current.last - current.startReference);
+  };
+
+  for (const point of sorted) {
+    const value = totalReturnValue(point);
+    if (value == null) continue;
+    const bucket = periodKeyAndLabel(
+      new Date(point.t * 1000),
+      period,
+      timezone
+    );
+    if (current && current.key !== bucket.key) {
+      flushCurrent();
+      current = null;
+    }
+    if (!current) {
+      current = {
+        key: bucket.key,
+        label: bucket.label,
+        startReference: previousReturn ?? value,
+        last: value,
+      };
+    } else {
+      current.last = value;
+    }
+    previousReturn = value;
+  }
+  flushCurrent();
+
+  if (labels.length === 0 || values.length === 0) return null;
+  return {
+    labels,
+    values,
+    lastValue: values[values.length - 1],
+  };
 }
 
 /**
@@ -386,6 +532,11 @@ function formatYLabel(v: number, format?: MetricFormat): string {
     return formatAppNumber(v, { maximumFractionDigits: 0 });
   if (format === 'int')
     return formatAppNumber(Math.round(v), { maximumFractionDigits: 0 });
+  if (format === 'rate')
+    return `${formatAppNumber(v, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })}/s`;
   return formatAppNumber(v, {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
@@ -523,6 +674,92 @@ function FillLineChart({
   );
 }
 
+function FillBarChart({
+  fallbackHeight,
+  ...chartProps
+}: ComponentProps<typeof BarChart> & {
+  fallbackHeight: number;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    const updateSize = () => {
+      const measured = measureContainer(host);
+      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
+      const nextHeight = Math.max(
+        MIN_CHART_MEASURE_PX,
+        measured.height > MIN_CHART_MEASURE_PX
+          ? measured.height
+          : fallbackHeight
+      );
+      setSize((current) =>
+        current.width === nextWidth && current.height === nextHeight
+          ? current
+          : { width: nextWidth, height: nextHeight }
+      );
+    };
+
+    const rafId = requestAnimationFrame(() => {
+      updateSize();
+    });
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSize);
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updateSize);
+      };
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(host);
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, [fallbackHeight]);
+
+  const effectiveWidth = size.width > 0 ? size.width : undefined;
+  const effectiveHeight =
+    size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight;
+
+  return (
+    <Box
+      ref={hostRef}
+      sx={{
+        width: '100%',
+        height: '100%',
+        position: 'absolute',
+        inset: 0,
+        minWidth: 0,
+        minHeight: 0,
+        '& > *': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+        '& > [class*="MuiChartsWrapper-root"]': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+        '& svg.MuiChartsSurface-root': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+      }}
+    >
+      <BarChart
+        {...chartProps}
+        {...(effectiveWidth != null ? { width: effectiveWidth } : {})}
+        height={effectiveHeight}
+      />
+    </Box>
+  );
+}
+
 export function TaskMetricsTab({
   data,
   isLoading,
@@ -557,6 +794,27 @@ export function TaskMetricsTab({
     strategyType === 'snowball_net'
       ? SNOWBALL_NET_CHART_METRICS
       : CHART_METRICS;
+  const returnChartDataMap = useMemo(() => {
+    const map: Record<
+      string,
+      { labels: string[]; values: number[]; lastValue: number }
+    > = {};
+    for (const chart of RETURN_BAR_CHARTS) {
+      const chartData = buildPeriodReturnData(data, chart.period, timezone);
+      if (chartData && chartData.labels.length > 0) {
+        map[chart.key] = chartData;
+      }
+    }
+    return map;
+  }, [data, timezone]);
+  const availableReturnCharts = useMemo(
+    () =>
+      RETURN_BAR_CHARTS.filter((chart) => {
+        const chartData = returnChartDataMap[chart.key];
+        return chartData && chartData.labels.length > 0;
+      }),
+    [returnChartDataMap]
+  );
 
   const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
@@ -585,9 +843,10 @@ export function TaskMetricsTab({
   const allChartKeys = useMemo(() => {
     const keys: string[] = [];
     if (hasOhlc) keys.push(OHLC_KEY);
+    for (const chart of availableReturnCharts) keys.push(chart.key);
     for (const chart of availableCharts) keys.push(chart.key);
     return keys;
-  }, [availableCharts, hasOhlc]);
+  }, [availableCharts, availableReturnCharts, hasOhlc]);
 
   const { orderedKeys, moveItem, setOrder, resetOrder } =
     useMetricsOrder(allChartKeys);
@@ -598,6 +857,11 @@ export function TaskMetricsTab({
     for (const chart of chartMetricDefinitions) map.set(chart.key, chart);
     return map;
   }, [chartMetricDefinitions]);
+  const returnChartDefinitionMap = useMemo(() => {
+    const map = new Map<string, ReturnBarChartDefinition>();
+    for (const chart of RETURN_BAR_CHARTS) map.set(chart.key, chart);
+    return map;
+  }, []);
 
   // Compute effective interval from data range (for formatting)
   const effectiveInterval = useMemo(() => {
@@ -788,6 +1052,17 @@ export function TaskMetricsTab({
         });
         continue;
       }
+      const returnChart = returnChartDefinitionMap.get(key);
+      if (returnChart) {
+        items.push({
+          key,
+          label: t(`metrics.${returnChart.key}`, {
+            defaultValue: returnChart.key.replace(/_/g, ' '),
+          }),
+          color: returnChart.color,
+        });
+        continue;
+      }
       const chart = chartDefinitionMap.get(key);
       if (!chart) continue;
       items.push({
@@ -799,7 +1074,13 @@ export function TaskMetricsTab({
       });
     }
     return items;
-  }, [chartDefinitionMap, instrument, orderedKeys, t]);
+  }, [
+    chartDefinitionMap,
+    instrument,
+    orderedKeys,
+    returnChartDefinitionMap,
+    t,
+  ]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -833,6 +1114,11 @@ export function TaskMetricsTab({
     if (format === 'pct') return formatAppPercent(val, 1);
     if (format === 'int')
       return formatAppNumber(Math.round(val), { maximumFractionDigits: 0 });
+    if (format === 'rate')
+      return `${formatAppNumber(val, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}/s`;
     if (format === 'currency')
       return formatMoneyAmount(val, valueCurrency ?? currency, {
         minimumFractionDigits: 0,
@@ -923,6 +1209,110 @@ export function TaskMetricsTab({
                   refreshToken={ohlcRefreshToken}
                   timezone={timezone}
                 />
+              </Grid>
+            );
+          }
+
+          if (RETURN_BAR_CHART_KEY_SET.has(key)) {
+            const chart = returnChartDefinitionMap.get(key);
+            const cd = chart ? returnChartDataMap[chart.key] : undefined;
+            if (!chart || !cd || cd.labels.length === 0) return null;
+            const maxChars = cd.values.reduce((max, value) => {
+              const label = formatYLabel(value, 'pct');
+              return Math.max(max, label.length);
+            }, 0);
+            const yAxisWidth = Math.max(
+              MIN_Y_AXIS_WIDTH,
+              maxChars * CHAR_WIDTH_PX + Y_AXIS_OVERHEAD
+            );
+            return (
+              <Grid
+                key={chart.key}
+                size={{ xs: 12, lg: 6 }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, chart.key)}
+                onDragOver={(e) => handleDragOver(e, chart.key)}
+                onDrop={(e) => handleDrop(e, chart.key)}
+                onDragEnd={handleDragEnd}
+                sx={{
+                  opacity: dragKey === chart.key ? 0.4 : 1,
+                  cursor: 'grab',
+                  minWidth: 0,
+                  transition:
+                    'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+                  transform:
+                    dragOverKey === chart.key && dragKey !== chart.key
+                      ? 'translateY(-2px)'
+                      : 'none',
+                  outline: '2px solid',
+                  outlineColor:
+                    dragOverKey === chart.key && dragKey !== chart.key
+                      ? 'primary.main'
+                      : 'transparent',
+                  outlineOffset: 3,
+                  borderRadius: 1,
+                }}
+              >
+                <ChartPanel
+                  title={t(`metrics.${chart.key}`, {
+                    defaultValue: chart.key.replace(/_/g, ' '),
+                  })}
+                  valueLabel={formatValue(cd.lastValue, 'pct')}
+                  height={CHART_CARD_HEIGHT}
+                  headerPrefix={
+                    <DragIndicatorIcon
+                      sx={{
+                        fontSize: 16,
+                        color: 'text.disabled',
+                        cursor: 'grab',
+                        mr: spacingTokens.xxs,
+                      }}
+                    />
+                  }
+                >
+                  <FillBarChart
+                    fallbackHeight={LINE_CHART_FALLBACK_HEIGHT}
+                    xAxis={[
+                      {
+                        data: cd.labels,
+                        scaleType: 'band' as const,
+                        tickLabelStyle: { fontSize: 10 },
+                      },
+                    ]}
+                    yAxis={[
+                      {
+                        position: 'right',
+                        width: yAxisWidth,
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatYLabel(v, 'pct') : '',
+                      },
+                    ]}
+                    series={[
+                      {
+                        data: cd.values,
+                        color: chart.color,
+                        label: t(`metrics.${chart.key}`, {
+                          defaultValue: chart.key.replace(/_/g, ' '),
+                        }),
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatValue(v, 'pct') : '',
+                      },
+                    ]}
+                    grid={{ horizontal: true }}
+                    margin={{
+                      left: LINE_CHART_LEFT_MARGIN,
+                      right: LINE_CHART_RIGHT_MARGIN,
+                      top: LINE_CHART_TOP_MARGIN,
+                      bottom: LINE_CHART_BOTTOM_MARGIN,
+                    }}
+                    hideLegend
+                    slotProps={{
+                      axisTickLabel: {
+                        style: { fontSize: 10 },
+                      },
+                    }}
+                  />
+                </ChartPanel>
               </Grid>
             );
           }

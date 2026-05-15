@@ -61,6 +61,28 @@ class TestRuntimeMetricsTracker:
         assert metrics["total_pnl_quote_money"]["currency"] == "JPY"
         assert metrics["mid_price"] == "150.11"
 
+    def test_build_metrics_includes_execution_tick_rate_when_elapsed_is_positive(self):
+        tracker = RuntimeMetricsTracker(
+            instrument="USD_JPY",
+            pip_size=Decimal("0.01"),
+            account_currency="JPY",
+            margin_rate=Decimal("0.04"),
+            atr_period=14,
+        )
+
+        metrics = tracker.build_metrics(
+            timestamp=datetime(2026, 3, 22, 10, 0, tzinfo=UTC),
+            bid=Decimal("150.10"),
+            ask=Decimal("150.12"),
+            mid=Decimal("150.11"),
+            current_balance=Decimal("100000"),
+            ticks_processed=250,
+            execution_elapsed_seconds=Decimal("2.5"),
+        )
+
+        assert metrics["execution_elapsed_seconds"] == "2.500000"
+        assert Decimal(metrics["ticks_per_second"]) == Decimal("100.000000")
+
     def test_build_metrics_includes_current_atr_without_strategy_specific_metrics(self):
         tracker = RuntimeMetricsTracker(
             instrument="USD_JPY",
