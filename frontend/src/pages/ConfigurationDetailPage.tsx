@@ -22,7 +22,10 @@ import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyConfigSchemas';
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
 import { orderConfigEntries } from '../utils/configFieldOrder';
-import { isParameterVisible } from '../utils/strategySchemaDependsOn';
+import {
+  isObsoleteStrategyParameterKey,
+  isParameterVisible,
+} from '../utils/strategySchemaDependsOn';
 import { useDateTimeFormatter } from '../hooks/useDateTimeFormatter';
 
 /** Keys excluded from the detail view (not user-facing). */
@@ -150,7 +153,13 @@ export default function ConfigurationDetailPage() {
       });
       const otherGroup = t('configuration:form.otherParameters');
       Object.keys(params).forEach((key) => {
-        if (configSchema?.properties?.[key] || HIDDEN_KEYS.has(key)) return;
+        if (
+          configSchema?.properties?.[key] ||
+          HIDDEN_KEYS.has(key) ||
+          isObsoleteStrategyParameterKey(key)
+        ) {
+          return;
+        }
         if (!groupMap.has(otherGroup)) {
           groupMap.set(otherGroup, []);
           seenGroups.push(otherGroup);

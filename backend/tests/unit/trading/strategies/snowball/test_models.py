@@ -25,12 +25,10 @@ class TestSnowballStrategyConfig:
         assert cfg.stop_loss_mode == "auto"
         assert cfg.counter_tp_mode == "weighted_avg"
         assert cfg.disable_loss_cut_after_rebuild is True
-        assert cfg.rebuild_stop_loss_mode == "same"
+        assert cfg.rebuild_stop_loss_mode == "same_pips"
         assert cfg.rebuild_stop_loss_manual_pips == []
-        assert cfg.rebuild_take_profit_mode == "same"
+        assert cfg.rebuild_take_profit_mode == "same_pips"
         assert cfg.rebuild_take_profit_manual_pips == []
-        assert cfg.rebuild_take_profit_recovery_enabled is False
-        assert cfg.rebuild_take_profit_recovery_mode == "pips"
         assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
@@ -105,8 +103,6 @@ class TestSnowballStrategyConfig:
                 "rebuild_stop_loss_manual_pips": ["11", "12", "13", "14", "15", "16"],
                 "rebuild_take_profit_mode": "manual",
                 "rebuild_take_profit_manual_pips": ["21", "22", "23", "24", "25", "26"],
-                "rebuild_take_profit_recovery_enabled": True,
-                "rebuild_take_profit_recovery_mode": "pips",
                 "rebuild_price_adjustment_enabled": True,
                 "grid_order_validation_enabled": True,
                 "preserve_highest_retracement_enabled": True,
@@ -136,8 +132,6 @@ class TestSnowballStrategyConfig:
             Decimal("25"),
             Decimal("26"),
         ]
-        assert cfg2.rebuild_take_profit_recovery_enabled is True
-        assert cfg2.rebuild_take_profit_recovery_mode == "pips"
         assert cfg2.rebuild_price_adjustment_enabled is False
         assert cfg2.grid_order_validation_enabled is True
         assert cfg2.preserve_highest_retracement_enabled is True
@@ -182,6 +176,13 @@ class TestSnowballStrategyConfig:
                 }
             ).validate()
 
+    def test_rebuild_same_pips_stop_loss_mode_is_valid(self):
+        cfg = SnowballStrategyConfig.from_dict({"rebuild_stop_loss_mode": "same_pips"})
+
+        cfg.validate()
+
+        assert cfg.rebuild_stop_loss_mode == "same_pips"
+
     def test_validate_rebuild_manual_take_profit_requires_all_slots(self):
         with pytest.raises(ValueError, match="rebuild_take_profit_manual_pips"):
             SnowballStrategyConfig.from_dict(
@@ -214,11 +215,18 @@ class TestSnowballStrategyConfig:
         assert cfg.rebuild_price_adjustment_enabled is False
         assert cfg.grid_order_validation_enabled is True
 
-    def test_validate_rejects_unknown_rebuild_recovery_mode(self):
-        with pytest.raises(ValueError, match="rebuild_take_profit_recovery_mode"):
-            SnowballStrategyConfig.from_dict(
-                {"rebuild_take_profit_recovery_mode": "money"}
-            ).validate()
+    def test_rebuild_same_pips_take_profit_keeps_price_adjustment_enabled(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "rebuild_take_profit_mode": "same_pips",
+                "rebuild_price_adjustment_enabled": True,
+            }
+        )
+
+        cfg.validate()
+
+        assert cfg.rebuild_take_profit_mode == "same_pips"
+        assert cfg.rebuild_price_adjustment_enabled is True
 
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):
@@ -260,16 +268,6 @@ class TestSnowballStrategyConfig:
 
         with pytest.raises(ValueError, match="preserve_highest_r_from"):
             SnowballStrategyConfig.strict_from_dict(raw)
-
-    def test_strict_from_dict_allows_omitted_rebuild_recovery_fields(self):
-        raw = SnowballStrategyConfig.from_dict({}).to_dict()
-        raw.pop("rebuild_take_profit_recovery_enabled")
-        raw.pop("rebuild_take_profit_recovery_mode")
-
-        cfg = SnowballStrategyConfig.strict_from_dict(raw)
-
-        assert cfg.rebuild_take_profit_recovery_enabled is False
-        assert cfg.rebuild_take_profit_recovery_mode == "pips"
 
 
 class TestStopLossClosedEntry:

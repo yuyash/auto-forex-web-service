@@ -188,11 +188,13 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is True
-        assert result["rebuild_stop_loss_mode"] == "same"
-        assert result["rebuild_take_profit_mode"] == "same"
+        assert result["rebuild_stop_loss_mode"] == "same_pips"
+        assert result["rebuild_take_profit_mode"] == "same_pips"
         assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
         assert result["stop_loss_mode"] == "auto"
+        assert "rebuild_take_profit_recovery_enabled" not in result
+        assert "rebuild_take_profit_recovery_mode" not in result
         assert "preserve_highest_r_from" not in result
 
     def test_default_parameters(self):
@@ -204,9 +206,13 @@ class TestSnowballStrategyClassMethods:
         assert defaults["disable_loss_cut_after_rebuild"] is True
         assert "rebuild_stop_loss_mode" in defaults
         assert "rebuild_take_profit_mode" in defaults
+        assert defaults["rebuild_stop_loss_mode"] == "same_pips"
+        assert defaults["rebuild_take_profit_mode"] == "same_pips"
         assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
         assert defaults["stop_loss_mode"] == "auto"
+        assert "rebuild_take_profit_recovery_enabled" not in defaults
+        assert "rebuild_take_profit_recovery_mode" not in defaults
         assert "preserve_highest_r_from" not in defaults
 
     def test_parse_config_accepts_persisted_default_parameters(self):
@@ -627,6 +633,53 @@ class TestSnowballRebuildStopLossModes:
 
         assert entry.stop_loss_price == Decimal("154.40")
 
+    def test_same_pips_mode_reuses_original_stop_loss_distance(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "disable_loss_cut_after_rebuild": False,
+                "rebuild_stop_loss_mode": "same_pips",
+            }
+        )
+        long_entry = Entry(
+            entry_id=9,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.90"),
+            close_price=Decimal("155.20"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            is_rebuild=True,
+        )
+        short_entry = Entry(
+            entry_id=10,
+            step=2,
+            direction=Direction.SHORT,
+            entry_price=Decimal("154.50"),
+            close_price=Decimal("154.20"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            is_rebuild=True,
+        )
+
+        s._assign_rebuild_stop_loss(long_entry, self._make_pending_rebuild())
+        s._assign_rebuild_stop_loss(
+            short_entry,
+            self._make_pending_rebuild(
+                direction=Direction.SHORT,
+                stop_loss_price="155.00",
+            ),
+        )
+
+        assert long_entry.stop_loss_price == Decimal("154.60")
+        assert short_entry.stop_loss_price == Decimal("154.80")
+
     def test_manual_mode_applies_absolute_pips_from_rebuild_entry(self):
         s = _strategy(
             {
@@ -737,32 +790,39 @@ class TestSnowballRebuildTakeProfitModes:
         assert long_tp == Decimal("154.82")
         assert short_tp == Decimal("154.58")
 
-    def test_recovery_mode_same_tp_keeps_original_absolute_take_profit(self):
+    def test_same_pips_mode_reuses_original_take_profit_distance(self):
         s = _strategy(
             {
                 "stop_loss_enabled": True,
-                "rebuild_take_profit_mode": "same",
-                "rebuild_take_profit_recovery_enabled": True,
-                "rebuild_take_profit_recovery_mode": "pips",
+                "rebuild_take_profit_mode": "same_pips",
             }
         )
 
+        long_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(
+                direction=Direction.LONG,
+                entry_price=Decimal("154.70"),
+                close_price=Decimal("155.00"),
+            ),
+            entry_price=Decimal("154.10"),
+            pip_size=s.pip_size,
+            config=s.config,
+        )
         short_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
             pending=self._make_pending_rebuild(
                 direction=Direction.SHORT,
-                entry_price=Decimal("157.397"),
-                stop_loss_loss_pips=Decimal("30.1"),
-                stop_loss_exit_price=Decimal("157.698"),
-                close_price=Decimal("157.247"),
+                entry_price=Decimal("154.70"),
+                close_price=Decimal("154.40"),
             ),
-            entry_price=Decimal("157.698"),
-            pip_size=Decimal("0.01"),
+            entry_price=Decimal("155.10"),
+            pip_size=s.pip_size,
             config=s.config,
         )
 
-        assert short_tp == Decimal("157.247")
+        assert long_tp == Decimal("154.40")
+        assert short_tp == Decimal("154.80")
 
-    def test_recovery_flag_switches_rebuild_trigger_to_stop_loss_exit(self):
+    def test_rebuild_trigger_uses_pending_entry_price(self):
         pending = self._make_pending_rebuild(
             direction=Direction.SHORT,
             entry_price=Decimal("157.397"),
@@ -772,49 +832,19 @@ class TestSnowballRebuildTakeProfitModes:
         )
         planner = StopLossRebuildPricePlanner()
 
-        disabled_trigger = planner.trigger_price(
-            pending=pending,
-            apply_adjustment=False,
-            entry_buffer_price=Decimal("0"),
-            pip_size=Decimal("0.01"),
-            use_stop_loss_exit=False,
-        )
-        enabled_trigger = planner.trigger_price(
-            pending=pending,
-            apply_adjustment=False,
-            entry_buffer_price=Decimal("0"),
-            pip_size=Decimal("0.01"),
-            use_stop_loss_exit=True,
-        )
-
-        assert disabled_trigger == Decimal("157.397")
-        assert enabled_trigger == Decimal("157.698")
-
-    def test_recovery_trigger_can_be_derived_from_loss_pips_for_old_state(self):
-        pending = self._make_pending_rebuild(
-            direction=Direction.LONG,
-            entry_price=Decimal("144.547"),
-            stop_loss_loss_pips=Decimal("35"),
-            close_price=Decimal("144.697"),
-        )
-        planner = StopLossRebuildPricePlanner()
-
         trigger = planner.trigger_price(
             pending=pending,
             apply_adjustment=False,
             entry_buffer_price=Decimal("0"),
-            pip_size=Decimal("0.01"),
-            use_stop_loss_exit=True,
         )
 
-        assert trigger == Decimal("144.197")
+        assert trigger == Decimal("157.397")
 
-    def test_recovery_rebuild_waits_until_after_stop_loss_tick(self):
+    def test_rebuild_waits_until_after_stop_loss_tick(self):
         strategy = _strategy(
             {
                 "stop_loss_enabled": True,
                 "rebuild_take_profit_mode": "same",
-                "rebuild_take_profit_recovery_enabled": True,
             }
         )
         closed_at = datetime(2026, 1, 1, tzinfo=UTC)
@@ -834,7 +864,7 @@ class TestSnowballRebuildTakeProfitModes:
 
         same_tick_plan = planner.plan(
             strategy=strategy,
-            tick=_make_tick(closed_at, "144.197", "144.217"),
+            tick=_make_tick(closed_at, "144.547", "144.567"),
             cycle=cycle,
             layer=layer,
             slot=slot,
@@ -845,7 +875,7 @@ class TestSnowballRebuildTakeProfitModes:
         )
         next_tick_plan = planner.plan(
             strategy=strategy,
-            tick=_make_tick(closed_at + timedelta(seconds=1), "144.197", "144.217"),
+            tick=_make_tick(closed_at + timedelta(seconds=1), "144.547", "144.567"),
             cycle=cycle,
             layer=layer,
             slot=slot,
@@ -857,29 +887,8 @@ class TestSnowballRebuildTakeProfitModes:
 
         assert same_tick_plan is None
         assert next_tick_plan is not None
-        assert next_tick_plan.trigger_price == Decimal("144.197")
+        assert next_tick_plan.trigger_price == Decimal("144.547")
         assert next_tick_plan.close_price == Decimal("144.697")
-
-    def test_recovery_mode_keeps_farther_existing_take_profit(self):
-        s = _strategy(
-            {
-                "stop_loss_enabled": True,
-                "rebuild_take_profit_mode": "same",
-                "rebuild_take_profit_recovery_enabled": True,
-            }
-        )
-
-        long_tp = SNOWBALL_PRICING.rebuild_take_profit_price(
-            pending=self._make_pending_rebuild(
-                direction=Direction.LONG,
-                stop_loss_loss_pips=Decimal("10"),
-            ),
-            entry_price=Decimal("154.70"),
-            pip_size=s.pip_size,
-            config=s.config,
-        )
-
-        assert long_tp == Decimal("155.00")
 
     def test_manual_take_profit_mode_skips_grid_order_validation(self):
         s = _strategy(

@@ -154,6 +154,16 @@ class StopLossAssigner:
                 entry.stop_loss_price = pending.stop_loss_price
             return
 
+        if strategy.config.rebuild_stop_loss_mode == "same_pips":
+            if pending.stop_loss_price is None:
+                return
+            if strategy.pip_size <= 0:
+                entry.stop_loss_price = pending.stop_loss_price
+                return
+            sl_pips = abs(pending.entry_price - pending.stop_loss_price) / strategy.pip_size
+            self.assign(strategy, entry, sl_pips)
+            return
+
         values = strategy.config.rebuild_stop_loss_manual_pips
         if not values:
             return
@@ -383,8 +393,6 @@ class StopLossRebuildPricePlanner:
             pending,
             apply_adjustment,
             entry_buffer_price,
-            pip_size=strategy.pip_size,
-            use_stop_loss_exit=strategy.config.rebuild_take_profit_recovery_enabled,
         )
         trigger_price = self.clamp_entry_price(cycle, layer, slot, pending, trigger_price)
         if not self.trigger_hit(pending, tick, trigger_price):
@@ -418,39 +426,18 @@ class StopLossRebuildPricePlanner:
         pending: StopLossClosedEntry,
         apply_adjustment: bool,
         entry_buffer_price: Decimal,
-        *,
-        pip_size: Decimal,
-        use_stop_loss_exit: bool,
     ) -> Decimal:
         """Return the price that must be reached to rebuild the entry."""
-        base_price = self.base_trigger_price(
-            pending,
-            pip_size=pip_size,
-            use_stop_loss_exit=use_stop_loss_exit,
-        )
+        base_price = self.base_trigger_price(pending)
         if not apply_adjustment or entry_buffer_price <= 0:
             return base_price
         if pending.direction == Direction.LONG:
             return base_price + entry_buffer_price
         return base_price - entry_buffer_price
 
-    def base_trigger_price(
-        self,
-        pending: StopLossClosedEntry,
-        *,
-        pip_size: Decimal,
-        use_stop_loss_exit: bool,
-    ) -> Decimal:
+    def base_trigger_price(self, pending: StopLossClosedEntry) -> Decimal:
         """Return the unbuffered rebuild trigger price."""
-        if not use_stop_loss_exit:
-            return pending.entry_price
-        if pending.stop_loss_exit_price is not None:
-            return pending.stop_loss_exit_price
-        if pending.stop_loss_loss_pips <= 0 or pip_size <= 0:
-            return pending.entry_price
-        if pending.direction == Direction.LONG:
-            return pending.entry_price - pending.stop_loss_loss_pips * pip_size
-        return pending.entry_price + pending.stop_loss_loss_pips * pip_size
+        return pending.entry_price
 
     def clamp_entry_price(
         self,
@@ -714,7 +701,7 @@ class StopLossRebuildProcessor:
         events: list[StrategyEvent] = []
         apply_adjustment = (
             strategy.config.rebuild_price_adjustment_enabled
-            and strategy.config.rebuild_take_profit_mode == "same"
+            and strategy.config.rebuild_take_profit_mode in {"same", "same_pips"}
         )
         entry_buffer_price = strategy.config.rebuild_entry_price_buffer_pips * strategy.pip_size
         exit_buffer_price = strategy.config.rebuild_exit_price_buffer_pips * strategy.pip_size

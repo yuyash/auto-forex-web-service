@@ -24,34 +24,29 @@ class SnowballPricingService:
     ) -> Decimal:
         """Return the take-profit price for a rebuilt entry."""
         if config.rebuild_take_profit_mode == "same":
-            price = pending.close_price
+            return pending.close_price
+        if config.rebuild_take_profit_mode == "same_pips":
+            if pip_size <= 0:
+                return pending.close_price
+            tp_pips = self._take_profit_distance_pips(pending, pip_size)
         else:
             tp_pips = SnowballCalculator(config).rebuild_take_profit_pips(
                 pending.retracement_count + 1
             )
-            price = self._take_profit_price(
-                direction=pending.direction,
-                entry_price=entry_price,
-                tp_pips=tp_pips,
-                pip_size=pip_size,
-            )
-
-        if not config.rebuild_take_profit_recovery_enabled:
-            return price
-
-        recovery_pips = pending.stop_loss_loss_pips
-        if recovery_pips <= 0:
-            return price
-
-        recovery_price = self._take_profit_price(
+        return self._take_profit_price(
             direction=pending.direction,
             entry_price=entry_price,
-            tp_pips=recovery_pips,
+            tp_pips=tp_pips,
             pip_size=pip_size,
         )
-        if pending.direction == Direction.LONG:
-            return recovery_price if recovery_price > price else price
-        return recovery_price if recovery_price < price else price
+
+    def _take_profit_distance_pips(
+        self,
+        pending: StopLossClosedEntry,
+        pip_size: Decimal,
+    ) -> Decimal:
+        """Return the original absolute TP distance in pips."""
+        return abs(pending.close_price - pending.entry_price) / pip_size
 
     def weighted_avg_close_price(
         self,

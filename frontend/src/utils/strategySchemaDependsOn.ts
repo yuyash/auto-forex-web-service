@@ -24,6 +24,15 @@ import type {
   JsonPrimitive,
 } from '../types/strategy';
 
+const OBSOLETE_STRATEGY_PARAMETER_KEYS = new Set([
+  'rebuild_take_profit_recovery_enabled',
+  'rebuild_take_profit_recovery_mode',
+]);
+
+export function isObsoleteStrategyParameterKey(key: string): boolean {
+  return OBSOLETE_STRATEGY_PARAMETER_KEYS.has(key.replace(/^parameters\./, ''));
+}
+
 /**
  * Normalise a value so it can be compared against a schema's
  * `values` array, which uses raw JSON primitives.
@@ -152,6 +161,7 @@ export function isParameterVisible(
   params: Record<string, unknown>,
   schemaProperties: Record<string, ConfigProperty> | undefined
 ): boolean {
+  if (isObsoleteStrategyParameterKey(key)) return false;
   const prop = schemaProperties?.[key];
   if (!prop?.dependsOn) return true;
   return matchesDependsOn(params, prop.dependsOn, schemaProperties);

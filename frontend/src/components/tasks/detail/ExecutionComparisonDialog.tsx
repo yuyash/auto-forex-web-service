@@ -47,6 +47,7 @@ import {
   buildParameterLabelMap,
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
+import { isObsoleteStrategyParameterKey } from '../../../utils/strategySchemaDependsOn';
 import { computeAutoInterval } from '../../../utils/autoGranularity';
 import {
   formatAppNumber,
@@ -533,10 +534,13 @@ function ConfigComparisonPanel({
   const allKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const cfg of configs) {
-      for (const k of Object.keys(cfg)) keys.add(k);
+      for (const k of Object.keys(cfg)) {
+        if (type === 'strategy' && isObsoleteStrategyParameterKey(k)) continue;
+        keys.add(k);
+      }
     }
     return [...keys].sort();
-  }, [configs]);
+  }, [configs, type]);
 
   // Determine which keys differ
   const diffKeys = useMemo(() => {

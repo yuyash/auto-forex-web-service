@@ -3,14 +3,12 @@ from django.utils import timezone
 
 
 SNOWBALL_REBUILD_TAKE_PROFIT_DEFAULTS = {
-    "rebuild_take_profit_mode": "same",
+    "rebuild_take_profit_mode": "same_pips",
     "rebuild_take_profit_pips_head": "25",
     "rebuild_take_profit_pips_tail": "10",
     "rebuild_take_profit_pips_flat_steps": 0,
     "rebuild_take_profit_pips_gamma": "1.4",
     "rebuild_take_profit_manual_pips": [],
-    "rebuild_take_profit_recovery_enabled": False,
-    "rebuild_take_profit_recovery_mode": "pips",
 }
 
 
