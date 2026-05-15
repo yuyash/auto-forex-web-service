@@ -79,7 +79,8 @@
     "editConfiguration": "設定を編集",
     "deleteConfiguration": "設定を削除",
     "newConfiguration": "新規設定",
-    "manageConfigurations": "設定を管理"
+    "manageConfigurations": "設定を管理",
+    "revision": "リビジョン"
   },
   "parametersForm": {
     "title": "戦略パラメータ",

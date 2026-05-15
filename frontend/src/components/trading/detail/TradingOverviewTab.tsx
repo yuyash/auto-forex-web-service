@@ -22,11 +22,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import {
+  canEditDisplayedStrategyConfig,
   formatStrategyConfigRevisionLabel,
   getStrategyConfigSnapshotName,
   getStrategyConfigSnapshotRevision,
   getStrategyConfigSnapshotType,
-  isStrategyConfigSnapshotCurrent,
 } from '../../../utils/strategyConfigRevision';
 
 interface TradingOverviewTabProps {
@@ -62,6 +62,7 @@ export function TradingOverviewTab({
   strategySnapshotError,
   onRefreshExecutionStatus,
   executionStatusRefreshing = false,
+  isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
   onOpenConfiguration,
@@ -76,15 +77,13 @@ export function TradingOverviewTab({
   const isSuperuser = Boolean(user?.is_superuser);
   const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
   const hasExecutionConfigSnapshot = Boolean(historicalStrategyConfig);
-  const canEditDisplayedStrategyConfig = Boolean(
-    task.config_id &&
-      historicalStrategyConfig?.id === task.config_id &&
-      isStrategyConfigSnapshotCurrent(
-        historicalStrategyConfig,
-        task.config_revision,
-        task.config_hash
-      )
-  );
+  const canEditDisplayedConfig = canEditDisplayedStrategyConfig({
+    configId: task.config_id,
+    config: historicalStrategyConfig,
+    isViewingHistorical,
+    currentRevision: task.config_revision,
+    currentHash: task.config_hash,
+  });
 
   // When viewing a historical execution, prefer snapshot values
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
@@ -292,7 +291,7 @@ export function TradingOverviewTab({
         config={historicalStrategyConfig}
         strategies={strategies}
         editHref={
-          canEditDisplayedStrategyConfig
+          canEditDisplayedConfig
             ? `/configurations/${task.config_id}/edit`
             : undefined
         }

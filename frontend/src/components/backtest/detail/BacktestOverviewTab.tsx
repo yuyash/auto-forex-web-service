@@ -19,11 +19,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useDateTimeFormatter } from '../../../hooks/useDateTimeFormatter';
 import { useNumberFormatter } from '../../../hooks/useNumberFormatter';
 import {
+  canEditDisplayedStrategyConfig,
   formatStrategyConfigRevisionLabel,
   getStrategyConfigSnapshotName,
   getStrategyConfigSnapshotRevision,
   getStrategyConfigSnapshotType,
-  isStrategyConfigSnapshotCurrent,
 } from '../../../utils/strategyConfigRevision';
 
 const BACKTEST_PERIOD_SETTING_KEYS = new Set([
@@ -71,6 +71,7 @@ export function BacktestOverviewTab({
   executionStatusRefreshing = false,
   timezone,
   language,
+  isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
   onOpenConfiguration,
@@ -84,15 +85,13 @@ export function BacktestOverviewTab({
   const isSuperuser = Boolean(user?.is_superuser);
   const [historicalConfigOpen, setHistoricalConfigOpen] = useState(false);
   const hasExecutionConfigSnapshot = Boolean(historicalStrategyConfig);
-  const canEditDisplayedStrategyConfig = Boolean(
-    task.config_id &&
-      historicalStrategyConfig?.id === task.config_id &&
-      isStrategyConfigSnapshotCurrent(
-        historicalStrategyConfig,
-        task.config_revision,
-        task.config_hash
-      )
-  );
+  const canEditDisplayedConfig = canEditDisplayedStrategyConfig({
+    configId: task.config_id,
+    config: historicalStrategyConfig,
+    isViewingHistorical,
+    currentRevision: task.config_revision,
+    currentHash: task.config_hash,
+  });
 
   // Prefer execution snapshots when available, including the current run.
   const effectiveStartTime =
@@ -345,7 +344,7 @@ export function BacktestOverviewTab({
         config={historicalStrategyConfig}
         strategies={strategies}
         editHref={
-          canEditDisplayedStrategyConfig
+          canEditDisplayedConfig
             ? `/configurations/${task.config_id}/edit`
             : undefined
         }
