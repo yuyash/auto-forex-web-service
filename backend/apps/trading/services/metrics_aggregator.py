@@ -14,6 +14,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+NON_TIMESERIES_METRIC_KEYS = frozenset(
+    {
+        # Large per-tick diagnostic payload. Keep it in ExecutionState when
+        # explicitly enabled, but do not copy it into every minute snapshot.
+        "snowball_decision_trace",
+    }
+)
+
 
 def _truncate_to_minute(dt: datetime) -> datetime:
     """Return *dt* with seconds and microseconds zeroed out."""
@@ -73,7 +81,11 @@ class MetricsAggregator:
         if not metrics:
             return
         bucket_key = _truncate_to_minute(timestamp)
-        serialised = {k: _serialise_value(v) for k, v in metrics.items() if v is not None}
+        serialised = {
+            k: _serialise_value(v)
+            for k, v in metrics.items()
+            if v is not None and k not in NON_TIMESERIES_METRIC_KEYS
+        }
         if not serialised:
             return
         # Last-write-wins within the same minute
