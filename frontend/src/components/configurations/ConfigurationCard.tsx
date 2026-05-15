@@ -202,6 +202,20 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               }}
             >
               <Typography variant="caption" color="text.secondary">
+                {t('configuration:card.revision')}
+              </Typography>
+              <Typography variant="caption" fontWeight={500}>
+                rev.{configuration.revision}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
                 Created
               </Typography>
               <Typography variant="caption" fontWeight={500}>

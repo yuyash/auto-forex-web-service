@@ -491,26 +491,25 @@ function buildCurrentBalanceItems(
     summary.execution.currentBalanceCurrency ||
     summary.execution.accountCurrency ||
     pnlCurrency;
-  const hasConvertedBalance =
-    accountMoney != null &&
-    displayMoney != null &&
-    displayMoney.currency !== accountMoney.currency;
-  const primaryMoney = displayMoney ?? accountMoney;
+  const displayCurrency = summary.execution.displayCurrency;
 
-  const value = hasConvertedBalance
-    ? `${formatMoneyPayload(displayMoney, {}, separators)} (${formatMoneyPayload(
-        accountMoney,
-        {},
-        separators
-      )})`
-    : primaryMoney
-      ? formatMoneyPayload(primaryMoney, {}, separators)
-      : formatCurrency(
-          summary.execution.currentBalance,
-          accountCurrency,
+  const value = displayMoney
+    ? formatMoneyPayload(displayMoney, {}, separators)
+    : displayCurrency && summary.execution.currentBalanceDisplay != null
+      ? formatCurrency(
+          summary.execution.currentBalanceDisplay,
+          displayCurrency,
           false,
           separators
-        );
+        )
+      : accountMoney
+        ? formatMoneyPayload(accountMoney, {}, separators)
+        : formatCurrency(
+            summary.execution.currentBalance,
+            accountCurrency,
+            false,
+            separators
+          );
 
   return [
     {

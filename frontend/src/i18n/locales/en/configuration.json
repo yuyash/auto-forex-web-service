@@ -79,7 +79,8 @@
     "editConfiguration": "Edit Configuration",
     "deleteConfiguration": "Delete Configuration",
     "newConfiguration": "New Configuration",
-    "manageConfigurations": "Manage Configurations"
+    "manageConfigurations": "Manage Configurations",
+    "revision": "Revision"
   },
   "parametersForm": {
     "title": "Strategy Parameters",

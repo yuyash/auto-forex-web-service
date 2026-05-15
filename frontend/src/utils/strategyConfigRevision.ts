@@ -2,6 +2,14 @@ import type { TaskExecution } from '../types/execution';
 
 type StrategyConfigSnapshot = NonNullable<TaskExecution['strategy_config']>;
 
+interface CanEditDisplayedStrategyConfigParams {
+  configId?: string | number | null;
+  config?: StrategyConfigSnapshot | null;
+  isViewingHistorical?: boolean;
+  currentRevision?: number | null;
+  currentHash?: string | null;
+}
+
 export function getStrategyConfigSnapshotName(
   config?: StrategyConfigSnapshot | null
 ): string {
@@ -48,6 +56,28 @@ export function isStrategyConfigSnapshotCurrent(
     snapshotRevision &&
       currentRevision &&
       Number(snapshotRevision) === Number(currentRevision)
+  );
+}
+
+export function canEditDisplayedStrategyConfig({
+  configId,
+  config,
+  isViewingHistorical = false,
+  currentRevision,
+  currentHash,
+}: CanEditDisplayedStrategyConfigParams): boolean {
+  if (!configId) {
+    return false;
+  }
+
+  if (!isViewingHistorical) {
+    return true;
+  }
+
+  return Boolean(
+    config &&
+      String(config.id) === String(configId) &&
+      isStrategyConfigSnapshotCurrent(config, currentRevision, currentHash)
   );
 }
 
