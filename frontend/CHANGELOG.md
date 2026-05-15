@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.69.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.69.0...frontend-v1.69.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* **frontend:** update task configuration displays ([#719](https://github.com/yuyash/auto-forex-web-service/issues/719)) ([75c9030](https://github.com/yuyash/auto-forex-web-service/commit/75c9030304f4e1db837d57656ce8ffa818abec0a))
+
 ## [1.69.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.68.5...frontend-v1.69.0) (2026-05-15)
 
 
