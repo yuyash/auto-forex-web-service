@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from time import monotonic
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING
 
@@ -419,6 +420,7 @@ class RuntimeMetricsRecorder:
     def __init__(self, executor: "TaskExecutor") -> None:
         """Bind the recorder to one executor instance."""
         self.executor = executor
+        self._execution_started_at = monotonic()
         self.live_tick_latency_metric_keys = frozenset(
             {
                 "oanda_tick_publish_latency_seconds",
@@ -505,10 +507,14 @@ class RuntimeMetricsRecorder:
             mid=Decimal(str(tick.mid)),
             current_balance=current_balance,
             ticks_processed=state.ticks_processed,
+            execution_elapsed_seconds=self._execution_elapsed_seconds(),
         )
         existing_metrics.update(common_metrics)
         strategy_state["metrics"] = existing_metrics
         state.strategy_state = strategy_state
+
+    def _execution_elapsed_seconds(self) -> float:
+        return max(monotonic() - self._execution_started_at, 0.000001)
 
     def buffer_tick_metrics(self, state: "ExecutionState", tick) -> None:
         """Record strategy metrics into the minute-level aggregator."""

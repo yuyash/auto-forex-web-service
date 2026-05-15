@@ -66,9 +66,15 @@ interface ExecutionStatusItem {
 }
 
 const METRIC_KEYS: Array<{
-  key: 'win_rate' | 'winning_trades' | 'losing_trades' | 'total_return';
-  format: 'pct' | 'int';
+  key:
+    | 'win_rate'
+    | 'winning_trades'
+    | 'losing_trades'
+    | 'total_return'
+    | 'ticks_per_second';
+  format: 'pct' | 'int' | 'rate';
 }> = [
+  { key: 'ticks_per_second', format: 'rate' },
   { key: 'win_rate', format: 'pct' },
   { key: 'winning_trades', format: 'int' },
   { key: 'losing_trades', format: 'int' },
@@ -547,7 +553,9 @@ function buildMetricItems(
         value:
           format === 'pct'
             ? formatPercent(value, separators)
-            : formatWholeNumber(value, separators),
+            : format === 'rate'
+              ? formatRate(value, separators)
+              : formatWholeNumber(value, separators),
         color,
       },
     ];
@@ -574,6 +582,17 @@ function metricValueForKey(
   if (raw == null || raw === '') return null;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
+}
+
+function formatRate(value: number, separators: NumberFormatSeparators): string {
+  return `${formatAppNumber(
+    value,
+    {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    },
+    separators
+  )}/s`;
 }
 
 function snapshotCardToItem(

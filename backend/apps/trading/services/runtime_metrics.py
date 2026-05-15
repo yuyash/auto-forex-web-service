@@ -129,6 +129,7 @@ class RuntimeMetricsTracker:
         mid: Decimal,
         current_balance: Decimal,
         ticks_processed: int = 0,
+        execution_elapsed_seconds: float | int | Decimal | None = None,
     ) -> dict[str, Any]:
         """Update rolling state for a tick and return common metrics."""
         self._record_tick(timestamp=timestamp, mid=mid)
@@ -220,6 +221,11 @@ class RuntimeMetricsTracker:
             "mid_price": str(mid),
             "price_currency": quote_currency,
         }
+
+        elapsed_seconds = _positive_float(execution_elapsed_seconds)
+        if elapsed_seconds is not None:
+            metrics["execution_elapsed_seconds"] = f"{elapsed_seconds:.6f}"
+            metrics["ticks_per_second"] = f"{max(ticks_processed, 0) / elapsed_seconds:.6f}"
 
         atr_cache: dict[int, Decimal] = {}
 
@@ -375,3 +381,13 @@ def config_int(config_dict: dict[str, Any], key: str, default: int) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _positive_float(value: float | int | Decimal | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None

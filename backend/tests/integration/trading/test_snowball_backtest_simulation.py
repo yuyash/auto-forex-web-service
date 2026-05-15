@@ -82,8 +82,14 @@ def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     """Normalize numeric metric strings for stable resume comparisons."""
+    nondeterministic_runtime_keys = {
+        "execution_elapsed_seconds",
+        "ticks_per_second",
+    }
     normalized: dict[str, Any] = {}
     for key, value in metrics.items():
+        if key in nondeterministic_runtime_keys:
+            continue
         if value in (None, ""):
             normalized[key] = value
             continue
