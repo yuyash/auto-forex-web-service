@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.5...backend-v1.54.0) (2026-05-15)
+
+
+### Features
+
+* **trading:** add task display currency selection ([#716](https://github.com/yuyash/auto-forex-web-service/issues/716)) ([94465d7](https://github.com/yuyash/auto-forex-web-service/commit/94465d71a2576a876ab94c5052ee67b19fb8aea9))
+
 ## [1.53.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.53.4...backend-v1.53.5) (2026-05-15)
 
 
