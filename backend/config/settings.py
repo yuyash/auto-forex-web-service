@@ -272,9 +272,20 @@ MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = int(
 MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK = int(
     os.getenv("MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK", "50000")
 )
+# Check Redis consumer lag once every N published ticks unless the publisher is
+# already paused.  This removes a Redis round-trip from the hot path while the
+# headroom clamp in the task keeps MAXLEN trimming safe.
+MARKET_BACKTEST_BACKPRESSURE_CHECK_INTERVAL = int(
+    os.getenv("MARKET_BACKTEST_BACKPRESSURE_CHECK_INTERVAL", "100")
+)
 # Sleep interval when waiting for the subscriber to drain.
 MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS = float(
     os.getenv("MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS", "0.5")
+)
+# Stop checks are still invoked from the publisher loop, but DB probes are
+# throttled to this interval to avoid one executor-status query per tick.
+MARKET_BACKTEST_STOP_CHECK_INTERVAL_SECONDS = float(
+    os.getenv("MARKET_BACKTEST_STOP_CHECK_INTERVAL_SECONDS", "1.0")
 )
 
 # XREAD BLOCK timeout in milliseconds.  Controls how long the subscriber waits
@@ -316,6 +327,11 @@ MARKET_BACKTEST_MAX_TICK_GAP_HOURS = int(os.getenv("MARKET_BACKTEST_MAX_TICK_GAP
 # stop-loss drift issue on 1-minute replays).  Set to ``0`` to disable.
 MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS = float(
     os.getenv("MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS", "30")
+)
+# Maximum per-bucket warning lines before switching to one summary line.  The
+# range check remains enabled; only repeated log output is suppressed.
+MARKET_BACKTEST_BAR_RANGE_WARNING_LIMIT = int(
+    os.getenv("MARKET_BACKTEST_BAR_RANGE_WARNING_LIMIT", "25")
 )
 
 

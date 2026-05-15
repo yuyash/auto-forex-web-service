@@ -224,6 +224,58 @@ class TestBacktestStreamPublisher:
             assert call.kwargs.get("maxlen") == 123
             assert call.kwargs.get("approximate") is True
 
+    def test_backpressure_check_interval_is_headroom_bounded(self) -> None:
+        runner = BacktestTickPublisherRunner()
+
+        assert (
+            runner._backpressure_check_interval(
+                stream_maxlen=200_000,
+                high_watermark=100_000,
+                configured_interval=100,
+            )
+            == 100
+        )
+        assert (
+            runner._backpressure_check_interval(
+                stream_maxlen=1_000,
+                high_watermark=900,
+                configured_interval=1_000,
+            )
+            == 50
+        )
+        assert (
+            runner._backpressure_check_interval(
+                stream_maxlen=1_000,
+                high_watermark=1_000,
+                configured_interval=100,
+            )
+            == 1
+        )
+
+    def test_should_check_backpressure_only_on_interval_or_while_waiting(self) -> None:
+        runner = BacktestTickPublisherRunner()
+
+        assert runner._should_check_backpressure(
+            published=0,
+            check_interval=100,
+            already_waiting=False,
+        )
+        assert not runner._should_check_backpressure(
+            published=99,
+            check_interval=100,
+            already_waiting=False,
+        )
+        assert runner._should_check_backpressure(
+            published=100,
+            check_interval=100,
+            already_waiting=False,
+        )
+        assert runner._should_check_backpressure(
+            published=99,
+            check_interval=100,
+            already_waiting=True,
+        )
+
 
 @pytest.mark.django_db
 class TestBacktestStreamPublisherExecutionIsolation:

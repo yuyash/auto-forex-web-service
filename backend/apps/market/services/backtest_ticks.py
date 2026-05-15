@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from statistics import median
 
+from django.conf import settings
 from django.db import connection
 
 from apps.market.models import TickData
@@ -74,6 +75,7 @@ def iter_aggregated_backtest_ticks(
     row itself is unchanged — the warning is purely diagnostic.
     """
     warn_threshold = _range_warn_threshold_price(range_warning_pips, pip_size)
+    warning_limit = _range_warning_limit()
 
     if connection.vendor != "postgresql":
         yield from _iter_aggregated_backtest_ticks_python(
@@ -85,17 +87,27 @@ def iter_aggregated_backtest_ticks(
             batch_size=batch_size,
             warn_threshold=warn_threshold,
             range_warning_pips=range_warning_pips,
+            warning_limit=warning_limit,
             request_id=request_id,
         )
         return
 
     interval_sql = _INTERVAL_SQL_BY_GRANULARITY[granularity]
-    sql = _build_aggregation_sql(mode=mode)
+    sql = _build_aggregation_sql(mode=mode, include_range_stats=warn_threshold is not None)
+    warnings_logged = 0
+    warnings_suppressed = 0
     with connection.cursor() as cursor:
         cursor.execute(sql, [interval_sql, instrument, start_dt, end_dt])
         while True:
             rows = cursor.fetchmany(batch_size)
             if not rows:
+                _log_range_warning_summary(
+                    suppressed=warnings_suppressed,
+                    limit=warning_limit,
+                    instrument=instrument,
+                    granularity=granularity,
+                    request_id=request_id,
+                )
                 return
             for timestamp, bid, ask, mid, bid_high, bid_low in rows:
                 bid_dec = Decimal(str(bid))
@@ -106,17 +118,21 @@ def iter_aggregated_backtest_ticks(
                     bl = Decimal(str(bid_low))
                     bar_range = bh - bl
                     if bar_range > warn_threshold:
-                        _log_range_warning(
-                            timestamp=timestamp,
-                            bar_range=bar_range,
-                            pip_size=pip_size,
-                            granularity=granularity,
-                            instrument=instrument,
-                            bid_high=bh,
-                            bid_low=bl,
-                            threshold_pips=range_warning_pips,
-                            request_id=request_id,
-                        )
+                        if warnings_logged < warning_limit:
+                            _log_range_warning(
+                                timestamp=timestamp,
+                                bar_range=bar_range,
+                                pip_size=pip_size,
+                                granularity=granularity,
+                                instrument=instrument,
+                                bid_high=bh,
+                                bid_low=bl,
+                                threshold_pips=range_warning_pips,
+                                request_id=request_id,
+                            )
+                            warnings_logged += 1
+                        else:
+                            warnings_suppressed += 1
                 yield BacktestTickRow(
                     timestamp=timestamp,
                     bid=bid_dec,
@@ -139,6 +155,11 @@ def _range_warn_threshold_price(
     if range_warning_pips <= 0 or pip_size <= 0:
         return None
     return range_warning_pips * pip_size
+
+
+def _range_warning_limit() -> int:
+    """Return max per-bucket warning logs before summary-only reporting."""
+    return max(int(getattr(settings, "MARKET_BACKTEST_BAR_RANGE_WARNING_LIMIT", 25)), 0)
 
 
 def _log_range_warning(
@@ -176,7 +197,30 @@ def _log_range_warning(
     )
 
 
-def _build_aggregation_sql(*, mode: str) -> str:
+def _log_range_warning_summary(
+    *,
+    suppressed: int,
+    limit: int,
+    instrument: str,
+    granularity: str,
+    request_id: str | None,
+) -> None:
+    """Emit one summary when per-bucket range warnings were rate-limited."""
+    if suppressed <= 0:
+        return
+    request_suffix = f" request_id={request_id}" if request_id else ""
+    logger.warning(
+        "Aggregated backtest bar range warnings suppressed: "
+        "instrument=%s granularity=%s suppressed=%s logged_limit=%s.%s",
+        instrument,
+        granularity,
+        suppressed,
+        limit,
+        request_suffix,
+    )
+
+
+def _build_aggregation_sql(*, mode: str, include_range_stats: bool) -> str:
     filtered_cte = """
         WITH filtered AS (
             SELECT
@@ -192,15 +236,20 @@ def _build_aggregation_sql(*, mode: str) -> str:
         )
     """
 
+    range_stats_select = (
+        "MAX(f.bid) AS bid_high, MIN(f.bid) AS bid_low"
+        if include_range_stats
+        else "NULL::numeric AS bid_high, NULL::numeric AS bid_low"
+    )
+
     if mode == "average":
-        average_sql = """
+        average_sql = f"""
             SELECT
                 f.bucket AS timestamp,
                 AVG(f.bid) AS bid,
                 AVG(f.ask) AS ask,
                 AVG(f.mid) AS mid,
-                MAX(f.bid) AS bid_high,
-                MIN(f.bid) AS bid_low
+                {range_stats_select}
             FROM filtered f
             GROUP BY f.bucket
             ORDER BY f.bucket
@@ -208,14 +257,13 @@ def _build_aggregation_sql(*, mode: str) -> str:
         return filtered_cte + average_sql
 
     if mode == "median":
-        median_sql = """
+        median_sql = f"""
             SELECT
                 f.bucket AS timestamp,
                 percentile_cont(0.5) WITHIN GROUP (ORDER BY f.bid) AS bid,
                 percentile_cont(0.5) WITHIN GROUP (ORDER BY f.ask) AS ask,
                 percentile_cont(0.5) WITHIN GROUP (ORDER BY f.mid) AS mid,
-                MAX(f.bid) AS bid_high,
-                MIN(f.bid) AS bid_low
+                {range_stats_select}
             FROM filtered f
             GROUP BY f.bucket
             ORDER BY f.bucket
@@ -223,36 +271,48 @@ def _build_aggregation_sql(*, mode: str) -> str:
         return filtered_cte + median_sql
 
     ordering = "ASC" if mode == "first" else "DESC"
+    if not include_range_stats:
+        distinct_sql = f"""
+        SELECT DISTINCT ON (f.bucket)
+            f.bucket AS timestamp,
+            f.bid,
+            f.ask,
+            f.mid,
+            NULL::numeric AS bid_high,
+            NULL::numeric AS bid_low
+        FROM filtered f
+        ORDER BY f.bucket, f.timestamp {ordering}
+        """  # nosec B608
+        return filtered_cte + distinct_sql
+
     ranked_sql = f"""
-        , ranked AS (
-            SELECT
+        , selected AS (
+            SELECT DISTINCT ON (bucket)
                 bucket,
-                timestamp,
                 bid,
                 ask,
-                mid,
-                ROW_NUMBER() OVER (
-                    PARTITION BY bucket
-                    ORDER BY timestamp {ordering}
-                ) AS row_num
+                mid
             FROM filtered
+            ORDER BY bucket, timestamp {ordering}
         ),
         bucket_stats AS (
-            SELECT bucket, MAX(bid) AS bid_high, MIN(bid) AS bid_low
+            SELECT
+                bucket,
+                MAX(bid) AS bid_high,
+                MIN(bid) AS bid_low
             FROM filtered
             GROUP BY bucket
         )
         SELECT
-            r.bucket AS timestamp,
-            r.bid,
-            r.ask,
-            r.mid,
+            s.bucket AS timestamp,
+            s.bid,
+            s.ask,
+            s.mid,
             bs.bid_high,
             bs.bid_low
-        FROM ranked r
-        JOIN bucket_stats bs ON bs.bucket = r.bucket
-        WHERE r.row_num = 1
-        ORDER BY r.bucket
+        FROM selected s
+        JOIN bucket_stats bs ON bs.bucket = s.bucket
+        ORDER BY s.bucket
         """  # nosec B608
     return filtered_cte + ranked_sql
 
@@ -267,6 +327,7 @@ def _iter_aggregated_backtest_ticks_python(
     batch_size: int,
     warn_threshold: Decimal | None = None,
     range_warning_pips: Decimal | None = None,
+    warning_limit: int = 25,
     request_id: str | None = None,
 ) -> Iterator[BacktestTickRow]:
     bucket_seconds = _INTERVAL_SECONDS_BY_GRANULARITY[granularity]
@@ -288,27 +349,36 @@ def _iter_aggregated_backtest_ticks_python(
     if warn_threshold is not None and range_warning_pips is not None and range_warning_pips > 0:
         pip_size = warn_threshold / range_warning_pips
 
+    warnings_logged = 0
+    warnings_suppressed = 0
     for bucket, rows in sorted(buckets.items(), key=lambda item: item[0]):
-        bid_values = [Decimal(str(row["bid"])) for row in rows]
-        bid_high = max(bid_values) if bid_values else None
-        bid_low = min(bid_values) if bid_values else None
+        bid_high = None
+        bid_low = None
+        if warn_threshold is not None:
+            bid_values = [Decimal(str(row["bid"])) for row in rows]
+            bid_high = max(bid_values) if bid_values else None
+            bid_low = min(bid_values) if bid_values else None
         if (
             warn_threshold is not None
             and bid_high is not None
             and bid_low is not None
             and (bid_high - bid_low) > warn_threshold
         ):
-            _log_range_warning(
-                timestamp=bucket,
-                bar_range=bid_high - bid_low,
-                pip_size=pip_size,
-                granularity=granularity,
-                instrument=instrument,
-                bid_high=bid_high,
-                bid_low=bid_low,
-                threshold_pips=range_warning_pips,
-                request_id=request_id,
-            )
+            if warnings_logged < warning_limit:
+                _log_range_warning(
+                    timestamp=bucket,
+                    bar_range=bid_high - bid_low,
+                    pip_size=pip_size,
+                    granularity=granularity,
+                    instrument=instrument,
+                    bid_high=bid_high,
+                    bid_low=bid_low,
+                    threshold_pips=range_warning_pips,
+                    request_id=request_id,
+                )
+                warnings_logged += 1
+            else:
+                warnings_suppressed += 1
 
         if mode == "first":
             selected = rows[0]
@@ -346,6 +416,14 @@ def _iter_aggregated_backtest_ticks_python(
             ask=Decimal(str(median([Decimal(str(row["ask"])) for row in rows]))),
             mid=Decimal(str(median([Decimal(str(row["mid"])) for row in rows]))),
         )
+
+    _log_range_warning_summary(
+        suppressed=warnings_suppressed,
+        limit=warning_limit,
+        instrument=instrument,
+        granularity=granularity,
+        request_id=request_id,
+    )
 
 
 def _bucket_start(timestamp: datetime, bucket_seconds: int) -> datetime:
