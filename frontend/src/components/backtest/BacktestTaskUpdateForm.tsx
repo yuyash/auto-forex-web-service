@@ -898,6 +898,10 @@ export default function BacktestTaskUpdateForm({
                 firstTick={firstTick}
                 firstTickLoading={firstTickLoading}
                 firstTickError={firstTickError}
+                resetBaselineEnabled={
+                  initialData.initial_positions_enabled ?? false
+                }
+                resetBaselineValue={initialData.initial_position_cycles ?? []}
                 error={
                   errors.initial_position_cycles?.message as string | undefined
                 }

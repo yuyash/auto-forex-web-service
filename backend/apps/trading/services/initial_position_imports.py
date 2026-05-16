@@ -259,7 +259,7 @@ class InitialPositionImportService:
             ) from exc
 
         cycles: list[dict[str, Any]] = []
-        for cycle in snowball_state.cycles:
+        for cycle in sorted(snowball_state.cycles, key=_cycle_import_sort_key):
             if cycle.completed:
                 continue
             positions: list[dict[str, Any]] = []
@@ -387,3 +387,7 @@ def _count_imported_positions(cycles: list[dict[str, Any]]) -> tuple[int, int]:
             else:
                 imported_open += 1
     return imported_open, imported_pending
+
+
+def _cycle_import_sort_key(cycle: Any) -> int:
+    return int(cycle.cycle_id)

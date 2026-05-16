@@ -613,6 +613,10 @@ export default function TradingTaskUpdateForm({
               accountId={accountId}
               configId={selectedConfigId}
               instrument={initialData.instrument}
+              resetBaselineEnabled={
+                initialData.initial_positions_enabled ?? false
+              }
+              resetBaselineValue={initialData.initial_position_cycles ?? []}
               error={
                 errors.initial_position_cycles?.message as string | undefined
               }
