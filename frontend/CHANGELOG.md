@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.72.2...frontend-v1.73.0) (2026-05-16)
+
+
+### Features
+
+* **trading:** import initial positions ([#733](https://github.com/yuyash/auto-forex-web-service/issues/733)) ([95411df](https://github.com/yuyash/auto-forex-web-service/commit/95411dfb118ddad206641f6e7f6e9fbf7836e29e))
+
 ## [1.72.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.72.1...frontend-v1.72.2) (2026-05-16)
 
 
