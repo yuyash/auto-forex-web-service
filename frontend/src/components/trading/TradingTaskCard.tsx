@@ -594,7 +594,7 @@ export default function TradingTaskCard({
                   )}
                   variant="outlined"
                   size="small"
-                  sx={{ flex: '1 1 auto' }}
+                  sx={{ flex: '0 1 auto' }}
                 />
                 {!isMobile && (
                   <Chip

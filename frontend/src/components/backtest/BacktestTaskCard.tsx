@@ -524,7 +524,7 @@ export default function BacktestTaskCard({
                     )}
                     variant="outlined"
                     size="small"
-                    sx={{ flex: '1 1 auto' }}
+                    sx={{ flex: '0 1 auto' }}
                   />
                 )}
                 {!isMobile && currentTask.config_name && (
