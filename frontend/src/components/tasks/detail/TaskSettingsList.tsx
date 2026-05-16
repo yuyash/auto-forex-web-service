@@ -43,7 +43,11 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gridTemplateColumns: {
+            xs: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(3, minmax(0, 1fr))',
+            xl: 'repeat(4, minmax(0, 1fr))',
+          },
           gap: spacingTokens.sm,
         }}
       >
