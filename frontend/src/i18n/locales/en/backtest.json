@@ -228,6 +228,7 @@
     "initialPositionCycleTempId": "C{{cycle}}",
     "initialPositionPositionTempId": "P{{position}}",
     "nextInitialPositionSlot": "Next position",
+    "initialPositionAnchorShift": "Auto-adjust prices from L1/R0",
     "initialPositionDuplicateWarning": "Cycle C{{cycle}} position P{{position}} duplicates {{actual}}.",
     "initialPositionLayerOutOfRangeWarning": "Cycle C{{cycle}} position P{{position}} uses {{actual}}, but max layer is L{{maxLayer}}.",
     "initialPositionRetracementOutOfRangeWarning": "Cycle C{{cycle}} position P{{position}} uses {{actual}}, but max retracement is R{{maxRetracement}}.",
