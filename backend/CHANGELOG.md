@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.1...backend-v1.55.2) (2026-05-16)
+
+
+### Bug Fixes
+
+* trading idle resume reconciliation ([#729](https://github.com/yuyash/auto-forex-web-service/issues/729)) ([59a16c3](https://github.com/yuyash/auto-forex-web-service/commit/59a16c30baa447d237f268c51fdf9a84d36e5080))
+
 ## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.0...backend-v1.55.1) (2026-05-16)
 
 
