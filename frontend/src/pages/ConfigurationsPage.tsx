@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Typography,
   Box,
@@ -20,22 +20,40 @@ import AddIcon from '@mui/icons-material/Add';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfigurations } from '../hooks/useConfigurations';
-import { Breadcrumbs, PageContainer } from '../components/common';
+import { Breadcrumbs, PageContainer, useToast } from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
 import type { SelectChangeEvent } from '@mui/material';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
+import { buildCompareUrl } from '../utils/compareParams';
+import { BulkActionToolbar } from '../components/common/BulkActionToolbar';
+import { BulkDeleteDialog } from '../components/common/BulkDeleteDialog';
+import {
+  useCopyConfiguration,
+  useDeleteConfiguration,
+} from '../hooks/useConfigurationMutations';
+import { logger } from '../utils/logger';
 
 const ConfigurationsPage = () => {
   const { t } = useTranslation(['configuration', 'common']);
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const [search, setSearch] = useState('');
   const [strategyTypeFilter, setStrategyTypeFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState('-updated_at');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const copyMutation = useCopyConfiguration({
+    onSuccess: (copied) => {
+      navigate(`/configurations/${copied.id}`);
+    },
+  });
+  const deleteMutation = useDeleteConfiguration();
 
   // Fetch configurations with filters
-  const { data, isLoading, error } = useConfigurations({
+  const { data, isLoading, error, refresh } = useConfigurations({
     search: search || undefined,
     strategy_type:
       strategyTypeFilter !== 'all' ? strategyTypeFilter : undefined,
@@ -51,6 +69,25 @@ const ConfigurationsPage = () => {
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
+  const visibleIdSet = useMemo(
+    () => new Set(configurations.map((config) => config.id)),
+    [configurations]
+  );
+  const visibleSelectedIds = useMemo(
+    () => selectedIds.filter((id) => visibleIdSet.has(id)),
+    [selectedIds, visibleIdSet]
+  );
+  const selectedConfigurations = useMemo(
+    () =>
+      configurations.filter((config) => visibleSelectedIds.includes(config.id)),
+    [configurations, visibleSelectedIds]
+  );
+  const singleSelectedConfiguration =
+    selectedConfigurations.length === 1 ? selectedConfigurations[0] : null;
+  const selectedIncludesInUse = selectedConfigurations.some(
+    (config) => config.is_in_use
+  );
+
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
@@ -61,21 +98,25 @@ const ConfigurationsPage = () => {
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(event.target.value);
+    setSelectedIds([]);
     setPage(1);
   };
 
   const handleStrategyTypeChange = (event: SelectChangeEvent<string>) => {
     setStrategyTypeFilter(event.target.value);
+    setSelectedIds([]);
     setPage(1);
   };
 
   const handleSortChange = (event: SelectChangeEvent<string>) => {
     setSortBy(event.target.value);
+    setSelectedIds([]);
     setPage(1);
   };
 
   const handlePageSizeChange = (event: SelectChangeEvent<string>) => {
     setPageSize(Number(event.target.value));
+    setSelectedIds([]);
     setPage(1);
   };
 
@@ -83,10 +124,86 @@ const ConfigurationsPage = () => {
     navigate('/configurations/new');
   };
 
+  const handleCompare = () => {
+    navigate(buildCompareUrl('/configurations/compare', visibleSelectedIds));
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(configurations.map((config) => config.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const handleCopySelected = async () => {
+    if (!singleSelectedConfiguration) return;
+    try {
+      await copyMutation.mutate({ id: singleSelectedConfiguration.id });
+    } catch (error) {
+      logger.error('Failed to copy configuration from bulk toolbar', {
+        configurationId: singleSelectedConfiguration.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(
+        error instanceof Error
+          ? error.message
+          : t('common:errors.operationFailed', {
+              defaultValue: 'Operation failed',
+            })
+      );
+    }
+  };
+
+  const handleEditSelected = () => {
+    if (
+      !singleSelectedConfiguration ||
+      singleSelectedConfiguration.has_running_tasks
+    ) {
+      return;
+    }
+    navigate(`/configurations/${singleSelectedConfiguration.id}/edit`);
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      for (const config of selectedConfigurations) {
+        await deleteMutation.mutate(config.id);
+      }
+      setBulkDeleteOpen(false);
+      setSelectedIds([]);
+      await refresh();
+      showSuccess(t('common:selection.bulkDeleteSuccess'));
+    } catch (error) {
+      logger.error('Failed to bulk delete configurations', {
+        configurationIds: selectedConfigurations.map((config) => config.id),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(
+        error instanceof Error
+          ? error.message
+          : t('common:errors.operationFailed', {
+              defaultValue: 'Operation failed',
+            })
+      );
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleSelectedChange = (id: string, selected: boolean) => {
+    setSelectedIds((current) => {
+      if (selected) return current.includes(id) ? current : [...current, id];
+      return current.filter((currentId) => currentId !== id);
+    });
+  };
+
   const handlePageChange = (
     _event: React.ChangeEvent<unknown>,
     value: number
   ) => {
+    setSelectedIds([]);
     setPage(value);
   };
 
@@ -218,6 +335,49 @@ const ConfigurationsPage = () => {
         </Box>
       </Paper>
 
+      {configurations.length > 0 && (
+        <BulkActionToolbar
+          selectedCount={visibleSelectedIds.length}
+          totalCount={configurations.length}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          onCompare={handleCompare}
+          onBulkDelete={() => setBulkDeleteOpen(true)}
+          onCopy={handleCopySelected}
+          onEdit={handleEditSelected}
+          disableCompare={visibleSelectedIds.length < 2}
+          disableCopy={
+            selectedConfigurations.length !== 1 || copyMutation.isLoading
+          }
+          copyTooltip={
+            selectedConfigurations.length === 1
+              ? undefined
+              : t('common:selection.singleSelectionRequired')
+          }
+          disableEdit={
+            selectedConfigurations.length !== 1 ||
+            Boolean(singleSelectedConfiguration?.has_running_tasks)
+          }
+          editTooltip={
+            singleSelectedConfiguration?.has_running_tasks
+              ? t('configuration:form.editLockedRunningTasks')
+              : selectedConfigurations.length === 1
+                ? undefined
+                : t('common:selection.singleSelectionRequired')
+          }
+          disableBulkDelete={
+            selectedConfigurations.length === 0 ||
+            selectedIncludesInUse ||
+            isBulkDeleting
+          }
+          bulkDeleteTooltip={
+            selectedIncludesInUse
+              ? t('configuration:deleteDialog.bulkDeleteInUseBlocked')
+              : undefined
+          }
+        />
+      )}
+
       {/* Error State */}
       {error && (
         <Alert
@@ -304,7 +464,12 @@ const ConfigurationsPage = () => {
             }}
           >
             {configurations.map((config) => (
-              <ConfigurationCard key={config.id} configuration={config} />
+              <ConfigurationCard
+                key={config.id}
+                configuration={config}
+                selected={selectedIds.includes(config.id)}
+                onSelectedChange={handleSelectedChange}
+              />
             ))}
           </Box>
 
@@ -322,6 +487,16 @@ const ConfigurationsPage = () => {
           )}
         </>
       )}
+
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        title={t('common:selection.bulkDeleteTitle')}
+        itemNames={selectedConfigurations.map((config) => config.name)}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        isLoading={isBulkDeleting}
+        warning={t('configuration:deleteDialog.cannotBeUndone')}
+      />
     </PageContainer>
   );
 };

@@ -74,6 +74,11 @@
     "viewDetails": "View Details",
     "viewTasks": "View Tasks",
     "copy": "Copy",
+    "compare": "Compare",
+    "selectForCompare": "Select for comparison",
+    "selectAll": "Select All",
+    "clearSelection": "Clear Selection",
+    "bulkDelete": "Bulk Delete",
     "saving": "Saving...",
     "deleting": "Deleting...",
     "ok": "OK",
@@ -83,6 +88,19 @@
     "backToCurrent": "Back to Current",
     "enableWidthLimit": "Enable width limit",
     "disableWidthLimit": "Disable width limit"
+  },
+  "selection": {
+    "selectedCount": "{{selected}} / {{total}} selected",
+    "visibleItems": "{{count}} visible",
+    "singleSelectionRequired": "Select exactly one item.",
+    "editUnavailable": "The selected item cannot be edited.",
+    "deleteUnavailable": "One or more selected items cannot be deleted.",
+    "bulkDeleteTitle": "Delete Selected Items",
+    "bulkDeleteConfirmation": "Delete {{count}} selected item(s)?",
+    "bulkDeleteWarning": "This deletes the selected items and their related execution history. This action cannot be undone.",
+    "confirmBulkDelete": "I understand this action cannot be undone.",
+    "bulkDeleteSuccess": "Selected items deleted.",
+    "copySuccess": "Item copied."
   },
   "status": {
     "active": "Active",
@@ -439,6 +457,7 @@
     "newTask": "New Task",
     "editTask": "Edit Task",
     "taskDetails": "Task Details",
+    "compare": "Compare",
     "oandaAccounts": "OANDA",
     "accountDetails": "Account Details"
   },
@@ -757,6 +776,11 @@
     "unrealized_pnl": "Unrealized PnL",
     "unrealized_pnl_quote": "Unrealized PnL (Quote)",
     "total_return": "Total Return",
+    "period_return": "Period Return",
+    "return_period_day": "Day",
+    "return_period_week": "Week",
+    "return_period_month": "Month",
+    "return_period_year": "Year",
     "daily_return": "Daily Return",
     "weekly_return": "Weekly Return",
     "monthly_return": "Monthly Return",
@@ -808,6 +832,20 @@
     "configDiff": "Configuration Differences",
     "noDifferences": "No differences",
     "loading": "Loading comparison data...",
-    "error": "Failed to load comparison data"
+    "error": "Failed to load comparison data",
+    "configurationTitle": "Compare Strategy Configurations",
+    "tradingTaskTitle": "Compare Trading Tasks",
+    "backtestTaskTitle": "Compare Backtest Tasks",
+    "selectedCount": "{{count}} selected",
+    "differenceCount": "{{count}} differences",
+    "selectAtLeastTwo": "Select at least two items to compare.",
+    "showAll": "Show all",
+    "showDifferencesOnly": "Show differences only",
+    "setting": "Setting",
+    "noSettings": "No settings are available for comparison.",
+    "configRevision": "Config Revision",
+    "configHash": "Config Hash",
+    "accountType": "Account Type",
+    "debugOptions": "Debug Options"
   }
 }
