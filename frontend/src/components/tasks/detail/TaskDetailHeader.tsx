@@ -182,7 +182,7 @@ export function TaskDetailHeader({
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
-            flexWrap: 'wrap',
+            minWidth: 0,
           }}
         >
           <Typography
@@ -192,14 +192,28 @@ export function TaskDetailHeader({
               fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' },
               lineHeight: 1.2,
               fontWeight: 600,
-              wordBreak: 'break-word',
-              flex: 1,
+              overflowWrap: 'anywhere',
+              flex: '1 1 auto',
               minWidth: 0,
             }}
           >
             {taskName}
           </Typography>
-          <StatusBadge status={status} />
+          <Box sx={{ flex: '0 0 auto' }}>
+            <StatusBadge status={status} />
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.25,
+            flexWrap: 'wrap',
+            minWidth: 0,
+            width: '100%',
+          }}
+        >
           {!isViewingHistorical && (
             <Box
               sx={{
@@ -207,6 +221,7 @@ export function TaskDetailHeader({
                 alignItems: 'center',
                 gap: 0.25,
                 flexWrap: 'wrap',
+                minWidth: 0,
               }}
             >
               <TaskControlButtons
@@ -247,6 +262,7 @@ export function TaskDetailHeader({
               size="small"
               onClick={() => setExpanded((prev) => !prev)}
               aria-label={expanded ? 'Collapse header' : 'Expand header'}
+              sx={{ ml: 'auto' }}
             >
               {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
             </IconButton>
