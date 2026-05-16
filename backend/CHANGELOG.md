@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.56.0...backend-v1.56.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **trading:** validate sparse initial position slots ([#737](https://github.com/yuyash/auto-forex-web-service/issues/737)) ([48dd303](https://github.com/yuyash/auto-forex-web-service/commit/48dd303aa79b526bbc214f4b94a5023f5d2a470c))
+
 ## [1.56.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.2...backend-v1.56.0) (2026-05-16)
 
 
