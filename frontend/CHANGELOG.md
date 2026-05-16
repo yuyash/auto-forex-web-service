@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.72.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.72.1...frontend-v1.72.2) (2026-05-16)
+
+
+### Bug Fixes
+
+* **ui:** constrain task config chip width ([#731](https://github.com/yuyash/auto-forex-web-service/issues/731)) ([798f71f](https://github.com/yuyash/auto-forex-web-service/commit/798f71f715e0773f4ec820ae756b8e711e374b15))
+
 ## [1.72.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.72.0...frontend-v1.72.1) (2026-05-16)
 
 
