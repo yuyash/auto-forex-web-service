@@ -114,12 +114,7 @@ export function BacktestInitialPositionsEditor({
     enabled: enabled && canUseInitialPositions,
     staleTime: 30_000,
   });
-  const importSources = (importSourcesQuery.data?.results ?? []).filter(
-    (source) =>
-      !currentTaskId ||
-      source.task_type !== taskType ||
-      source.id !== currentTaskId
-  );
+  const importSources = importSourcesQuery.data?.results ?? [];
   const canImportFromOanda = Boolean(
     allowOandaImport && accountId && configId && instrument
   );
@@ -311,6 +306,10 @@ export function BacktestInitialPositionsEditor({
                     value={importSourceKey(source)}
                   >
                     {sourceLabel(source)}
+                    {source.task_type === taskType &&
+                    source.id === currentTaskId
+                      ? ` (${t('common:labels.currentTask')})`
+                      : ''}
                   </MenuItem>
                 ))}
               </Select>

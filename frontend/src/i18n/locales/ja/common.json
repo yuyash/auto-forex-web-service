@@ -156,6 +156,7 @@
     "parameters": "パラメータ",
     "executionStatus": "実行状況",
     "strategySnapshot": "戦略スナップショット",
+    "currentTask": "現在のタスク",
     "pageSize": "ページサイズ",
     "columns": "列数",
     "columnCount": "{{count}}列"

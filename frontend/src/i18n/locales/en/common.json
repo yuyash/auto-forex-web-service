@@ -156,6 +156,7 @@
     "parameters": "Parameters",
     "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
+    "currentTask": "Current task",
     "pageSize": "Page size",
     "columns": "Columns",
     "columnCount": "{{count}} columns"
