@@ -499,12 +499,17 @@ export function BacktestInitialPositionsEditor({
                 </Typography>
               }
             />
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+            >
               <Button
                 size="small"
                 variant="outlined"
                 startIcon={<EnableIcon />}
                 onClick={() => setAllCycleAnchorShiftEnabled(true)}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 {t('backtest:form.enableAllCycleAnchorShift', {
                   defaultValue: 'Enable all cycle adjustments',
@@ -515,6 +520,7 @@ export function BacktestInitialPositionsEditor({
                 variant="outlined"
                 startIcon={<DisableIcon />}
                 onClick={() => setAllCycleAnchorShiftEnabled(false)}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 {t('backtest:form.disableAllCycleAnchorShift', {
                   defaultValue: 'Disable all cycle adjustments',
@@ -526,6 +532,7 @@ export function BacktestInitialPositionsEditor({
                 color="warning"
                 startIcon={<ResetIcon />}
                 onClick={resetInitialPositions}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 {t('backtest:form.resetInitialPositions', {
                   defaultValue: 'Reset initial positions',
@@ -534,12 +541,17 @@ export function BacktestInitialPositionsEditor({
             </Stack>
           </Stack>
 
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+          >
             <Button
               size="small"
               variant="outlined"
               startIcon={<AddIcon />}
               onClick={() => addCycle('long')}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               {t('backtest:form.addLongCycle', { defaultValue: 'Long cycle' })}
             </Button>
@@ -548,6 +560,7 @@ export function BacktestInitialPositionsEditor({
               variant="outlined"
               startIcon={<AddIcon />}
               onClick={() => addCycle('short')}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               {t('backtest:form.addShortCycle', {
                 defaultValue: 'Short cycle',
@@ -572,22 +585,22 @@ export function BacktestInitialPositionsEditor({
               <Paper
                 key={`${cycle.direction}-${cycleIndex}`}
                 variant="outlined"
-                sx={{ p: 2, borderRadius: 1 }}
+                sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1 }}
               >
                 <Stack spacing={2}>
                   <Stack
-                    direction="row"
+                    direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
                     sx={{
-                      alignItems: 'center',
+                      alignItems: { xs: 'stretch', sm: 'center' },
                       justifyContent: 'space-between',
                     }}
                   >
                     <Stack
-                      direction="row"
+                      direction={{ xs: 'column', sm: 'row' }}
                       spacing={1}
                       sx={{
-                        alignItems: 'center',
+                        alignItems: { xs: 'stretch', sm: 'center' },
                         flexWrap: 'wrap',
                       }}
                     >
@@ -598,7 +611,10 @@ export function BacktestInitialPositionsEditor({
                           cycle: cycleIndex + 1,
                         })}
                       />
-                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <FormControl
+                        size="small"
+                        sx={{ width: { xs: '100%', sm: 160 } }}
+                      >
                         <InputLabel>
                           {t('common:labels.direction', {
                             defaultValue: 'Direction',
@@ -649,7 +665,7 @@ export function BacktestInitialPositionsEditor({
                         </Select>
                       </FormControl>
                       <FormControlLabel
-                        sx={{ ml: 0 }}
+                        sx={{ ml: 0, alignItems: 'flex-start' }}
                         control={
                           <Checkbox
                             size="small"
@@ -677,7 +693,10 @@ export function BacktestInitialPositionsEditor({
                         defaultValue: 'Delete',
                       })}
                     >
-                      <IconButton onClick={() => removeCycle(cycleIndex)}>
+                      <IconButton
+                        onClick={() => removeCycle(cycleIndex)}
+                        sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
+                      >
                         <DeleteIcon />
                       </IconButton>
                     </Tooltip>
@@ -705,10 +724,14 @@ export function BacktestInitialPositionsEditor({
                     />
                   ))}
 
-                  <Stack direction="row" spacing={1}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+                  >
                     <FormControl
                       size="small"
-                      sx={{ minWidth: 150 }}
+                      sx={{ width: { xs: '100%', sm: 150 } }}
                       disabled={addSlots.length === 0}
                     >
                       <InputLabel>
@@ -748,6 +771,7 @@ export function BacktestInitialPositionsEditor({
                       variant="outlined"
                       startIcon={<AddIcon />}
                       disabled={!canAdd}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                       onClick={() => {
                         if (selectedSlot) {
                           addPosition(cycleIndex, selectedSlot);
@@ -761,6 +785,7 @@ export function BacktestInitialPositionsEditor({
                       variant="text"
                       startIcon={<RemoveIcon />}
                       disabled={cycle.positions.length === 0}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                       onClick={() => removeLastPosition(cycleIndex)}
                     >
                       {t('backtest:form.removeLastPosition', {
@@ -1412,7 +1437,7 @@ function SeedPositionRow({
             />
           </Stack>
         </Grid>
-        <Grid size={{ xs: 6, sm: 1.6 }}>
+        <Grid size={{ xs: 12, sm: 1.6 }}>
           <TextField
             fullWidth
             size="small"
@@ -1432,7 +1457,7 @@ function SeedPositionRow({
             }
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 1.8 }}>
+        <Grid size={{ xs: 12, sm: 1.8 }}>
           <TextField
             fullWidth
             size="small"
@@ -1452,7 +1477,7 @@ function SeedPositionRow({
             }
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 1.8 }}>
+        <Grid size={{ xs: 12, sm: 1.8 }}>
           <TextField
             fullWidth
             size="small"
@@ -1467,7 +1492,7 @@ function SeedPositionRow({
             }
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 1.8 }}>
+        <Grid size={{ xs: 12, sm: 1.8 }}>
           <TextField
             fullWidth
             size="small"
@@ -1483,7 +1508,7 @@ function SeedPositionRow({
             }
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 1.8 }}>
+        <Grid size={{ xs: 12, sm: 1.8 }}>
           <FormControl fullWidth size="small">
             <InputLabel>
               {t('common:tables.positions.status', { defaultValue: 'Status' })}
@@ -1520,7 +1545,7 @@ function SeedPositionRow({
           </FormControl>
         </Grid>
         {status !== 'open' ? (
-          <Grid size={{ xs: 6, sm: 1.8 }}>
+          <Grid size={{ xs: 12, sm: 1.8 }}>
             <TextField
               fullWidth
               size="small"
@@ -1534,7 +1559,7 @@ function SeedPositionRow({
         ) : null}
       </Grid>
       {status !== 'open' ? (
-        <Box sx={{ mt: 1.5, maxWidth: 260 }}>
+        <Box sx={{ mt: 1.5, maxWidth: { xs: 'none', sm: 260 } }}>
           <TextField
             fullWidth
             size="small"

@@ -65,6 +65,10 @@ import {
   preferredCurrencyFromOptions,
 } from '../../utils/instruments';
 import {
+  firstValidationError,
+  hasValidationErrors,
+} from '../../utils/formValidation';
+import {
   fromTimezonePickerDate,
   formatDateTimeInTimezone,
   formatTimestampWithTimezone,
@@ -472,6 +476,25 @@ export default function BacktestTaskForm({
     shouldUnregister: false,
     defaultValues: resolvedDefaultValues,
   });
+  const submitValidationError = firstValidationError(errors);
+  const isSubmitBlockedByValidation = hasValidationErrors(errors);
+  const submitValidationBlockReason = isSubmitBlockedByValidation
+    ? t(
+        submitValidationError
+          ? 'common:validation.fixFormErrorsBeforeSubmitWithMessage'
+          : 'common:validation.fixFormErrorsBeforeSubmit',
+        {
+          message:
+            submitValidationError ??
+            t('common:validation.unknownFormError', {
+              defaultValue: 'Review the highlighted fields.',
+            }),
+          defaultValue: submitValidationError
+            ? 'Fix validation errors before submitting: {{message}}'
+            : 'Fix validation errors before submitting.',
+        }
+      )
+    : null;
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
@@ -1772,6 +1795,12 @@ export default function BacktestTaskForm({
       <form onSubmit={handleSubmit(onSubmit)}>
         <Paper sx={{ p: 3 }}>{getStepContent(activeStep)}</Paper>
 
+        {activeStep === steps.length - 1 && submitValidationBlockReason ? (
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            {submitValidationBlockReason}
+          </Alert>
+        ) : null}
+
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button
             disabled={activeStep === 0}
@@ -1793,7 +1822,11 @@ export default function BacktestTaskForm({
               <Button
                 type="submit"
                 variant="contained"
-                disabled={createTask.isLoading || updateTask.isLoading}
+                disabled={
+                  createTask.isLoading ||
+                  updateTask.isLoading ||
+                  isSubmitBlockedByValidation
+                }
                 onClick={() => {
                   canSubmitRef.current = true;
                 }}

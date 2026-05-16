@@ -57,6 +57,10 @@ import {
   preferredCurrencyForInstrument,
   preferredCurrencyFromOptions,
 } from '../../utils/instruments';
+import {
+  firstValidationError,
+  hasValidationErrors,
+} from '../../utils/formValidation';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -305,6 +309,8 @@ export default function BacktestTaskUpdateForm({
     resolver: zodResolver(
       backtestTaskUpdateSchema
     ) as Resolver<BacktestTaskUpdateData>,
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       ...initialData,
       name: taskName,
@@ -313,6 +319,25 @@ export default function BacktestTaskUpdateForm({
       display_currency: initialData.display_currency || defaultCurrency,
     },
   });
+  const submitValidationError = firstValidationError(errors);
+  const isSubmitBlockedByValidation = hasValidationErrors(errors);
+  const submitValidationBlockReason = isSubmitBlockedByValidation
+    ? t(
+        submitValidationError
+          ? 'common:validation.fixFormErrorsBeforeSubmitWithMessage'
+          : 'common:validation.fixFormErrorsBeforeSubmit',
+        {
+          message:
+            submitValidationError ??
+            t('common:validation.unknownFormError', {
+              defaultValue: 'Review the highlighted fields.',
+            }),
+          defaultValue: submitValidationError
+            ? 'Fix validation errors before submitting: {{message}}'
+            : 'Fix validation errors before submitting.',
+        }
+      )
+    : null;
 
   const { strategies } = useStrategies();
 
@@ -1240,6 +1265,12 @@ export default function BacktestTaskUpdateForm({
         )}
       </Grid>
 
+      {submitValidationBlockReason ? (
+        <Alert severity="warning" sx={{ mt: 3 }}>
+          {submitValidationBlockReason}
+        </Alert>
+      ) : null}
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
         <Button
           type="button"
@@ -1252,7 +1283,7 @@ export default function BacktestTaskUpdateForm({
         <Button
           type="submit"
           variant="contained"
-          disabled={updateTask.isLoading}
+          disabled={updateTask.isLoading || isSubmitBlockedByValidation}
         >
           {t('common:actions.updateTask')}
         </Button>
