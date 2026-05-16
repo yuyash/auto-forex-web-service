@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.72.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.71.0...frontend-v1.72.0) (2026-05-16)
+
+
+### Features
+
+* **ui:** improve responsive task list controls ([#727](https://github.com/yuyash/auto-forex-web-service/issues/727)) ([b00eaa7](https://github.com/yuyash/auto-forex-web-service/commit/b00eaa7d9f077a1444cbe0aadbf2fdb13464ca9b))
+
 ## [1.71.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.70.0...frontend-v1.71.0) (2026-05-16)
 
 

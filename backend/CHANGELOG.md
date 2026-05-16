@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.0...backend-v1.55.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **trading:** keep idle tasks parked on stale ticks ([#726](https://github.com/yuyash/auto-forex-web-service/issues/726)) ([da8ab19](https://github.com/yuyash/auto-forex-web-service/commit/da8ab19aca9302f8d02596483abb17c350e95a9c))
+
 ## [1.55.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.54.1...backend-v1.55.0) (2026-05-15)
 
 
