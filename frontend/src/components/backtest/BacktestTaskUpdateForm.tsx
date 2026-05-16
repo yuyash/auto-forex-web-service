@@ -44,6 +44,7 @@ import {
   currencyCodeSchema,
   optionalCurrencyCodeSchema,
 } from '../tasks/forms/currencyValidation';
+import { addInitialPositionSlotStructureIssues } from '../tasks/forms/validationSchemas';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
 import {
   useFirstTick,
@@ -246,26 +247,7 @@ const backtestTaskUpdateSchema = z
         message: 'At least one initial cycle is required',
       });
     }
-    data.initial_position_cycles.forEach((cycle, cycleIndex) => {
-      const seen = new Set<string>();
-      cycle.positions.forEach((position, positionIndex) => {
-        const key = `${position.layer_number}:${position.retracement_count}`;
-        if (seen.has(key)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [
-              'initial_position_cycles',
-              cycleIndex,
-              'positions',
-              positionIndex,
-              'retracement_count',
-            ],
-            message: `Duplicate L${position.layer_number}/R${position.retracement_count}`,
-          });
-        }
-        seen.add(key);
-      });
-    });
+    addInitialPositionSlotStructureIssues(data.initial_position_cycles, ctx);
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',

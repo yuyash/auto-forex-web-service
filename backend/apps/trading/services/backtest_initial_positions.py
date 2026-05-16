@@ -73,6 +73,7 @@ class InitialPositionValidationError(ValueError):
 
 @dataclass(slots=True)
 class NormalizedSeedPosition:
+    source_path: str
     layer_number: int
     retracement_count: int
     units: int
@@ -209,6 +210,11 @@ def _validate_initial_position_cycles_impl(
 
         if normalized_positions:
             normalized_positions.sort(key=lambda p: (p.layer_number, p.retracement_count))
+            _validate_slot_structure(
+                positions=normalized_positions,
+                path=path,
+                errors=errors,
+            )
 
             for position in normalized_positions:
                 _fill_default_prices(
@@ -686,6 +692,7 @@ def _normalize_position(
         close_reason = "tp"
 
     return NormalizedSeedPosition(
+        source_path=path,
         layer_number=int(layer_number),
         retracement_count=int(retracement_count),
         units=int(units),
@@ -697,6 +704,67 @@ def _normalize_position(
         close_reason=close_reason,
         oanda_trade_id=oanda_trade_id,
     )
+
+
+def _validate_slot_structure(
+    *,
+    positions: list[NormalizedSeedPosition],
+    path: str,
+    errors: dict[str, Any],
+) -> None:
+    """Validate that used Snowball slots form valid per-layer prefixes."""
+    if not positions:
+        return
+
+    by_layer: dict[int, list[NormalizedSeedPosition]] = {}
+    for position in positions:
+        if (
+            f"{position.source_path}.layer_number" in errors
+            or f"{position.source_path}.retracement_count" in errors
+        ):
+            continue
+        by_layer.setdefault(position.layer_number, []).append(position)
+    if not by_layer:
+        return
+
+    max_layer = max(by_layer)
+    for layer_number in range(1, max_layer + 1):
+        layer_positions = by_layer.get(layer_number)
+        if not layer_positions:
+            offender = next(
+                (position for position in positions if position.layer_number > layer_number),
+                None,
+            )
+            key = (
+                f"{offender.source_path}.layer_number"
+                if offender is not None
+                else f"{path}.positions"
+            )
+            errors[key] = f"Layer L{layer_number} must exist before higher layers."
+            continue
+
+        by_retracement = {position.retracement_count: position for position in layer_positions}
+        max_retracement = max(by_retracement)
+        if 0 not in by_retracement:
+            offender = min(layer_positions, key=lambda position: position.retracement_count)
+            errors[f"{offender.source_path}.retracement_count"] = (
+                f"Layer L{layer_number} must start at R0."
+            )
+            continue
+
+        for retracement_count in range(0, max_retracement + 1):
+            if retracement_count in by_retracement:
+                continue
+            offender = next(
+                position
+                for position in layer_positions
+                if position.retracement_count > retracement_count
+            )
+            errors[f"{offender.source_path}.retracement_count"] = (
+                f"Layer L{layer_number} cannot skip R{retracement_count} "
+                f"before R{offender.retracement_count}."
+            )
+            break
 
 
 def _fill_default_prices(
@@ -742,7 +810,7 @@ def _validate_normalized_cycle_consistency(
     errors: dict[str, Any],
 ) -> None:
     for position_index, position in enumerate(positions):
-        pos_path = f"{path}.positions[{position_index}]"
+        pos_path = position.source_path
         if position.status == POSITION_STATUS_OPEN:
             if position.exit_price is not None:
                 errors[f"{pos_path}.exit_price"] = "Open positions cannot have an exit price."
@@ -778,7 +846,7 @@ def _validate_normalized_cycle_consistency(
 
     for position_index, position in enumerate(positions[1:], start=1):
         previous = positions[position_index - 1]
-        pos_path = f"{path}.positions[{position_index}]"
+        pos_path = position.source_path
         if direction == Direction.LONG and position.entry_price >= previous.entry_price:
             errors[f"{pos_path}.entry_price"] = (
                 f"Entry price for {_slot_label(position)} must be lower than "

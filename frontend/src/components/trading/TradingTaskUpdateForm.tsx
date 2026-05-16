@@ -18,6 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
+import { addInitialPositionSlotStructureIssues } from '../tasks/forms/validationSchemas';
 import { BacktestInitialPositionsEditor } from '../backtest/BacktestInitialPositionsEditor';
 import { useUpdateTradingTask } from '../../hooks/useTradingTaskMutations';
 import { useConfiguration } from '../../hooks/useConfigurations';
@@ -172,26 +173,7 @@ const tradingTaskUpdateSchema = z
         message: 'At least one initial cycle is required',
       });
     }
-    data.initial_position_cycles.forEach((cycle, cycleIndex) => {
-      const seen = new Set<string>();
-      cycle.positions.forEach((position, positionIndex) => {
-        const key = `${position.layer_number}:${position.retracement_count}`;
-        if (seen.has(key)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [
-              'initial_position_cycles',
-              cycleIndex,
-              'positions',
-              positionIndex,
-              'retracement_count',
-            ],
-            message: `Duplicate L${position.layer_number}/R${position.retracement_count}`,
-          });
-        }
-        seen.add(key);
-      });
-    });
+    addInitialPositionSlotStructureIssues(data.initial_position_cycles, ctx);
   });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
