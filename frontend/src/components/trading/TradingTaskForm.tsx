@@ -53,6 +53,10 @@ import {
   preferredCurrencyForInstrument,
   preferredCurrencyFromOptions,
 } from '../../utils/instruments';
+import {
+  firstValidationError,
+  hasValidationErrors,
+} from '../../utils/formValidation';
 
 const steps = [
   'trading:form.steps.account',
@@ -236,6 +240,8 @@ export default function TradingTaskForm({
     setValue,
   } = useForm<TradingTaskFormData>({
     resolver: zodResolver(tradingTaskSchema) as Resolver<TradingTaskFormData>,
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       account_id: initialData?.account_id || '',
       config_id: initialData?.config_id || '',
@@ -274,6 +280,25 @@ export default function TradingTaskForm({
         initialData?.broker_drift_check_interval_seconds ?? 60,
     },
   });
+  const submitValidationError = firstValidationError(errors);
+  const isSubmitBlockedByValidation = hasValidationErrors(errors);
+  const submitValidationBlockReason = isSubmitBlockedByValidation
+    ? t(
+        submitValidationError
+          ? 'common:validation.fixFormErrorsBeforeSubmitWithMessage'
+          : 'common:validation.fixFormErrorsBeforeSubmit',
+        {
+          message:
+            submitValidationError ??
+            t('common:validation.unknownFormError', {
+              defaultValue: 'Review the highlighted fields.',
+            }),
+          defaultValue: submitValidationError
+            ? 'Fix validation errors before submitting: {{message}}'
+            : 'Fix validation errors before submitting.',
+        }
+      )
+    : null;
 
   // Sync saved formData back into React Hook Form when changing steps
   useEffect(() => {
@@ -1534,6 +1559,12 @@ export default function TradingTaskForm({
           </Alert>
         )}
 
+        {activeStep === steps.length - 1 && submitValidationBlockReason ? (
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            {submitValidationBlockReason}
+          </Alert>
+        ) : null}
+
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
           <Button onClick={() => navigate(-1)} sx={{ mr: 'auto' }}>
             {t('common:actions.cancel')}
@@ -1549,7 +1580,11 @@ export default function TradingTaskForm({
             <Button
               variant="contained"
               onClick={handleSubmit(onSubmit)}
-              disabled={createTask.isLoading || updateTask.isLoading}
+              disabled={
+                createTask.isLoading ||
+                updateTask.isLoading ||
+                isSubmitBlockedByValidation
+              }
             >
               {taskId
                 ? t('common:actions.updateTask')
