@@ -68,6 +68,9 @@ export default function TradingTaskFormPage() {
                 display_currency: task.display_currency,
                 sell_on_stop: task.sell_on_stop ?? false,
                 hedging_enabled: task.hedging_enabled,
+                initial_positions_enabled:
+                  task.initial_positions_enabled ?? false,
+                initial_position_cycles: task.initial_position_cycles ?? [],
                 api_retry_max_attempts: task.api_retry_max_attempts,
                 api_retry_backoff_base_seconds:
                   task.api_retry_backoff_base_seconds

@@ -14,15 +14,16 @@ export type BacktestInitialPositionStatus =
   | 'pending_rebuild';
 
 export interface BacktestInitialPosition {
-  layer_number: number;
-  retracement_count: number;
+  layer_number: number | string;
+  retracement_count: number | string;
   units: number | string;
   entry_price: number | string;
   planned_exit_price?: number | string | null;
   stop_loss_price?: number | string | null;
-  status?: BacktestInitialPositionStatus;
+  status: BacktestInitialPositionStatus;
   exit_price?: number | string | null;
   close_reason?: string;
+  oanda_trade_id?: string;
 }
 
 export interface BacktestInitialPositionCycle {

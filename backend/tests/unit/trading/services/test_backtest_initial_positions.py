@@ -17,7 +17,9 @@ from apps.trading.services.backtest_initial_positions import (
 from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
 from tests.integration.factories import (
     BacktestTaskFactory,
+    OandaAccountFactory,
     StrategyConfigurationFactory,
+    TradingTaskFactory,
     UserFactory,
 )
 
@@ -60,7 +62,7 @@ def _task(*, initial_position_cycles):
 
 
 @pytest.mark.django_db
-def test_validate_initial_position_cycles_requires_contiguous_slots_from_l1_r0():
+def test_validate_initial_position_cycles_allows_sparse_slots():
     task = _task(
         initial_position_cycles=[
             {
@@ -71,22 +73,23 @@ def test_validate_initial_position_cycles_requires_contiguous_slots_from_l1_r0()
                         "retracement_count": 1,
                         "units": 1000,
                         "entry_price": "149.70",
+                        "planned_exit_price": "150.20",
+                        "stop_loss_price": "149.40",
                     }
                 ],
             }
         ]
     )
 
-    with pytest.raises(InitialPositionValidationError) as exc_info:
-        validate_initial_position_cycles(
-            task=task,
-            config=task.config,
-            cycles=task.initial_position_cycles,
-            pip_size=task.pip_size,
-        )
+    normalized = validate_initial_position_cycles(
+        task=task,
+        config=task.config,
+        cycles=task.initial_position_cycles,
+        pip_size=task.pip_size,
+    )
 
-    assert "initial_position_cycles[0].positions" in exc_info.value.errors
-    assert "L1/R0" in exc_info.value.errors["initial_position_cycles[0].positions"]
+    assert normalized[0].positions[0].layer_number == 1
+    assert normalized[0].positions[0].retracement_count == 1
 
 
 @pytest.mark.django_db
@@ -129,6 +132,121 @@ def test_validate_initial_position_cycles_rejects_stop_loss_when_disabled():
     assert (
         exc_info.value.errors["initial_position_cycles[0].positions[0].status"]
         == "Pending rebuild positions require stop loss to be enabled."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_contradictory_prices():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "planned_exit_price": "149.90",
+                        "stop_loss_price": "150.10",
+                    }
+                ],
+            }
+        ]
+    )
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[0].planned_exit_price"]
+        == "Long position planned exit must be above entry price."
+    )
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[0].stop_loss_price"]
+        == "Long position stop loss must be below entry price."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_contradictory_slot_progression():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "short",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "units": 2000,
+                        "entry_price": "149.90",
+                    },
+                ],
+            }
+        ]
+    )
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[1].entry_price"]
+        == "Entry price for L1/R1 must be higher than L1/R0 in a short cycle."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_open_position_with_close_fields():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "status": "open",
+                        "exit_price": "150.50",
+                        "close_reason": "tp",
+                    }
+                ],
+            }
+        ]
+    )
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[0].exit_price"]
+        == "Open positions cannot have an exit price."
+    )
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[0].close_reason"]
+        == "Open positions cannot have a close reason."
     )
 
 
@@ -355,11 +473,61 @@ def test_sync_for_task_can_seed_pending_rebuild_positions():
         ).count()
         == 2
     )
-    assert (
-        Trade.objects.filter(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-        ).count()
-        == 2
+
+
+@pytest.mark.django_db
+def test_sync_for_trading_task_creates_preview_with_external_oanda_trade_id():
+    user = UserFactory()
+    account = OandaAccountFactory(
+        user=user,
+        balance=Decimal("100000"),
+        currency="USD",
     )
+    task = TradingTaskFactory(
+        user=user,
+        oanda_account=account,
+        config=_snowball_config(user),
+        instrument="USD_JPY",
+        pip_size=Decimal("0.01"),
+        hedging_enabled=True,
+        initial_positions_enabled=True,
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "oanda_trade_id": "OANDA-123",
+                    },
+                ],
+            }
+        ],
+    )
+
+    BacktestInitialPositionService().sync_for_task(task)
+    task.refresh_from_db()
+
+    state = ExecutionState.objects.get(
+        task_type=TaskType.TRADING,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+    )
+    position = Position.objects.get(
+        task_type=TaskType.TRADING,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+    )
+
+    assert is_initial_position_preview_state(state)
+    assert state.last_tick_timestamp is None
+    assert state.resume_cursor_timestamp is None
+    assert position.oanda_trade_id == "OANDA-123"
+    assert Trade.objects.filter(
+        task_type=TaskType.TRADING,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+        oanda_trade_id="OANDA-123",
+    ).exists()

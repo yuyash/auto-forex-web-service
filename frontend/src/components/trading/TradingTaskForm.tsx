@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
+import { BacktestInitialPositionsEditor } from '../backtest/BacktestInitialPositionsEditor';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
 import type { Account } from '../../types/strategy';
 import {
@@ -58,75 +59,144 @@ const steps = [
   'trading:form.steps.review',
 ];
 
-// Validation schema
-const tradingTaskSchema = z.object({
-  account_id: z.string().min(1, 'Account is required'),
-  config_id: z.string().min(1, 'Configuration is required'),
-  name: z.string().min(1, 'Name is required').max(255),
-  description: z.string().optional(),
-  instrument: z.string().min(1, 'Instrument is required'),
-  display_currency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/, 'Display currency must be a 3-letter code'),
-  sell_on_stop: z.boolean().optional().default(false),
-  dry_run: z.boolean().optional(),
-  hedging_enabled: z.boolean().optional(),
-  risk_acknowledged: z.boolean().optional(),
-  api_retry_max_attempts: z
-    .number({ message: 'Must be a positive integer' })
-    .int('Must be an integer')
-    .min(1, 'Must be at least 1')
-    .max(1000, 'Must not exceed 1000')
-    .optional(),
-  api_retry_backoff_base_seconds: z
-    .number({ message: 'Must be a non-negative number' })
-    .min(0, 'Must be non-negative')
-    .max(600, 'Must not exceed 600 seconds')
-    .optional(),
-  api_retry_backoff_max_seconds: z
-    .number({ message: 'Must be a non-negative number' })
-    .min(0, 'Must be non-negative')
-    .max(3600, 'Must not exceed 3600 seconds')
-    .optional(),
-  drain_duration_hours: z
-    .number({ message: 'Must be a non-negative integer' })
-    .int('Must be an integer')
-    .min(0, 'Must be non-negative')
-    .optional(),
-  market_idle_pre_close_minutes: z
-    .number({ message: 'Must be a non-negative integer' })
-    .int('Must be an integer')
-    .min(0, 'Must be non-negative')
-    .max(720, 'Must not exceed 720 minutes (12 hours)')
-    .optional(),
-  market_idle_resume_delay_minutes: z
-    .number({ message: 'Must be a non-negative integer' })
-    .int('Must be an integer')
-    .min(0, 'Must be non-negative')
-    .max(720, 'Must not exceed 720 minutes (12 hours)')
-    .optional(),
-  live_tick_stale_guard_enabled: z.boolean().optional(),
-  live_tick_max_age_seconds: z
-    .number({ message: 'Must be a positive integer' })
-    .int('Must be an integer')
-    .min(1, 'Must be at least 1 second')
-    .max(3600, 'Must not exceed 3600 seconds')
-    .optional(),
-  live_tick_status_log_interval_seconds: z
-    .number({ message: 'Must be a non-negative integer' })
-    .int('Must be an integer')
-    .min(0, 'Must be non-negative')
-    .max(3600, 'Must not exceed 3600 seconds')
-    .optional(),
-  broker_drift_check_interval_seconds: z
-    .number({ message: 'Must be a non-negative integer' })
-    .int('Must be an integer')
-    .min(0, 'Must be non-negative')
-    .max(3600, 'Must not exceed 3600 seconds')
-    .optional(),
+const requiredPositiveNumberInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isFinite(Number(value)) && Number(value) > 0,
+    'Must be a positive number'
+  );
+const requiredPositiveIntegerInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isInteger(Number(value)) && Number(value) > 0,
+    'Must be a positive integer'
+  );
+const nonNegativeIntegerInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isInteger(Number(value)) && Number(value) >= 0,
+    'Must be a non-negative integer'
+  );
+const optionalPositiveNumberSchema = z
+  .union([z.number(), z.string(), z.null()])
+  .optional()
+  .refine(
+    (value) =>
+      value === undefined ||
+      value === null ||
+      value === '' ||
+      (Number.isFinite(Number(value)) && Number(value) > 0),
+    'Must be a positive number'
+  );
+
+const initialPositionSchema = z.object({
+  layer_number: requiredPositiveIntegerInputSchema,
+  retracement_count: nonNegativeIntegerInputSchema,
+  units: requiredPositiveIntegerInputSchema,
+  entry_price: requiredPositiveNumberInputSchema,
+  planned_exit_price: optionalPositiveNumberSchema,
+  stop_loss_price: optionalPositiveNumberSchema,
+  status: z
+    .enum(['open', 'closed', 'pending_rebuild'])
+    .optional()
+    .default('open'),
+  exit_price: optionalPositiveNumberSchema,
+  close_reason: z.string().optional(),
+  oanda_trade_id: z.string().optional(),
 });
+
+const initialPositionCycleSchema = z.object({
+  direction: z.enum(['long', 'short']),
+  positions: z.array(initialPositionSchema).min(1),
+});
+
+// Validation schema
+const tradingTaskSchema = z
+  .object({
+    account_id: z.string().min(1, 'Account is required'),
+    config_id: z.string().min(1, 'Configuration is required'),
+    name: z.string().min(1, 'Name is required').max(255),
+    description: z.string().optional(),
+    instrument: z.string().min(1, 'Instrument is required'),
+    display_currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/, 'Display currency must be a 3-letter code'),
+    sell_on_stop: z.boolean().optional().default(false),
+    dry_run: z.boolean().optional(),
+    hedging_enabled: z.boolean().optional(),
+    initial_positions_enabled: z.boolean().optional().default(false),
+    initial_position_cycles: z
+      .array(initialPositionCycleSchema)
+      .optional()
+      .default([]),
+    risk_acknowledged: z.boolean().optional(),
+    api_retry_max_attempts: z
+      .number({ message: 'Must be a positive integer' })
+      .int('Must be an integer')
+      .min(1, 'Must be at least 1')
+      .max(1000, 'Must not exceed 1000')
+      .optional(),
+    api_retry_backoff_base_seconds: z
+      .number({ message: 'Must be a non-negative number' })
+      .min(0, 'Must be non-negative')
+      .max(600, 'Must not exceed 600 seconds')
+      .optional(),
+    api_retry_backoff_max_seconds: z
+      .number({ message: 'Must be a non-negative number' })
+      .min(0, 'Must be non-negative')
+      .max(3600, 'Must not exceed 3600 seconds')
+      .optional(),
+    drain_duration_hours: z
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .optional(),
+    market_idle_pre_close_minutes: z
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_idle_resume_delay_minutes: z
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    live_tick_stale_guard_enabled: z.boolean().optional(),
+    live_tick_max_age_seconds: z
+      .number({ message: 'Must be a positive integer' })
+      .int('Must be an integer')
+      .min(1, 'Must be at least 1 second')
+      .max(3600, 'Must not exceed 3600 seconds')
+      .optional(),
+    live_tick_status_log_interval_seconds: z
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(3600, 'Must not exceed 3600 seconds')
+      .optional(),
+    broker_drift_check_interval_seconds: z
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(3600, 'Must not exceed 3600 seconds')
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.initial_positions_enabled &&
+      !data.initial_position_cycles.length
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['initial_position_cycles'],
+        message: 'At least one initial cycle is required',
+      });
+    }
+  });
 
 type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 
@@ -139,7 +209,7 @@ export default function TradingTaskForm({
   taskId,
   initialData,
 }: TradingTaskFormProps) {
-  const { t } = useTranslation(['trading', 'common']);
+  const { t } = useTranslation(['trading', 'common', 'backtest']);
   const { user } = useAuth();
   const language = user?.language;
   const navigate = useNavigate();
@@ -177,6 +247,9 @@ export default function TradingTaskForm({
       sell_on_stop: initialData?.sell_on_stop ?? false,
       dry_run: false,
       hedging_enabled: true,
+      initial_positions_enabled:
+        initialData?.initial_positions_enabled ?? false,
+      initial_position_cycles: initialData?.initial_position_cycles ?? [],
       risk_acknowledged: false,
       api_retry_max_attempts: initialData?.api_retry_max_attempts ?? 50,
       api_retry_backoff_base_seconds:
@@ -215,6 +288,10 @@ export default function TradingTaskForm({
   const liveTickStaleGuardEnabled = useWatch({
     control,
     name: 'live_tick_stale_guard_enabled',
+  });
+  const watchedInitialPositionsEnabled = useWatch({
+    control,
+    name: 'initial_positions_enabled',
   });
 
   const selectedConfigId = useWatch({ control, name: 'config_id' });
@@ -344,6 +421,8 @@ export default function TradingTaskForm({
           'name',
           'instrument',
           'display_currency',
+          'initial_positions_enabled',
+          'initial_position_cycles',
         ];
         break;
       default:
@@ -400,6 +479,10 @@ export default function TradingTaskForm({
           selectedAccount?.hedging_enabled === false || !strategySupportsHedging
             ? false
             : completeData.hedging_enabled,
+        initial_positions_enabled: completeData.initial_positions_enabled,
+        initial_position_cycles: completeData.initial_positions_enabled
+          ? completeData.initial_position_cycles
+          : [],
         api_retry_max_attempts: completeData.api_retry_max_attempts,
         api_retry_backoff_base_seconds:
           completeData.api_retry_backoff_base_seconds,
@@ -458,6 +541,9 @@ export default function TradingTaskForm({
           broker_drift_check_interval_seconds: t(
             'trading:form.brokerDriftCheckIntervalSeconds'
           ),
+          initial_position_cycles: t('backtest:form.initialPositionCycles', {
+            defaultValue: 'Initial position cycles',
+          }),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -822,6 +908,40 @@ export default function TradingTaskForm({
                   )}
                 </Grid>
               ) : null}
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="initial_position_cycles"
+                  control={control}
+                  render={({ field }) => (
+                    <BacktestInitialPositionsEditor
+                      enabled={watchedInitialPositionsEnabled ?? false}
+                      onEnabledChange={(enabled) =>
+                        setValue('initial_positions_enabled', enabled, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      value={field.value ?? []}
+                      onChange={field.onChange}
+                      currentTaskId={taskId}
+                      selectedConfig={selectedConfig ?? undefined}
+                      strategyType={selectedConfig?.strategy_type}
+                      taskType="trading"
+                      showFirstTickInfo={false}
+                      allowOandaImport
+                      accountId={selectedAccountId}
+                      configId={selectedConfigId}
+                      instrument={watchedInstrument}
+                      error={
+                        errors.initial_position_cycles?.message as
+                          | string
+                          | undefined
+                      }
+                    />
+                  )}
+                />
+              </Grid>
 
               <Grid size={{ xs: 12 }}>
                 <Typography

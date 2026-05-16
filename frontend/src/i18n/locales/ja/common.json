@@ -78,7 +78,7 @@
     "selectForCompare": "比較対象として選択",
     "selectAll": "全選択",
     "clearSelection": "選択解除",
-    "bulkDelete": "一括削除",
+    "bulkDelete": "削除",
     "saving": "保存中...",
     "deleting": "削除中...",
     "ok": "OK",

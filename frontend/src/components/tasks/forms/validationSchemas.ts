@@ -12,16 +12,41 @@ const dataSourceValues = [
   DataSource.S3,
 ] as const;
 
-const optionalPositiveNumberSchema = z.preprocess(
-  (value) => (value === '' ? undefined : value),
-  z.coerce.number().positive().optional().nullable()
-);
+const requiredPositiveNumberInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isFinite(Number(value)) && Number(value) > 0,
+    'Must be a positive number'
+  );
+const requiredPositiveIntegerInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isInteger(Number(value)) && Number(value) > 0,
+    'Must be a positive integer'
+  );
+const nonNegativeIntegerInputSchema = z
+  .union([z.number(), z.string()])
+  .refine(
+    (value) => Number.isInteger(Number(value)) && Number(value) >= 0,
+    'Must be a non-negative integer'
+  );
+const optionalPositiveNumberSchema = z
+  .union([z.number(), z.string(), z.null()])
+  .optional()
+  .refine(
+    (value) =>
+      value === undefined ||
+      value === null ||
+      value === '' ||
+      (Number.isFinite(Number(value)) && Number(value) > 0),
+    'Must be a positive number'
+  );
 
 const initialPositionSchema = z.object({
-  layer_number: z.coerce.number().int().min(1),
-  retracement_count: z.coerce.number().int().min(0),
-  units: z.coerce.number().int().positive(),
-  entry_price: z.coerce.number().positive(),
+  layer_number: requiredPositiveIntegerInputSchema,
+  retracement_count: nonNegativeIntegerInputSchema,
+  units: requiredPositiveIntegerInputSchema,
+  entry_price: requiredPositiveNumberInputSchema,
   planned_exit_price: optionalPositiveNumberSchema,
   stop_loss_price: optionalPositiveNumberSchema,
   status: z
@@ -30,23 +55,13 @@ const initialPositionSchema = z.object({
     .default('open'),
   exit_price: optionalPositiveNumberSchema,
   close_reason: z.string().optional(),
+  oanda_trade_id: z.string().optional(),
 });
 
 const initialPositionCycleSchema = z.object({
   direction: z.enum(['long', 'short']),
   positions: z.array(initialPositionSchema).min(1),
 });
-
-function expectedInitialPositionSlot(
-  positionIndex: number,
-  rMax = 7
-): { layer: number; retracement: number } {
-  const perLayer = rMax + 1;
-  return {
-    layer: Math.floor(positionIndex / perLayer) + 1,
-    retracement: positionIndex % perLayer,
-  };
-}
 
 // Configuration validation schema
 export const configurationSchema = z.object({
@@ -179,22 +194,6 @@ export const backtestTaskSchema = z
     data.initial_position_cycles.forEach((cycle, cycleIndex) => {
       const seen = new Set<string>();
       cycle.positions.forEach((position, positionIndex) => {
-        const expected = expectedInitialPositionSlot(positionIndex);
-        if (
-          position.layer_number !== expected.layer ||
-          position.retracement_count !== expected.retracement
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [
-              'initial_position_cycles',
-              cycleIndex,
-              'positions',
-              positionIndex,
-            ],
-            message: `Positions must be stacked from L1/R0. Expected L${expected.layer}/R${expected.retracement}.`,
-          });
-        }
         const key = `${position.layer_number}:${position.retracement_count}`;
         if (seen.has(key)) {
           ctx.addIssue({

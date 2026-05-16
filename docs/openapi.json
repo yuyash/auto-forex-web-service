@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.55.1",
+        "version": "1.55.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -4715,6 +4715,104 @@
                 }
             }
         },
+        "/api/trading/tasks/initial-position-import-sources/": {
+            "get": {
+                "operationId": "trading_tasks_initial_position_import_sources_retrieve",
+                "description": "Return tasks whose current state can seed initial positions.",
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InitialPositionImportSourceList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/initial-positions/import-from-oanda/": {
+            "post": {
+                "operationId": "trading_tasks_initial_positions_import_from_oanda_create",
+                "description": "Import editable initial-position cycles from OANDA open trades.",
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InitialPositionImportFromOandaRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InitialPositionImportResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/initial-positions/import-from-task/": {
+            "post": {
+                "operationId": "trading_tasks_initial_positions_import_from_task_create",
+                "description": "Import editable initial-position cycles from another task.",
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InitialPositionImportFromTaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InitialPositionImportResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/": {
             "get": {
                 "operationId": "trading_tasks_trading_list",
@@ -8587,6 +8685,138 @@
                     "version"
                 ]
             },
+            "InitialPositionImportFromOandaRequest": {
+                "type": "object",
+                "description": "Request serializer for importing from OANDA open trades.",
+                "properties": {
+                    "account_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "config_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20
+                    }
+                },
+                "required": [
+                    "account_id",
+                    "config_id",
+                    "instrument"
+                ]
+            },
+            "InitialPositionImportFromTaskRequest": {
+                "type": "object",
+                "description": "Request serializer for importing from another task.",
+                "properties": {
+                    "source_task_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16
+                    },
+                    "source_task_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "target_task_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16
+                    }
+                },
+                "required": [
+                    "source_task_id",
+                    "source_task_type",
+                    "target_task_type"
+                ]
+            },
+            "InitialPositionImportResult": {
+                "type": "object",
+                "description": "Serializer for imported editable initial-position cycles.",
+                "properties": {
+                    "cycles": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "summary": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "cycles",
+                    "source",
+                    "summary"
+                ]
+            },
+            "InitialPositionImportSource": {
+                "type": "object",
+                "description": "Serializer for a selectable initial-position import source.",
+                "properties": {
+                    "task_type": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string"
+                    },
+                    "config_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "config_name": {
+                        "type": "string"
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "config_id",
+                    "config_name",
+                    "id",
+                    "instrument",
+                    "name",
+                    "status",
+                    "strategy_type",
+                    "task_type",
+                    "updated_at"
+                ]
+            },
+            "InitialPositionImportSourceList": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/InitialPositionImportSource"
+                        }
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "InstrumentDetailResponse": {
                 "type": "object",
                 "properties": {
@@ -10639,6 +10869,13 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the trading task."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
                     "api_retry_max_attempts": {
                         "type": "integer",
@@ -13509,6 +13746,13 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the trading task."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -13735,6 +13979,13 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the trading task."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
                     "api_retry_max_attempts": {
                         "type": "integer",
                         "maximum": 2147483647,
@@ -13890,6 +14141,15 @@
                         "type": "boolean",
                         "readOnly": true,
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Create Snowball initial cycles/positions before starting the trading task."
+                    },
+                    "initial_position_cycles": {
+                        "readOnly": true,
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
                     "pip_size": {
                         "type": "string",
@@ -14049,6 +14309,8 @@
                     "execution_id",
                     "hedging_enabled",
                     "id",
+                    "initial_position_cycles",
+                    "initial_positions_enabled",
                     "instrument",
                     "instrument_context",
                     "live_tick_max_age_seconds",
@@ -14092,6 +14354,13 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "initial_positions_enabled": {
+                        "type": "boolean",
+                        "description": "Create Snowball initial cycles/positions before starting the trading task."
+                    },
+                    "initial_position_cycles": {
+                        "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
                     "api_retry_max_attempts": {
                         "type": "integer",
