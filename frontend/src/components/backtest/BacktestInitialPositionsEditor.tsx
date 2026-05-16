@@ -63,11 +63,26 @@ interface BacktestInitialPositionsEditorProps {
 }
 
 interface InitialPositionOrderWarning {
-  type: 'order' | 'duplicate';
+  type:
+    | 'duplicate'
+    | 'layerOutOfRange'
+    | 'retracementOutOfRange'
+    | 'missingLayer'
+    | 'layerStart'
+    | 'missingRetracement';
   cycleNumber: number;
-  rowNumber: number;
-  expected?: string;
+  positionNumber?: number;
   actual: string;
+  duplicateOf?: number;
+  maxLayer?: number;
+  maxRetracement?: number;
+  missingLayer?: number;
+  missingRetracement?: number;
+}
+
+interface SlotAddress {
+  layer: number;
+  retracement: number;
 }
 
 export function BacktestInitialPositionsEditor({
@@ -94,6 +109,9 @@ export function BacktestInitialPositionsEditor({
   const [selectedSourceKey, setSelectedSourceKey] = useState('');
   const [importing, setImporting] = useState<'task' | 'oanda' | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [selectedAddSlotKeys, setSelectedAddSlotKeys] = useState<
+    Record<number, string>
+  >({});
   const resolvedStrategyType = normalizedStrategyType(
     strategyType ?? selectedConfig?.strategy_type
   );
@@ -105,8 +123,8 @@ export function BacktestInitialPositionsEditor({
     [selectedConfig, pipSize]
   );
   const orderWarnings = useMemo(
-    () => initialPositionOrderWarnings(value, config.rMax),
-    [config.rMax, value]
+    () => initialPositionOrderWarnings(value, config),
+    [config, value]
   );
   const importSourcesQuery = useQuery({
     queryKey: ['initial-position-import-sources'],
@@ -156,9 +174,8 @@ export function BacktestInitialPositionsEditor({
     onChange(value.filter((_, i) => i !== cycleIndex));
   };
 
-  const addPosition = (cycleIndex: number) => {
+  const addPosition = (cycleIndex: number, slot: SlotAddress) => {
     updateCycle(cycleIndex, (cycle) => {
-      const slot = nextSlot(cycle.positions.length, config.rMax);
       if (slot.layer > config.fMax) {
         return cycle;
       }
@@ -178,7 +195,10 @@ export function BacktestInitialPositionsEditor({
         cycle,
         config
       );
-      return { ...cycle, positions: [...cycle.positions, position] };
+      return {
+        ...cycle,
+        positions: sortPositionsBySlot([...cycle.positions, position]),
+      };
     });
   };
 
@@ -363,28 +383,14 @@ export function BacktestInitialPositionsEditor({
           </Stack>
 
           {orderWarnings.length > 0 ? (
-            <Alert severity="warning">
+            <Alert severity="error">
               <Stack spacing={0.5}>
                 {orderWarnings.map((warning, index) => (
                   <Typography
-                    key={`${warning.type}-${warning.cycleNumber}-${warning.rowNumber}-${warning.actual}-${index}`}
+                    key={`${warning.type}-${warning.cycleNumber}-${warning.positionNumber ?? 'cycle'}-${warning.actual}-${index}`}
                     variant="body2"
                   >
-                    {warning.type === 'duplicate'
-                      ? t('backtest:form.initialPositionDuplicateWarning', {
-                          defaultValue:
-                            'Cycle {{cycle}} has duplicate slot {{actual}}.',
-                          cycle: warning.cycleNumber,
-                          actual: warning.actual,
-                        })
-                      : t('backtest:form.initialPositionOrderWarning', {
-                          defaultValue:
-                            'Cycle {{cycle}}, row {{row}} should be {{expected}}, but is {{actual}}.',
-                          cycle: warning.cycleNumber,
-                          row: warning.rowNumber,
-                          expected: warning.expected,
-                          actual: warning.actual,
-                        })}
+                    {formatInitialPositionIssue(warning, t)}
                   </Typography>
                 ))}
               </Stack>
@@ -442,8 +448,14 @@ export function BacktestInitialPositionsEditor({
           </Stack>
 
           {value.map((cycle, cycleIndex) => {
-            const slot = nextSlot(cycle.positions.length, config.rMax);
-            const canAdd = slot.layer <= config.fMax;
+            const addSlots = nextAvailableSlots(cycle, config);
+            const selectedSlotKey = selectedAddSlotKey(
+              cycleIndex,
+              addSlots,
+              selectedAddSlotKeys
+            );
+            const selectedSlot = parseSlotKey(selectedSlotKey);
+            const canAdd = selectedSlot !== null;
             return (
               <Paper
                 key={`${cycle.direction}-${cycleIndex}`}
@@ -459,56 +471,72 @@ export function BacktestInitialPositionsEditor({
                       justifyContent: 'space-between',
                     }}
                   >
-                    <FormControl size="small" sx={{ minWidth: 160 }}>
-                      <InputLabel>
-                        {t('common:labels.direction', {
-                          defaultValue: 'Direction',
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <Chip
+                        size="small"
+                        label={t('backtest:form.initialPositionCycleTempId', {
+                          defaultValue: 'C{{cycle}}',
+                          cycle: cycleIndex + 1,
                         })}
-                      </InputLabel>
-                      <Select
-                        label={t('common:labels.direction', {
-                          defaultValue: 'Direction',
-                        })}
-                        value={cycle.direction}
-                        onChange={(event) =>
-                          updateCycle(cycleIndex, (current) => ({
-                            ...current,
-                            direction: event.target.value as 'long' | 'short',
-                            positions: current.positions.map((position) =>
-                              withDefaultPrices(
-                                {
-                                  ...position,
-                                  planned_exit_price: undefined,
-                                  stop_loss_price: undefined,
-                                  exit_price:
-                                    position.status === 'open'
-                                      ? undefined
-                                      : position.exit_price,
-                                },
-                                {
-                                  ...current,
-                                  direction: event.target.value as
-                                    | 'long'
-                                    | 'short',
-                                },
-                                config
-                              )
-                            ),
-                          }))
-                        }
-                      >
-                        <MenuItem value="long">
-                          {t('common:tables.positions.long', {
-                            defaultValue: 'Long',
+                      />
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel>
+                          {t('common:labels.direction', {
+                            defaultValue: 'Direction',
                           })}
-                        </MenuItem>
-                        <MenuItem value="short">
-                          {t('common:tables.positions.short', {
-                            defaultValue: 'Short',
+                        </InputLabel>
+                        <Select
+                          label={t('common:labels.direction', {
+                            defaultValue: 'Direction',
                           })}
-                        </MenuItem>
-                      </Select>
-                    </FormControl>
+                          value={cycle.direction}
+                          onChange={(event) =>
+                            updateCycle(cycleIndex, (current) => ({
+                              ...current,
+                              direction: event.target.value as 'long' | 'short',
+                              positions: current.positions.map((position) =>
+                                withDefaultPrices(
+                                  {
+                                    ...position,
+                                    planned_exit_price: undefined,
+                                    stop_loss_price: undefined,
+                                    exit_price:
+                                      position.status === 'open'
+                                        ? undefined
+                                        : position.exit_price,
+                                  },
+                                  {
+                                    ...current,
+                                    direction: event.target.value as
+                                      | 'long'
+                                      | 'short',
+                                  },
+                                  config
+                                )
+                              ),
+                            }))
+                          }
+                        >
+                          <MenuItem value="long">
+                            {t('common:tables.positions.long', {
+                              defaultValue: 'Long',
+                            })}
+                          </MenuItem>
+                          <MenuItem value="short">
+                            {t('common:tables.positions.short', {
+                              defaultValue: 'Short',
+                            })}
+                          </MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Stack>
 
                     <Tooltip
                       title={t('common:actions.delete', {
@@ -523,8 +551,9 @@ export function BacktestInitialPositionsEditor({
 
                   {cycle.positions.map((position, positionIndex) => (
                     <SeedPositionRow
-                      key={`${position.layer_number}-${position.retracement_count}`}
+                      key={`${position.layer_number}-${position.retracement_count}-${positionIndex}`}
                       position={position}
+                      positionNumber={positionIndex + 1}
                       onChange={(next) =>
                         updateCycle(cycleIndex, (current) => ({
                           ...current,
@@ -543,18 +572,55 @@ export function BacktestInitialPositionsEditor({
                   ))}
 
                   <Stack direction="row" spacing={1}>
+                    <FormControl
+                      size="small"
+                      sx={{ minWidth: 150 }}
+                      disabled={addSlots.length === 0}
+                    >
+                      <InputLabel>
+                        {t('backtest:form.nextInitialPositionSlot', {
+                          defaultValue: 'Next position',
+                        })}
+                      </InputLabel>
+                      <Select
+                        label={t('backtest:form.nextInitialPositionSlot', {
+                          defaultValue: 'Next position',
+                        })}
+                        value={selectedSlotKey}
+                        onChange={(event) =>
+                          setSelectedAddSlotKeys((current) => ({
+                            ...current,
+                            [cycleIndex]: event.target.value,
+                          }))
+                        }
+                      >
+                        {addSlots.length === 0 ? (
+                          <MenuItem value="">
+                            {t('backtest:form.gridFull', {
+                              defaultValue: 'Grid full',
+                            })}
+                          </MenuItem>
+                        ) : (
+                          addSlots.map((slot) => (
+                            <MenuItem key={slotKey(slot)} value={slotKey(slot)}>
+                              {slotLabel(slot.layer, slot.retracement)}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
                     <Button
                       size="small"
                       variant="outlined"
                       startIcon={<AddIcon />}
                       disabled={!canAdd}
-                      onClick={() => addPosition(cycleIndex)}
+                      onClick={() => {
+                        if (selectedSlot) {
+                          addPosition(cycleIndex, selectedSlot);
+                        }
+                      }}
                     >
-                      {canAdd
-                        ? `L${slot.layer}/R${slot.retracement}`
-                        : t('backtest:form.gridFull', {
-                            defaultValue: 'Grid full',
-                          })}
+                      {t('common:actions.add', { defaultValue: 'Add' })}
                     </Button>
                     <Button
                       size="small"
@@ -580,41 +646,305 @@ export function BacktestInitialPositionsEditor({
 
 function initialPositionOrderWarnings(
   cycles: BacktestInitialPositionCycle[],
-  rMax: number
+  config: SnowballUiConfig
 ): InitialPositionOrderWarning[] {
   return cycles.flatMap((cycle, cycleIndex) => {
-    const seen = new Set<string>();
-    return cycle.positions.flatMap((position, positionIndex) => {
-      const expected = nextSlot(positionIndex, rMax);
-      const expectedLabel = slotLabel(expected.layer, expected.retracement);
+    const warnings: InitialPositionOrderWarning[] = [];
+    const seen = new Map<string, number>();
+    const validPositions: Array<{
+      positionNumber: number;
+      layer: number;
+      retracement: number;
+    }> = [];
+
+    cycle.positions.forEach((position, positionIndex) => {
       const layer = intNum(position.layer_number, 0);
       const retracement = intNum(position.retracement_count, 0);
       const actualLabel = slotLabel(layer, retracement);
       const key = `${layer}:${retracement}`;
-      const warnings: InitialPositionOrderWarning[] = [];
+
+      if (layer < 1 || layer > config.fMax) {
+        warnings.push({
+          type: 'layerOutOfRange',
+          cycleNumber: cycleIndex + 1,
+          positionNumber: positionIndex + 1,
+          actual: actualLabel,
+          maxLayer: config.fMax,
+        });
+      }
+
+      if (retracement < 0 || retracement > config.rMax) {
+        warnings.push({
+          type: 'retracementOutOfRange',
+          cycleNumber: cycleIndex + 1,
+          positionNumber: positionIndex + 1,
+          actual: actualLabel,
+          maxRetracement: config.rMax,
+        });
+      }
 
       if (seen.has(key)) {
         warnings.push({
           type: 'duplicate',
           cycleNumber: cycleIndex + 1,
-          rowNumber: positionIndex + 1,
+          positionNumber: positionIndex + 1,
           actual: actualLabel,
+          duplicateOf: seen.get(key),
         });
-      }
-      seen.add(key);
-
-      if (layer !== expected.layer || retracement !== expected.retracement) {
-        warnings.push({
-          type: 'order',
-          cycleNumber: cycleIndex + 1,
-          rowNumber: positionIndex + 1,
-          expected: expectedLabel,
-          actual: actualLabel,
-        });
+      } else {
+        seen.set(key, positionIndex + 1);
       }
 
-      return warnings;
+      if (
+        seen.get(key) === positionIndex + 1 &&
+        layer >= 1 &&
+        layer <= config.fMax &&
+        retracement >= 0 &&
+        retracement <= config.rMax
+      ) {
+        validPositions.push({
+          positionNumber: positionIndex + 1,
+          layer,
+          retracement,
+        });
+      }
     });
+
+    const byLayer = new Map<number, typeof validPositions>();
+    validPositions.forEach((item) => {
+      byLayer.set(item.layer, [...(byLayer.get(item.layer) ?? []), item]);
+    });
+    const maxLayer = Math.max(0, ...Array.from(byLayer.keys()));
+
+    for (let layer = 1; layer <= maxLayer; layer += 1) {
+      const layerPositions = byLayer.get(layer) ?? [];
+      if (layerPositions.length === 0) {
+        const offender = validPositions.find((item) => item.layer > layer);
+        warnings.push({
+          type: 'missingLayer',
+          cycleNumber: cycleIndex + 1,
+          positionNumber: offender?.positionNumber,
+          actual: offender
+            ? slotLabel(offender.layer, offender.retracement)
+            : `L${layer}`,
+          missingLayer: layer,
+        });
+        continue;
+      }
+
+      const byRetracement = new Map<number, (typeof validPositions)[number]>();
+      layerPositions.forEach((item) => {
+        byRetracement.set(item.retracement, item);
+      });
+      const maxRetracement = Math.max(...Array.from(byRetracement.keys()));
+      if (!byRetracement.has(0)) {
+        const offender = [...layerPositions].sort(
+          (left, right) => left.retracement - right.retracement
+        )[0];
+        warnings.push({
+          type: 'layerStart',
+          cycleNumber: cycleIndex + 1,
+          positionNumber: offender.positionNumber,
+          actual: slotLabel(offender.layer, offender.retracement),
+          missingRetracement: 0,
+        });
+        continue;
+      }
+
+      for (
+        let retracement = 0;
+        retracement <= maxRetracement;
+        retracement += 1
+      ) {
+        if (byRetracement.has(retracement)) {
+          continue;
+        }
+        const offender = [...layerPositions]
+          .filter((item) => item.retracement > retracement)
+          .sort((left, right) => left.retracement - right.retracement)[0];
+        warnings.push({
+          type: 'missingRetracement',
+          cycleNumber: cycleIndex + 1,
+          positionNumber: offender.positionNumber,
+          actual: slotLabel(offender.layer, offender.retracement),
+          missingRetracement: retracement,
+        });
+        break;
+      }
+    }
+
+    return warnings;
+  });
+}
+
+function formatInitialPositionIssue(
+  warning: InitialPositionOrderWarning,
+  t: ReturnType<typeof useTranslation>['t']
+) {
+  const base = {
+    cycle: warning.cycleNumber,
+    position: warning.positionNumber,
+    actual: warning.actual,
+  };
+  switch (warning.type) {
+    case 'duplicate':
+      return t('backtest:form.initialPositionDuplicateWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} duplicates {{actual}}.',
+        ...base,
+      });
+    case 'layerOutOfRange':
+      return t('backtest:form.initialPositionLayerOutOfRangeWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} uses {{actual}}, but max layer is L{{maxLayer}}.',
+        ...base,
+        maxLayer: warning.maxLayer,
+      });
+    case 'retracementOutOfRange':
+      return t('backtest:form.initialPositionRetracementOutOfRangeWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} uses {{actual}}, but max retracement is R{{maxRetracement}}.',
+        ...base,
+        maxRetracement: warning.maxRetracement,
+      });
+    case 'missingLayer':
+      return t('backtest:form.initialPositionMissingLayerWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} cannot use {{actual}} because L{{missingLayer}} is missing.',
+        ...base,
+        missingLayer: warning.missingLayer,
+      });
+    case 'layerStart':
+      return t('backtest:form.initialPositionLayerStartWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} cannot use {{actual}} because each layer must start at R0.',
+        ...base,
+      });
+    case 'missingRetracement':
+      return t('backtest:form.initialPositionMissingRetracementWarning', {
+        defaultValue:
+          'Cycle C{{cycle}} position P{{position}} cannot use {{actual}} because R{{missingRetracement}} is missing before it.',
+        ...base,
+        missingRetracement: warning.missingRetracement,
+      });
+    default:
+      return warning.actual;
+  }
+}
+
+function nextAvailableSlots(
+  cycle: BacktestInitialPositionCycle,
+  config: SnowballUiConfig
+): SlotAddress[] {
+  const slotsByLayer = new Map<number, Set<number>>();
+  cycle.positions.forEach((position) => {
+    const layer = intNum(position.layer_number, 0);
+    const retracement = intNum(position.retracement_count, -1);
+    if (
+      layer < 1 ||
+      layer > config.fMax ||
+      retracement < 0 ||
+      retracement > config.rMax
+    ) {
+      return;
+    }
+    if (!slotsByLayer.has(layer)) {
+      slotsByLayer.set(layer, new Set<number>());
+    }
+    slotsByLayer.get(layer)?.add(retracement);
+  });
+
+  if (slotsByLayer.size === 0) {
+    return [{ layer: 1, retracement: 0 }];
+  }
+
+  const slots: SlotAddress[] = [];
+  const maxLayer = Math.max(...Array.from(slotsByLayer.keys()));
+  for (let layer = 1; layer <= Math.min(maxLayer, config.fMax); layer += 1) {
+    const retracements = slotsByLayer.get(layer);
+    if (!retracements || !retracements.has(0)) {
+      continue;
+    }
+    const maxRetracement = Math.max(...Array.from(retracements));
+    if (!isContiguousRetracementPrefix(retracements, maxRetracement)) {
+      continue;
+    }
+    if (maxRetracement < config.rMax) {
+      slots.push({ layer, retracement: maxRetracement + 1 });
+    }
+  }
+
+  if (canAddNextLayer(slotsByLayer, maxLayer, config.fMax)) {
+    slots.push({ layer: maxLayer + 1, retracement: 0 });
+  }
+
+  return slots;
+}
+
+function canAddNextLayer(
+  slotsByLayer: Map<number, Set<number>>,
+  maxLayer: number,
+  fMax: number
+) {
+  if (maxLayer >= fMax) {
+    return false;
+  }
+  for (let layer = 1; layer <= maxLayer; layer += 1) {
+    if (!slotsByLayer.get(layer)?.has(0)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isContiguousRetracementPrefix(
+  retracements: Set<number>,
+  maxRetracement: number
+) {
+  for (let retracement = 0; retracement <= maxRetracement; retracement += 1) {
+    if (!retracements.has(retracement)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function selectedAddSlotKey(
+  cycleIndex: number,
+  slots: SlotAddress[],
+  selected: Record<number, string>
+) {
+  const current = selected[cycleIndex];
+  if (current && slots.some((slot) => slotKey(slot) === current)) {
+    return current;
+  }
+  return slots[0] ? slotKey(slots[0]) : '';
+}
+
+function slotKey(slot: SlotAddress) {
+  return `${slot.layer}:${slot.retracement}`;
+}
+
+function parseSlotKey(value: string): SlotAddress | null {
+  const [rawLayer, rawRetracement] = value.split(':');
+  const layer = Number(rawLayer);
+  const retracement = Number(rawRetracement);
+  if (!Number.isInteger(layer) || !Number.isInteger(retracement)) {
+    return null;
+  }
+  return { layer, retracement };
+}
+
+function sortPositionsBySlot(positions: BacktestInitialPosition[]) {
+  return [...positions].sort((left, right) => {
+    const leftLayer = intNum(left.layer_number, 0);
+    const rightLayer = intNum(right.layer_number, 0);
+    if (leftLayer !== rightLayer) {
+      return leftLayer - rightLayer;
+    }
+    return (
+      intNum(left.retracement_count, 0) - intNum(right.retracement_count, 0)
+    );
   });
 }
 
@@ -623,8 +953,10 @@ function normalizeCyclesForConfig(
   config: SnowballUiConfig
 ): BacktestInitialPositionCycle[] {
   return cycles.map((cycle) => {
-    const normalizedPositions = cycle.positions.map((position) =>
-      normalizePositionForConfig(position, config)
+    const normalizedPositions = sortPositionsBySlot(
+      cycle.positions.map((position) =>
+        normalizePositionForConfig(position, config)
+      )
     );
     const normalizedCycle = { ...cycle, positions: normalizedPositions };
     return {
@@ -675,7 +1007,13 @@ function appendImportedCycles(
   imported: BacktestInitialPositionCycle[]
 ) {
   if (imported.length === 0) return current;
-  return [...current, ...imported];
+  return [
+    ...current,
+    ...imported.map((cycle) => ({
+      ...cycle,
+      positions: sortPositionsBySlot(cycle.positions),
+    })),
+  ];
 }
 
 function importSourceKey(source: InitialPositionImportSource) {
@@ -696,10 +1034,12 @@ function formatTickTimestamp(timestamp: string) {
 
 function SeedPositionRow({
   position,
+  positionNumber,
   onChange,
   stopLossEnabled,
 }: {
   position: BacktestInitialPosition;
+  positionNumber: number;
   onChange: (position: BacktestInitialPosition) => void;
   stopLossEnabled: boolean;
 }) {
@@ -737,10 +1077,20 @@ function SeedPositionRow({
     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
       <Grid container spacing={1.5} sx={{ alignItems: 'center' }}>
         <Grid size={{ xs: 12, sm: 1.4 }}>
-          <Chip
-            size="small"
-            label={`L${position.layer_number}/R${position.retracement_count}`}
-          />
+          <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+            <Chip
+              size="small"
+              label={t('backtest:form.initialPositionPositionTempId', {
+                defaultValue: 'P{{position}}',
+                position: positionNumber,
+              })}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`L${position.layer_number}/R${position.retracement_count}`}
+            />
+          </Stack>
         </Grid>
         <Grid size={{ xs: 6, sm: 1.6 }}>
           <TextField
@@ -1136,14 +1486,6 @@ function progressionPips(
     Math.max(values.tail, values.head - (values.head - values.tail) * curved),
     values.roundStep
   );
-}
-
-function nextSlot(positionCount: number, rMax: number) {
-  const perLayer = rMax + 1;
-  return {
-    layer: Math.floor(positionCount / perLayer) + 1,
-    retracement: positionCount % perLayer,
-  };
 }
 
 function slotLabel(layer: number, retracement: number) {

@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
+import { addInitialPositionSlotStructureIssues } from '../tasks/forms/validationSchemas';
 import { BacktestInitialPositionsEditor } from '../backtest/BacktestInitialPositionsEditor';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
 import type { Account } from '../../types/strategy';
@@ -195,6 +196,9 @@ const tradingTaskSchema = z
         path: ['initial_position_cycles'],
         message: 'At least one initial cycle is required',
       });
+    }
+    if (data.initial_positions_enabled) {
+      addInitialPositionSlotStructureIssues(data.initial_position_cycles, ctx);
     }
   });
 

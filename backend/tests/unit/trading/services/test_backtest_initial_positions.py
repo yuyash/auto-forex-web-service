@@ -62,7 +62,7 @@ def _task(*, initial_position_cycles):
 
 
 @pytest.mark.django_db
-def test_validate_initial_position_cycles_allows_sparse_slots():
+def test_validate_initial_position_cycles_allows_sparse_layers():
     task = _task(
         initial_position_cycles=[
             {
@@ -70,12 +70,24 @@ def test_validate_initial_position_cycles_allows_sparse_slots():
                 "positions": [
                     {
                         "layer_number": 1,
-                        "retracement_count": 1,
+                        "retracement_count": 0,
                         "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "units": 2000,
                         "entry_price": "149.70",
                         "planned_exit_price": "150.20",
                         "stop_loss_price": "149.40",
-                    }
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.30",
+                    },
                 ],
             }
         ]
@@ -88,8 +100,93 @@ def test_validate_initial_position_cycles_allows_sparse_slots():
         pip_size=task.pip_size,
     )
 
-    assert normalized[0].positions[0].layer_number == 1
-    assert normalized[0].positions[0].retracement_count == 1
+    assert [(p.layer_number, p.retracement_count) for p in normalized[0].positions] == [
+        (1, 0),
+        (1, 1),
+        (2, 0),
+    ]
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_missing_layer_r0():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "units": 2000,
+                        "entry_price": "149.70",
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 2,
+                        "units": 3000,
+                        "entry_price": "149.30",
+                    },
+                ],
+            }
+        ]
+    )
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[2].retracement_count"]
+        == "Layer L2 must start at R0."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_missing_retracement_prefix():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 2,
+                        "units": 3000,
+                        "entry_price": "149.40",
+                    },
+                ],
+            }
+        ]
+    )
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[1].retracement_count"]
+        == "Layer L1 cannot skip R1 before R2."
+    )
 
 
 @pytest.mark.django_db

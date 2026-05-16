@@ -63,6 +63,147 @@ const initialPositionCycleSchema = z.object({
   positions: z.array(initialPositionSchema).min(1),
 });
 
+interface InitialPositionSlotLike {
+  layer_number: unknown;
+  retracement_count: unknown;
+}
+
+interface InitialPositionCycleLike {
+  positions?: InitialPositionSlotLike[];
+}
+
+export function addInitialPositionSlotStructureIssues(
+  cycles: InitialPositionCycleLike[],
+  ctx: z.RefinementCtx
+) {
+  cycles.forEach((cycle, cycleIndex) => {
+    const positions = Array.isArray(cycle.positions) ? cycle.positions : [];
+    const seen = new Map<string, number>();
+    const validPositions: Array<{
+      positionIndex: number;
+      layer: number;
+      retracement: number;
+    }> = [];
+
+    positions.forEach((position, positionIndex) => {
+      const layer = integerValue(position.layer_number);
+      const retracement = integerValue(position.retracement_count);
+      if (layer === null || retracement === null) {
+        return;
+      }
+
+      const key = `${layer}:${retracement}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [
+            'initial_position_cycles',
+            cycleIndex,
+            'positions',
+            positionIndex,
+            'retracement_count',
+          ],
+          message: `Duplicate L${layer}/R${retracement}`,
+        });
+        return;
+      }
+      seen.set(key, positionIndex);
+
+      if (layer >= 1 && retracement >= 0) {
+        validPositions.push({ positionIndex, layer, retracement });
+      }
+    });
+
+    const byLayer = new Map<number, typeof validPositions>();
+    validPositions.forEach((position) => {
+      byLayer.set(position.layer, [
+        ...(byLayer.get(position.layer) ?? []),
+        position,
+      ]);
+    });
+    const maxLayer = Math.max(0, ...Array.from(byLayer.keys()));
+
+    for (let layer = 1; layer <= maxLayer; layer += 1) {
+      const layerPositions = byLayer.get(layer) ?? [];
+      if (layerPositions.length === 0) {
+        const offender = validPositions.find(
+          (position) => position.layer > layer
+        );
+        if (offender) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [
+              'initial_position_cycles',
+              cycleIndex,
+              'positions',
+              offender.positionIndex,
+              'layer_number',
+            ],
+            message: `Layer L${layer} must exist before higher layers.`,
+          });
+        }
+        continue;
+      }
+
+      const byRetracement = new Map<number, (typeof validPositions)[number]>();
+      layerPositions.forEach((position) => {
+        byRetracement.set(position.retracement, position);
+      });
+      const maxRetracement = Math.max(...Array.from(byRetracement.keys()));
+      if (!byRetracement.has(0)) {
+        const offender = [...layerPositions].sort(
+          (left, right) => left.retracement - right.retracement
+        )[0];
+        ctx.addIssue({
+          code: 'custom',
+          path: [
+            'initial_position_cycles',
+            cycleIndex,
+            'positions',
+            offender.positionIndex,
+            'retracement_count',
+          ],
+          message: `Layer L${layer} must start at R0.`,
+        });
+        continue;
+      }
+
+      for (
+        let retracement = 0;
+        retracement <= maxRetracement;
+        retracement += 1
+      ) {
+        if (byRetracement.has(retracement)) {
+          continue;
+        }
+        const offender = [...layerPositions]
+          .filter((position) => position.retracement > retracement)
+          .sort((left, right) => left.retracement - right.retracement)[0];
+        ctx.addIssue({
+          code: 'custom',
+          path: [
+            'initial_position_cycles',
+            cycleIndex,
+            'positions',
+            offender.positionIndex,
+            'retracement_count',
+          ],
+          message: `Layer L${layer} cannot skip R${retracement} before R${offender.retracement}.`,
+        });
+        break;
+      }
+    }
+  });
+}
+
+function integerValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 // Configuration validation schema
 export const configurationSchema = z.object({
   name: z
@@ -191,26 +332,7 @@ export const backtestTaskSchema = z
         message: 'At least one initial cycle is required',
       });
     }
-    data.initial_position_cycles.forEach((cycle, cycleIndex) => {
-      const seen = new Set<string>();
-      cycle.positions.forEach((position, positionIndex) => {
-        const key = `${position.layer_number}:${position.retracement_count}`;
-        if (seen.has(key)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [
-              'initial_position_cycles',
-              cycleIndex,
-              'positions',
-              positionIndex,
-              'retracement_count',
-            ],
-            message: `Duplicate L${position.layer_number}/R${position.retracement_count}`,
-          });
-        }
-        seen.add(key);
-      });
-    });
+    addInitialPositionSlotStructureIssues(data.initial_position_cycles, ctx);
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
