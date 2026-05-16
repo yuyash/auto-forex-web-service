@@ -7,6 +7,7 @@ import pytest
 
 from apps.market.services.oanda import OpenTrade, OrderDirection
 from apps.trading.enums import TaskStatus, TaskType
+from apps.trading.models import ExecutionState
 from apps.trading.services.backtest_initial_positions import BacktestInitialPositionService
 from apps.trading.services.initial_position_imports import InitialPositionImportService
 from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
@@ -117,6 +118,66 @@ def test_import_from_task_includes_open_and_pending_for_backtest_but_only_pendin
         "open": 0,
         "pending": 1,
     }
+
+
+@pytest.mark.django_db
+def test_import_from_task_sorts_cycles_by_original_creation_order():
+    user = UserFactory()
+    task = BacktestTaskFactory(
+        user=user,
+        config=_snowball_config(user),
+        instrument="USD_JPY",
+        pip_size=Decimal("0.01"),
+        account_currency="USD",
+        initial_balance=Decimal("100000"),
+        initial_positions_enabled=True,
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    }
+                ],
+            },
+            {
+                "direction": "short",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "151.00",
+                    }
+                ],
+            },
+        ],
+    )
+    BacktestInitialPositionService().sync_for_task(task)
+    task.status = TaskStatus.STOPPED
+    task.save(update_fields=["status", "updated_at"])
+    state = ExecutionState.objects.get(
+        task_type=TaskType.BACKTEST.value,
+        task_id=task.pk,
+    )
+    state.strategy_state["cycles"] = list(reversed(state.strategy_state["cycles"]))
+    state.save(update_fields=["strategy_state", "updated_at"])
+
+    result = InitialPositionImportService().import_from_task(
+        user=task.user,
+        source_task_type=TaskType.BACKTEST.value,
+        source_task_id=str(task.pk),
+        target_task_type=TaskType.BACKTEST.value,
+    )
+
+    assert [cycle["direction"] for cycle in result["cycles"]] == ["long", "short"]
+    assert [cycle["positions"][0]["entry_price"] for cycle in result["cycles"]] == [
+        "150.00",
+        "151.00",
+    ]
 
 
 @pytest.mark.django_db

@@ -1,8 +1,11 @@
 import {
   Add as AddIcon,
+  CheckCircleOutline as EnableIcon,
   Delete as DeleteIcon,
+  HighlightOff as DisableIcon,
   Download as ImportIcon,
   RemoveCircleOutline as RemoveIcon,
+  RestartAlt as ResetIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -60,6 +63,8 @@ interface BacktestInitialPositionsEditorProps {
   configId?: string;
   instrument?: string;
   error?: string;
+  resetBaselineEnabled?: boolean;
+  resetBaselineValue?: BacktestInitialPositionCycle[];
 }
 
 interface InitialPositionOrderWarning {
@@ -104,6 +109,8 @@ export function BacktestInitialPositionsEditor({
   configId,
   instrument,
   error,
+  resetBaselineEnabled = false,
+  resetBaselineValue = [],
 }: BacktestInitialPositionsEditorProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const [selectedSourceKey, setSelectedSourceKey] = useState('');
@@ -115,6 +122,8 @@ export function BacktestInitialPositionsEditor({
   const [anchorShiftEnabledByCycle, setAnchorShiftEnabledByCycle] = useState<
     Record<number, boolean>
   >({});
+  const [crossCycleAnchorShiftEnabled, setCrossCycleAnchorShiftEnabled] =
+    useState(true);
   const resolvedStrategyType = normalizedStrategyType(
     strategyType ?? selectedConfig?.strategy_type
   );
@@ -277,6 +286,21 @@ export function BacktestInitialPositionsEditor({
     } finally {
       setImporting(null);
     }
+  };
+
+  const setAllCycleAnchorShiftEnabled = (isEnabled: boolean) => {
+    setAnchorShiftEnabledByCycle(
+      Object.fromEntries(value.map((_, index) => [index, isEnabled]))
+    );
+  };
+
+  const resetInitialPositions = () => {
+    setImportError(null);
+    setSelectedAddSlotKeys({});
+    setCrossCycleAnchorShiftEnabled(true);
+    setAllCycleAnchorShiftEnabled(true);
+    onEnabledChange(resetBaselineEnabled);
+    onChange(cloneInitialPositionCycles(resetBaselineValue));
   };
 
   return (
@@ -451,6 +475,65 @@ export function BacktestInitialPositionsEditor({
             </Alert>
           ) : null}
 
+          <Stack
+            direction={{ xs: 'column', lg: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { xs: 'stretch', lg: 'center' } }}
+          >
+            <FormControlLabel
+              sx={{ ml: 0 }}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={crossCycleAnchorShiftEnabled}
+                  onChange={(event) =>
+                    setCrossCycleAnchorShiftEnabled(event.target.checked)
+                  }
+                />
+              }
+              label={
+                <Typography variant="body2">
+                  {t('backtest:form.initialPositionCrossCycleAnchorShift', {
+                    defaultValue: 'Use C1 as anchor for all cycles',
+                  })}
+                </Typography>
+              }
+            />
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<EnableIcon />}
+                onClick={() => setAllCycleAnchorShiftEnabled(true)}
+              >
+                {t('backtest:form.enableAllCycleAnchorShift', {
+                  defaultValue: 'Enable all cycle adjustments',
+                })}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<DisableIcon />}
+                onClick={() => setAllCycleAnchorShiftEnabled(false)}
+              >
+                {t('backtest:form.disableAllCycleAnchorShift', {
+                  defaultValue: 'Disable all cycle adjustments',
+                })}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<ResetIcon />}
+                onClick={resetInitialPositions}
+              >
+                {t('backtest:form.resetInitialPositions', {
+                  defaultValue: 'Reset initial positions',
+                })}
+              </Button>
+            </Stack>
+          </Stack>
+
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Button
               size="small"
@@ -481,8 +564,9 @@ export function BacktestInitialPositionsEditor({
             );
             const selectedSlot = parseSlotKey(selectedSlotKey);
             const canAdd = selectedSlot !== null;
-            const anchorShiftEnabled = Boolean(
-              anchorShiftEnabledByCycle[cycleIndex]
+            const anchorShiftEnabled = isCycleAnchorShiftEnabled(
+              anchorShiftEnabledByCycle,
+              cycleIndex
             );
             return (
               <Paper
@@ -581,7 +665,7 @@ export function BacktestInitialPositionsEditor({
                         label={
                           <Typography variant="body2">
                             {t('backtest:form.initialPositionAnchorShift', {
-                              defaultValue: 'Auto-adjust prices from L1/R0',
+                              defaultValue: 'Auto-adjust this cycle from L1/R0',
                             })}
                           </Typography>
                         }
@@ -605,13 +689,15 @@ export function BacktestInitialPositionsEditor({
                       position={position}
                       positionNumber={positionIndex + 1}
                       onChange={(next) =>
-                        updateCycle(cycleIndex, (current) =>
-                          updatePositionInCycle(
-                            current,
+                        onChange(
+                          updatePositionInCycles(
+                            value,
+                            cycleIndex,
                             positionIndex,
                             next,
                             config,
-                            anchorShiftEnabled
+                            anchorShiftEnabledByCycle,
+                            crossCycleAnchorShiftEnabled
                           )
                         )
                       }
@@ -867,6 +953,79 @@ function updatePositionInCycle(
         : item
     ),
   };
+}
+
+function updatePositionInCycles(
+  cycles: BacktestInitialPositionCycle[],
+  cycleIndex: number,
+  positionIndex: number,
+  next: BacktestInitialPosition,
+  config: SnowballUiConfig,
+  anchorShiftEnabledByCycle: Record<number, boolean>,
+  crossCycleAnchorShiftEnabled: boolean
+): BacktestInitialPositionCycle[] {
+  const cycle = cycles[cycleIndex];
+  const previous = cycle?.positions[positionIndex];
+  const delta =
+    previous && isAnchorSlot(previous) ? entryPriceDelta(previous, next) : null;
+  const shouldShiftAcrossCycles =
+    cycleIndex === 0 &&
+    crossCycleAnchorShiftEnabled &&
+    delta !== null &&
+    delta !== 0;
+
+  if (!shouldShiftAcrossCycles) {
+    return cycles.map((current, index) =>
+      index === cycleIndex
+        ? updatePositionInCycle(
+            current,
+            positionIndex,
+            next,
+            config,
+            isCycleAnchorShiftEnabled(anchorShiftEnabledByCycle, index)
+          )
+        : current
+    );
+  }
+
+  return cycles.map((current, index) => {
+    if (!isCycleAnchorShiftEnabled(anchorShiftEnabledByCycle, index)) {
+      return index === cycleIndex
+        ? updatePositionInCycle(current, positionIndex, next, config, false)
+        : current;
+    }
+
+    return index === cycleIndex
+      ? updatePositionInCycle(current, positionIndex, next, config, true)
+      : shiftCyclePrices(current, delta, config);
+  });
+}
+
+function shiftCyclePrices(
+  cycle: BacktestInitialPositionCycle,
+  delta: number,
+  config: SnowballUiConfig
+): BacktestInitialPositionCycle {
+  const shiftedPositions = cycle.positions.map((position) =>
+    shiftPositionPrices(position, delta, true)
+  );
+  const shiftedCycle = { ...cycle, positions: shiftedPositions };
+  return {
+    ...shiftedCycle,
+    positions: shiftedPositions.map((position) =>
+      normalizePositionForConfig(
+        withDefaultPrices(position, shiftedCycle, config),
+        config
+      )
+    ),
+  };
+}
+
+function isCycleAnchorShiftEnabled(
+  anchorShiftEnabledByCycle: Record<number, boolean>,
+  cycleIndex: number
+) {
+  return anchorShiftEnabledByCycle[cycleIndex] ?? true;
 }
 
 function isAnchorSlot(position: BacktestInitialPosition) {
@@ -1154,6 +1313,13 @@ function sameInitialPositionCycles(
   right: BacktestInitialPositionCycle[]
 ) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function cloneInitialPositionCycles(cycles: BacktestInitialPositionCycle[]) {
+  return cycles.map((cycle) => ({
+    ...cycle,
+    positions: cycle.positions.map((position) => ({ ...position })),
+  }));
 }
 
 function appendImportedCycles(
