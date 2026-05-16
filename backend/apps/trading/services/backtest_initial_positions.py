@@ -24,6 +24,7 @@ from apps.trading.models import (
     Position,
     StrategyEventRecord,
     Trade,
+    TradingTask,
     TradingEvent,
 )
 from apps.trading.money import AccountCurrency
@@ -81,6 +82,7 @@ class NormalizedSeedPosition:
     status: str
     exit_price: Decimal | None
     close_reason: str
+    oanda_trade_id: str
 
 
 @dataclass(slots=True)
@@ -95,12 +97,17 @@ def is_initial_position_preview_state(state: ExecutionState | None) -> bool:
     return isinstance(raw, dict) and raw.get(PREVIEW_STATE_MARKER) is True
 
 
-def _is_preview_execution(*, task_id: Any, execution_id: Any) -> bool:
+def task_type_for_initial_position_task(task: BacktestTask | TradingTask) -> TaskType:
+    """Return the persisted task type for an initial-position-capable task."""
+    return TaskType.BACKTEST if isinstance(task, BacktestTask) else TaskType.TRADING
+
+
+def _is_preview_execution(*, task_type: TaskType, task_id: Any, execution_id: Any) -> bool:
     if execution_id is None:
         return False
     state = (
         ExecutionState.objects.filter(
-            task_type=TaskType.BACKTEST.value,
+            task_type=task_type.value,
             task_id=task_id,
             execution_id=execution_id,
         )
@@ -112,7 +119,7 @@ def _is_preview_execution(*, task_id: Any, execution_id: Any) -> bool:
 
 def _validate_initial_position_cycles_impl(
     *,
-    task: BacktestTask | None,
+    task: BacktestTask | TradingTask | None,
     config: Any,
     cycles: Any,
     pip_size: Decimal | None = None,
@@ -202,22 +209,6 @@ def _validate_initial_position_cycles_impl(
 
         if normalized_positions:
             normalized_positions.sort(key=lambda p: (p.layer_number, p.retracement_count))
-            expected_slots = _expected_prefix_slots(
-                count=len(normalized_positions),
-                r_max=cfg.r_max,
-            )
-            actual_slots = [(p.layer_number, p.retracement_count) for p in normalized_positions]
-            if actual_slots != expected_slots:
-                expected_label = ", ".join(
-                    f"L{layer}/R{retracement}" for layer, retracement in expected_slots
-                )
-                actual_label = ", ".join(
-                    f"L{layer}/R{retracement}" for layer, retracement in actual_slots
-                )
-                errors[f"{path}.positions"] = (
-                    "Positions must be stacked contiguously from L1/R0. "
-                    f"Expected prefix: {expected_label}; received: {actual_label}."
-                )
 
             for position in normalized_positions:
                 _fill_default_prices(
@@ -227,6 +218,12 @@ def _validate_initial_position_cycles_impl(
                     config=cfg,
                     pip_size=resolved_pip_size,
                 )
+            _validate_normalized_cycle_consistency(
+                positions=normalized_positions,
+                direction=direction,
+                path=path,
+                errors=errors,
+            )
 
             normalized_cycles.append(
                 NormalizedSeedCycle(direction=direction, positions=normalized_positions)
@@ -244,7 +241,7 @@ class InitialPositionCycleValidator:
     def validate(
         self,
         *,
-        task: BacktestTask | None,
+        task: BacktestTask | TradingTask | None,
         config: Any,
         cycles: Any,
         pip_size: Decimal | None = None,
@@ -263,7 +260,7 @@ INITIAL_POSITION_CYCLE_VALIDATOR = InitialPositionCycleValidator()
 
 def validate_initial_position_cycles(
     *,
-    task: BacktestTask | None,
+    task: BacktestTask | TradingTask | None,
     config: Any,
     cycles: Any,
     pip_size: Decimal | None = None,
@@ -287,8 +284,9 @@ class BacktestInitialPositionService:
     ) -> None:
         self.validator = validator or INITIAL_POSITION_CYCLE_VALIDATOR
 
-    def sync_for_task(self, task: BacktestTask) -> None:
-        """Create or clear the preview execution data for a backtest task."""
+    def sync_for_task(self, task: BacktestTask | TradingTask) -> None:
+        """Create or clear preview execution data for an initial-position task."""
+        task_type = task_type_for_initial_position_task(task)
         if task.status not in PREVIEWABLE_TASK_STATUSES:
             return
 
@@ -304,17 +302,24 @@ class BacktestInitialPositionService:
         )
 
         with transaction.atomic():
-            task = (
-                BacktestTask.objects.select_for_update()
-                .select_related("config", "user")
-                .get(pk=task.pk)
+            model = BacktestTask if task_type == TaskType.BACKTEST else TradingTask
+            select_related = (
+                ("config", "user")
+                if task_type == TaskType.BACKTEST
+                else (
+                    "config",
+                    "user",
+                    "oanda_account",
+                )
             )
+            task = model.objects.select_for_update().select_related(*select_related).get(pk=task.pk)
             if task.status not in PREVIEWABLE_TASK_STATUSES:
                 return
             if getattr(task, "initial_positions_enabled", False) is not True:
                 self._clear_preview_for_locked_task(task)
                 return
             current_preview = _is_preview_execution(
+                task_type=task_type,
                 task_id=task.pk,
                 execution_id=task.execution_id,
             )
@@ -330,19 +335,26 @@ class BacktestInitialPositionService:
             self._clear_scope(task)
             self._seed_preview(task=task, normalized_cycles=normalized_cycles)
 
-    def clear_preview(self, task: BacktestTask) -> None:
+    def clear_preview(self, task: BacktestTask | TradingTask) -> None:
         """Remove not-yet-started seed preview records."""
         if task.status not in PREVIEWABLE_TASK_STATUSES or task.execution_id is None:
             return
 
         with transaction.atomic():
-            task = BacktestTask.objects.select_for_update().get(pk=task.pk)
+            task_type = task_type_for_initial_position_task(task)
+            model = BacktestTask if task_type == TaskType.BACKTEST else TradingTask
+            task = model.objects.select_for_update().get(pk=task.pk)
             if task.status not in PREVIEWABLE_TASK_STATUSES or task.execution_id is None:
                 return
             self._clear_preview_for_locked_task(task)
 
-    def _clear_preview_for_locked_task(self, task: BacktestTask) -> None:
-        if not _is_preview_execution(task_id=task.pk, execution_id=task.execution_id):
+    def _clear_preview_for_locked_task(self, task: BacktestTask | TradingTask) -> None:
+        task_type = task_type_for_initial_position_task(task)
+        if not _is_preview_execution(
+            task_type=task_type,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+        ):
             return
         self._clear_scope(task)
         task.execution_id = None
@@ -351,50 +363,52 @@ class BacktestInitialPositionService:
     def _seed_preview(
         self,
         *,
-        task: BacktestTask,
+        task: BacktestTask | TradingTask,
         normalized_cycles: list[NormalizedSeedCycle],
     ) -> None:
+        task_type = task_type_for_initial_position_task(task)
         pip_size = Decimal(str(task.pip_size or pip_size_for_instrument(task.instrument)))
         engine = TradingEngine(
             instrument=task.instrument,
             pip_size=pip_size,
             strategy_config=task.config,
-            account_currency=task.account_currency or "USD",
+            account_currency=_account_currency(task) or "USD",
             hedging_enabled=task.hedging_enabled,
         )
-        order_service = OrderService(account=None, task=task, dry_run=True)
+        account = getattr(task, "oanda_account", None) if task_type == TaskType.TRADING else None
+        order_service = OrderService(account=account, task=task, dry_run=True)
         event_handler = engine.create_event_handler(
             order_service=order_service,
             instrument=task.instrument,
         )
         context = EventContext(
             user=task.user,
-            account=None,
+            account=account,
             instrument=task.instrument,
             task_id=task.pk,
             execution_id=task.execution_id,
-            task_type=TaskType.BACKTEST,
+            task_type=task_type,
         )
 
-        seed_timestamp = task.start_time - timedelta(seconds=1)
+        seed_timestamp = _seed_timestamp(task)
         state = ExecutionState.objects.create(
-            task_type=TaskType.BACKTEST.value,
+            task_type=task_type.value,
             task_id=task.pk,
             execution_id=task.execution_id,
             strategy_state={},
-            current_balance=task.initial_balance,
-            current_balance_currency=str(task.account_currency or "").upper(),
+            current_balance=_initial_balance(task),
+            current_balance_currency=str(_account_currency(task) or "USD").upper(),
             ticks_processed=0,
-            last_tick_timestamp=seed_timestamp,
-            resume_cursor_timestamp=task.start_time,
+            last_tick_timestamp=(seed_timestamp if task_type == TaskType.BACKTEST else None),
+            resume_cursor_timestamp=(task.start_time if isinstance(task, BacktestTask) else None),
             last_tick_price=None,
             last_tick_bid=None,
             last_tick_ask=None,
         )
         snowball_state = SnowballStrategyState(
             initialised=True,
-            account_balance=Decimal(str(task.initial_balance)),
-            account_nav=Decimal(str(task.initial_balance)),
+            account_balance=Decimal(str(_initial_balance(task))),
+            account_nav=Decimal(str(_initial_balance(task))),
         )
 
         event_sequence = 0
@@ -463,8 +477,15 @@ class BacktestInitialPositionService:
                     cycle.trade_cycle_id = str(binding)
                 entry.position_id = _latest_position_id_for_entry(
                     task=task,
+                    task_type=task_type,
                     execution_id=task.execution_id,
                     entry=entry,
+                )
+                self._apply_external_trade_id(
+                    task=task,
+                    task_type=task_type,
+                    position_id=entry.position_id,
+                    oanda_trade_id=position_spec.oanda_trade_id,
                 )
 
                 if position_spec.status == POSITION_STATUS_OPEN:
@@ -476,7 +497,7 @@ class BacktestInitialPositionService:
                     entry=entry,
                     position=position_spec,
                     timestamp=seed_timestamp + timedelta(microseconds=event_sequence),
-                    account_currency=task.account_currency or "USD",
+                    account_currency=_account_currency(task) or "USD",
                     pip_size=pip_size,
                 )
                 event_sequence = self._process_event(
@@ -568,17 +589,40 @@ class BacktestInitialPositionService:
                 Trade.objects.filter(pk__in=result.trade_ids).update(
                     created_at=event.timestamp,
                     updated_at=event.timestamp,
+                    is_initial_position_seed=True,
                 )
             if result.position_ids:
                 Position.objects.filter(pk__in=result.position_ids).update(
                     created_at=event.timestamp,
                     updated_at=event.timestamp,
+                    is_initial_position_seed=True,
                 )
         return event_sequence + 1
 
-    def _clear_scope(self, task: BacktestTask) -> None:
+    def _apply_external_trade_id(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: TaskType,
+        position_id: str | None,
+        oanda_trade_id: str,
+    ) -> None:
+        if not position_id or not oanda_trade_id:
+            return
         scope = {
-            "task_type": TaskType.BACKTEST.value,
+            "task_type": task_type.value,
+            "task_id": task.pk,
+            "execution_id": task.execution_id,
+            "position_id": position_id,
+        }
+        Position.objects.filter(pk=position_id).update(oanda_trade_id=oanda_trade_id)
+        Trade.objects.filter(**scope).update(oanda_trade_id=oanda_trade_id)
+        Order.objects.filter(**scope).update(oanda_trade_id=oanda_trade_id)
+
+    def _clear_scope(self, task: BacktestTask | TradingTask) -> None:
+        task_type = task_type_for_initial_position_task(task)
+        scope = {
+            "task_type": task_type.value,
             "task_id": task.pk,
             "execution_id": task.execution_id,
         }
@@ -607,6 +651,7 @@ def _normalize_position(
     exit_price = _optional_decimal_value(raw.get("exit_price"))
     status = str(raw.get("status") or POSITION_STATUS_OPEN).strip().lower()
     close_reason = str(raw.get("close_reason") or "").strip().lower()
+    oanda_trade_id = str(raw.get("oanda_trade_id") or "").strip()
 
     if layer_number is None:
         errors[f"{path}.layer_number"] = "Layer is required."
@@ -650,6 +695,7 @@ def _normalize_position(
         status=status,
         exit_price=exit_price,
         close_reason=close_reason,
+        oanda_trade_id=oanda_trade_id,
     )
 
 
@@ -686,6 +732,67 @@ def _fill_default_prices(
         position.exit_price = position.stop_loss_price or position.entry_price
     if position.status == POSITION_STATUS_CLOSED and position.exit_price is None:
         position.exit_price = position.planned_exit_price
+
+
+def _validate_normalized_cycle_consistency(
+    *,
+    positions: list[NormalizedSeedPosition],
+    direction: Direction,
+    path: str,
+    errors: dict[str, Any],
+) -> None:
+    for position_index, position in enumerate(positions):
+        pos_path = f"{path}.positions[{position_index}]"
+        if position.status == POSITION_STATUS_OPEN:
+            if position.exit_price is not None:
+                errors[f"{pos_path}.exit_price"] = "Open positions cannot have an exit price."
+            if position.close_reason:
+                errors[f"{pos_path}.close_reason"] = "Open positions cannot have a close reason."
+        elif position.exit_price is None:
+            errors[f"{pos_path}.exit_price"] = "Closed positions require an exit price."
+
+        if position.status == POSITION_STATUS_PENDING_REBUILD and position.stop_loss_price is None:
+            errors[f"{pos_path}.stop_loss_price"] = (
+                "Pending rebuild positions require a stop loss price."
+            )
+
+        if position.planned_exit_price is not None:
+            if direction == Direction.LONG and position.planned_exit_price <= position.entry_price:
+                errors[f"{pos_path}.planned_exit_price"] = (
+                    "Long position planned exit must be above entry price."
+                )
+            if direction == Direction.SHORT and position.planned_exit_price >= position.entry_price:
+                errors[f"{pos_path}.planned_exit_price"] = (
+                    "Short position planned exit must be below entry price."
+                )
+
+        if position.stop_loss_price is not None:
+            if direction == Direction.LONG and position.stop_loss_price >= position.entry_price:
+                errors[f"{pos_path}.stop_loss_price"] = (
+                    "Long position stop loss must be below entry price."
+                )
+            if direction == Direction.SHORT and position.stop_loss_price <= position.entry_price:
+                errors[f"{pos_path}.stop_loss_price"] = (
+                    "Short position stop loss must be above entry price."
+                )
+
+    for position_index, position in enumerate(positions[1:], start=1):
+        previous = positions[position_index - 1]
+        pos_path = f"{path}.positions[{position_index}]"
+        if direction == Direction.LONG and position.entry_price >= previous.entry_price:
+            errors[f"{pos_path}.entry_price"] = (
+                f"Entry price for {_slot_label(position)} must be lower than "
+                f"{_slot_label(previous)} in a long cycle."
+            )
+        if direction == Direction.SHORT and position.entry_price <= previous.entry_price:
+            errors[f"{pos_path}.entry_price"] = (
+                f"Entry price for {_slot_label(position)} must be higher than "
+                f"{_slot_label(previous)} in a short cycle."
+            )
+
+
+def _slot_label(position: NormalizedSeedPosition) -> str:
+    return f"L{position.layer_number}/R{position.retracement_count}"
 
 
 def _default_take_profit(
@@ -825,7 +932,7 @@ def _entry_role(position: NormalizedSeedPosition):
 
 def _close_event_for_seed(
     *,
-    task: BacktestTask,
+    task: BacktestTask | TradingTask,
     entry: Entry,
     position: NormalizedSeedPosition,
     timestamp,
@@ -949,13 +1056,14 @@ def _cycle_has_present_entries(cycle: SnowballCycle) -> bool:
 
 def _latest_position_id_for_entry(
     *,
-    task: BacktestTask,
+    task: BacktestTask | TradingTask,
+    task_type: TaskType,
     execution_id: Any,
     entry: Entry,
 ) -> str | None:
     position = (
         Position.objects.filter(
-            task_type=TaskType.BACKTEST.value,
+            task_type=task_type.value,
             task_id=task.pk,
             execution_id=execution_id,
             layer_index=entry.layer_number,
@@ -966,19 +1074,6 @@ def _latest_position_id_for_entry(
         .first()
     )
     return str(position.id) if position else None
-
-
-def _expected_prefix_slots(*, count: int, r_max: int) -> list[tuple[int, int]]:
-    result: list[tuple[int, int]] = []
-    layer = 1
-    retracement = 0
-    while len(result) < count:
-        result.append((layer, retracement))
-        retracement += 1
-        if retracement > r_max:
-            layer += 1
-            retracement = 0
-    return result
 
 
 def _tick_for_exit(
@@ -1017,7 +1112,11 @@ def _take_profit_from_pips(
     return entry_price - pips * pip_size
 
 
-def _resolve_pip_size(*, task: BacktestTask | None, pip_size: Decimal | None) -> Decimal:
+def _resolve_pip_size(
+    *,
+    task: BacktestTask | TradingTask | None,
+    pip_size: Decimal | None,
+) -> Decimal:
     if pip_size:
         return Decimal(str(pip_size))
     if task is not None and getattr(task, "pip_size", None):
@@ -1026,6 +1125,26 @@ def _resolve_pip_size(*, task: BacktestTask | None, pip_size: Decimal | None) ->
     if not instrument:
         return DEFAULT_PIP_SIZE
     return Decimal(str(pip_size_for_instrument(instrument)))
+
+
+def _seed_timestamp(task: BacktestTask | TradingTask):
+    if isinstance(task, BacktestTask):
+        return task.start_time - timedelta(seconds=1)
+    return timezone.now()
+
+
+def _initial_balance(task: BacktestTask | TradingTask) -> Decimal:
+    if isinstance(task, BacktestTask):
+        return Decimal(str(task.initial_balance))
+    return Decimal(str(getattr(task.oanda_account, "balance", 0) or 0))
+
+
+def _account_currency(task: BacktestTask | TradingTask) -> str:
+    return str(
+        getattr(task, "account_currency", "")
+        or getattr(getattr(task, "oanda_account", None), "currency", "")
+        or ""
+    ).upper()
 
 
 def _int_value(value: Any) -> int | None:

@@ -77,6 +77,8 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
+            "initial_positions_enabled",
+            "initial_position_cycles",
             "pip_size",
             "instrument_context",
             "status",
@@ -215,6 +217,8 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
+            "initial_positions_enabled",
+            "initial_position_cycles",
             "pip_size",
             "instrument_context",
             "status",
@@ -297,6 +301,8 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
+            "initial_positions_enabled",
+            "initial_position_cycles",
             "api_retry_max_attempts",
             "api_retry_backoff_base_seconds",
             "api_retry_backoff_max_seconds",
@@ -317,6 +323,8 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
             "hedging_enabled": {"required": False},
+            "initial_positions_enabled": {"required": False},
+            "initial_position_cycles": {"required": False},
             "api_retry_max_attempts": {"required": False, "min_value": 1},
             "api_retry_backoff_base_seconds": {"required": False, "min_value": 0},
             "api_retry_backoff_max_seconds": {"required": False, "min_value": 0},
@@ -417,6 +425,31 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
         if not instrument:
             raise serializers.ValidationError({"instrument": "Instrument is required"})
+
+        initial_positions_enabled = attrs.get(
+            "initial_positions_enabled",
+            getattr(self.instance, "initial_positions_enabled", False),
+        )
+        initial_position_cycles = attrs.get(
+            "initial_position_cycles",
+            getattr(self.instance, "initial_position_cycles", []),
+        )
+        if initial_positions_enabled:
+            from apps.trading.services.backtest_initial_positions import (
+                InitialPositionValidationError,
+                validate_initial_position_cycles,
+            )
+
+            try:
+                validate_initial_position_cycles(
+                    task=self.instance,
+                    config=config,
+                    cycles=initial_position_cycles,
+                    pip_size=attrs.get("pip_size", getattr(self.instance, "pip_size", None)),
+                )
+            except InitialPositionValidationError as exc:
+                raise serializers.ValidationError(exc.errors) from exc
+
         self._apply_display_currency_default(attrs, instrument)
         self._validate_display_currency_option(attrs, instrument)
 
@@ -506,7 +539,13 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
                 validated_data.get("display_currency")
             ) or default_currency_for_language(instrument, getattr(user, "language", ""))
 
-        return TradingTask.objects.create(**validated_data)
+        task = TradingTask.objects.create(**validated_data)
+        from apps.trading.services.backtest_initial_positions import (
+            BacktestInitialPositionService,
+        )
+
+        BacktestInitialPositionService().sync_for_task(task)
+        return task
 
     def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:
         """Update trading task."""
@@ -536,5 +575,18 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        preview_seed_fields = {
+            "initial_positions_enabled",
+            "initial_position_cycles",
+            "config",
+            "hedging_enabled",
+            "oanda_account",
+        }
+        if preview_seed_fields & set(validated_data):
+            from apps.trading.services.backtest_initial_positions import (
+                BacktestInitialPositionService,
+            )
+
+            BacktestInitialPositionService().sync_for_task(instance)
         audit_task_update(task=instance, task_type="trading", changes=changes)
         return instance

@@ -101,6 +101,18 @@ class TradingTask(ExecutableTaskModel):
         default=True,
         help_text="Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account.",
     )
+    initial_positions_enabled = models.BooleanField(
+        default=False,
+        help_text="Create Snowball initial cycles/positions before starting the trading task.",
+    )
+    initial_position_cycles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Requested Snowball initial cycle/position structure. "
+            "Positions, trades, orders, and strategy state are generated from this data."
+        ),
+    )
     strategy_state = models.JSONField(
         default=dict,
         blank=True,

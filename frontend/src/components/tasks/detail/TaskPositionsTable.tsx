@@ -384,6 +384,28 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       ),
   };
 
+  const initialPositionSeedCol: Column<TaskPosition> = {
+    id: 'is_initial_position_seed',
+    label: t('tables.positions.initialPositionSeed'),
+    width: 100,
+    minWidth: 80,
+    render: (r) =>
+      r.is_initial_position_seed ? (
+        <Chip
+          label={t('tables.positions.initialPositionSeedShort')}
+          size="small"
+          color="primary"
+          variant="filled"
+          sx={{
+            height: 22,
+            '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem' },
+          }}
+        />
+      ) : (
+        '-'
+      ),
+  };
+
   const statusCol: Column<TaskPosition> = {
     id: 'is_open',
     label: t('tables.positions.status'),
@@ -747,6 +769,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const closedCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
     replayCol,
+    initialPositionSeedCol,
     entryTimeCol,
     exitTimeCol,
     instrumentCol,
@@ -769,6 +792,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const openCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
     replayCol,
+    initialPositionSeedCol,
     entryTimeCol,
     instrumentCol,
     unitsCol,
@@ -788,6 +812,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const dirCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
     replayCol,
+    initialPositionSeedCol,
     statusCol,
     entryTimeCol,
     exitTimeCol,
@@ -811,6 +836,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const allCols = (): Column<TaskPosition>[] => [
     idCol,
     replayCol,
+    initialPositionSeedCol,
     directionCol,
     statusCol,
     entryTimeCol,

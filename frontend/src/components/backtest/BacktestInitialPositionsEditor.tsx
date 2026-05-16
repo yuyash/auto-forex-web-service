@@ -1,14 +1,17 @@
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
+  Download as ImportIcon,
   RemoveCircleOutline as RemoveIcon,
 } from '@mui/icons-material';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Box,
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -22,9 +25,14 @@ import {
   Typography,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { initialPositionImportsApi } from '../../services/api';
 import type { TickDataPoint } from '../../services/api/market';
+import type {
+  InitialPositionImportSource,
+  InitialPositionTaskType,
+} from '../../services/api/initialPositionImports';
 import type {
   BacktestInitialPosition,
   BacktestInitialPositionCycle,
@@ -44,6 +52,13 @@ interface BacktestInitialPositionsEditorProps {
   firstTick?: TickDataPoint | null;
   firstTickLoading?: boolean;
   firstTickError?: string | null;
+  taskType?: InitialPositionTaskType;
+  currentTaskId?: string;
+  showFirstTickInfo?: boolean;
+  allowOandaImport?: boolean;
+  accountId?: number | string;
+  configId?: string;
+  instrument?: string;
   error?: string;
 }
 
@@ -66,9 +81,19 @@ export function BacktestInitialPositionsEditor({
   firstTick,
   firstTickLoading = false,
   firstTickError,
+  taskType = 'backtest',
+  currentTaskId,
+  showFirstTickInfo = true,
+  allowOandaImport = false,
+  accountId,
+  configId,
+  instrument,
   error,
 }: BacktestInitialPositionsEditorProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const [selectedSourceKey, setSelectedSourceKey] = useState('');
+  const [importing, setImporting] = useState<'task' | 'oanda' | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const resolvedStrategyType = normalizedStrategyType(
     strategyType ?? selectedConfig?.strategy_type
   );
@@ -82,6 +107,16 @@ export function BacktestInitialPositionsEditor({
   const orderWarnings = useMemo(
     () => initialPositionOrderWarnings(value, config.rMax),
     [config.rMax, value]
+  );
+  const importSourcesQuery = useQuery({
+    queryKey: ['initial-position-import-sources'],
+    queryFn: () => initialPositionImportsApi.listSources(),
+    enabled: enabled && canUseInitialPositions,
+    staleTime: 30_000,
+  });
+  const importSources = importSourcesQuery.data?.results ?? [];
+  const canImportFromOanda = Boolean(
+    allowOandaImport && accountId && configId && instrument
   );
 
   useEffect(() => {
@@ -154,6 +189,51 @@ export function BacktestInitialPositionsEditor({
     }));
   };
 
+  const importFromTask = async () => {
+    const source = parseImportSourceKey(selectedSourceKey, importSources);
+    if (!source) return;
+    setImporting('task');
+    setImportError(null);
+    try {
+      const result = await initialPositionImportsApi.importFromTask({
+        source_task_type: source.task_type,
+        source_task_id: source.id,
+        target_task_type: taskType,
+      });
+      onChange(appendImportedCycles(value, result.cycles));
+    } catch {
+      setImportError(
+        t('backtest:form.initialPositionImportFailed', {
+          defaultValue: 'Could not import initial positions.',
+        })
+      );
+    } finally {
+      setImporting(null);
+    }
+  };
+
+  const importFromOanda = async () => {
+    if (!canImportFromOanda) return;
+    setImporting('oanda');
+    setImportError(null);
+    try {
+      const result = await initialPositionImportsApi.importFromOanda({
+        account_id: accountId!,
+        config_id: configId!,
+        instrument: instrument!,
+      });
+      onChange(appendImportedCycles(value, result.cycles));
+    } catch {
+      setImportError(
+        t('backtest:form.initialPositionOandaImportFailed', {
+          defaultValue: 'Could not import open OANDA positions.',
+        })
+      );
+    } finally {
+      setImporting(null);
+    }
+  };
+
   return (
     <Box>
       <FormControlLabel
@@ -190,6 +270,83 @@ export function BacktestInitialPositionsEditor({
               {error}
             </Typography>
           ) : null}
+          {importError ? <Alert severity="error">{importError}</Alert> : null}
+
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { xs: 'stretch', md: 'center' } }}
+          >
+            <FormControl size="small" sx={{ minWidth: { md: 360 } }}>
+              <InputLabel>
+                {t('backtest:form.initialPositionImportTask', {
+                  defaultValue: 'Import source task',
+                })}
+              </InputLabel>
+              <Select
+                label={t('backtest:form.initialPositionImportTask', {
+                  defaultValue: 'Import source task',
+                })}
+                value={selectedSourceKey}
+                onChange={(event) => setSelectedSourceKey(event.target.value)}
+                disabled={importSourcesQuery.isLoading}
+              >
+                <MenuItem value="">
+                  <em>
+                    {importSourcesQuery.isLoading
+                      ? t('common:status.loading')
+                      : t('backtest:form.selectImportSourceTask', {
+                          defaultValue: 'Select a task',
+                        })}
+                  </em>
+                </MenuItem>
+                {importSources.map((source) => (
+                  <MenuItem
+                    key={importSourceKey(source)}
+                    value={importSourceKey(source)}
+                  >
+                    {sourceLabel(source)}
+                    {source.task_type === taskType &&
+                    source.id === currentTaskId
+                      ? ` (${t('common:labels.currentTask')})`
+                      : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              startIcon={
+                importing === 'task' ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <ImportIcon />
+                )
+              }
+              disabled={!selectedSourceKey || importing !== null}
+              onClick={importFromTask}
+            >
+              {t('common:actions.import', { defaultValue: 'Import' })}
+            </Button>
+            {allowOandaImport ? (
+              <Button
+                variant="outlined"
+                startIcon={
+                  importing === 'oanda' ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <ImportIcon />
+                  )
+                }
+                disabled={!canImportFromOanda || importing !== null}
+                onClick={importFromOanda}
+              >
+                {t('backtest:form.importOandaOpenPositions', {
+                  defaultValue: 'Import OANDA open positions',
+                })}
+              </Button>
+            ) : null}
+          </Stack>
 
           {orderWarnings.length > 0 ? (
             <Alert severity="warning">
@@ -220,32 +377,34 @@ export function BacktestInitialPositionsEditor({
             </Alert>
           ) : null}
 
-          <Alert severity={firstTickError ? 'warning' : 'info'}>
-            {firstTickLoading
-              ? t('backtest:form.firstTickLoading', {
-                  defaultValue:
-                    'Loading the first tick in the backtest period...',
-                })
-              : firstTick
-                ? t('backtest:form.firstTickPrice', {
+          {showFirstTickInfo ? (
+            <Alert severity={firstTickError ? 'warning' : 'info'}>
+              {firstTickLoading
+                ? t('backtest:form.firstTickLoading', {
                     defaultValue:
-                      'First tick: {{timestamp}} / Bid {{bid}} / Ask {{ask}} / Mid {{mid}}',
-                    timestamp: formatTickTimestamp(firstTick.timestamp),
-                    bid: firstTick.bid,
-                    ask: firstTick.ask,
-                    mid: firstTick.mid,
+                      'Loading the first tick in the backtest period...',
                   })
-                : t(
-                    firstTickError
-                      ? 'backtest:form.firstTickLoadFailed'
-                      : 'backtest:form.firstTickUnavailable',
-                    {
-                      defaultValue: firstTickError
-                        ? 'Could not load the first tick in the backtest period.'
-                        : 'No tick was found in the backtest period.',
-                    }
-                  )}
-          </Alert>
+                : firstTick
+                  ? t('backtest:form.firstTickPrice', {
+                      defaultValue:
+                        'First tick: {{timestamp}} / Bid {{bid}} / Ask {{ask}} / Mid {{mid}}',
+                      timestamp: formatTickTimestamp(firstTick.timestamp),
+                      bid: firstTick.bid,
+                      ask: firstTick.ask,
+                      mid: firstTick.mid,
+                    })
+                  : t(
+                      firstTickError
+                        ? 'backtest:form.firstTickLoadFailed'
+                        : 'backtest:form.firstTickUnavailable',
+                      {
+                        defaultValue: firstTickError
+                          ? 'Could not load the first tick in the backtest period.'
+                          : 'No tick was found in the backtest period.',
+                      }
+                    )}
+            </Alert>
+          ) : null}
 
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Button
@@ -414,11 +573,10 @@ function initialPositionOrderWarnings(
     return cycle.positions.flatMap((position, positionIndex) => {
       const expected = nextSlot(positionIndex, rMax);
       const expectedLabel = slotLabel(expected.layer, expected.retracement);
-      const actualLabel = slotLabel(
-        position.layer_number,
-        position.retracement_count
-      );
-      const key = `${position.layer_number}:${position.retracement_count}`;
+      const layer = intNum(position.layer_number, 0);
+      const retracement = intNum(position.retracement_count, 0);
+      const actualLabel = slotLabel(layer, retracement);
+      const key = `${layer}:${retracement}`;
       const warnings: InitialPositionOrderWarning[] = [];
 
       if (seen.has(key)) {
@@ -431,10 +589,7 @@ function initialPositionOrderWarnings(
       }
       seen.add(key);
 
-      if (
-        position.layer_number !== expected.layer ||
-        position.retracement_count !== expected.retracement
-      ) {
+      if (layer !== expected.layer || retracement !== expected.retracement) {
         warnings.push({
           type: 'order',
           cycleNumber: cycleIndex + 1,
@@ -499,6 +654,31 @@ function sameInitialPositionCycles(
   right: BacktestInitialPositionCycle[]
 ) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function appendImportedCycles(
+  current: BacktestInitialPositionCycle[],
+  imported: BacktestInitialPositionCycle[]
+) {
+  if (imported.length === 0) return current;
+  return [...current, ...imported];
+}
+
+function importSourceKey(source: InitialPositionImportSource) {
+  return `${source.task_type}:${source.id}`;
+}
+
+function parseImportSourceKey(
+  value: string,
+  sources: InitialPositionImportSource[]
+) {
+  return sources.find((source) => importSourceKey(source) === value);
+}
+
+function sourceLabel(source: InitialPositionImportSource) {
+  const type = source.task_type === 'backtest' ? 'Backtest' : 'Trading';
+  const instrument = source.instrument ? ` / ${source.instrument}` : '';
+  return `${type}: ${source.name} (${source.status}${instrument})`;
 }
 
 function formatTickTimestamp(timestamp: string) {
@@ -799,14 +979,14 @@ function defaultTakeProfit(
 ) {
   const entry = num(position.entry_price, 0);
   const direction = cycle.direction;
-  if (position.retracement_count === 0) {
+  const layer = intNum(position.layer_number, 0);
+  const retracement = intNum(position.retracement_count, 0);
+  if (retracement === 0) {
     const raw = addPips(entry, direction, config.mPips, config.pipSize);
-    if (position.layer_number <= 1) return raw;
+    if (layer <= 1) return raw;
     const bound = [...cycle.positions]
       .reverse()
-      .find(
-        (p) => p.layer_number === position.layer_number - 1
-      )?.planned_exit_price;
+      .find((p) => intNum(p.layer_number, 0) === layer - 1)?.planned_exit_price;
     const boundNum = num(bound, NaN);
     if (!Number.isFinite(boundNum)) return raw;
     if (direction === 'long' && raw > boundNum) return boundNum;
@@ -816,8 +996,8 @@ function defaultTakeProfit(
   if (config.counterTpMode === 'weighted_avg') {
     const prior = cycle.positions.filter(
       (p) =>
-        p.layer_number === position.layer_number &&
-        p.retracement_count < position.retracement_count
+        intNum(p.layer_number, 0) === layer &&
+        intNum(p.retracement_count, 0) < retracement
     );
     const currentUnits = num(position.units, 0);
     const totalUnits = prior.reduce(
@@ -833,7 +1013,7 @@ function defaultTakeProfit(
   return addPips(
     entry,
     direction,
-    counterTpPips(position.retracement_count, config),
+    counterTpPips(retracement, config),
     config.pipSize
   );
 }
@@ -846,7 +1026,8 @@ function defaultStopLoss(
   if (!config.stopLossEnabled) return undefined;
   const entry = num(position.entry_price, 0);
   const direction = cycle.direction;
-  const slotNumber = position.retracement_count + 1;
+  const retracement = intNum(position.retracement_count, 0);
+  const slotNumber = retracement + 1;
   if (config.stopLossMode === 'auto') {
     const interval = progressionPips(slotNumber, {
       mode: config.intervalMode,
@@ -862,12 +1043,12 @@ function defaultStopLoss(
     const tpPips = Math.abs(planned - entry) / config.pipSize;
     if (direction === 'long') {
       const nextEntry = entry - interval * config.pipSize;
-      return position.retracement_count === 0 || tpPips < interval
+      return retracement === 0 || tpPips < interval
         ? nextEntry
         : nextEntry - interval * config.pipSize;
     }
     const nextEntry = entry + interval * config.pipSize;
-    return position.retracement_count === 0 || tpPips < interval
+    return retracement === 0 || tpPips < interval
       ? nextEntry
       : nextEntry + interval * config.pipSize;
   }

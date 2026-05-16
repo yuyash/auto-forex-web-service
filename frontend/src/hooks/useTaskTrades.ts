@@ -38,6 +38,7 @@ export interface TaskTrade {
   order_id?: string | null;
   oanda_trade_id?: string | null;
   is_rebuild?: boolean;
+  is_initial_position_seed?: boolean;
   stop_loss_price?: string | null;
   pnl?: string | null;
   pnl_currency?: string | null;

@@ -156,6 +156,7 @@
     "parameters": "Parameters",
     "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
+    "currentTask": "Current task",
     "pageSize": "Page size",
     "columns": "Columns",
     "columnCount": "{{count}} columns"
@@ -302,6 +303,8 @@
     "ohlcChart": "OHLC Chart",
     "chartLoadError": "Failed to load chart data. The timeline and flow chart below are unaffected.",
     "stepPriceLine": "price {{price}} / exit {{exit}}",
+    "initialPositionSeed": "Initial Position",
+    "initialPositionSeedShort": "Initial",
     "labels": {
       "open_position": "Open Position",
       "close_position": "Close Position",
@@ -582,6 +585,8 @@
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild",
+      "initialPositionSeed": "Initial Position",
+      "initialPositionSeedShort": "Initial",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",

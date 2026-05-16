@@ -66,6 +66,8 @@ export function useCreateTradingTask(options?: {
         sell_on_stop: variables.sell_on_stop,
         dry_run: variables.dry_run,
         hedging_enabled: variables.hedging_enabled,
+        initial_positions_enabled: variables.initial_positions_enabled,
+        initial_position_cycles: variables.initial_position_cycles,
         api_retry_max_attempts: variables.api_retry_max_attempts,
         api_retry_backoff_base_seconds:
           variables.api_retry_backoff_base_seconds,
@@ -109,6 +111,8 @@ export function useUpdateTradingTask(options?: {
         sell_on_stop: variables.data.sell_on_stop,
         dry_run: variables.data.dry_run,
         hedging_enabled: variables.data.hedging_enabled,
+        initial_positions_enabled: variables.data.initial_positions_enabled,
+        initial_position_cycles: variables.data.initial_position_cycles,
         api_retry_max_attempts: variables.data.api_retry_max_attempts,
         api_retry_backoff_base_seconds:
           variables.data.api_retry_backoff_base_seconds,

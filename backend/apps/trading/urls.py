@@ -15,6 +15,11 @@ from apps.trading.views.configs import (
     StrategyConfigView,
 )
 from apps.trading.views.fx import FxRateView
+from apps.trading.views.initial_positions import (
+    InitialPositionImportFromOandaView,
+    InitialPositionImportFromTaskView,
+    InitialPositionImportSourcesView,
+)
 from apps.trading.views.operations import TradingOperationsMetricsView
 from apps.trading.views.recovery import RecoveryAttemptListView
 from apps.trading.views.strategies import StrategyDefaultsView, StrategyView
@@ -37,6 +42,21 @@ urlpatterns = [
         name="task_event_stream",
     ),
     path("recovery-attempts/", RecoveryAttemptListView.as_view(), name="recovery_attempts"),
+    path(
+        "tasks/initial-position-import-sources/",
+        InitialPositionImportSourcesView.as_view(),
+        name="initial_position_import_sources",
+    ),
+    path(
+        "tasks/initial-positions/import-from-task/",
+        InitialPositionImportFromTaskView.as_view(),
+        name="initial_position_import_from_task",
+    ),
+    path(
+        "tasks/initial-positions/import-from-oanda/",
+        InitialPositionImportFromOandaView.as_view(),
+        name="initial_position_import_from_oanda",
+    ),
     path("fx/rate/", FxRateView.as_view(), name="fx_rate"),
     path(
         "operations/metrics/",

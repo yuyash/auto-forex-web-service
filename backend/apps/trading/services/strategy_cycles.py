@@ -150,6 +150,7 @@ class StrategyCyclesService:
                 "timestamp",
                 "position_id",
                 "is_rebuild",
+                "is_initial_position_seed",
                 "description",
                 "updated_at",
                 "margin_ratio",
@@ -660,6 +661,7 @@ def _load_cycle_aggregates(
             "timestamp",
             "position_id",
             "is_rebuild",
+            "is_initial_position_seed",
         )
     )
 
@@ -692,6 +694,8 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
             "position_ids": [],
             "realized_pnl": Decimal("0"),
             "rebuild_count": 0,
+            "initial_position_seed_count": 0,
+            "is_initial_position_seed": False,
             "protection_count": 0,
             "has_protection": False,
             "started_at": None,
@@ -716,6 +720,7 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
     realized_pnl = Decimal("0")
     protection_count = 0
     rebuild_count = 0
+    initial_position_seed_count = 0
     position_ids_seen: set[str] = set()
     units_by_open_pos: dict[str, int] = {}
 
@@ -748,6 +753,8 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
 
         if trade.get("is_rebuild"):
             rebuild_count += 1
+        if trade.get("is_initial_position_seed"):
+            initial_position_seed_count += 1
         if exec_method in _PROTECTION_METHODS or str(trade.get("description", "") or "").startswith(
             "[PROTECTION]"
         ):
@@ -778,6 +785,8 @@ def _aggregate_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, A
         "position_ids": sorted(position_ids_seen),
         "realized_pnl": realized_pnl,
         "rebuild_count": rebuild_count,
+        "initial_position_seed_count": initial_position_seed_count,
+        "is_initial_position_seed": initial_position_seed_count > 0,
         "protection_count": protection_count,
         "has_protection": protection_count > 0,
         "started_at": first["timestamp"],
@@ -820,6 +829,8 @@ def _build_list_cycle(
         "has_protection": aggregate["has_protection"],
         "protection_count": aggregate["protection_count"],
         "rebuild_count": aggregate["rebuild_count"],
+        "initial_position_seed_count": aggregate["initial_position_seed_count"],
+        "is_initial_position_seed": aggregate["is_initial_position_seed"],
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
@@ -885,6 +896,8 @@ def _build_cycle(
         "has_protection": aggregate["has_protection"],
         "protection_count": aggregate["protection_count"],
         "rebuild_count": aggregate["rebuild_count"],
+        "initial_position_seed_count": aggregate["initial_position_seed_count"],
+        "is_initial_position_seed": aggregate["is_initial_position_seed"],
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
@@ -956,6 +969,7 @@ def _serialize_trade(
         "volatility": volatility,
         "margin_ratio": margin_ratio,
         "is_rebuild": bool(t.get("is_rebuild", False)),
+        "is_initial_position_seed": bool(t.get("is_initial_position_seed", False)),
         "pnl": pnl,
     }
 

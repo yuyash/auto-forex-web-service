@@ -3,6 +3,7 @@ import type { TaskActionPolicy, TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
 import type { TaskInstrumentContext } from './instrument';
 import type { TaskMoneyContext } from './money';
+import type { BacktestInitialPositionCycle } from './backtestTask';
 
 export interface TradingTask {
   id: string;
@@ -25,6 +26,8 @@ export interface TradingTask {
   sell_on_stop: boolean;
   dry_run: boolean;
   hedging_enabled: boolean;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   api_retry_max_attempts?: number;
   api_retry_backoff_base_seconds?: string;
   api_retry_backoff_max_seconds?: string;
@@ -61,6 +64,8 @@ export interface TradingTaskCreateData {
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   api_retry_max_attempts?: number;
   api_retry_backoff_base_seconds?: number;
   api_retry_backoff_max_seconds?: number;
@@ -83,6 +88,8 @@ export interface TradingTaskUpdateData {
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
+  initial_positions_enabled?: boolean;
+  initial_position_cycles?: BacktestInitialPositionCycle[];
   api_retry_max_attempts?: number;
   api_retry_backoff_base_seconds?: number;
   api_retry_backoff_max_seconds?: number;

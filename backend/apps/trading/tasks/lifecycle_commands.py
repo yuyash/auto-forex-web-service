@@ -76,7 +76,7 @@ class TaskLifecycleCommands:
         task_type = "backtest" if is_backtest_task else "trading"
 
         try:
-            if type(task) is BacktestTask:
+            if getattr(task, "initial_positions_enabled", False) is True:
                 from apps.trading.services.backtest_initial_positions import (
                     BacktestInitialPositionService,
                 )

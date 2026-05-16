@@ -45,6 +45,7 @@ export interface CycleTrade {
   volatility?: string | null;
   margin_ratio?: string | null;
   is_rebuild?: boolean;
+  is_initial_position_seed?: boolean;
   pnl?: string | null;
   pnl_money?: MoneyAmountLike | null;
   pnl_display_money?: MoneyAmountLike | null;
@@ -64,6 +65,8 @@ export interface StrategyCycle {
   has_protection?: boolean;
   protection_count?: number;
   rebuild_count?: number;
+  is_initial_position_seed?: boolean;
+  initial_position_seed_count?: number;
   position_ids?: string[];
   realized_pnl?: string;
   unrealized_pnl?: string;

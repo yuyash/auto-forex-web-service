@@ -94,6 +94,7 @@ TRADE_ORDERING = OrderingConfig(
         "replayed_at": "replayed_at",
         "updated_at": "updated_at",
         "is_rebuild": "is_rebuild",
+        "is_initial_position_seed": "is_initial_position_seed",
         "sequence_number": "sequence_number",
     },
     default="-timestamp",
@@ -118,6 +119,7 @@ POSITION_ORDERING = OrderingConfig(
         "adverse_pips": "adverse_pips",
         "stop_loss_price": "stop_loss_price",
         "is_rebuild": "is_rebuild",
+        "is_initial_position_seed": "is_initial_position_seed",
         "oanda_trade_id": "oanda_trade_id",
         "replayed_at": "replayed_at",
         "updated_at": "updated_at",
@@ -462,6 +464,7 @@ class TaskActivityQueryService:
                 "replayed_at",
                 "updated_at",
                 "is_rebuild",
+                "is_initial_position_seed",
                 stop_loss_price=models.F("position__stop_loss_price"),
                 entry_price=models.F("position__entry_price"),
             )[start : start + page_size]

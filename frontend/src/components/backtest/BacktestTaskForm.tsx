@@ -1295,6 +1295,7 @@ export default function BacktestTaskForm({
                       }
                       value={field.value ?? []}
                       onChange={field.onChange}
+                      currentTaskId={taskId}
                       selectedConfig={
                         selectedConfig ?? selectedListConfig ?? undefined
                       }

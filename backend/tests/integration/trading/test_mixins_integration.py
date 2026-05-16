@@ -1116,6 +1116,7 @@ class TestPositions:
         pos = response.data["results"][0]
         assert pos["instrument"] == "USD_JPY"
         assert pos["is_open"] is True
+        assert pos["is_initial_position_seed"] is False
         assert pos["unrealized_pnl_currency"] == "JPY"
         assert pos["unrealized_pnl_money"] == {
             "amount": "0.0000000000",
@@ -1123,6 +1124,29 @@ class TestPositions:
         }
         assert pos["unrealized_pnl_display_money"] is None
         assert pos["unrealized_pnl_display_conversion_context"]["source_currency"] == "JPY"
+
+    def test_positions_include_initial_position_seed_flag(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=True,
+            is_initial_position_seed=True,
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/positions/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"][0]["is_initial_position_seed"] is True
 
     def test_positions_include_realized_pnl_money_for_closed_rows(self):
         task = _make_task()

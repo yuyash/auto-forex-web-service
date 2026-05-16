@@ -47,6 +47,7 @@ export interface BacktestInitialPositionRequest {
   status?: BacktestInitialPositionStatus;
   exit_price?: number | string | null;
   close_reason?: string;
+  oanda_trade_id?: string;
 }
 
 export interface BacktestInitialPositionCycleRequest {

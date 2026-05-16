@@ -112,6 +112,7 @@ class TradeSerializer(serializers.Serializer):
     oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     cycle_id = serializers.UUIDField(required=False, allow_null=True)
     is_rebuild = serializers.BooleanField(required=False, default=False)
+    is_initial_position_seed = serializers.BooleanField(required=False, default=False)
     stop_loss_price = serializers.SerializerMethodField()
     replayed_at = serializers.DateTimeField(required=False, allow_null=True)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
@@ -195,6 +196,7 @@ class PositionSerializer(serializers.Serializer):
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     is_rebuild = serializers.BooleanField(required=False, default=False)
+    is_initial_position_seed = serializers.BooleanField(required=False, default=False)
     unrealized_pnl = serializers.DecimalField(
         max_digits=20,
         decimal_places=10,

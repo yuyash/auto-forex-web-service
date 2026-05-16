@@ -397,6 +397,7 @@ export function TaskStrategyTab({
         timestamp: trade.timestamp,
         position_id: trade.position_id ?? null,
         is_rebuild: trade.is_rebuild,
+        is_initial_position_seed: trade.is_initial_position_seed,
         pnl: trade.pnl ?? null,
         pnl_money: trade.pnl_money ?? null,
         pnl_display_money: trade.pnl_display_money ?? null,
@@ -888,6 +889,17 @@ export function TaskStrategyTab({
                         sx={{ fontSize: '0.65rem', height: 20 }}
                       />
                     ) : null}
+                    {cycle.is_initial_position_seed ? (
+                      <Chip
+                        size="small"
+                        color="primary"
+                        variant="filled"
+                        label={t(
+                          'common:strategyVisualization.initialPositionSeedShort'
+                        )}
+                        sx={{ fontSize: '0.65rem', height: 20 }}
+                      />
+                    ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDateTime(
@@ -1064,6 +1076,16 @@ export function TaskStrategyTab({
                   size="small"
                   color={getStatusColor(selectedCycle.status)}
                 />
+                {selectedCycle.is_initial_position_seed ? (
+                  <Chip
+                    label={t(
+                      'common:strategyVisualization.initialPositionSeed'
+                    )}
+                    size="small"
+                    color="primary"
+                    variant="filled"
+                  />
+                ) : null}
                 <Tooltip title={t('common:actions.refresh')}>
                   <IconButton
                     size="small"
@@ -1337,6 +1359,8 @@ function TradeRow({
   onToggleSelection: (id: string) => void;
   onOpenLifecycle: (positionId: string) => void;
 }) {
+  const { t } = useTranslation(['common']);
+
   return (
     <Box
       sx={{
@@ -1395,6 +1419,15 @@ function TradeRow({
             label="Initial"
             color="primary"
             variant="outlined"
+            sx={{ fontSize: '0.7rem' }}
+          />
+        ) : null}
+        {trade.is_initial_position_seed ? (
+          <Chip
+            size="small"
+            label={t('common:strategyVisualization.initialPositionSeedShort')}
+            color="primary"
+            variant="filled"
             sx={{ fontSize: '0.7rem' }}
           />
         ) : null}
