@@ -699,9 +699,11 @@ export function TaskStrategyTab({
                 aria-label={t('common:actions.refresh')}
                 sx={{
                   flex: '0 0 auto',
+                  alignSelf: 'flex-start',
                   ml: 'auto',
-                  width: 30,
-                  height: 30,
+                  width: 24,
+                  height: 24,
+                  p: 0.25,
                 }}
               >
                 <RefreshIcon fontSize="small" />
