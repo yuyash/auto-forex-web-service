@@ -584,20 +584,6 @@ export function TaskStrategyTab({
               />
             </Tooltip>
           ))}
-          <Tooltip title={t('common:actions.refresh')}>
-            <IconButton
-              size="small"
-              onClick={() => void refresh()}
-              aria-label={t('common:actions.refresh')}
-              sx={{
-                flex: '0 0 auto',
-                width: { xs: 28, sm: 32 },
-                height: { xs: 28, sm: 32 },
-              }}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
         </Stack>
       ) : null}
 
@@ -631,68 +617,96 @@ export function TaskStrategyTab({
               py: 0.75,
               flexShrink: 0,
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: 0.5,
-              flexWrap: 'wrap',
+              minWidth: 0,
             }}
           >
-            <Typography variant="subtitle2" sx={{ mr: 0.5 }}>
-              {t('common:strategyVisualization.cycleList.title')}
-            </Typography>
-            <Chip
-              size="small"
-              clickable
-              color={sortOrder === 'asc' ? 'primary' : 'default'}
-              variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.sortOldest')}
-              onClick={() => setSortOrder('asc')}
-            />
-            <Chip
-              size="small"
-              clickable
-              color={sortOrder === 'desc' ? 'primary' : 'default'}
-              variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.sortNewest')}
-              onClick={() => setSortOrder('desc')}
-            />
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'active' ? 'primary' : 'default'}
-              variant={statusFilter === 'active' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.filterActive')}
-              onClick={() =>
-                setStatusFilter(statusFilter === 'active' ? 'all' : 'active')
-              }
-            />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'completed' ? 'primary' : 'default'}
-              variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
-              label={t(
-                'common:strategyVisualization.cycleList.filterCompleted'
-              )}
-              onClick={() =>
-                setStatusFilter(
-                  statusFilter === 'completed' ? 'all' : 'completed'
-                )
-              }
-            />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'pending' ? 'primary' : 'default'}
-              variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
-              label={t(
-                'common:strategyVisualization.cycleList.filterPending',
-                'Pending'
-              )}
-              onClick={() =>
-                setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')
-              }
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flex: '1 1 auto',
+                flexWrap: 'wrap',
+                minWidth: 0,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mr: 0.5 }}>
+                {t('common:strategyVisualization.cycleList.title')}
+              </Typography>
+              <Chip
+                size="small"
+                clickable
+                color={sortOrder === 'asc' ? 'primary' : 'default'}
+                variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.sortOldest')}
+                onClick={() => setSortOrder('asc')}
+              />
+              <Chip
+                size="small"
+                clickable
+                color={sortOrder === 'desc' ? 'primary' : 'default'}
+                variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.sortNewest')}
+                onClick={() => setSortOrder('desc')}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'active' ? 'primary' : 'default'}
+                variant={statusFilter === 'active' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.filterActive')}
+                onClick={() =>
+                  setStatusFilter(statusFilter === 'active' ? 'all' : 'active')
+                }
+              />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'completed' ? 'primary' : 'default'}
+                variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
+                label={t(
+                  'common:strategyVisualization.cycleList.filterCompleted'
+                )}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === 'completed' ? 'all' : 'completed'
+                  )
+                }
+              />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'pending' ? 'primary' : 'default'}
+                variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
+                label={t(
+                  'common:strategyVisualization.cycleList.filterPending',
+                  'Pending'
+                )}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === 'pending' ? 'all' : 'pending'
+                  )
+                }
+              />
+            </Box>
+            <Tooltip title={t('common:actions.refresh')}>
+              <IconButton
+                size="small"
+                onClick={() => void handleRefreshDetail()}
+                aria-label={t('common:actions.refresh')}
+                sx={{
+                  flex: '0 0 auto',
+                  ml: 'auto',
+                  width: 30,
+                  height: 30,
+                }}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
           <Divider />
           <Box sx={{ px: 1, py: 0.5, flexShrink: 0 }}>
@@ -941,6 +955,10 @@ export function TaskStrategyTab({
                 )}
                 sx={{
                   flexShrink: 0,
+                  mb: {
+                    xs: 'calc(56px + env(safe-area-inset-bottom))',
+                    sm: 4,
+                  },
                   '& .MuiTablePagination-toolbar': {
                     minHeight: 36,
                     paddingLeft: 1,
@@ -1261,6 +1279,12 @@ export function TaskStrategyTab({
                   setTradePage(0);
                 }}
                 rowsPerPageOptions={[10, 25, 50, 100, 200, 500, 1000]}
+                sx={{
+                  mb: {
+                    xs: 'calc(56px + env(safe-area-inset-bottom))',
+                    sm: 4,
+                  },
+                }}
               />
             </Box>
           ) : (

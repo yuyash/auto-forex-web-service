@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskMetricsTab } from '../../../src/components/tasks/detail/TaskMetricsTab';
 import type { MetricPoint } from '../../../src/utils/fetchMetrics';
@@ -7,6 +7,12 @@ const lineChartProps = vi.hoisted(
   () =>
     [] as Array<{
       series?: Array<{ label?: string; data?: Array<number | null> }>;
+    }>
+);
+const barChartProps = vi.hoisted(
+  () =>
+    [] as Array<{
+      xAxis?: Array<{ data?: string[] }>;
     }>
 );
 
@@ -19,9 +25,17 @@ vi.mock('@mui/x-charts/LineChart', () => ({
   },
 }));
 
+vi.mock('@mui/x-charts/BarChart', () => ({
+  BarChart: (props: { xAxis?: Array<{ data?: string[] }> }) => {
+    barChartProps.push(props);
+    return <div data-testid="bar-chart" />;
+  },
+}));
+
 describe('TaskMetricsTab', () => {
   beforeEach(() => {
     lineChartProps.length = 0;
+    barChartProps.length = 0;
   });
 
   it('renders large metric series without overflowing the call stack', () => {
@@ -163,5 +177,44 @@ describe('TaskMetricsTab', () => {
       false
     );
     expect(lineChartLabels.flat().includes('Next Add Distance')).toBe(false);
+  });
+
+  it('labels weekly period returns by the week start date', () => {
+    const data: MetricPoint[] = [
+      ['2026-01-06T00:00:00Z', 0],
+      ['2026-01-09T00:00:00Z', 0.02],
+      ['2026-01-13T00:00:00Z', 0.02],
+      ['2026-01-16T00:00:00Z', 0.05],
+    ].map(([iso, totalReturn]) => ({
+      t: Math.floor(new Date(iso).getTime() / 1000),
+      metrics: {
+        total_return: totalReturn,
+      },
+    }));
+
+    render(
+      <TaskMetricsTab
+        data={data}
+        isLoading={false}
+        error={null}
+        interval={1}
+        since=""
+        until=""
+        onIntervalChange={vi.fn()}
+        onSinceChange={vi.fn()}
+        onUntilChange={vi.fn()}
+        onRefresh={vi.fn()}
+        timezone="UTC"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly Return' }));
+
+    const latestBarChart = barChartProps.at(-1);
+    expect(latestBarChart?.xAxis?.[0]?.data).toEqual([
+      '2026-01-05',
+      '2026-01-12',
+    ]);
+    expect(latestBarChart?.xAxis?.[0]?.data).not.toContain('2026-W02');
   });
 });

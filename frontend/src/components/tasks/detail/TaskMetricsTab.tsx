@@ -373,16 +373,24 @@ function periodKeyAndLabel(
 
   const localDate = new Date(Date.UTC(year, month - 1, day));
   const weekday = localDate.getUTCDay() || 7;
-  localDate.setUTCDate(localDate.getUTCDate() + 4 - weekday);
-  const weekYear = localDate.getUTCFullYear();
+  const weekStartDate = new Date(localDate);
+  weekStartDate.setUTCDate(localDate.getUTCDate() + 1 - weekday);
+  const weekAnchorDate = new Date(localDate);
+  weekAnchorDate.setUTCDate(localDate.getUTCDate() + 4 - weekday);
+  const weekYear = weekAnchorDate.getUTCFullYear();
   const yearStart = new Date(Date.UTC(weekYear, 0, 1));
   const week = Math.ceil(
-    ((localDate.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7
+    ((weekAnchorDate.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7
   );
   const weekText = String(week).padStart(2, '0');
+  const weekStartMonthText = String(weekStartDate.getUTCMonth() + 1).padStart(
+    2,
+    '0'
+  );
+  const weekStartDayText = String(weekStartDate.getUTCDate()).padStart(2, '0');
   return {
     key: `${weekYear}-W${weekText}`,
-    label: `${weekYear}-W${weekText}`,
+    label: `${weekStartDate.getUTCFullYear()}-${weekStartMonthText}-${weekStartDayText}`,
   };
 }
 
