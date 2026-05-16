@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.2...backend-v1.56.0) (2026-05-16)
+
+
+### Features
+
+* **trading:** import initial positions ([#733](https://github.com/yuyash/auto-forex-web-service/issues/733)) ([95411df](https://github.com/yuyash/auto-forex-web-service/commit/95411dfb118ddad206641f6e7f6e9fbf7836e29e))
+
 ## [1.55.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.55.1...backend-v1.55.2) (2026-05-16)
 
 
