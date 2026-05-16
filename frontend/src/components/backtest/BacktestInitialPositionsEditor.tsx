@@ -664,42 +664,65 @@ export function BacktestInitialPositionsEditor({
                           </MenuItem>
                         </Select>
                       </FormControl>
-                      <FormControlLabel
-                        sx={{ ml: 0, alignItems: 'flex-start' }}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={anchorShiftEnabled}
-                            onChange={(event) =>
-                              setAnchorShiftEnabledByCycle((current) => ({
-                                ...current,
-                                [cycleIndex]: event.target.checked,
-                              }))
-                            }
-                          />
-                        }
-                        label={
-                          <Typography variant="body2">
-                            {t('backtest:form.initialPositionAnchorShift', {
-                              defaultValue: 'Auto-adjust this cycle from L1/R0',
-                            })}
-                          </Typography>
-                        }
-                      />
-                    </Stack>
-
-                    <Tooltip
-                      title={t('common:actions.delete', {
-                        defaultValue: 'Delete',
-                      })}
-                    >
-                      <IconButton
-                        onClick={() => removeCycle(cycleIndex)}
-                        sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          alignItems: 'center',
+                          justifyContent: {
+                            xs: 'space-between',
+                            sm: 'flex-start',
+                          },
+                          minWidth: 0,
+                          width: { xs: '100%', sm: 'auto' },
+                        }}
                       >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
+                        <FormControlLabel
+                          sx={{
+                            ml: 0,
+                            mr: 0,
+                            alignItems: 'center',
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={anchorShiftEnabled}
+                              onChange={(event) =>
+                                setAnchorShiftEnabledByCycle((current) => ({
+                                  ...current,
+                                  [cycleIndex]: event.target.checked,
+                                }))
+                              }
+                            />
+                          }
+                          label={
+                            <Typography
+                              variant="body2"
+                              sx={{ overflowWrap: 'anywhere' }}
+                            >
+                              {t('backtest:form.initialPositionAnchorShift', {
+                                defaultValue:
+                                  'Auto-adjust this cycle from L1/R0',
+                              })}
+                            </Typography>
+                          }
+                        />
+                        <Tooltip
+                          title={t('common:actions.delete', {
+                            defaultValue: 'Delete',
+                          })}
+                        >
+                          <IconButton
+                            onClick={() => removeCycle(cycleIndex)}
+                            sx={{ flexShrink: 0 }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
                   </Stack>
 
                   {cycle.positions.map((position, positionIndex) => (
