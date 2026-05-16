@@ -305,7 +305,21 @@ export function BacktestInitialPositionsEditor({
                     key={importSourceKey(source)}
                     value={importSourceKey(source)}
                   >
-                    {sourceLabel(source)}
+                    {t('backtest:form.initialPositionImportSourceLabel', {
+                      type:
+                        source.task_type === 'backtest'
+                          ? t('common:navigation.backtest')
+                          : t('common:navigation.trading'),
+                      name: source.name,
+                      status: t(`common:status.${source.status}`, {
+                        defaultValue: source.status,
+                      }),
+                      instrument: source.instrument
+                        ? t('backtest:form.initialPositionImportInstrument', {
+                            instrument: source.instrument,
+                          })
+                        : '',
+                    })}
                     {source.task_type === taskType &&
                     source.id === currentTaskId
                       ? ` (${t('common:labels.currentTask')})`
@@ -673,12 +687,6 @@ function parseImportSourceKey(
   sources: InitialPositionImportSource[]
 ) {
   return sources.find((source) => importSourceKey(source) === value);
-}
-
-function sourceLabel(source: InitialPositionImportSource) {
-  const type = source.task_type === 'backtest' ? 'Backtest' : 'Trading';
-  const instrument = source.instrument ? ` / ${source.instrument}` : '';
-  return `${type}: ${source.name} (${source.status}${instrument})`;
 }
 
 function formatTickTimestamp(timestamp: string) {
