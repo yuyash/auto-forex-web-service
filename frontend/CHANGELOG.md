@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.71.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.70.0...frontend-v1.71.0) (2026-05-16)
+
+
+### Features
+
+* **frontend:** add settings comparison workflows ([#724](https://github.com/yuyash/auto-forex-web-service/issues/724)) ([da72afb](https://github.com/yuyash/auto-forex-web-service/commit/da72afb4140585dfff5f072cf0d9e69a80aa639d))
+
 ## [1.70.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.69.1...frontend-v1.70.0) (2026-05-15)
 
 
