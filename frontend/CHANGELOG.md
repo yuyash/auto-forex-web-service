@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.73.0...frontend-v1.73.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **i18n:** localize initial position import labels ([#735](https://github.com/yuyash/auto-forex-web-service/issues/735)) ([62f9c08](https://github.com/yuyash/auto-forex-web-service/commit/62f9c0896cf01e96d51ca61b186fd3e0d2338084))
+
 ## [1.73.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.72.2...frontend-v1.73.0) (2026-05-16)
 
 
