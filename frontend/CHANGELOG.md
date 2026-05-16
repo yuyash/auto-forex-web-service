@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.75.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.75.0...frontend-v1.75.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* initial position mobile validation ([#743](https://github.com/yuyash/auto-forex-web-service/issues/743)) ([bacf0c8](https://github.com/yuyash/auto-forex-web-service/commit/bacf0c812c8fb5921999cb83efbb31e803ed8111))
+
 ## [1.75.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.74.0...frontend-v1.75.0) (2026-05-16)
 
 
