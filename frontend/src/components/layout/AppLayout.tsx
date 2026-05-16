@@ -7,7 +7,7 @@ import ResponsiveNavigation from './ResponsiveNavigation';
 import Sidebar from './Sidebar';
 import SkipLinks from '../common/SkipLinks';
 import GlobalKeyboardShortcuts from '../common/GlobalKeyboardShortcuts';
-import { DRAWER_WIDTH } from './constants';
+import { DRAWER_WIDTH, MOBILE_BOTTOM_NAV_HEIGHT } from './constants';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useActiveScreenRefetch } from '../../hooks/useActiveScreenRefetch';
 import { layoutTokens } from '../../theme/density';
@@ -26,6 +26,7 @@ const AppLayout = () => {
 
   // Show sidebar only on tablet (not on mobile or desktop)
   const showSidebar = isTablet;
+  const mobileBottomInset = `calc(${MOBILE_BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 8px)`;
 
   return (
     <>
@@ -79,7 +80,8 @@ const AppLayout = () => {
               display: 'flex',
               flexDirection: 'column',
               overflowY: 'auto',
-              marginBottom: isMobile ? '8px' : 0, // Space for bottom nav on mobile
+              pb: isMobile ? mobileBottomInset : 0,
+              scrollPaddingBottom: isMobile ? mobileBottomInset : 0,
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
               '--app-content-max-width': settings.constrainContentWidth
                 ? `${layoutTokens.contentMaxWidth}px`
