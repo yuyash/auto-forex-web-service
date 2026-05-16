@@ -112,6 +112,9 @@ export function BacktestInitialPositionsEditor({
   const [selectedAddSlotKeys, setSelectedAddSlotKeys] = useState<
     Record<number, string>
   >({});
+  const [anchorShiftEnabledByCycle, setAnchorShiftEnabledByCycle] = useState<
+    Record<number, boolean>
+  >({});
   const resolvedStrategyType = normalizedStrategyType(
     strategyType ?? selectedConfig?.strategy_type
   );
@@ -155,6 +158,17 @@ export function BacktestInitialPositionsEditor({
     }
   }, [canUseInitialPositions, config, enabled, onChange, value]);
 
+  useEffect(() => {
+    setAnchorShiftEnabledByCycle((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([cycleIndex]) => {
+          const index = Number(cycleIndex);
+          return Number.isInteger(index) && index >= 0 && index < value.length;
+        })
+      )
+    );
+  }, [value.length]);
+
   const updateCycle = (
     cycleIndex: number,
     updater: (
@@ -172,6 +186,17 @@ export function BacktestInitialPositionsEditor({
 
   const removeCycle = (cycleIndex: number) => {
     onChange(value.filter((_, i) => i !== cycleIndex));
+    setAnchorShiftEnabledByCycle((current) =>
+      Object.fromEntries(
+        Object.entries(current).flatMap(([rawIndex, isEnabled]) => {
+          const index = Number(rawIndex);
+          if (!Number.isInteger(index) || index === cycleIndex) {
+            return [];
+          }
+          return [[index > cycleIndex ? index - 1 : index, isEnabled]];
+        })
+      )
+    );
   };
 
   const addPosition = (cycleIndex: number, slot: SlotAddress) => {
@@ -456,6 +481,9 @@ export function BacktestInitialPositionsEditor({
             );
             const selectedSlot = parseSlotKey(selectedSlotKey);
             const canAdd = selectedSlot !== null;
+            const anchorShiftEnabled = Boolean(
+              anchorShiftEnabledByCycle[cycleIndex]
+            );
             return (
               <Paper
                 key={`${cycle.direction}-${cycleIndex}`}
@@ -536,6 +564,28 @@ export function BacktestInitialPositionsEditor({
                           </MenuItem>
                         </Select>
                       </FormControl>
+                      <FormControlLabel
+                        sx={{ ml: 0 }}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={anchorShiftEnabled}
+                            onChange={(event) =>
+                              setAnchorShiftEnabledByCycle((current) => ({
+                                ...current,
+                                [cycleIndex]: event.target.checked,
+                              }))
+                            }
+                          />
+                        }
+                        label={
+                          <Typography variant="body2">
+                            {t('backtest:form.initialPositionAnchorShift', {
+                              defaultValue: 'Auto-adjust prices from L1/R0',
+                            })}
+                          </Typography>
+                        }
+                      />
                     </Stack>
 
                     <Tooltip
@@ -555,17 +605,15 @@ export function BacktestInitialPositionsEditor({
                       position={position}
                       positionNumber={positionIndex + 1}
                       onChange={(next) =>
-                        updateCycle(cycleIndex, (current) => ({
-                          ...current,
-                          positions: current.positions.map((item, i) =>
-                            i === positionIndex
-                              ? normalizePositionForConfig(
-                                  withDefaultPrices(next, current, config),
-                                  config
-                                )
-                              : item
-                          ),
-                        }))
+                        updateCycle(cycleIndex, (current) =>
+                          updatePositionInCycle(
+                            current,
+                            positionIndex,
+                            next,
+                            config,
+                            anchorShiftEnabled
+                          )
+                        )
                       }
                       stopLossEnabled={config.stopLossEnabled}
                     />
@@ -775,6 +823,112 @@ function initialPositionOrderWarnings(
 
     return warnings;
   });
+}
+
+function updatePositionInCycle(
+  cycle: BacktestInitialPositionCycle,
+  positionIndex: number,
+  next: BacktestInitialPosition,
+  config: SnowballUiConfig,
+  anchorShiftEnabled: boolean
+): BacktestInitialPositionCycle {
+  const previous = cycle.positions[positionIndex];
+  const delta =
+    previous && anchorShiftEnabled && isAnchorSlot(previous)
+      ? entryPriceDelta(previous, next)
+      : null;
+
+  if (previous && delta !== null && delta !== 0) {
+    const shiftedPositions = cycle.positions.map((position, index) =>
+      index === positionIndex
+        ? shiftAnchorPositionPrices(previous, next, delta)
+        : shiftPositionPrices(position, delta, true)
+    );
+    const shiftedCycle = { ...cycle, positions: shiftedPositions };
+    return {
+      ...shiftedCycle,
+      positions: shiftedPositions.map((position) =>
+        normalizePositionForConfig(
+          withDefaultPrices(position, shiftedCycle, config),
+          config
+        )
+      ),
+    };
+  }
+
+  return {
+    ...cycle,
+    positions: cycle.positions.map((item, index) =>
+      index === positionIndex
+        ? normalizePositionForConfig(
+            withDefaultPrices(next, cycle, config),
+            config
+          )
+        : item
+    ),
+  };
+}
+
+function isAnchorSlot(position: BacktestInitialPosition) {
+  return (
+    intNum(position.layer_number, 0) === 1 &&
+    intNum(position.retracement_count, -1) === 0
+  );
+}
+
+function entryPriceDelta(
+  previous: BacktestInitialPosition,
+  next: BacktestInitialPosition
+) {
+  const previousEntry = num(previous.entry_price, NaN);
+  const nextEntry = num(next.entry_price, NaN);
+  if (!Number.isFinite(previousEntry) || !Number.isFinite(nextEntry)) {
+    return null;
+  }
+  return nextEntry - previousEntry;
+}
+
+function shiftAnchorPositionPrices(
+  previous: BacktestInitialPosition,
+  next: BacktestInitialPosition,
+  delta: number
+): BacktestInitialPosition {
+  const status = next.status ?? previous.status ?? 'open';
+  return {
+    ...next,
+    planned_exit_price: shiftPrice(previous.planned_exit_price, delta),
+    stop_loss_price: shiftPrice(previous.stop_loss_price, delta),
+    exit_price:
+      status === 'open' ? undefined : shiftPrice(previous.exit_price, delta),
+  };
+}
+
+function shiftPositionPrices(
+  position: BacktestInitialPosition,
+  delta: number,
+  includeEntry: boolean
+): BacktestInitialPosition {
+  return {
+    ...position,
+    entry_price: includeEntry
+      ? shiftRequiredPrice(position.entry_price, delta)
+      : position.entry_price,
+    planned_exit_price: shiftPrice(position.planned_exit_price, delta),
+    stop_loss_price: shiftPrice(position.stop_loss_price, delta),
+    exit_price: shiftPrice(position.exit_price, delta),
+  };
+}
+
+function shiftRequiredPrice(value: number | string, delta: number) {
+  const current = num(value, NaN);
+  return Number.isFinite(current)
+    ? Number((current + delta).toFixed(5))
+    : value;
+}
+
+function shiftPrice(value: number | string | null | undefined, delta: number) {
+  const current = num(value, NaN);
+  return Number.isFinite(current) ? fixed(current + delta) : value;
 }
 
 function formatInitialPositionIssue(

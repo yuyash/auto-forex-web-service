@@ -228,6 +228,7 @@
     "initialPositionCycleTempId": "C{{cycle}}",
     "initialPositionPositionTempId": "P{{position}}",
     "nextInitialPositionSlot": "次のポジション",
+    "initialPositionAnchorShift": "L1/R0に合わせて価格を自動調整",
     "initialPositionDuplicateWarning": "サイクル C{{cycle}} のポジション P{{position}} は {{actual}} が重複しています。",
     "initialPositionLayerOutOfRangeWarning": "サイクル C{{cycle}} のポジション P{{position}} は {{actual}} を使用していますが、最大レイヤーは L{{maxLayer}} です。",
     "initialPositionRetracementOutOfRangeWarning": "サイクル C{{cycle}} のポジション P{{position}} は {{actual}} を使用していますが、最大 R は R{{maxRetracement}} です。",
