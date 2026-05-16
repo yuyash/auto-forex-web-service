@@ -491,99 +491,142 @@ export default function TradingTaskCard({
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'flex-start',
             mb: 0.75,
             gap: 1,
           }}
         >
           <Box
-            sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-            onClick={handleView}
+            sx={{
+              flex: 1,
+              minWidth: 0,
+            }}
           >
-            <Typography
-              variant="subtitle1"
-              component="h2"
-              sx={{
-                mb: 0.5,
-                fontWeight: 600,
-                lineHeight: 1.25,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {currentTask.name}
-            </Typography>
             <Box
-              sx={{
-                display: 'flex',
-                gap: 0.5,
-                alignItems: 'center',
-                mb: 0.5,
-                flexWrap: 'nowrap',
-                minWidth: 0,
-                overflow: 'hidden',
-                '& .MuiChip-root': {
+              sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+              onClick={handleView}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  mb: 0.5,
                   minWidth: 0,
-                  maxWidth: '100%',
-                },
-                '& .MuiChip-label': {
+                }}
+              >
+                {onSelectedChange && (
+                  <Tooltip
+                    title={t('common:actions.selectForCompare', {
+                      defaultValue: 'Select for comparison',
+                    })}
+                  >
+                    <Checkbox
+                      checked={selected}
+                      onChange={(event) => {
+                        event.stopPropagation();
+                        onSelectedChange(task.id, event.target.checked);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      inputProps={{
+                        'aria-label': t('common:actions.selectForCompare', {
+                          defaultValue: 'Select for comparison',
+                        }),
+                      }}
+                      size="small"
+                      sx={{ p: 0.25, ml: -0.25, flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                )}
+                <Typography
+                  variant="subtitle1"
+                  component="h2"
+                  sx={{
+                    fontWeight: 600,
+                    lineHeight: 1.25,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {currentTask.name}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 0.5,
+                  alignItems: 'center',
+                  mb: 0.5,
+                  flexWrap: 'nowrap',
                   minWidth: 0,
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                },
-              }}
-            >
-              <Box sx={{ flexShrink: 0 }}>
-                <StatusBadge status={displayStatus} />
-              </Box>
-              {currentTask.account_type === 'live' && (
-                <Chip
-                  label={t('common:labels.liveAccount')}
-                  color="error"
-                  size="small"
-                  sx={{ flexShrink: 0, fontWeight: 'bold' }}
-                />
-              )}
-              <Chip
-                label={getStrategyDisplayName(
-                  strategies,
-                  currentTask.strategy_type
+                  '& .MuiChip-root': {
+                    minWidth: 0,
+                    maxWidth: '100%',
+                  },
+                  '& .MuiChip-label': {
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  },
+                }}
+              >
+                <Box sx={{ flexShrink: 0 }}>
+                  <StatusBadge status={displayStatus} />
+                </Box>
+                {currentTask.account_type === 'live' && (
+                  <Chip
+                    label={t('common:labels.liveAccount')}
+                    color="error"
+                    size="small"
+                    sx={{ flexShrink: 0, fontWeight: 'bold' }}
+                  />
                 )}
-                variant="outlined"
-                size="small"
-                sx={{ flex: '1 1 auto' }}
-              />
-              {!isMobile && (
                 <Chip
-                  label={currentTask.config_name}
+                  label={getStrategyDisplayName(
+                    strategies,
+                    currentTask.strategy_type
+                  )}
                   variant="outlined"
-                  color="primary"
+                  size="small"
+                  sx={{ flex: '0 1 auto' }}
+                />
+                {!isMobile && (
+                  <Chip
+                    label={currentTask.config_name}
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    sx={{ flex: '1 1 auto' }}
+                  />
+                )}
+                <Chip
+                  label={currentTask.account_name}
+                  variant="outlined"
+                  color="secondary"
                   size="small"
                   sx={{ flex: '1 1 auto' }}
                 />
+              </Box>
+              {currentTask.description && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {currentTask.description}
+                </Typography>
               )}
-              <Chip
-                label={currentTask.account_name}
-                variant="outlined"
-                color="secondary"
-                size="small"
-                sx={{ flex: '1 1 auto' }}
-              />
             </Box>
-            {currentTask.description && (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {currentTask.description}
-              </Typography>
-            )}
           </Box>
 
           <Box
@@ -592,31 +635,10 @@ export default function TradingTaskCard({
               gap: 0.5,
               alignItems: 'flex-start',
               flexShrink: 0,
+              mt: -0.5,
+              mr: -0.5,
             }}
           >
-            {onSelectedChange && (
-              <Tooltip
-                title={t('common:actions.selectForCompare', {
-                  defaultValue: 'Select for comparison',
-                })}
-              >
-                <Checkbox
-                  checked={selected}
-                  onChange={(event) => {
-                    event.stopPropagation();
-                    onSelectedChange(task.id, event.target.checked);
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  inputProps={{
-                    'aria-label': t('common:actions.selectForCompare', {
-                      defaultValue: 'Select for comparison',
-                    }),
-                  }}
-                  size="small"
-                  sx={{ p: 0.5 }}
-                />
-              </Tooltip>
-            )}
             <Tooltip title={t('common:actions.viewDetails')}>
               <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />

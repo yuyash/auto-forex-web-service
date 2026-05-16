@@ -15,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { MOBILE_BOTTOM_NAV_HEIGHT } from './constants';
 
 interface NavigationItem {
   path: string;
@@ -86,6 +87,8 @@ const ResponsiveNavigation = () => {
         left: 0,
         right: 0,
         zIndex: theme.zIndex.appBar,
+        pb: 'env(safe-area-inset-bottom)',
+        backgroundColor: 'background.paper',
       }}
     >
       <BottomNavigation
@@ -95,6 +98,7 @@ const ResponsiveNavigation = () => {
         }}
         showLabels
         sx={{
+          height: MOBILE_BOTTOM_NAV_HEIGHT,
           borderTop: `1px solid ${theme.palette.divider}`,
         }}
       >

@@ -77,7 +77,7 @@
     "compare": "比較",
     "selectForCompare": "比較対象として選択",
     "selectAll": "全選択",
-    "clearSelection": "全選択解除",
+    "clearSelection": "選択解除",
     "bulkDelete": "一括削除",
     "saving": "保存中...",
     "deleting": "削除中...",
@@ -362,7 +362,14 @@
       "active": "進行中: {{count}}",
       "pending": "保留: {{count}}",
       "completed": "完了: {{count}}",
-      "trades": "トレード: {{count}}"
+      "trades": "トレード: {{count}}",
+      "compact": {
+        "cycles": "サ",
+        "active": "進",
+        "pending": "保",
+        "completed": "完",
+        "trades": "ト"
+      }
     },
     "grid": {
       "title": "グリッド状態",

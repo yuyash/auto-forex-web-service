@@ -44,9 +44,9 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
         sx={{
           display: 'grid',
           gridTemplateColumns: {
-            xs: '1fr',
-            sm: 'repeat(2, minmax(0, 1fr))',
-            lg: 'repeat(3, minmax(0, 1fr))',
+            xs: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(3, minmax(0, 1fr))',
+            xl: 'repeat(4, minmax(0, 1fr))',
           },
           gap: spacingTokens.sm,
         }}
@@ -69,11 +69,13 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
                 {definition.label}
               </Typography>
               {renderedValue ? (
-                <Box sx={{ mt: 0.25, minWidth: 0 }}>{renderedValue}</Box>
+                <Box sx={{ mt: 0.25, minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {renderedValue}
+                </Box>
               ) : (
                 <Typography
                   variant={typographyTokens.body}
-                  sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
+                  sx={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
                 >
                   {definition.format
                     ? definition.format(value as TaskSettingValue)

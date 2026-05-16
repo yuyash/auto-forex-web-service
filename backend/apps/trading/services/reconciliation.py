@@ -602,8 +602,29 @@ class TradingResumeReconciler:
         self.state.strategy_state = strategy_state
 
     def _persist_state(self) -> None:
+        if self._try_persist_state() == 1:
+            self.state.state_version += 1
+            return
+
+        if self._refresh_state_for_metadata_retry():
+            if self._try_persist_state() == 1:
+                self.state.state_version += 1
+                logger.info(
+                    "Retried broker reconciliation state persistence after benign "
+                    "state_version conflict - task_id=%s, execution_id=%s, state_version=%s",
+                    self.task.pk,
+                    self.execution_id,
+                    self.state.state_version,
+                )
+                return
+
+        raise TradingSafetyError(
+            "Execution state changed during broker reconciliation. Retry resume after refresh."
+        )
+
+    def _try_persist_state(self) -> int:
         now = dj_timezone.now()
-        rows = ExecutionState.objects.filter(
+        return ExecutionState.objects.filter(
             pk=self.state.pk,
             state_version=self.state.state_version,
         ).update(
@@ -621,11 +642,44 @@ class TradingResumeReconciler:
             updated_at=now,
             state_version=F("state_version") + 1,
         )
-        if rows != 1:
-            raise TradingSafetyError(
-                "Execution state changed during broker reconciliation. Retry resume after refresh."
-            )
-        self.state.state_version += 1
+
+    def _refresh_state_for_metadata_retry(self) -> bool:
+        """Refresh after a benign metadata-only optimistic-lock conflict.
+
+        Resume reconciliation can overlap with a redundant recovery/resume attempt
+        around deploys. If another writer only saved reconciliation metadata for
+        the same tick cursor, merge our broker metadata into the latest row and
+        retry once. If tick progress changed, trading may already be active and
+        continuing this reconciliation would risk overwriting live state.
+        """
+        latest = ExecutionState.objects.get(pk=self.state.pk)
+        progress_fields = (
+            "ticks_processed",
+            "last_tick_timestamp",
+            "resume_cursor_timestamp",
+            "last_tick_price",
+            "last_tick_bid",
+            "last_tick_ask",
+        )
+        if any(
+            getattr(latest, progress_field) != getattr(self.state, progress_field)
+            for progress_field in progress_fields
+        ):
+            return False
+
+        latest_strategy_state = (
+            dict(latest.strategy_state) if isinstance(latest.strategy_state, dict) else {}
+        )
+        pending_strategy_state = (
+            self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        )
+        latest_strategy_state.update(pending_strategy_state)
+        self.state.strategy_state = latest_strategy_state
+
+        for progress_field in progress_fields:
+            setattr(self.state, progress_field, getattr(latest, progress_field))
+        self.state.state_version = latest.state_version
+        return True
 
     def _sync_strategy_state_with_positions(
         self,

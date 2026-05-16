@@ -162,6 +162,7 @@ export function TaskStrategyTab({
   const [showOhlcChart, setShowOhlcChart] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  const isSummaryCompact = useMediaQuery(theme.breakpoints.down('sm'));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [tradePage, setTradePage] = useState(0);
   const [tradeRowsPerPage, setTradeRowsPerPage] = useState(50);
@@ -413,6 +414,84 @@ export function TaskStrategyTab({
   }, [pagedTrades]);
 
   const summary = data?.summary;
+  const formatSummaryCount = useCallback(
+    (value: number) =>
+      formatAppNumber(value, {
+        maximumFractionDigits: 0,
+      }),
+    []
+  );
+  const summaryChips = useMemo(() => {
+    if (!summary) return [];
+
+    return [
+      {
+        key: 'cycles',
+        label: t('common:strategyVisualization.chips.cycles', {
+          count: summary.cycle_count,
+        }),
+        compactLabel: `${t(
+          'common:strategyVisualization.chips.compact.cycles',
+          {
+            defaultValue: 'C',
+          }
+        )}: ${formatSummaryCount(summary.cycle_count)}`,
+      },
+      {
+        key: 'active',
+        label: t('common:strategyVisualization.chips.active', {
+          count: summary.active_count,
+        }),
+        compactLabel: `${t(
+          'common:strategyVisualization.chips.compact.active',
+          {
+            defaultValue: 'A',
+          }
+        )}: ${formatSummaryCount(summary.active_count)}`,
+      },
+      ...(summary.pending_count > 0
+        ? [
+            {
+              key: 'pending',
+              label: t('common:strategyVisualization.chips.pending', {
+                count: summary.pending_count,
+              }),
+              compactLabel: `${t(
+                'common:strategyVisualization.chips.compact.pending',
+                {
+                  defaultValue: 'P',
+                }
+              )}: ${formatSummaryCount(summary.pending_count)}`,
+              color: 'info' as const,
+            },
+          ]
+        : []),
+      {
+        key: 'completed',
+        label: t('common:strategyVisualization.chips.completed', {
+          count: summary.completed_count,
+        }),
+        compactLabel: `${t(
+          'common:strategyVisualization.chips.compact.completed',
+          {
+            defaultValue: 'D',
+          }
+        )}: ${formatSummaryCount(summary.completed_count)}`,
+      },
+      {
+        key: 'trades',
+        label: t('common:strategyVisualization.chips.trades', {
+          count: summary.total_trades,
+        }),
+        compactLabel: `${t(
+          'common:strategyVisualization.chips.compact.trades',
+          {
+            defaultValue: 'T',
+          }
+        )}: ${formatSummaryCount(summary.total_trades)}`,
+      },
+    ];
+  }, [formatSummaryCount, summary, t]);
 
   if (isLoading) {
     return (
@@ -472,51 +551,39 @@ export function TaskStrategyTab({
       {summary ? (
         <Stack
           direction="row"
-          spacing={0.5}
+          spacing={0}
           sx={{
             mb: 0.75,
-            flexWrap: 'wrap',
+            gap: { xs: 0.25, sm: 0.5 },
+            flexWrap: 'nowrap',
             flexShrink: 0,
             alignItems: 'center',
+            minWidth: 0,
+            overflow: 'hidden',
           }}
         >
-          <Chip
-            label={t('common:strategyVisualization.chips.cycles', {
-              count: summary.cycle_count,
-            })}
-          />
-          <Chip
-            label={t('common:strategyVisualization.chips.active', {
-              count: summary.active_count,
-            })}
-          />
-          {summary.pending_count > 0 ? (
-            <Chip
-              label={t('common:strategyVisualization.chips.pending', {
-                count: summary.pending_count,
-              })}
-              color="info"
-            />
-          ) : null}
-          <Chip
-            label={t('common:strategyVisualization.chips.completed', {
-              count: summary.completed_count,
-            })}
-          />
-          <Chip
-            label={t('common:strategyVisualization.chips.trades', {
-              count: summary.total_trades,
-            })}
-          />
-          <Tooltip title={t('common:actions.refresh')}>
-            <IconButton
-              size="small"
-              onClick={() => void refresh()}
-              aria-label={t('common:actions.refresh')}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {summaryChips.map((chip) => (
+            <Tooltip key={chip.key} title={chip.label}>
+              <Chip
+                label={isSummaryCompact ? chip.compactLabel : chip.label}
+                color={chip.color}
+                size="small"
+                sx={{
+                  flex: { xs: '1 1 0', sm: '0 0 auto' },
+                  minWidth: 0,
+                  height: { xs: 24, sm: 32 },
+                  '& .MuiChip-label': {
+                    minWidth: 0,
+                    px: { xs: 0.5, sm: 1.5 },
+                    fontSize: { xs: '0.68rem', sm: '0.8125rem' },
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  },
+                }}
+              />
+            </Tooltip>
+          ))}
         </Stack>
       ) : null}
 
@@ -550,68 +617,98 @@ export function TaskStrategyTab({
               py: 0.75,
               flexShrink: 0,
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: 0.5,
-              flexWrap: 'wrap',
+              minWidth: 0,
             }}
           >
-            <Typography variant="subtitle2" sx={{ mr: 0.5 }}>
-              {t('common:strategyVisualization.cycleList.title')}
-            </Typography>
-            <Chip
-              size="small"
-              clickable
-              color={sortOrder === 'asc' ? 'primary' : 'default'}
-              variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.sortOldest')}
-              onClick={() => setSortOrder('asc')}
-            />
-            <Chip
-              size="small"
-              clickable
-              color={sortOrder === 'desc' ? 'primary' : 'default'}
-              variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.sortNewest')}
-              onClick={() => setSortOrder('desc')}
-            />
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'active' ? 'primary' : 'default'}
-              variant={statusFilter === 'active' ? 'filled' : 'outlined'}
-              label={t('common:strategyVisualization.cycleList.filterActive')}
-              onClick={() =>
-                setStatusFilter(statusFilter === 'active' ? 'all' : 'active')
-              }
-            />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'completed' ? 'primary' : 'default'}
-              variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
-              label={t(
-                'common:strategyVisualization.cycleList.filterCompleted'
-              )}
-              onClick={() =>
-                setStatusFilter(
-                  statusFilter === 'completed' ? 'all' : 'completed'
-                )
-              }
-            />
-            <Chip
-              size="small"
-              clickable
-              color={statusFilter === 'pending' ? 'primary' : 'default'}
-              variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
-              label={t(
-                'common:strategyVisualization.cycleList.filterPending',
-                'Pending'
-              )}
-              onClick={() =>
-                setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')
-              }
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flex: '1 1 auto',
+                flexWrap: 'wrap',
+                minWidth: 0,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mr: 0.5 }}>
+                {t('common:strategyVisualization.cycleList.title')}
+              </Typography>
+              <Chip
+                size="small"
+                clickable
+                color={sortOrder === 'asc' ? 'primary' : 'default'}
+                variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.sortOldest')}
+                onClick={() => setSortOrder('asc')}
+              />
+              <Chip
+                size="small"
+                clickable
+                color={sortOrder === 'desc' ? 'primary' : 'default'}
+                variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.sortNewest')}
+                onClick={() => setSortOrder('desc')}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'active' ? 'primary' : 'default'}
+                variant={statusFilter === 'active' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.cycleList.filterActive')}
+                onClick={() =>
+                  setStatusFilter(statusFilter === 'active' ? 'all' : 'active')
+                }
+              />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'completed' ? 'primary' : 'default'}
+                variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
+                label={t(
+                  'common:strategyVisualization.cycleList.filterCompleted'
+                )}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === 'completed' ? 'all' : 'completed'
+                  )
+                }
+              />
+              <Chip
+                size="small"
+                clickable
+                color={statusFilter === 'pending' ? 'primary' : 'default'}
+                variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
+                label={t(
+                  'common:strategyVisualization.cycleList.filterPending',
+                  'Pending'
+                )}
+                onClick={() =>
+                  setStatusFilter(
+                    statusFilter === 'pending' ? 'all' : 'pending'
+                  )
+                }
+              />
+            </Box>
+            <Tooltip title={t('common:actions.refresh')}>
+              <IconButton
+                size="small"
+                onClick={() => void handleRefreshDetail()}
+                aria-label={t('common:actions.refresh')}
+                sx={{
+                  flex: '0 0 auto',
+                  alignSelf: 'flex-start',
+                  ml: 'auto',
+                  width: 24,
+                  height: 24,
+                  p: 0.25,
+                }}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
           <Divider />
           <Box sx={{ px: 1, py: 0.5, flexShrink: 0 }}>
@@ -860,6 +957,10 @@ export function TaskStrategyTab({
                 )}
                 sx={{
                   flexShrink: 0,
+                  mb: {
+                    xs: 'calc(56px + env(safe-area-inset-bottom))',
+                    sm: 4,
+                  },
                   '& .MuiTablePagination-toolbar': {
                     minHeight: 36,
                     paddingLeft: 1,
@@ -1180,6 +1281,12 @@ export function TaskStrategyTab({
                   setTradePage(0);
                 }}
                 rowsPerPageOptions={[10, 25, 50, 100, 200, 500, 1000]}
+                sx={{
+                  mb: {
+                    xs: 'calc(56px + env(safe-area-inset-bottom))',
+                    sm: 4,
+                  },
+                }}
               />
             </Box>
           ) : (

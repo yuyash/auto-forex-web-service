@@ -646,6 +646,9 @@ export function ExecutionHistoryTable({
           setPage(0);
         }}
         rowsPerPageOptions={[5, 10, 25, 50]}
+        sx={{
+          mb: { xs: 'calc(56px + env(safe-area-inset-bottom))', sm: 4 },
+        }}
       />
 
       <ColumnConfigDialog
