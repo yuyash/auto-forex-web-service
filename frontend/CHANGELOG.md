@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.74.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.73.2...frontend-v1.74.0) (2026-05-16)
+
+
+### Features
+
+* **trading:** auto-adjust initial position prices ([#739](https://github.com/yuyash/auto-forex-web-service/issues/739)) ([7100eb5](https://github.com/yuyash/auto-forex-web-service/commit/7100eb5385e38c70226affdfc9e241eb82bfc45d))
+
 ## [1.73.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.73.1...frontend-v1.73.2) (2026-05-16)
 
 
