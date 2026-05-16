@@ -71,6 +71,7 @@
     "confirmMessage": "この設定を削除してもよろしいですか",
     "inUseWarning": "この設定は現在{{count}}個のタスクで使用されています。",
     "cannotDelete": "削除できません：この設定は{{count}}個のアクティブなタスクで使用されています。先にこれらのタスクを停止または完了してください。",
+    "bulkDeleteInUseBlocked": "使用中の設定は一括削除できません。",
     "tasksUsingConfig": "この設定を使用しているタスク：",
     "confirmCheckbox": "この設定を削除すると{{count}}個のタスクに影響することを理解しています",
     "cannotBeUndone": "この操作は元に戻せません。"

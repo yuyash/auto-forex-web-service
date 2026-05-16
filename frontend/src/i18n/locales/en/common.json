@@ -76,6 +76,9 @@
     "copy": "Copy",
     "compare": "Compare",
     "selectForCompare": "Select for comparison",
+    "selectAll": "Select All",
+    "clearSelection": "Clear Selection",
+    "bulkDelete": "Bulk Delete",
     "saving": "Saving...",
     "deleting": "Deleting...",
     "ok": "OK",
@@ -85,6 +88,19 @@
     "backToCurrent": "Back to Current",
     "enableWidthLimit": "Enable width limit",
     "disableWidthLimit": "Disable width limit"
+  },
+  "selection": {
+    "selectedCount": "{{selected}} / {{total}} selected",
+    "visibleItems": "{{count}} visible",
+    "singleSelectionRequired": "Select exactly one item.",
+    "editUnavailable": "The selected item cannot be edited.",
+    "deleteUnavailable": "One or more selected items cannot be deleted.",
+    "bulkDeleteTitle": "Delete Selected Items",
+    "bulkDeleteConfirmation": "Delete {{count}} selected item(s)?",
+    "bulkDeleteWarning": "This deletes the selected items and their related execution history. This action cannot be undone.",
+    "confirmBulkDelete": "I understand this action cannot be undone.",
+    "bulkDeleteSuccess": "Selected items deleted.",
+    "copySuccess": "Item copied."
   },
   "status": {
     "active": "Active",

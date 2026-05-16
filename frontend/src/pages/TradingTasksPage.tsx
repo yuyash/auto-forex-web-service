@@ -24,7 +24,6 @@ import {
   Warning as WarningIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
-  CompareArrows as CompareArrowsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +36,11 @@ import {
   Breadcrumbs,
   LoadingSpinner,
   PageContainer,
+  useToast,
 } from '../components/common';
+import { BulkActionToolbar } from '../components/common/BulkActionToolbar';
+import { BulkDeleteDialog } from '../components/common/BulkDeleteDialog';
+import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
@@ -45,6 +48,11 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { logger } from '../utils/logger';
 import { buildCompareUrl } from '../utils/compareParams';
+import {
+  useCopyTradingTask,
+  useDeleteTradingTask,
+} from '../hooks/useTradingTaskMutations';
+import { formatTaskActionError } from '../utils/taskActionError';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -78,6 +86,7 @@ function a11yProps(index: number) {
 export default function TradingTasksPage() {
   const { t } = useTranslation(['trading', 'common']);
   const { settings: appSettings } = useAppSettings();
+  const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
@@ -87,6 +96,11 @@ export default function TradingTasksPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const copyTask = useCopyTradingTask();
+  const deleteTask = useDeleteTradingTask();
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
@@ -127,6 +141,18 @@ export default function TradingTasksPage() {
     () => selectedIds.filter((id) => visibleIdSet.has(id)),
     [selectedIds, visibleIdSet]
   );
+  const visibleTasks = useMemo(() => data?.results ?? [], [data?.results]);
+  const selectedTasks = useMemo(
+    () => visibleTasks.filter((task) => visibleSelectedIds.includes(task.id)),
+    [visibleSelectedIds, visibleTasks]
+  );
+  const singleSelectedTask =
+    selectedTasks.length === 1 ? selectedTasks[0] : null;
+  const selectedContainsNonDeletable = selectedTasks.some(
+    (task) => !(task.action_policy?.can_delete ?? false)
+  );
+  const selectedTaskCanEdit =
+    singleSelectedTask?.action_policy?.can_edit_metadata ?? false;
 
   const hasActiveTasks = !!data?.results.some((task) =>
     shouldPollTaskStatus(task.status)
@@ -185,21 +211,25 @@ export default function TradingTasksPage() {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    setSelectedIds([]);
     setPage(1); // Reset to first page when changing tabs
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
+    setSelectedIds([]);
     setPage(1); // Reset to first page when searching
   };
 
   const handleSortChange = (event: { target: { value: string } }) => {
     setSortBy(event.target.value);
+    setSelectedIds([]);
     setPage(1);
   };
 
   const handlePageSizeChange = (event: { target: { value: string } }) => {
     setPageSize(Number(event.target.value));
+    setSelectedIds([]);
     setPage(1);
   };
 
@@ -208,6 +238,7 @@ export default function TradingTasksPage() {
     value: number
   ) => {
     setPage(value);
+    setSelectedIds([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -217,6 +248,59 @@ export default function TradingTasksPage() {
 
   const handleCompare = () => {
     navigate(buildCompareUrl('/trading-tasks/compare', visibleSelectedIds));
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(visibleTasks.map((task) => task.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const handleCopyConfirm = async (newName: string) => {
+    if (!singleSelectedTask) return;
+    try {
+      await copyTask.mutate({
+        id: singleSelectedTask.id,
+        data: { new_name: newName },
+      });
+      setCopyDialogOpen(false);
+      await refresh();
+      showSuccess(t('common:selection.copySuccess'));
+    } catch (error) {
+      logger.error('Failed to copy trading task from bulk toolbar', {
+        taskId: singleSelectedTask.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(formatTaskActionError(error, 'Failed to copy task'));
+    }
+  };
+
+  const handleEditSelected = () => {
+    if (!singleSelectedTask || !selectedTaskCanEdit) return;
+    navigate(`/trading-tasks/${singleSelectedTask.id}/edit`);
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      for (const task of selectedTasks) {
+        await deleteTask.mutate(task.id);
+      }
+      setBulkDeleteOpen(false);
+      setSelectedIds([]);
+      await refresh();
+      showSuccess(t('common:selection.bulkDeleteSuccess'));
+    } catch (error) {
+      logger.error('Failed to bulk delete trading tasks', {
+        taskIds: selectedTasks.map((task) => task.id),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showError(formatTaskActionError(error, 'Failed to delete tasks'));
+    } finally {
+      setIsBulkDeleting(false);
+    }
   };
 
   const handleSelectedChange = (id: string, selected: boolean) => {
@@ -281,14 +365,6 @@ export default function TradingTasksPage() {
               disabled={isLoading}
             >
               {t('common:actions.refresh')}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<CompareArrowsIcon />}
-              disabled={visibleSelectedIds.length < 2}
-              onClick={handleCompare}
-            >
-              {t('common:actions.compare')} ({visibleSelectedIds.length})
             </Button>
             <Button
               variant="outlined"
@@ -380,6 +456,7 @@ export default function TradingTasksPage() {
                 value={configFilter}
                 onChange={(value) => {
                   setConfigFilter(value);
+                  setSelectedIds([]);
                   setPage(1);
                 }}
                 label={t('common:labels.configuration')}
@@ -443,6 +520,42 @@ export default function TradingTasksPage() {
             {t('common:errors.refreshFailed')}: {pollingError}
           </Alert>
         )}
+
+        <BulkActionToolbar
+          selectedCount={visibleSelectedIds.length}
+          totalCount={visibleTasks.length}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          onCompare={handleCompare}
+          onBulkDelete={() => setBulkDeleteOpen(true)}
+          onCopy={() => setCopyDialogOpen(true)}
+          onEdit={handleEditSelected}
+          disableCompare={visibleSelectedIds.length < 2}
+          disableCopy={selectedTasks.length !== 1 || copyTask.isLoading}
+          copyTooltip={
+            selectedTasks.length === 1
+              ? undefined
+              : t('common:selection.singleSelectionRequired')
+          }
+          disableEdit={selectedTasks.length !== 1 || !selectedTaskCanEdit}
+          editTooltip={
+            selectedTasks.length === 1
+              ? selectedTaskCanEdit
+                ? undefined
+                : t('common:selection.editUnavailable')
+              : t('common:selection.singleSelectionRequired')
+          }
+          disableBulkDelete={
+            selectedTasks.length === 0 ||
+            selectedContainsNonDeletable ||
+            isBulkDeleting
+          }
+          bulkDeleteTooltip={
+            selectedContainsNonDeletable
+              ? t('common:selection.deleteUnavailable')
+              : undefined
+          }
+        />
 
         {/* Tab Panels */}
         <TabPanel value={tabValue} index={0}>
@@ -634,6 +747,22 @@ export default function TradingTasksPage() {
             </>
           )}
         </TabPanel>
+        <CopyTaskDialog
+          open={copyDialogOpen}
+          taskName={singleSelectedTask?.name ?? ''}
+          onCancel={() => setCopyDialogOpen(false)}
+          onConfirm={handleCopyConfirm}
+          isLoading={copyTask.isLoading}
+        />
+        <BulkDeleteDialog
+          open={bulkDeleteOpen}
+          title={t('common:selection.bulkDeleteTitle')}
+          itemNames={selectedTasks.map((task) => task.name)}
+          onCancel={() => setBulkDeleteOpen(false)}
+          onConfirm={handleBulkDelete}
+          isLoading={isBulkDeleting}
+          warning={t('common:selection.bulkDeleteWarning')}
+        />
       </Box>
     </PageContainer>
   );

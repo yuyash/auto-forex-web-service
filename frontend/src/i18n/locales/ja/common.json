@@ -76,6 +76,9 @@
     "copy": "コピー",
     "compare": "比較",
     "selectForCompare": "比較対象として選択",
+    "selectAll": "全選択",
+    "clearSelection": "全選択解除",
+    "bulkDelete": "一括削除",
     "saving": "保存中...",
     "deleting": "削除中...",
     "ok": "OK",
@@ -85,6 +88,19 @@
     "backToCurrent": "現在の実行に戻る",
     "enableWidthLimit": "横幅制限を有効化",
     "disableWidthLimit": "横幅制限を無効化"
+  },
+  "selection": {
+    "selectedCount": "{{selected}} / {{total}} 件選択中",
+    "visibleItems": "表示中 {{count}} 件",
+    "singleSelectionRequired": "1件だけ選択してください。",
+    "editUnavailable": "選択した項目は編集できません。",
+    "deleteUnavailable": "選択した項目の中に削除できないものがあります。",
+    "bulkDeleteTitle": "選択項目を削除",
+    "bulkDeleteConfirmation": "選択した {{count}} 件を削除しますか？",
+    "bulkDeleteWarning": "選択した項目と関連する実行履歴を削除します。この操作は元に戻せません。",
+    "confirmBulkDelete": "この操作を元に戻せないことを理解しています。",
+    "bulkDeleteSuccess": "選択した項目を削除しました。",
+    "copySuccess": "項目をコピーしました。"
   },
   "status": {
     "active": "アクティブ",

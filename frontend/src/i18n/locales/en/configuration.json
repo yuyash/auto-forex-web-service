@@ -71,6 +71,7 @@
     "confirmMessage": "Are you sure you want to delete the configuration",
     "inUseWarning": "This configuration is currently being used by {{count}} task(s).",
     "cannotDelete": "Cannot delete: This configuration is being used by {{count}} active task(s). Please stop or complete these tasks first.",
+    "bulkDeleteInUseBlocked": "Configurations currently in use cannot be bulk deleted.",
     "tasksUsingConfig": "Tasks using this configuration:",
     "confirmCheckbox": "I understand that deleting this configuration will affect {{count}} task(s)",
     "cannotBeUndone": "This action cannot be undone."
