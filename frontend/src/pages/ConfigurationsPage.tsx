@@ -335,46 +335,48 @@ const ConfigurationsPage = () => {
         </Box>
       </Paper>
 
-      <BulkActionToolbar
-        selectedCount={visibleSelectedIds.length}
-        totalCount={configurations.length}
-        onSelectAll={handleSelectAll}
-        onClearSelection={handleClearSelection}
-        onCompare={handleCompare}
-        onBulkDelete={() => setBulkDeleteOpen(true)}
-        onCopy={handleCopySelected}
-        onEdit={handleEditSelected}
-        disableCompare={visibleSelectedIds.length < 2}
-        disableCopy={
-          selectedConfigurations.length !== 1 || copyMutation.isLoading
-        }
-        copyTooltip={
-          selectedConfigurations.length === 1
-            ? undefined
-            : t('common:selection.singleSelectionRequired')
-        }
-        disableEdit={
-          selectedConfigurations.length !== 1 ||
-          Boolean(singleSelectedConfiguration?.has_running_tasks)
-        }
-        editTooltip={
-          singleSelectedConfiguration?.has_running_tasks
-            ? t('configuration:form.editLockedRunningTasks')
-            : selectedConfigurations.length === 1
+      {configurations.length > 0 && (
+        <BulkActionToolbar
+          selectedCount={visibleSelectedIds.length}
+          totalCount={configurations.length}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          onCompare={handleCompare}
+          onBulkDelete={() => setBulkDeleteOpen(true)}
+          onCopy={handleCopySelected}
+          onEdit={handleEditSelected}
+          disableCompare={visibleSelectedIds.length < 2}
+          disableCopy={
+            selectedConfigurations.length !== 1 || copyMutation.isLoading
+          }
+          copyTooltip={
+            selectedConfigurations.length === 1
               ? undefined
               : t('common:selection.singleSelectionRequired')
-        }
-        disableBulkDelete={
-          selectedConfigurations.length === 0 ||
-          selectedIncludesInUse ||
-          isBulkDeleting
-        }
-        bulkDeleteTooltip={
-          selectedIncludesInUse
-            ? t('configuration:deleteDialog.bulkDeleteInUseBlocked')
-            : undefined
-        }
-      />
+          }
+          disableEdit={
+            selectedConfigurations.length !== 1 ||
+            Boolean(singleSelectedConfiguration?.has_running_tasks)
+          }
+          editTooltip={
+            singleSelectedConfiguration?.has_running_tasks
+              ? t('configuration:form.editLockedRunningTasks')
+              : selectedConfigurations.length === 1
+                ? undefined
+                : t('common:selection.singleSelectionRequired')
+          }
+          disableBulkDelete={
+            selectedConfigurations.length === 0 ||
+            selectedIncludesInUse ||
+            isBulkDeleting
+          }
+          bulkDeleteTooltip={
+            selectedIncludesInUse
+              ? t('configuration:deleteDialog.bulkDeleteInUseBlocked')
+              : undefined
+          }
+        />
+      )}
 
       {/* Error State */}
       {error && (

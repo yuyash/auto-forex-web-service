@@ -521,41 +521,43 @@ export default function TradingTasksPage() {
           </Alert>
         )}
 
-        <BulkActionToolbar
-          selectedCount={visibleSelectedIds.length}
-          totalCount={visibleTasks.length}
-          onSelectAll={handleSelectAll}
-          onClearSelection={handleClearSelection}
-          onCompare={handleCompare}
-          onBulkDelete={() => setBulkDeleteOpen(true)}
-          onCopy={() => setCopyDialogOpen(true)}
-          onEdit={handleEditSelected}
-          disableCompare={visibleSelectedIds.length < 2}
-          disableCopy={selectedTasks.length !== 1 || copyTask.isLoading}
-          copyTooltip={
-            selectedTasks.length === 1
-              ? undefined
-              : t('common:selection.singleSelectionRequired')
-          }
-          disableEdit={selectedTasks.length !== 1 || !selectedTaskCanEdit}
-          editTooltip={
-            selectedTasks.length === 1
-              ? selectedTaskCanEdit
+        {visibleTasks.length > 0 && (
+          <BulkActionToolbar
+            selectedCount={visibleSelectedIds.length}
+            totalCount={visibleTasks.length}
+            onSelectAll={handleSelectAll}
+            onClearSelection={handleClearSelection}
+            onCompare={handleCompare}
+            onBulkDelete={() => setBulkDeleteOpen(true)}
+            onCopy={() => setCopyDialogOpen(true)}
+            onEdit={handleEditSelected}
+            disableCompare={visibleSelectedIds.length < 2}
+            disableCopy={selectedTasks.length !== 1 || copyTask.isLoading}
+            copyTooltip={
+              selectedTasks.length === 1
                 ? undefined
-                : t('common:selection.editUnavailable')
-              : t('common:selection.singleSelectionRequired')
-          }
-          disableBulkDelete={
-            selectedTasks.length === 0 ||
-            selectedContainsNonDeletable ||
-            isBulkDeleting
-          }
-          bulkDeleteTooltip={
-            selectedContainsNonDeletable
-              ? t('common:selection.deleteUnavailable')
-              : undefined
-          }
-        />
+                : t('common:selection.singleSelectionRequired')
+            }
+            disableEdit={selectedTasks.length !== 1 || !selectedTaskCanEdit}
+            editTooltip={
+              selectedTasks.length === 1
+                ? selectedTaskCanEdit
+                  ? undefined
+                  : t('common:selection.editUnavailable')
+                : t('common:selection.singleSelectionRequired')
+            }
+            disableBulkDelete={
+              selectedTasks.length === 0 ||
+              selectedContainsNonDeletable ||
+              isBulkDeleting
+            }
+            bulkDeleteTooltip={
+              selectedContainsNonDeletable
+                ? t('common:selection.deleteUnavailable')
+                : undefined
+            }
+          />
+        )}
 
         {/* Tab Panels */}
         <TabPanel value={tabValue} index={0}>
