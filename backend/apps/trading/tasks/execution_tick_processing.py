@@ -31,8 +31,12 @@ class ExecutionTickProcessor:
         """Process one tick; return True when execution should stop."""
         executor = self.executor
         tick_ts = executor._coerce_tick_timestamp(tick.timestamp)
-        if executor._handle_live_tick_delivery(loop=loop, tick=tick, tick_ts=tick_ts):
-            return True
+
+        if executor.task_type == TaskType.TRADING:
+            executor._trading_idle_tick_policy.refresh_market_state(loop=loop)
+
+        if self._skip_resume_duplicate_tick(loop=loop, tick=tick, tick_ts=tick_ts):
+            return False
 
         if executor._trading_idle_tick_policy.handle_if_idle(
             loop=loop,
@@ -41,17 +45,11 @@ class ExecutionTickProcessor:
         ):
             return False
 
-        if executor._backtest_gap_guard.stop_for_gap(loop=loop, tick_ts=tick_ts):
+        if executor._handle_live_tick_delivery(loop=loop, tick=tick, tick_ts=tick_ts):
             return True
 
-        resume_ts = loop.resume_last_tick_timestamp
-        if resume_ts is not None and tick_ts is not None and tick_ts <= resume_ts:
-            executor._runtime_metrics._record_tick(
-                timestamp=tick_ts,
-                mid=Decimal(str(tick.mid)),
-            )
-            loop.last_delivered_tick_timestamp = tick_ts
-            return False
+        if executor._backtest_gap_guard.stop_for_gap(loop=loop, tick_ts=tick_ts):
+            return True
 
         if executor._backtest_idle_policy.handle_if_idle(loop=loop, tick=tick, tick_ts=tick_ts):
             return False
@@ -83,6 +81,32 @@ class ExecutionTickProcessor:
 
         executor._record_processed_tick(loop, tick)
         return False
+
+    def _skip_resume_duplicate_tick(
+        self,
+        *,
+        loop: "ExecutionLoopState",
+        tick,
+        tick_ts: datetime,
+    ) -> bool:
+        """Skip ticks that were already processed before this run resumed."""
+        resume_ts = loop.resume_last_tick_timestamp
+        if resume_ts is None or tick_ts > resume_ts:
+            return False
+
+        executor = self.executor
+        executor._runtime_metrics._record_tick(
+            timestamp=tick_ts,
+            mid=Decimal(str(tick.mid)),
+        )
+        if executor.task_type == TaskType.TRADING and executor.task.status == TaskStatus.IDLE:
+            executor._trading_idle_tick_policy.write_waiting_delivery_state(
+                loop=loop,
+                tick=tick,
+                tick_ts=tick_ts,
+            )
+        loop.last_delivered_tick_timestamp = tick_ts
+        return True
 
 
 class LiveTickDeliveryGuard:
@@ -343,6 +367,25 @@ class TradingIdleTickPolicy:
         """Bind the policy to one executor instance."""
         self.executor = executor
 
+    def refresh_market_state(self, *, loop: "ExecutionLoopState") -> None:
+        """Synchronize RUNNING/IDLE before a live tick reaches freshness checks."""
+        executor = self.executor
+        if executor.task_type != TaskType.TRADING:
+            return
+        if executor.task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
+            return
+        if executor.task.status == TaskStatus.IDLE and self._broker_read_outage_active(loop):
+            return
+        now = datetime.now(UTC)
+        if (
+            executor.task.status == TaskStatus.RUNNING
+            and loop.last_market_idle_eval_at is not None
+            and (now - loop.last_market_idle_eval_at).total_seconds() < 60
+        ):
+            return
+        executor._evaluate_market_idle(loop)
+        loop.last_market_idle_eval_at = now
+
     def handle_if_idle(
         self,
         *,
@@ -356,14 +399,8 @@ class TradingIdleTickPolicy:
             return False
         if executor.task.status != TaskStatus.IDLE:
             return False
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        if not isinstance(strategy_state.get("_broker_read_unavailable"), dict):
-            executor._evaluate_market_idle(loop)
-        if executor.task.status != TaskStatus.IDLE:
-            return False
 
+        self.write_waiting_delivery_state(loop=loop, tick=tick, tick_ts=tick_ts)
         loop.last_delivered_tick_timestamp = tick_ts
         loop.state.ticks_processed += 1
         loop.state.last_tick_timestamp = tick_ts
@@ -374,6 +411,52 @@ class TradingIdleTickPolicy:
         executor._update_common_metrics(loop.state, tick)
         executor._buffer_tick_metrics(loop.state, tick)
         return True
+
+    def write_waiting_delivery_state(
+        self,
+        *,
+        loop: "ExecutionLoopState",
+        tick,
+        tick_ts: datetime,
+    ) -> None:
+        """Record that a live tick was observed but trading is intentionally idle."""
+        executor = self.executor
+        observed_at = datetime.now(UTC)
+        age_seconds = max(0.0, (observed_at - tick_ts).total_seconds())
+        status = "market_closed" if self._market_is_closed(loop) else "waiting"
+        executor._write_live_tick_delivery_state(
+            loop=loop,
+            status=status,
+            tick_ts=tick_ts,
+            observed_at=observed_at,
+            age_seconds=age_seconds,
+            max_age_seconds=executor._max_live_tick_age_seconds(),
+            message=(
+                "Live tick observed while task is parked in IDLE; "
+                "strategy/order processing skipped."
+            )
+            if status == "waiting"
+            else (
+                "Live tick observed while forex market is closed; "
+                "strategy/order processing skipped."
+            ),
+        )
+
+    def _market_is_closed(self, loop: "ExecutionLoopState") -> bool:
+        clock = self.executor._market_idle_clock(loop)
+        if clock is None:
+            return False
+
+        from apps.trading.tasks.market_session import is_forex_market_closed
+
+        return is_forex_market_closed(clock, config=self.executor._market_session_config())
+
+    @staticmethod
+    def _broker_read_outage_active(loop: "ExecutionLoopState") -> bool:
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        return isinstance(strategy_state.get("_broker_read_unavailable"), dict)
 
 
 class LiveTickDeliveryStateRepository:

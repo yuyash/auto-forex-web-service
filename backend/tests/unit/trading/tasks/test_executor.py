@@ -12,7 +12,7 @@ from uuid import uuid4
 import pytest
 from freezegun import freeze_time
 
-from apps.trading.enums import TaskType
+from apps.trading.enums import TaskStatus, TaskType
 
 
 class TestIsForexMarketClosed:
@@ -1291,6 +1291,9 @@ class TestLiveTickDeliveryGuard:
         task.config.config_dict = {}
         task.config.strategy_type = ""
         task.oanda_account.currency = "JPY"
+        task.status = TaskStatus.RUNNING
+        task.market_idle_pre_close_minutes = 0
+        task.market_idle_resume_delay_minutes = 0
         task.live_tick_stale_guard_enabled = True
         task.live_tick_max_age_seconds = 30
         task.live_tick_status_log_interval_seconds = 60
@@ -1339,6 +1342,68 @@ class TestLiveTickDeliveryGuard:
         assert delivery["age_seconds"] == 60.0
         assert delivery["max_age_seconds"] == 30
         assert delivery["tick_timestamp"] == "2026-01-01T00:00:00+00:00"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-05-16 00:49:45", tz_offset=0)
+    def test_market_closed_idle_consumes_stale_live_tick_without_failure(self, mock_handler):
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        executor.task.status = TaskStatus.IDLE
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 5, 15, 20, 59, 5, tzinfo=UTC),
+            mid=Decimal("158.776"),
+            bid=Decimal("158.768"),
+            ask=Decimal("158.784"),
+        )
+
+        loop = ExecutionLoopState(state=state)
+        should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        assert loop.stopped_early is False
+        assert loop.is_error is False
+        assert state.ticks_processed == 6
+        assert state.last_tick_timestamp == tick.timestamp
+        engine.on_tick.assert_not_called()
+        delivery = state.strategy_state["live_tick_delivery"]
+        assert delivery["status"] == "market_closed"
+        assert delivery["tick_timestamp"] == "2026-05-15T20:59:05+00:00"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @freeze_time("2026-01-01 00:01:00", tz_offset=0)
+    def test_resume_duplicate_live_tick_skips_before_stale_guard(self, mock_handler):
+        from apps.trading.tasks.executor import ExecutionLoopState
+
+        executor, engine = self._make_executor()
+        state = MagicMock()
+        state.ticks_processed = 5
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+
+        loop = ExecutionLoopState(
+            state=state,
+            resume_last_tick_timestamp=tick.timestamp,
+        )
+        should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        assert loop.stopped_early is False
+        assert loop.is_error is False
+        assert state.ticks_processed == 5
+        assert loop.last_delivered_tick_timestamp == tick.timestamp
+        assert "live_tick_delivery" not in state.strategy_state
+        engine.on_tick.assert_not_called()
 
     @patch("apps.trading.tasks.executor.EventHandler")
     @freeze_time("2026-01-01 00:00:05", tz_offset=0)
