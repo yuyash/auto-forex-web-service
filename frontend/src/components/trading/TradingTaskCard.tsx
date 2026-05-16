@@ -11,6 +11,7 @@ import {
   Tooltip,
   Alert,
   useMediaQuery,
+  Checkbox,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Grid from '@mui/material/Grid';
@@ -65,11 +66,15 @@ import { formatCurrencyConversionContext } from '../../utils/currencyConversion'
 interface TradingTaskCardProps {
   task: TradingTask;
   onRefresh?: () => void;
+  selected?: boolean;
+  onSelectedChange?: (id: string, selected: boolean) => void;
 }
 
 export default function TradingTaskCard({
   task,
   onRefresh,
+  selected = false,
+  onSelectedChange,
 }: TradingTaskCardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -447,6 +452,9 @@ export default function TradingTaskCard({
           displayStatus === TaskStatus.RUNNING ? '2px solid' : '1px solid',
         borderColor:
           displayStatus === TaskStatus.RUNNING ? 'success.main' : 'divider',
+        outline: selected ? '2px solid' : '2px solid transparent',
+        outlineColor: selected ? 'primary.main' : 'transparent',
+        outlineOffset: 2,
       }}
     >
       <CardContent
@@ -548,6 +556,29 @@ export default function TradingTaskCard({
               flexShrink: 0,
             }}
           >
+            {onSelectedChange && (
+              <Tooltip
+                title={t('common:actions.selectForCompare', {
+                  defaultValue: 'Select for comparison',
+                })}
+              >
+                <Checkbox
+                  checked={selected}
+                  onChange={(event) => {
+                    event.stopPropagation();
+                    onSelectedChange(task.id, event.target.checked);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  inputProps={{
+                    'aria-label': t('common:actions.selectForCompare', {
+                      defaultValue: 'Select for comparison',
+                    }),
+                  }}
+                  size="small"
+                  sx={{ p: 0.5 }}
+                />
+              </Tooltip>
+            )}
             <Tooltip title={t('common:actions.viewDetails')}>
               <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />

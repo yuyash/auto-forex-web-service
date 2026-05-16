@@ -13,7 +13,15 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  CircularProgress,
+  Grid,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -197,9 +205,13 @@ const RETURN_BAR_CHARTS: ReturnBarChartDefinition[] = [
   { key: 'yearly_return', period: 'year', color: '#c2185b' },
 ];
 
-const RETURN_BAR_CHART_KEY_SET = new Set(
-  RETURN_BAR_CHARTS.map((chart) => chart.key)
-);
+const RETURN_PERIOD_CHART_KEY = 'period_return';
+const RETURN_PERIOD_SHORT_LABEL_KEYS: Record<ReturnPeriod, string> = {
+  day: 'metrics.return_period_day',
+  week: 'metrics.return_period_week',
+  month: 'metrics.return_period_month',
+  year: 'metrics.return_period_year',
+};
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
@@ -788,6 +800,8 @@ export function TaskMetricsTab({
   const { settings } = useAppSettings();
   const [ohlcRefreshToken, setOhlcRefreshToken] = useState(0);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [selectedReturnPeriod, setSelectedReturnPeriod] =
+    useState<ReturnPeriod>('day');
 
   const hasOhlc = !!(instrument && startTime);
   const chartMetricDefinitions =
@@ -816,6 +830,12 @@ export function TaskMetricsTab({
     [returnChartDataMap]
   );
 
+  const effectiveReturnPeriod =
+    availableReturnCharts.find((chart) => chart.period === selectedReturnPeriod)
+      ?.period ??
+    availableReturnCharts[0]?.period ??
+    selectedReturnPeriod;
+
   const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
     await onRefresh();
@@ -843,7 +863,7 @@ export function TaskMetricsTab({
   const allChartKeys = useMemo(() => {
     const keys: string[] = [];
     if (hasOhlc) keys.push(OHLC_KEY);
-    for (const chart of availableReturnCharts) keys.push(chart.key);
+    if (availableReturnCharts.length > 0) keys.push(RETURN_PERIOD_CHART_KEY);
     for (const chart of availableCharts) keys.push(chart.key);
     return keys;
   }, [availableCharts, availableReturnCharts, hasOhlc]);
@@ -857,12 +877,6 @@ export function TaskMetricsTab({
     for (const chart of chartMetricDefinitions) map.set(chart.key, chart);
     return map;
   }, [chartMetricDefinitions]);
-  const returnChartDefinitionMap = useMemo(() => {
-    const map = new Map<string, ReturnBarChartDefinition>();
-    for (const chart of RETURN_BAR_CHARTS) map.set(chart.key, chart);
-    return map;
-  }, []);
-
   // Compute effective interval from data range (for formatting)
   const effectiveInterval = useMemo(() => {
     if (interval > 0) return interval;
@@ -1052,14 +1066,13 @@ export function TaskMetricsTab({
         });
         continue;
       }
-      const returnChart = returnChartDefinitionMap.get(key);
-      if (returnChart) {
+      if (key === RETURN_PERIOD_CHART_KEY) {
         items.push({
           key,
-          label: t(`metrics.${returnChart.key}`, {
-            defaultValue: returnChart.key.replace(/_/g, ' '),
+          label: t('metrics.period_return', {
+            defaultValue: 'Period Return',
           }),
-          color: returnChart.color,
+          color: '#2e7d32',
         });
         continue;
       }
@@ -1074,13 +1087,7 @@ export function TaskMetricsTab({
       });
     }
     return items;
-  }, [
-    chartDefinitionMap,
-    instrument,
-    orderedKeys,
-    returnChartDefinitionMap,
-    t,
-  ]);
+  }, [chartDefinitionMap, instrument, orderedKeys, t]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -1213,8 +1220,11 @@ export function TaskMetricsTab({
             );
           }
 
-          if (RETURN_BAR_CHART_KEY_SET.has(key)) {
-            const chart = returnChartDefinitionMap.get(key);
+          if (key === RETURN_PERIOD_CHART_KEY) {
+            const chart =
+              availableReturnCharts.find(
+                (candidate) => candidate.period === effectiveReturnPeriod
+              ) ?? availableReturnCharts[0];
             const cd = chart ? returnChartDataMap[chart.key] : undefined;
             if (!chart || !cd || cd.labels.length === 0) return null;
             const maxChars = cd.values.reduce((max, value) => {
@@ -1227,26 +1237,28 @@ export function TaskMetricsTab({
             );
             return (
               <Grid
-                key={chart.key}
+                key={RETURN_PERIOD_CHART_KEY}
                 size={{ xs: 12, lg: 6 }}
                 draggable
-                onDragStart={(e) => handleDragStart(e, chart.key)}
-                onDragOver={(e) => handleDragOver(e, chart.key)}
-                onDrop={(e) => handleDrop(e, chart.key)}
+                onDragStart={(e) => handleDragStart(e, RETURN_PERIOD_CHART_KEY)}
+                onDragOver={(e) => handleDragOver(e, RETURN_PERIOD_CHART_KEY)}
+                onDrop={(e) => handleDrop(e, RETURN_PERIOD_CHART_KEY)}
                 onDragEnd={handleDragEnd}
                 sx={{
-                  opacity: dragKey === chart.key ? 0.4 : 1,
+                  opacity: dragKey === RETURN_PERIOD_CHART_KEY ? 0.4 : 1,
                   cursor: 'grab',
                   minWidth: 0,
                   transition:
                     'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
                   transform:
-                    dragOverKey === chart.key && dragKey !== chart.key
+                    dragOverKey === RETURN_PERIOD_CHART_KEY &&
+                    dragKey !== RETURN_PERIOD_CHART_KEY
                       ? 'translateY(-2px)'
                       : 'none',
                   outline: '2px solid',
                   outlineColor:
-                    dragOverKey === chart.key && dragKey !== chart.key
+                    dragOverKey === RETURN_PERIOD_CHART_KEY &&
+                    dragKey !== RETURN_PERIOD_CHART_KEY
                       ? 'primary.main'
                       : 'transparent',
                   outlineOffset: 3,
@@ -1254,8 +1266,8 @@ export function TaskMetricsTab({
                 }}
               >
                 <ChartPanel
-                  title={t(`metrics.${chart.key}`, {
-                    defaultValue: chart.key.replace(/_/g, ' '),
+                  title={t('metrics.period_return', {
+                    defaultValue: 'Period Return',
                   })}
                   valueLabel={formatValue(cd.lastValue, 'pct')}
                   height={CHART_CARD_HEIGHT}
@@ -1268,6 +1280,41 @@ export function TaskMetricsTab({
                         mr: spacingTokens.xxs,
                       }}
                     />
+                  }
+                  headerActions={
+                    <ToggleButtonGroup
+                      exclusive
+                      size="small"
+                      value={chart.period}
+                      onChange={(_, nextPeriod: ReturnPeriod | null) => {
+                        if (nextPeriod) setSelectedReturnPeriod(nextPeriod);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={t('metrics.period_return', {
+                        defaultValue: 'Period Return',
+                      })}
+                      sx={{
+                        '& .MuiToggleButton-root': {
+                          px: 0.75,
+                          py: 0.25,
+                          fontSize: '0.6875rem',
+                          lineHeight: 1.2,
+                        },
+                      }}
+                    >
+                      {availableReturnCharts.map((option) => (
+                        <ToggleButton
+                          key={option.period}
+                          value={option.period}
+                          aria-label={t(`metrics.${option.key}`, {
+                            defaultValue: option.key.replace(/_/g, ' '),
+                          })}
+                        >
+                          {t(RETURN_PERIOD_SHORT_LABEL_KEYS[option.period])}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
                   }
                 >
                   <FillBarChart

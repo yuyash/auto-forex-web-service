@@ -12,6 +12,7 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Checkbox,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -31,9 +32,15 @@ import { useDateTimeFormatter } from '../../hooks/useDateTimeFormatter';
 
 interface ConfigurationCardProps {
   configuration: StrategyConfig;
+  selected?: boolean;
+  onSelectedChange?: (id: string, selected: boolean) => void;
 }
 
-const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
+const ConfigurationCard = ({
+  configuration,
+  selected = false,
+  onSelectedChange,
+}: ConfigurationCardProps) => {
   const { t } = useTranslation(['configuration', 'common']);
   const { formatDate } = useDateTimeFormatter();
   const navigate = useNavigate();
@@ -107,6 +114,9 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           flexDirection: 'column',
           cursor: 'pointer',
           transition: 'all 0.2s ease-in-out',
+          outline: selected ? '2px solid' : '2px solid transparent',
+          outlineColor: selected ? 'primary.main' : 'transparent',
+          outlineOffset: 0,
           '&:hover': {
             transform: 'translateY(-4px)',
             boxShadow: 4,
@@ -129,6 +139,30 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               mb: 0.75,
             }}
           >
+            {onSelectedChange && (
+              <Tooltip
+                title={t('common:actions.selectForCompare', {
+                  defaultValue: 'Select for comparison',
+                })}
+              >
+                <Checkbox
+                  checked={selected}
+                  onChange={(event) => {
+                    event.stopPropagation();
+                    onSelectedChange(configuration.id, event.target.checked);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  inputProps={{
+                    'aria-label': t('common:actions.selectForCompare', {
+                      defaultValue: 'Select for comparison',
+                    }),
+                  }}
+                  size="small"
+                  sx={{ p: 0.25, mr: 0.75, mt: -0.25 }}
+                />
+              </Tooltip>
+            )}
             <Typography
               variant="subtitle1"
               component="div"

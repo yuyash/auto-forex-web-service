@@ -39,6 +39,11 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       { label: t('breadcrumbs.configurations'), path: '/configurations' },
       { label: t('breadcrumbs.newConfiguration') },
     ],
+    '/configurations/compare': [
+      { label: t('breadcrumbs.home'), path: homePath },
+      { label: t('breadcrumbs.configurations'), path: '/configurations' },
+      { label: t('breadcrumbs.compare') },
+    ],
     // Backtest Task routes
     '/backtest-tasks': [
       { label: t('breadcrumbs.home'), path: homePath },
@@ -49,6 +54,11 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
       { label: t('breadcrumbs.newTask') },
     ],
+    '/backtest-tasks/compare': [
+      { label: t('breadcrumbs.home'), path: homePath },
+      { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
+      { label: t('breadcrumbs.compare') },
+    ],
     // Trading Task routes
     '/trading-tasks': [
       { label: t('breadcrumbs.home'), path: homePath },
@@ -58,6 +68,11 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       { label: t('breadcrumbs.home'), path: homePath },
       { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
       { label: t('breadcrumbs.newTask') },
+    ],
+    '/trading-tasks/compare': [
+      { label: t('breadcrumbs.home'), path: homePath },
+      { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+      { label: t('breadcrumbs.compare') },
     ],
     // Settings routes
     '/settings': [

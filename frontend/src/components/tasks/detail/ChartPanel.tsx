@@ -6,6 +6,7 @@ interface ChartPanelProps {
   valueLabel?: string;
   height: number;
   headerPrefix?: ReactNode;
+  headerActions?: ReactNode;
   children: ReactNode;
 }
 
@@ -14,6 +15,7 @@ export function ChartPanel({
   valueLabel,
   height,
   headerPrefix,
+  headerActions,
   children,
 }: ChartPanelProps) {
   return (
@@ -34,19 +36,36 @@ export function ChartPanel({
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'baseline',
+          alignItems: 'center',
           mb: 0.25,
+          gap: 1,
+          minWidth: 0,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}
+        >
           {headerPrefix}
-          <Typography variant="subtitle2">{title}</Typography>
-        </Box>
-        {valueLabel ? (
-          <Typography variant="body2" color="text.secondary">
-            {valueLabel}
+          <Typography variant="subtitle2" noWrap>
+            {title}
           </Typography>
-        ) : null}
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 0.75,
+            flexShrink: 0,
+          }}
+        >
+          {headerActions}
+          {valueLabel ? (
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {valueLabel}
+            </Typography>
+          ) : null}
+        </Box>
       </Box>
       {/* position:relative wrapper gives the absolute child a concrete
           reference rectangle, which Safari needs to resolve flex-based

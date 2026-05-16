@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   Box,
@@ -24,6 +24,7 @@ import {
   Warning as WarningIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
+  CompareArrows as CompareArrowsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +44,7 @@ import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { logger } from '../utils/logger';
+import { buildCompareUrl } from '../utils/compareParams';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -84,6 +86,7 @@ export default function TradingTasksPage() {
   const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
@@ -115,6 +118,15 @@ export default function TradingTasksPage() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.pathname, location.state?.deleted, navigate, refresh]);
+
+  const visibleIdSet = useMemo(
+    () => new Set(data?.results.map((task) => task.id) ?? []),
+    [data?.results]
+  );
+  const visibleSelectedIds = useMemo(
+    () => selectedIds.filter((id) => visibleIdSet.has(id)),
+    [selectedIds, visibleIdSet]
+  );
 
   const hasActiveTasks = !!data?.results.some((task) =>
     shouldPollTaskStatus(task.status)
@@ -203,6 +215,17 @@ export default function TradingTasksPage() {
     navigate('/trading-tasks/new');
   };
 
+  const handleCompare = () => {
+    navigate(buildCompareUrl('/trading-tasks/compare', visibleSelectedIds));
+  };
+
+  const handleSelectedChange = (id: string, selected: boolean) => {
+    setSelectedIds((current) => {
+      if (selected) return current.includes(id) ? current : [...current, id];
+      return current.filter((currentId) => currentId !== id);
+    });
+  };
+
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   return (
@@ -258,6 +281,14 @@ export default function TradingTasksPage() {
               disabled={isLoading}
             >
               {t('common:actions.refresh')}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<CompareArrowsIcon />}
+              disabled={visibleSelectedIds.length < 2}
+              onClick={handleCompare}
+            >
+              {t('common:actions.compare')} ({visibleSelectedIds.length})
             </Button>
             <Button
               variant="outlined"
@@ -444,7 +475,12 @@ export default function TradingTasksPage() {
               <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
+                    <TradingTaskCard
+                      task={task}
+                      onRefresh={handleRefresh}
+                      selected={selectedIds.includes(task.id)}
+                      onSelectedChange={handleSelectedChange}
+                    />
                   </Grid>
                 ))}
               </Grid>
@@ -484,7 +520,12 @@ export default function TradingTasksPage() {
               <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
+                    <TradingTaskCard
+                      task={task}
+                      onRefresh={handleRefresh}
+                      selected={selectedIds.includes(task.id)}
+                      onSelectedChange={handleSelectedChange}
+                    />
                   </Grid>
                 ))}
               </Grid>
@@ -524,7 +565,12 @@ export default function TradingTasksPage() {
               <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
+                    <TradingTaskCard
+                      task={task}
+                      onRefresh={handleRefresh}
+                      selected={selectedIds.includes(task.id)}
+                      onSelectedChange={handleSelectedChange}
+                    />
                   </Grid>
                 ))}
               </Grid>
@@ -564,7 +610,12 @@ export default function TradingTasksPage() {
               <Grid container spacing={1}>
                 {data.results.map((task) => (
                   <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard task={task} onRefresh={handleRefresh} />
+                    <TradingTaskCard
+                      task={task}
+                      onRefresh={handleRefresh}
+                      selected={selectedIds.includes(task.id)}
+                      onSelectedChange={handleSelectedChange}
+                    />
                   </Grid>
                 ))}
               </Grid>

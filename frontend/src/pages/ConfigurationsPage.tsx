@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Typography,
   Box,
@@ -17,6 +17,7 @@ import {
 
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfigurations } from '../hooks/useConfigurations';
@@ -24,6 +25,7 @@ import { Breadcrumbs, PageContainer } from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
 import type { SelectChangeEvent } from '@mui/material';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
+import { buildCompareUrl } from '../utils/compareParams';
 
 const ConfigurationsPage = () => {
   const { t } = useTranslation(['configuration', 'common']);
@@ -33,6 +35,7 @@ const ConfigurationsPage = () => {
   const [sortBy, setSortBy] = useState('-updated_at');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Fetch configurations with filters
   const { data, isLoading, error } = useConfigurations({
@@ -50,6 +53,15 @@ const ConfigurationsPage = () => {
   }, [data]);
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
+
+  const visibleIdSet = useMemo(
+    () => new Set(configurations.map((config) => config.id)),
+    [configurations]
+  );
+  const visibleSelectedIds = useMemo(
+    () => selectedIds.filter((id) => visibleIdSet.has(id)),
+    [selectedIds, visibleIdSet]
+  );
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -81,6 +93,17 @@ const ConfigurationsPage = () => {
 
   const handleCreateNew = () => {
     navigate('/configurations/new');
+  };
+
+  const handleCompare = () => {
+    navigate(buildCompareUrl('/configurations/compare', visibleSelectedIds));
+  };
+
+  const handleSelectedChange = (id: string, selected: boolean) => {
+    setSelectedIds((current) => {
+      if (selected) return current.includes(id) ? current : [...current, id];
+      return current.filter((currentId) => currentId !== id);
+    });
   };
 
   const handlePageChange = (
@@ -121,14 +144,24 @@ const ConfigurationsPage = () => {
             {t('configuration:pages.subtitle')}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleCreateNew}
-        >
-          {t('configuration:card.newConfiguration')}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<CompareArrowsIcon />}
+            disabled={visibleSelectedIds.length < 2}
+            onClick={handleCompare}
+          >
+            {t('common:actions.compare')} ({visibleSelectedIds.length})
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleCreateNew}
+          >
+            {t('configuration:card.newConfiguration')}
+          </Button>
+        </Box>
       </Box>
 
       {/* Search and Filter Controls */}
@@ -304,7 +337,12 @@ const ConfigurationsPage = () => {
             }}
           >
             {configurations.map((config) => (
-              <ConfigurationCard key={config.id} configuration={config} />
+              <ConfigurationCard
+                key={config.id}
+                configuration={config}
+                selected={selectedIds.includes(config.id)}
+                onSelectedChange={handleSelectedChange}
+              />
             ))}
           </Box>
 

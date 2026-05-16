@@ -31,15 +31,24 @@ const ConfigurationFormPage = lazy(
 const ConfigurationDetailPage = lazy(
   () => import('./pages/ConfigurationDetailPage')
 );
+const ConfigurationComparePage = lazy(
+  () => import('./pages/ConfigurationComparePage')
+);
 const BacktestTasksPage = lazy(() => import('./pages/BacktestTasksPage'));
 const BacktestTaskFormPage = lazy(() => import('./pages/BacktestTaskFormPage'));
 const BacktestTaskDetailPage = lazy(
   () => import('./pages/BacktestTaskDetailPage')
 );
+const BacktestTasksComparePage = lazy(
+  () => import('./pages/BacktestTasksComparePage')
+);
 const TradingTasksPage = lazy(() => import('./pages/TradingTasksPage'));
 const TradingTaskFormPage = lazy(() => import('./pages/TradingTaskFormPage'));
 const TradingTaskDetailPage = lazy(
   () => import('./pages/TradingTaskDetailPage')
+);
+const TradingTasksComparePage = lazy(
+  () => import('./pages/TradingTasksComparePage')
 );
 
 const OandaAccountDetailPage = lazy(
@@ -155,6 +164,10 @@ function AppRoutes() {
             />
             <Route path="/configurations" element={<ConfigurationsPage />} />
             <Route
+              path="/configurations/compare"
+              element={<ConfigurationComparePage />}
+            />
+            <Route
               path="/configurations/:id"
               element={<ConfigurationDetailPage />}
             />
@@ -168,6 +181,10 @@ function AppRoutes() {
             />
             <Route path="/backtest-tasks" element={<BacktestTasksPage />} />
             <Route
+              path="/backtest-tasks/compare"
+              element={<BacktestTasksComparePage />}
+            />
+            <Route
               path="/backtest-tasks/new"
               element={<BacktestTaskFormPage />}
             />
@@ -180,6 +197,10 @@ function AppRoutes() {
               element={<BacktestTaskFormPage />}
             />
             <Route path="/trading-tasks" element={<TradingTasksPage />} />
+            <Route
+              path="/trading-tasks/compare"
+              element={<TradingTasksComparePage />}
+            />
             <Route
               path="/trading-tasks/new"
               element={<TradingTaskFormPage />}
