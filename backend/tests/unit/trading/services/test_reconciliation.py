@@ -16,6 +16,7 @@ from apps.trading.services.reconciliation import (
     BrokerReadFailurePolicy,
     BrokerReadUnavailableError,
     ReconciliationReport,
+    TradingSafetyError,
     TradingResumeReconciler,
     _safe_decimal,
 )
@@ -403,6 +404,68 @@ class TestReconcilePersistence:
             state_version=7,
         )
         assert reconciler.state.state_version == 8
+
+    @patch("apps.trading.services.reconciliation.ExecutionState")
+    def test_reconcile_retries_metadata_persist_after_same_progress_conflict(
+        self, mock_state_model
+    ):
+        reconciler = _make_reconciler()
+        reconciler.state.pk = uuid4()
+        reconciler.state.state_version = 7
+        reconciler.state.strategy_state = {"broker_reconciliation_status": "ok"}
+        reconciler.state.ticks_processed = 126399
+        reconciler.state.last_tick_timestamp = dj_timezone.now()
+        reconciler.state.resume_cursor_timestamp = reconciler.state.last_tick_timestamp
+        reconciler.state.last_tick_price = Decimal("158.776")
+        reconciler.state.last_tick_bid = Decimal("158.768")
+        reconciler.state.last_tick_ask = Decimal("158.784")
+
+        latest = MagicMock()
+        latest.state_version = 8
+        latest.strategy_state = {"_idle_entered_at": "2026-05-16T03:45:00+00:00"}
+        latest.ticks_processed = reconciler.state.ticks_processed
+        latest.last_tick_timestamp = reconciler.state.last_tick_timestamp
+        latest.resume_cursor_timestamp = reconciler.state.resume_cursor_timestamp
+        latest.last_tick_price = reconciler.state.last_tick_price
+        latest.last_tick_bid = reconciler.state.last_tick_bid
+        latest.last_tick_ask = reconciler.state.last_tick_ask
+
+        mock_state_model.objects.filter.return_value.update.side_effect = [0, 1]
+        mock_state_model.objects.get.return_value = latest
+
+        reconciler._persist_state()
+
+        assert reconciler.state.state_version == 9
+        assert reconciler.state.strategy_state["_idle_entered_at"] == ("2026-05-16T03:45:00+00:00")
+        assert reconciler.state.strategy_state["broker_reconciliation_status"] == "ok"
+
+    @patch("apps.trading.services.reconciliation.ExecutionState")
+    def test_reconcile_conflict_with_tick_progress_change_stays_blocking(self, mock_state_model):
+        reconciler = _make_reconciler()
+        reconciler.state.pk = uuid4()
+        reconciler.state.state_version = 7
+        reconciler.state.ticks_processed = 126399
+        reconciler.state.last_tick_timestamp = dj_timezone.now()
+        reconciler.state.resume_cursor_timestamp = reconciler.state.last_tick_timestamp
+        reconciler.state.last_tick_price = Decimal("158.776")
+        reconciler.state.last_tick_bid = Decimal("158.768")
+        reconciler.state.last_tick_ask = Decimal("158.784")
+
+        latest = MagicMock()
+        latest.state_version = 8
+        latest.strategy_state = {}
+        latest.ticks_processed = reconciler.state.ticks_processed + 1
+        latest.last_tick_timestamp = reconciler.state.last_tick_timestamp
+        latest.resume_cursor_timestamp = reconciler.state.resume_cursor_timestamp
+        latest.last_tick_price = reconciler.state.last_tick_price
+        latest.last_tick_bid = reconciler.state.last_tick_bid
+        latest.last_tick_ask = reconciler.state.last_tick_ask
+
+        mock_state_model.objects.filter.return_value.update.return_value = 0
+        mock_state_model.objects.get.return_value = latest
+
+        with pytest.raises(TradingSafetyError, match="Execution state changed"):
+            reconciler._persist_state()
 
 
 class TestDetectRuntimeDrift:
