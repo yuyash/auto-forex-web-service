@@ -533,7 +533,10 @@ export default function BacktestTaskCard({
                     variant="outlined"
                     color="primary"
                     size="small"
-                    sx={{ flex: '1 1 auto' }}
+                    sx={{
+                      flex: '0 1 auto',
+                      maxWidth: 'min(100%, 16rem)',
+                    }}
                   />
                 )}
               </Box>
