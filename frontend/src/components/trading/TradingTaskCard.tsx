@@ -498,54 +498,63 @@ export default function TradingTaskCard({
         >
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
               flex: 1,
               minWidth: 0,
             }}
           >
-            {onSelectedChange && (
-              <Tooltip
-                title={t('common:actions.selectForCompare', {
-                  defaultValue: 'Select for comparison',
-                })}
-              >
-                <Checkbox
-                  checked={selected}
-                  onChange={(event) => {
-                    event.stopPropagation();
-                    onSelectedChange(task.id, event.target.checked);
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  inputProps={{
-                    'aria-label': t('common:actions.selectForCompare', {
-                      defaultValue: 'Select for comparison',
-                    }),
-                  }}
-                  size="small"
-                  sx={{ p: 0.25, mr: 0.75, mt: -0.25, flexShrink: 0 }}
-                />
-              </Tooltip>
-            )}
             <Box
               sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
               onClick={handleView}
             >
-              <Typography
-                variant="subtitle1"
-                component="h2"
+              <Box
                 sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
                   mb: 0.5,
-                  fontWeight: 600,
-                  lineHeight: 1.25,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  minWidth: 0,
                 }}
               >
-                {currentTask.name}
-              </Typography>
+                {onSelectedChange && (
+                  <Tooltip
+                    title={t('common:actions.selectForCompare', {
+                      defaultValue: 'Select for comparison',
+                    })}
+                  >
+                    <Checkbox
+                      checked={selected}
+                      onChange={(event) => {
+                        event.stopPropagation();
+                        onSelectedChange(task.id, event.target.checked);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      inputProps={{
+                        'aria-label': t('common:actions.selectForCompare', {
+                          defaultValue: 'Select for comparison',
+                        }),
+                      }}
+                      size="small"
+                      sx={{ p: 0.25, ml: -0.25, flexShrink: 0 }}
+                    />
+                  </Tooltip>
+                )}
+                <Typography
+                  variant="subtitle1"
+                  component="h2"
+                  sx={{
+                    fontWeight: 600,
+                    lineHeight: 1.25,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {currentTask.name}
+                </Typography>
+              </Box>
               <Box
                 sx={{
                   display: 'flex',
