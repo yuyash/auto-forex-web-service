@@ -20,18 +20,22 @@ import AddIcon from '@mui/icons-material/Add';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfigurations } from '../hooks/useConfigurations';
-import { Breadcrumbs, PageContainer, useToast } from '../components/common';
+import {
+  Breadcrumbs,
+  ColumnCountControl,
+  PageContainer,
+  useToast,
+} from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
 import type { SelectChangeEvent } from '@mui/material';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { buildCompareUrl } from '../utils/compareParams';
 import { BulkActionToolbar } from '../components/common/BulkActionToolbar';
 import { BulkDeleteDialog } from '../components/common/BulkDeleteDialog';
-import {
-  useCopyConfiguration,
-  useDeleteConfiguration,
-} from '../hooks/useConfigurationMutations';
+import { useDeleteConfiguration } from '../hooks/useConfigurationMutations';
 import { logger } from '../utils/logger';
+import { useGridColumnCount } from '../hooks/useGridColumnCount';
+import { responsiveGridTemplateColumns } from '../utils/gridColumns';
 
 const ConfigurationsPage = () => {
   const { t } = useTranslation(['configuration', 'common']);
@@ -45,11 +49,10 @@ const ConfigurationsPage = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const copyMutation = useCopyConfiguration({
-    onSuccess: (copied) => {
-      navigate(`/configurations/${copied.id}`);
-    },
-  });
+  const [columnCount, setColumnCount] = useGridColumnCount(
+    'strategy-configurations',
+    3
+  );
   const deleteMutation = useDeleteConfiguration();
 
   // Fetch configurations with filters
@@ -134,25 +137,6 @@ const ConfigurationsPage = () => {
 
   const handleClearSelection = () => {
     setSelectedIds([]);
-  };
-
-  const handleCopySelected = async () => {
-    if (!singleSelectedConfiguration) return;
-    try {
-      await copyMutation.mutate({ id: singleSelectedConfiguration.id });
-    } catch (error) {
-      logger.error('Failed to copy configuration from bulk toolbar', {
-        configurationId: singleSelectedConfiguration.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showError(
-        error instanceof Error
-          ? error.message
-          : t('common:errors.operationFailed', {
-              defaultValue: 'Operation failed',
-            })
-      );
-    }
   };
 
   const handleEditSelected = () => {
@@ -255,7 +239,8 @@ const ConfigurationsPage = () => {
             display: 'grid',
             gridTemplateColumns: {
               xs: '1fr',
-              md: 'minmax(0, 1fr) 220px 200px 160px',
+              md: 'repeat(2, minmax(0, 1fr))',
+              lg: 'minmax(0, 1fr) 220px 200px 160px 170px',
             },
             gap: 1,
             alignItems: 'center',
@@ -332,6 +317,11 @@ const ConfigurationsPage = () => {
               ))}
             </Select>
           </FormControl>
+          <ColumnCountControl
+            value={columnCount}
+            onChange={setColumnCount}
+            fullWidth
+          />
         </Box>
       </Paper>
 
@@ -343,17 +333,8 @@ const ConfigurationsPage = () => {
           onClearSelection={handleClearSelection}
           onCompare={handleCompare}
           onBulkDelete={() => setBulkDeleteOpen(true)}
-          onCopy={handleCopySelected}
           onEdit={handleEditSelected}
           disableCompare={visibleSelectedIds.length < 2}
-          disableCopy={
-            selectedConfigurations.length !== 1 || copyMutation.isLoading
-          }
-          copyTooltip={
-            selectedConfigurations.length === 1
-              ? undefined
-              : t('common:selection.singleSelectionRequired')
-          }
           disableEdit={
             selectedConfigurations.length !== 1 ||
             Boolean(singleSelectedConfiguration?.has_running_tasks)
@@ -455,12 +436,9 @@ const ConfigurationsPage = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'repeat(2, 1fr)',
-                lg: 'repeat(3, 1fr)',
-              },
+              gridTemplateColumns: responsiveGridTemplateColumns(columnCount),
               gap: 1,
+              alignItems: 'stretch',
             }}
           >
             {configurations.map((config) => (

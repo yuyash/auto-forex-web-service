@@ -156,7 +156,9 @@
     "parameters": "Parameters",
     "executionStatus": "Execution Status",
     "strategySnapshot": "Strategy Snapshot",
-    "pageSize": "Page size"
+    "pageSize": "Page size",
+    "columns": "Columns",
+    "columnCount": "{{count}} columns"
   },
   "currencyConversion": {
     "tooltip": "{{policy}}: {{source}} to {{target}}, rate {{rate}}, source {{rateSource}}, as of {{rateAsOf}}, path {{ratePath}}",

@@ -34,13 +34,13 @@ import { TaskStatus, TaskType } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import {
   Breadcrumbs,
+  ColumnCountControl,
   LoadingSpinner,
   PageContainer,
   useToast,
 } from '../components/common';
 import { BulkActionToolbar } from '../components/common/BulkActionToolbar';
 import { BulkDeleteDialog } from '../components/common/BulkDeleteDialog';
-import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
@@ -48,11 +48,10 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { logger } from '../utils/logger';
 import { buildCompareUrl } from '../utils/compareParams';
-import {
-  useCopyTradingTask,
-  useDeleteTradingTask,
-} from '../hooks/useTradingTaskMutations';
+import { useDeleteTradingTask } from '../hooks/useTradingTaskMutations';
 import { formatTaskActionError } from '../utils/taskActionError';
+import { useGridColumnCount } from '../hooks/useGridColumnCount';
+import { responsiveGridTemplateColumns } from '../utils/gridColumns';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -96,12 +95,11 @@ export default function TradingTasksPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const copyTask = useCopyTradingTask();
   const deleteTask = useDeleteTradingTask();
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
+  const [columnCount, setColumnCount] = useGridColumnCount('trading-tasks', 3);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -258,25 +256,6 @@ export default function TradingTasksPage() {
     setSelectedIds([]);
   };
 
-  const handleCopyConfirm = async (newName: string) => {
-    if (!singleSelectedTask) return;
-    try {
-      await copyTask.mutate({
-        id: singleSelectedTask.id,
-        data: { new_name: newName },
-      });
-      setCopyDialogOpen(false);
-      await refresh();
-      showSuccess(t('common:selection.copySuccess'));
-    } catch (error) {
-      logger.error('Failed to copy trading task from bulk toolbar', {
-        taskId: singleSelectedTask.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showError(formatTaskActionError(error, 'Failed to copy task'));
-    }
-  };
-
   const handleEditSelected = () => {
     if (!singleSelectedTask || !selectedTaskCanEdit) return;
     navigate(`/trading-tasks/${singleSelectedTask.id}/edit`);
@@ -311,6 +290,27 @@ export default function TradingTasksPage() {
   };
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
+  const renderTaskGrid = () => (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: responsiveGridTemplateColumns(columnCount),
+        gap: 1,
+        alignItems: 'stretch',
+      }}
+    >
+      {data?.results.map((task) => (
+        <Box key={task.id} sx={{ minWidth: 0, height: '100%' }}>
+          <TradingTaskCard
+            task={task}
+            onRefresh={handleRefresh}
+            selected={selectedIds.includes(task.id)}
+            onSelectedChange={handleSelectedChange}
+          />
+        </Box>
+      ))}
+    </Box>
+  );
 
   return (
     <PageContainer>
@@ -464,7 +464,7 @@ export default function TradingTasksPage() {
                 emptySelectionLabel={t('trading:filters.allConfigurations')}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('trading:filters.sortBy')}</InputLabel>
                 <Select
@@ -490,7 +490,7 @@ export default function TradingTasksPage() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth>
                 <InputLabel>
                   {t('common:labels.pageSize', 'Page size')}
@@ -507,6 +507,16 @@ export default function TradingTasksPage() {
                   ))}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid
+              size={{ xs: 12, md: 2 }}
+              sx={{ display: { xs: 'none', lg: 'block' } }}
+            >
+              <ColumnCountControl
+                value={columnCount}
+                onChange={setColumnCount}
+                fullWidth
+              />
             </Grid>
           </Grid>
         </Paper>
@@ -529,15 +539,8 @@ export default function TradingTasksPage() {
             onClearSelection={handleClearSelection}
             onCompare={handleCompare}
             onBulkDelete={() => setBulkDeleteOpen(true)}
-            onCopy={() => setCopyDialogOpen(true)}
             onEdit={handleEditSelected}
             disableCompare={visibleSelectedIds.length < 2}
-            disableCopy={selectedTasks.length !== 1 || copyTask.isLoading}
-            copyTooltip={
-              selectedTasks.length === 1
-                ? undefined
-                : t('common:selection.singleSelectionRequired')
-            }
             disableEdit={selectedTasks.length !== 1 || !selectedTaskCanEdit}
             editTooltip={
               selectedTasks.length === 1
@@ -587,18 +590,7 @@ export default function TradingTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -632,18 +624,7 @@ export default function TradingTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -677,18 +658,7 @@ export default function TradingTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -722,18 +692,7 @@ export default function TradingTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid size={{ xs: 12 }} key={task.id}>
-                    <TradingTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -749,13 +708,6 @@ export default function TradingTasksPage() {
             </>
           )}
         </TabPanel>
-        <CopyTaskDialog
-          open={copyDialogOpen}
-          taskName={singleSelectedTask?.name ?? ''}
-          onCancel={() => setCopyDialogOpen(false)}
-          onConfirm={handleCopyConfirm}
-          isLoading={copyTask.isLoading}
-        />
         <BulkDeleteDialog
           open={bulkDeleteOpen}
           title={t('common:selection.bulkDeleteTitle')}

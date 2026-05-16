@@ -240,7 +240,7 @@ export function ExecutionHistoryTable({
               }
             >
               <Chip
-                label={revision ? `rev.${revision}` : '-'}
+                label={revision ? `Rev.${revision}` : '-'}
                 size="small"
                 variant={revision ? 'filled' : 'outlined'}
                 clickable

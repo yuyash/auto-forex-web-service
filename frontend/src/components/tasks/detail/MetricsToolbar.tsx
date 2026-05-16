@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { TableFilterBar } from '../../common/TableFilterBar';
 import { tableFilterDateRangeSx } from '../../common/tableFilterLayout';
+import { ColumnCountControl } from '../../common/ColumnCountControl';
+import type { GridColumnCount } from '../../../utils/gridColumns';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Auto' },
@@ -47,6 +49,8 @@ export interface MetricsToolbarProps {
   showLossCutMarkers?: boolean;
   onToggleLossCutMarkers?: (next: boolean) => void;
   lossCutMarkerCount?: number;
+  columnCount: GridColumnCount;
+  onColumnCountChange: (value: GridColumnCount) => void;
 }
 
 export function MetricsToolbar({
@@ -62,6 +66,8 @@ export function MetricsToolbar({
   showLossCutMarkers,
   onToggleLossCutMarkers,
   lossCutMarkerCount,
+  columnCount,
+  onColumnCountChange,
 }: MetricsToolbarProps) {
   const { t } = useTranslation('common');
   const [showRange, setShowRange] = useState(!!since || !!until);
@@ -175,6 +181,11 @@ export function MetricsToolbar({
               </ToggleButton>
             </Tooltip>
           ) : null}
+
+          <ColumnCountControl
+            value={columnCount}
+            onChange={onColumnCountChange}
+          />
 
           {onConfigureCharts ? (
             <Tooltip title={t('metrics.configureCharts', 'Chart settings')}>

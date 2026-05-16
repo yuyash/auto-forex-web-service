@@ -32,23 +32,22 @@ import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import {
   LoadingSpinner,
   Breadcrumbs,
+  ColumnCountControl,
   PageContainer,
   useToast,
 } from '../components/common';
 import { BulkActionToolbar } from '../components/common/BulkActionToolbar';
 import { BulkDeleteDialog } from '../components/common/BulkDeleteDialog';
-import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { logger } from '../utils/logger';
 import { buildCompareUrl } from '../utils/compareParams';
-import {
-  useCopyBacktestTask,
-  useDeleteBacktestTask,
-} from '../hooks/useBacktestTaskMutations';
+import { useDeleteBacktestTask } from '../hooks/useBacktestTaskMutations';
 import { formatTaskActionError } from '../utils/taskActionError';
+import { useGridColumnCount } from '../hooks/useGridColumnCount';
+import { responsiveGridTemplateColumns } from '../utils/gridColumns';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -91,12 +90,11 @@ export default function BacktestTasksPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const copyTask = useCopyBacktestTask();
   const deleteTask = useDeleteBacktestTask();
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
+  const [columnCount, setColumnCount] = useGridColumnCount('backtest-tasks', 3);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -246,25 +244,6 @@ export default function BacktestTasksPage() {
     setSelectedIds([]);
   };
 
-  const handleCopyConfirm = async (newName: string) => {
-    if (!singleSelectedTask) return;
-    try {
-      await copyTask.mutate({
-        id: singleSelectedTask.id,
-        data: { new_name: newName },
-      });
-      setCopyDialogOpen(false);
-      await refresh();
-      showSuccess(t('common:selection.copySuccess'));
-    } catch (error) {
-      logger.error('Failed to copy backtest task from bulk toolbar', {
-        taskId: singleSelectedTask.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showError(formatTaskActionError(error, 'Failed to copy task'));
-    }
-  };
-
   const handleEditSelected = () => {
     if (!singleSelectedTask || !selectedTaskCanEdit) return;
     navigate(`/backtest-tasks/${singleSelectedTask.id}/edit`);
@@ -299,6 +278,27 @@ export default function BacktestTasksPage() {
   };
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
+  const renderTaskGrid = () => (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: responsiveGridTemplateColumns(columnCount),
+        gap: 1,
+        alignItems: 'stretch',
+      }}
+    >
+      {data?.results.map((task) => (
+        <Box key={task.id} sx={{ minWidth: 0, height: '100%' }}>
+          <BacktestTaskCard
+            task={task}
+            onRefresh={handleRefresh}
+            selected={selectedIds.includes(task.id)}
+            onSelectedChange={handleSelectedChange}
+          />
+        </Box>
+      ))}
+    </Box>
+  );
 
   return (
     <PageContainer>
@@ -383,7 +383,7 @@ export default function BacktestTasksPage() {
         {/* Filters */}
         <Paper sx={{ p: 1, mb: 1 }}>
           <Grid container spacing={1} alignItems="center">
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
                 placeholder={t(
@@ -447,6 +447,16 @@ export default function BacktestTasksPage() {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid
+              size={{ xs: 12, md: 2 }}
+              sx={{ display: { xs: 'none', lg: 'block' } }}
+            >
+              <ColumnCountControl
+                value={columnCount}
+                onChange={setColumnCount}
+                fullWidth
+              />
+            </Grid>
           </Grid>
         </Paper>
 
@@ -468,15 +478,8 @@ export default function BacktestTasksPage() {
             onClearSelection={handleClearSelection}
             onCompare={handleCompare}
             onBulkDelete={() => setBulkDeleteOpen(true)}
-            onCopy={() => setCopyDialogOpen(true)}
             onEdit={handleEditSelected}
             disableCompare={visibleSelectedIds.length < 2}
-            disableCopy={selectedTasks.length !== 1 || copyTask.isLoading}
-            copyTooltip={
-              selectedTasks.length === 1
-                ? undefined
-                : t('common:selection.singleSelectionRequired')
-            }
             disableEdit={selectedTasks.length !== 1 || !selectedTaskCanEdit}
             editTooltip={
               selectedTasks.length === 1
@@ -526,18 +529,7 @@ export default function BacktestTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -571,18 +563,7 @@ export default function BacktestTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -616,18 +597,7 @@ export default function BacktestTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -661,18 +631,7 @@ export default function BacktestTasksPage() {
             </Paper>
           ) : (
             <>
-              <Grid container spacing={1}>
-                {data.results.map((task) => (
-                  <Grid key={task.id} size={{ xs: 12 }}>
-                    <BacktestTaskCard
-                      task={task}
-                      onRefresh={handleRefresh}
-                      selected={selectedIds.includes(task.id)}
-                      onSelectedChange={handleSelectedChange}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {renderTaskGrid()}
               {totalPages > 1 && (
                 <Box
                   sx={{ display: 'flex', justifyContent: 'center', mt: 1.5 }}
@@ -688,13 +647,6 @@ export default function BacktestTasksPage() {
             </>
           )}
         </TabPanel>
-        <CopyTaskDialog
-          open={copyDialogOpen}
-          taskName={singleSelectedTask?.name ?? ''}
-          onCancel={() => setCopyDialogOpen(false)}
-          onConfirm={handleCopyConfirm}
-          isLoading={copyTask.isLoading}
-        />
         <BulkDeleteDialog
           open={bulkDeleteOpen}
           title={t('common:selection.bulkDeleteTitle')}

@@ -51,6 +51,6 @@ describe('ConfigurationCard', () => {
     );
 
     expect(screen.getByText('Revision')).toBeInTheDocument();
-    expect(screen.getByText('rev.7')).toBeInTheDocument();
+    expect(screen.getByText('Rev.7')).toBeInTheDocument();
   });
 });

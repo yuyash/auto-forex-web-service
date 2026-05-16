@@ -879,7 +879,7 @@ export default function OandaAccountsPage() {
                 xs: '1fr',
                 sm: 'repeat(2, minmax(0, 1fr))',
                 md: 'repeat(3, minmax(0, 1fr))',
-                xl: 'minmax(220px, 1fr) 180px 190px 160px 130px 150px',
+                xl: 'minmax(220px, 1fr) 180px 190px 160px 130px 48px',
               },
               alignItems: 'center',
             }}
@@ -1006,16 +1006,35 @@ export default function OandaAccountsPage() {
                 ))}
               </Select>
             </FormControl>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<ClearFiltersIcon />}
-              disabled={!hasActiveAccountFilters}
-              onClick={handleClearAccountFilters}
-              sx={{ minHeight: 56 }}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: { xs: 'flex-end', xl: 'center' },
+                alignItems: 'center',
+                minHeight: 56,
+              }}
             >
-              {t('settings:accounts.clearAccountFilters', 'Clear filters')}
-            </Button>
+              <Tooltip
+                title={t(
+                  'settings:accounts.clearAccountFilters',
+                  'Clear filters'
+                )}
+              >
+                <span>
+                  <IconButton
+                    color="primary"
+                    disabled={!hasActiveAccountFilters}
+                    onClick={handleClearAccountFilters}
+                    aria-label={t(
+                      'settings:accounts.clearAccountFilters',
+                      'Clear filters'
+                    )}
+                  >
+                    <ClearFiltersIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
           </Box>
         </CardContent>
       </Card>
