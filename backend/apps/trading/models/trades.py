@@ -138,6 +138,11 @@ class Trade(models.Model):
         default=False,
         help_text="Whether this trade is for a position rebuilt after a stop-loss close.",
     )
+    is_initial_position_seed = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether this trade was created from task initial-position settings.",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when this record was created",

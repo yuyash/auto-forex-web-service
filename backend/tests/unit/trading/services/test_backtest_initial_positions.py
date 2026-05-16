@@ -297,12 +297,22 @@ def test_sync_for_task_creates_preview_execution_records_before_start():
     assert [p.retracement_count for p in positions] == [0, 1]
     assert all(p.entry_time < task.start_time for p in positions)
     assert all(p.created_at < task.start_time for p in positions)
+    assert all(p.is_initial_position_seed for p in positions)
 
     assert (
         Order.objects.filter(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
             execution_id=task.execution_id,
+        ).count()
+        == 2
+    )
+    assert (
+        Trade.objects.filter(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            is_initial_position_seed=True,
         ).count()
         == 2
     )
@@ -464,12 +474,22 @@ def test_sync_for_task_can_seed_pending_rebuild_positions():
     assert first_slot["entry"] is None
     assert first_slot["pending_rebuild"]["stop_loss_price"] == "149.70"
     assert position.is_open is False
+    assert position.is_initial_position_seed is True
     assert position.exit_time is not None and position.exit_time < task.start_time
     assert (
         Trade.objects.filter(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
             execution_id=task.execution_id,
+        ).count()
+        == 2
+    )
+    assert (
+        Trade.objects.filter(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            is_initial_position_seed=True,
         ).count()
         == 2
     )
@@ -525,9 +545,11 @@ def test_sync_for_trading_task_creates_preview_with_external_oanda_trade_id():
     assert state.last_tick_timestamp is None
     assert state.resume_cursor_timestamp is None
     assert position.oanda_trade_id == "OANDA-123"
+    assert position.is_initial_position_seed is True
     assert Trade.objects.filter(
         task_type=TaskType.TRADING,
         task_id=task.pk,
         execution_id=task.execution_id,
         oanda_trade_id="OANDA-123",
+        is_initial_position_seed=True,
     ).exists()

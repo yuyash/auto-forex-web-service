@@ -11094,6 +11094,10 @@
                         "type": "boolean",
                         "default": false
                     },
+                    "is_initial_position_seed": {
+                        "type": "boolean",
+                        "default": false
+                    },
                     "unrealized_pnl": {
                         "type": "string",
                         "format": "decimal",
@@ -13496,6 +13500,10 @@
                         "nullable": true
                     },
                     "is_rebuild": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "is_initial_position_seed": {
                         "type": "boolean",
                         "default": false
                     },

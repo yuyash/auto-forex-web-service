@@ -589,11 +589,13 @@ class BacktestInitialPositionService:
                 Trade.objects.filter(pk__in=result.trade_ids).update(
                     created_at=event.timestamp,
                     updated_at=event.timestamp,
+                    is_initial_position_seed=True,
                 )
             if result.position_ids:
                 Position.objects.filter(pk__in=result.position_ids).update(
                     created_at=event.timestamp,
                     updated_at=event.timestamp,
+                    is_initial_position_seed=True,
                 )
         return event_sequence + 1
 

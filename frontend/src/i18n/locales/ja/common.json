@@ -302,6 +302,8 @@
     "ohlcChart": "OHLCチャート",
     "chartLoadError": "チャートデータの読み込みに失敗しました。下のタイムラインとフローチャートには影響ありません。",
     "stepPriceLine": "price {{price}} / exit {{exit}}",
+    "initialPositionSeed": "初期ポジション",
+    "initialPositionSeedShort": "初期",
     "labels": {
       "open_position": "ポジション作成",
       "close_position": "ポジション決済",
@@ -582,6 +584,8 @@
       "stopLossPrice": "ロスカット価格",
       "isRebuild": "再建玉",
       "rebuild": "再建玉",
+      "initialPositionSeed": "初期ポジション",
+      "initialPositionSeedShort": "初期",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",

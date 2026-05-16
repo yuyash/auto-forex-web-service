@@ -138,6 +138,11 @@ class Position(models.Model):
         default=False,
         help_text="Whether this position was rebuilt after a stop-loss close.",
     )
+    is_initial_position_seed = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether this position was created from task initial-position settings.",
+    )
     oanda_trade_id = models.CharField(
         max_length=64,
         null=True,

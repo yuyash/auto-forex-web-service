@@ -120,6 +120,8 @@ function baseCopyExtractors(
     stop_loss_price: (row) =>
       formatPriceWithCurrency(row.stop_loss_price, row.unrealized_pnl_currency),
     is_rebuild: (row) => (row.is_rebuild ? 'Yes' : '-'),
+    is_initial_position_seed: (row) =>
+      row.is_initial_position_seed ? 'Yes' : '-',
   };
 }
 

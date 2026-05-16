@@ -306,6 +306,34 @@ class TestStrategyEventsPagination:
         assert len(response.data["cycles"]) == 1
         assert len(response.data["cycles"][0]["trades"]) == 2
 
+    def test_initial_position_seed_flag_is_returned_for_cycles_and_trades(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        cycle_id = _seed_cycles(
+            task,
+            count=1,
+            start=datetime(2024, 6, 1, tzinfo=timezone.utc),
+        )[0]
+        Trade.objects.filter(task_id=task.pk, execution_id=task.execution_id).update(
+            is_initial_position_seed=True
+        )
+
+        list_response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
+        detail_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": str(cycle_id)},
+        )
+
+        assert list_response.status_code == status.HTTP_200_OK
+        assert list_response.data["cycles"][0]["is_initial_position_seed"] is True
+        assert list_response.data["cycles"][0]["initial_position_seed_count"] == 2
+        assert detail_response.status_code == status.HTTP_200_OK
+        assert detail_response.data["cycles"][0]["is_initial_position_seed"] is True
+        assert all(
+            trade["is_initial_position_seed"]
+            for trade in detail_response.data["cycles"][0]["trades"]
+        )
+
     def test_summary_reflects_filtered_universe(self):
         task = _make_task()
         client = _auth_client(task.user)
