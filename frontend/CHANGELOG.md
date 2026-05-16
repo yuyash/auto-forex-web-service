@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.75.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.74.0...frontend-v1.75.0) (2026-05-16)
+
+
+### Features
+
+* **trading:** add cycle anchor controls ([#741](https://github.com/yuyash/auto-forex-web-service/issues/741)) ([7585ea1](https://github.com/yuyash/auto-forex-web-service/commit/7585ea1576a7c1870bf24977fe897b6685d36acd))
+
 ## [1.74.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.73.2...frontend-v1.74.0) (2026-05-16)
 
 
