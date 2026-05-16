@@ -12,3 +12,4 @@ export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
 export { TaskControlButtons } from './TaskControlButtons';
 export type { TaskControlButtonsProps } from './TaskControlButtons';
 export { MoneyAmountText } from './MoneyAmountText';
+export { ColumnCountControl } from './ColumnCountControl';

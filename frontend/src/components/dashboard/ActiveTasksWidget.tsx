@@ -7,12 +7,10 @@ import {
   CardContent,
   CircularProgress,
   Stack,
-  Button,
 } from '@mui/material';
 import {
   PlayCircleOutline as TradingIcon,
   Assessment as BacktestIcon,
-  ArrowForward as ArrowIcon,
 } from '@mui/icons-material';
 import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
@@ -84,12 +82,6 @@ const ActiveTasksWidget = () => {
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t('widgets.activeTasks')} ({totalActive})
         </Typography>
-        <Button
-          endIcon={<ArrowIcon />}
-          onClick={() => navigate('/backtest-tasks')}
-        >
-          {t('widgets.quickActions')}
-        </Button>
       </Box>
 
       {isLoading ? (

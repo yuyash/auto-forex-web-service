@@ -50,6 +50,8 @@ import {
   formatMoneyAmount,
 } from '../../../utils/numberFormat';
 import { measureContainer } from '../../../utils/measureContainer';
+import { useGridColumnCount } from '../../../hooks/useGridColumnCount';
+import { responsiveChartGridSize } from '../../../utils/gridColumns';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -870,6 +872,11 @@ export function TaskMetricsTab({
 
   const { orderedKeys, moveItem, setOrder, resetOrder } =
     useMetricsOrder(allChartKeys);
+  const [columnCount, setColumnCount] = useGridColumnCount('task-metrics', 2);
+  const chartGridSize = useMemo(
+    () => responsiveChartGridSize(columnCount),
+    [columnCount]
+  );
 
   // Map chart key → chart config for quick lookup
   const chartDefinitionMap = useMemo(() => {
@@ -1161,6 +1168,8 @@ export function TaskMetricsTab({
         showLossCutMarkers={showLossCutMarkers}
         onToggleLossCutMarkers={onToggleLossCutMarkers}
         lossCutMarkerCount={lossCutEvents?.length}
+        columnCount={columnCount}
+        onColumnCountChange={setColumnCount}
       />
       {consistencyWarnings.length > 0 ? (
         <Alert severity="warning" sx={{ mb: { xs: 0.75, sm: 1.5 } }}>
@@ -1181,7 +1190,7 @@ export function TaskMetricsTab({
             return (
               <Grid
                 key={OHLC_KEY}
-                size={{ xs: 12, lg: 6 }}
+                size={chartGridSize}
                 draggable
                 onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
                 onDragOver={(e) => handleDragOver(e, OHLC_KEY)}
@@ -1238,7 +1247,7 @@ export function TaskMetricsTab({
             return (
               <Grid
                 key={RETURN_PERIOD_CHART_KEY}
-                size={{ xs: 12, lg: 6 }}
+                size={chartGridSize}
                 draggable
                 onDragStart={(e) => handleDragStart(e, RETURN_PERIOD_CHART_KEY)}
                 onDragOver={(e) => handleDragOver(e, RETURN_PERIOD_CHART_KEY)}
@@ -1377,7 +1386,7 @@ export function TaskMetricsTab({
           return (
             <Grid
               key={chart.key}
-              size={{ xs: 12, lg: 6 }}
+              size={chartGridSize}
               draggable
               onDragStart={(e) => handleDragStart(e, chart.key)}
               onDragOver={(e) => handleDragOver(e, chart.key)}

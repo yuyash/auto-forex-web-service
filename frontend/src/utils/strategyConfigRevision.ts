@@ -88,5 +88,5 @@ export function formatStrategyConfigRevisionLabel(
   if (!revision) {
     return name;
   }
-  return `${name} rev.${revision}`;
+  return `${name} Rev.${revision}`;
 }

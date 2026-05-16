@@ -16,7 +16,7 @@ const QuickActionsWidget = () => {
     {
       label: t('quickActions.addAccount'),
       icon: <AccountIcon />,
-      path: '/settings',
+      path: '/oanda-accounts',
       color: 'info' as const,
     },
     {

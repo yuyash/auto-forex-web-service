@@ -239,7 +239,7 @@ const ConfigurationCard = ({
                 {t('configuration:card.revision')}
               </Typography>
               <Typography variant="caption" fontWeight={500}>
-                rev.{configuration.revision}
+                Rev.{configuration.revision}
               </Typography>
             </Box>
             <Box

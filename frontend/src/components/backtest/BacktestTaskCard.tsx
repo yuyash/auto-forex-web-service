@@ -398,6 +398,9 @@ export default function BacktestTaskCard({
   return (
     <Card
       sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
         '&:hover': {
           boxShadow: 4,
         },
@@ -411,6 +414,9 @@ export default function BacktestTaskCard({
     >
       <CardContent
         sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
           p: { xs: 1, sm: 1.25 },
           '&:last-child': { pb: { xs: 1, sm: 1.25 } },
         }}
@@ -430,7 +436,14 @@ export default function BacktestTaskCard({
             <Typography
               variant="subtitle1"
               component="h2"
-              sx={{ mb: 0.5, fontWeight: 600, lineHeight: 1.25 }}
+              sx={{
+                mb: 0.5,
+                fontWeight: 600,
+                lineHeight: 1.25,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
             >
               {currentTask.name}
             </Typography>
@@ -440,10 +453,24 @@ export default function BacktestTaskCard({
                 gap: 0.5,
                 alignItems: 'center',
                 mb: 0.5,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                minWidth: 0,
+                overflow: 'hidden',
+                '& .MuiChip-root': {
+                  minWidth: 0,
+                  maxWidth: '100%',
+                },
+                '& .MuiChip-label': {
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                },
               }}
             >
-              <StatusBadge status={displayStatus} />
+              <Box sx={{ flexShrink: 0 }}>
+                <StatusBadge status={displayStatus} />
+              </Box>
               {getStrategyDisplayName(
                 strategies,
                 currentTask.strategy_type
@@ -455,6 +482,7 @@ export default function BacktestTaskCard({
                   )}
                   variant="outlined"
                   size="small"
+                  sx={{ flex: '1 1 auto' }}
                 />
               )}
               {!isMobile && currentTask.config_name && (
@@ -463,10 +491,20 @@ export default function BacktestTaskCard({
                   variant="outlined"
                   color="primary"
                   size="small"
+                  sx={{ flex: '1 1 auto' }}
                 />
               )}
             </Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
               {formatPeriod(currentTask.start_time)} -{' '}
               {formatPeriod(currentTask.end_time)}
             </Typography>
@@ -652,7 +690,7 @@ export default function BacktestTaskCard({
         {/* Footer with metadata */}
         <Box
           sx={{
-            mt: 1,
+            mt: 'auto',
             pt: 1,
             borderTop: 1,
             borderColor: 'divider',

@@ -7,12 +7,8 @@ import {
   CardContent,
   CircularProgress,
   Stack,
-  Button,
 } from '@mui/material';
-import {
-  Assessment as BacktestIcon,
-  ArrowForward as ArrowIcon,
-} from '@mui/icons-material';
+import { Assessment as BacktestIcon } from '@mui/icons-material';
 import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskStatus } from '../../types/common';
@@ -48,12 +44,6 @@ const RecentBacktestsWidget = () => {
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t('widgets.recentBacktests')}
         </Typography>
-        <Button
-          endIcon={<ArrowIcon />}
-          onClick={() => navigate('/backtest-tasks')}
-        >
-          {t('widgets.quickActions')}
-        </Button>
       </Box>
 
       {isLoading ? (

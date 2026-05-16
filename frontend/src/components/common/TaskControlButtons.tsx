@@ -6,7 +6,7 @@
  *
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ButtonGroup,
   Button,
@@ -43,7 +43,25 @@ export interface TaskControlButtonsProps {
   size?: 'small' | 'medium' | 'large';
   variant?: 'text' | 'outlined' | 'contained';
   showLabels?: boolean;
+  autoHideLabels?: boolean;
   orientation?: 'horizontal' | 'vertical';
+}
+
+type ButtonColor =
+  | 'primary'
+  | 'secondary'
+  | 'error'
+  | 'warning'
+  | 'info'
+  | 'success';
+
+interface ControlButtonConfig {
+  actionKey: string;
+  icon: React.ReactNode;
+  label: string;
+  action: (taskId: string) => void | Promise<void>;
+  enabled: boolean;
+  color?: ButtonColor;
 }
 
 /**
@@ -96,6 +114,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   size = 'small',
   variant = 'outlined',
   showLabels = false,
+  autoHideLabels = true,
   orientation = 'horizontal',
 }) => {
   // Determine which buttons should be enabled based on status and task type.
@@ -120,6 +139,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   //   FAILED: Restart, Delete
   const { t } = useTranslation('common');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [labelsFit, setLabelsFit] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const measurementRef = useRef<HTMLDivElement | null>(null);
   const pendingActionRef = useRef<string | null>(null);
 
   const isTrading = taskType === 'trading';
@@ -178,48 +200,163 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
     [disabled, isLoading, taskId]
   );
 
-  const renderButton = (
-    actionKey: string,
-    icon: React.ReactNode,
-    label: string,
-    onClick: () => void,
-    enabled: boolean,
-    color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'
-  ) => {
-    const isPending = pendingAction === actionKey;
+  const buttonConfigs: ControlButtonConfig[] = [];
+
+  if (onStart) {
+    buttonConfigs.push({
+      actionKey: 'start',
+      icon: <StartIcon />,
+      label: t('actions.start'),
+      action: onStart,
+      enabled: canStart,
+      color: 'success',
+    });
+  }
+
+  if (onResume) {
+    buttonConfigs.push({
+      actionKey: 'resume',
+      icon: <ResumeIcon />,
+      label: t('actions.resume'),
+      action: onResume,
+      enabled: resumeEnabled,
+      color: 'primary',
+    });
+  }
+
+  if (onPause && !isTrading) {
+    buttonConfigs.push({
+      actionKey: 'pause',
+      icon: <PauseIcon />,
+      label: t('actions.pause'),
+      action: onPause,
+      enabled: pauseEnabled,
+      color: 'warning',
+    });
+  }
+
+  if (onStop) {
+    buttonConfigs.push({
+      actionKey: 'stop',
+      icon: <StopIcon />,
+      label: t('actions.stop'),
+      action: onStop,
+      enabled: canStop,
+      color: 'error',
+    });
+  }
+
+  if (onRestart) {
+    buttonConfigs.push({
+      actionKey: 'restart',
+      icon: <RestartIcon />,
+      label: t('actions.restart'),
+      action: onRestart,
+      enabled: canRestart,
+      color: 'info',
+    });
+  }
+
+  if (onDelete) {
+    buttonConfigs.push({
+      actionKey: 'delete',
+      icon: <DeleteIcon />,
+      label: t('actions.delete'),
+      action: onDelete,
+      enabled: canDelete,
+      color: 'error',
+    });
+  }
+
+  const shouldAutoHideLabels =
+    showLabels && autoHideLabels && orientation === 'horizontal';
+  const effectiveShowLabels =
+    showLabels && (!shouldAutoHideLabels || labelsFit);
+  const measurementKey = `${size}:${variant}:${buttonConfigs
+    .map((button) => `${button.actionKey}:${button.label}`)
+    .join('|')}`;
+
+  useEffect(() => {
+    if (!shouldAutoHideLabels) {
+      setLabelsFit(true);
+      return;
+    }
+
+    const container = containerRef.current;
+    const measurement = measurementRef.current;
+    if (!container || !measurement) {
+      return;
+    }
+
+    let frameId: number | null = null;
+    const updateLabelsFit = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(() => {
+        const availableWidth = container.clientWidth;
+        const requiredWidth = measurement.scrollWidth;
+        if (availableWidth > 0 && requiredWidth > 0) {
+          setLabelsFit(requiredWidth <= availableWidth + 1);
+        }
+      });
+    };
+
+    updateLabelsFit();
+
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateLabelsFit)
+        : null;
+    observer?.observe(container);
+    observer?.observe(measurement);
+    window.addEventListener('resize', updateLabelsFit);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      observer?.disconnect();
+      window.removeEventListener('resize', updateLabelsFit);
+    };
+  }, [measurementKey, shouldAutoHideLabels]);
+
+  const renderButton = (button: ControlButtonConfig) => {
+    const isPending = pendingAction === button.actionKey;
     const isDisabled =
-      !enabled || isLoading || disabled || pendingAction !== null;
+      !button.enabled || isLoading || disabled || pendingAction !== null;
     const buttonIcon = isPending ? (
       <CircularProgress size={16} color="inherit" />
     ) : (
-      icon
+      button.icon
     );
 
-    if (showLabels) {
+    if (effectiveShowLabels) {
       return (
         <Button
+          key={button.actionKey}
           variant={variant}
           size={size}
-          color={color}
+          color={button.color}
           startIcon={buttonIcon}
-          onClick={onClick}
+          onClick={() => void handleAction(button.actionKey, button.action)}
           disabled={isDisabled}
-          aria-label={label}
+          aria-label={button.label}
         >
-          {label}
+          {button.label}
         </Button>
       );
     }
 
     return (
-      <Tooltip title={label}>
+      <Tooltip key={button.actionKey} title={button.label}>
         <span>
           <IconButton
             size={size}
-            color={color}
-            onClick={onClick}
+            color={button.color}
+            onClick={() => void handleAction(button.actionKey, button.action)}
             disabled={isDisabled}
-            aria-label={label}
+            aria-label={button.label}
           >
             {buttonIcon}
           </IconButton>
@@ -237,80 +374,75 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   }
 
   return (
-    <ButtonGroup
-      orientation={orientation}
-      variant={variant}
-      size={size}
-      disabled={disabled}
-      aria-label="Task control buttons"
+    <Box
+      ref={containerRef}
+      sx={{
+        position: 'relative',
+        display: showLabels ? 'block' : 'inline-flex',
+        width: showLabels ? '100%' : 'auto',
+        maxWidth: '100%',
+        minWidth: 0,
+      }}
     >
-      {/* Start Button */}
-      {onStart &&
-        renderButton(
-          'start',
-          <StartIcon />,
-          t('actions.start'),
-          () => void handleAction('start', onStart),
-          canStart,
-          'success'
-        )}
+      <ButtonGroup
+        orientation={orientation}
+        variant={variant}
+        size={size}
+        disabled={disabled}
+        aria-label="Task control buttons"
+        sx={{
+          maxWidth: '100%',
+          '& .MuiButton-root': {
+            minWidth: 0,
+            whiteSpace: 'nowrap',
+          },
+        }}
+      >
+        {buttonConfigs.map(renderButton)}
+      </ButtonGroup>
 
-      {/* Resume Button */}
-      {onResume &&
-        renderButton(
-          'resume',
-          <ResumeIcon />,
-          t('actions.resume'),
-          () => void handleAction('resume', onResume),
-          resumeEnabled,
-          'primary'
-        )}
-
-      {/* Pause Button (backtest only) */}
-      {onPause &&
-        !isTrading &&
-        renderButton(
-          'pause',
-          <PauseIcon />,
-          t('actions.pause'),
-          () => void handleAction('pause', onPause),
-          pauseEnabled,
-          'warning'
-        )}
-
-      {/* Stop Button */}
-      {onStop &&
-        renderButton(
-          'stop',
-          <StopIcon />,
-          t('actions.stop'),
-          () => void handleAction('stop', onStop),
-          canStop,
-          'error'
-        )}
-
-      {/* Restart Button */}
-      {onRestart &&
-        renderButton(
-          'restart',
-          <RestartIcon />,
-          t('actions.restart'),
-          () => void handleAction('restart', onRestart),
-          canRestart,
-          'info'
-        )}
-
-      {/* Delete Button */}
-      {onDelete &&
-        renderButton(
-          'delete',
-          <DeleteIcon />,
-          t('actions.delete'),
-          () => void handleAction('delete', onDelete),
-          canDelete,
-          'error'
-        )}
-    </ButtonGroup>
+      {shouldAutoHideLabels && (
+        <Box
+          ref={measurementRef}
+          aria-hidden
+          sx={{
+            position: 'absolute',
+            width: 'max-content',
+            height: 0,
+            overflow: 'hidden',
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <ButtonGroup
+            orientation="horizontal"
+            variant={variant}
+            size={size}
+            disabled={disabled}
+            aria-hidden
+            sx={{
+              '& .MuiButton-root': {
+                whiteSpace: 'nowrap',
+              },
+            }}
+          >
+            {buttonConfigs.map((button) => (
+              <Button
+                key={button.actionKey}
+                variant={variant}
+                size={size}
+                color={button.color}
+                startIcon={button.icon}
+                tabIndex={-1}
+              >
+                {button.label}
+              </Button>
+            ))}
+          </ButtonGroup>
+        </Box>
+      )}
+    </Box>
   );
 };
 

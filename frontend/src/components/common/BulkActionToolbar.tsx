@@ -3,7 +3,6 @@ import {
   CheckBox as SelectAllIcon,
   CheckBoxOutlineBlank as ClearSelectionIcon,
   CompareArrows as CompareArrowsIcon,
-  ContentCopy as CopyIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
@@ -16,13 +15,10 @@ interface BulkActionToolbarProps {
   onSelectAll: () => void;
   onClearSelection: () => void;
   onBulkDelete: () => void;
-  onCopy: () => void;
   onEdit: () => void;
   onCompare?: () => void;
   disableBulkDelete?: boolean;
   bulkDeleteTooltip?: string;
-  disableCopy?: boolean;
-  copyTooltip?: string;
   disableEdit?: boolean;
   editTooltip?: string;
   disableCompare?: boolean;
@@ -34,13 +30,10 @@ export function BulkActionToolbar({
   onSelectAll,
   onClearSelection,
   onBulkDelete,
-  onCopy,
   onEdit,
   onCompare,
   disableBulkDelete = false,
   bulkDeleteTooltip,
-  disableCopy = false,
-  copyTooltip,
   disableEdit = false,
   editTooltip,
   disableCompare = false,
@@ -122,18 +115,6 @@ export function BulkActionToolbar({
             onClick={onCompare}
           >
             {t('actions.compare')}
-          </Button>
-        )}
-        {wrapTooltip(
-          copyTooltip,
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<CopyIcon />}
-            disabled={disableCopy}
-            onClick={onCopy}
-          >
-            {t('actions.copy')}
           </Button>
         )}
         {wrapTooltip(
