@@ -362,7 +362,14 @@
       "active": "進行中: {{count}}",
       "pending": "保留: {{count}}",
       "completed": "完了: {{count}}",
-      "trades": "トレード: {{count}}"
+      "trades": "トレード: {{count}}",
+      "compact": {
+        "cycles": "サ",
+        "active": "進",
+        "pending": "保",
+        "completed": "完",
+        "trades": "ト"
+      }
     },
     "grid": {
       "title": "グリッド状態",

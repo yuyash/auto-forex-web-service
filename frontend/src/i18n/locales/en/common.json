@@ -362,7 +362,14 @@
       "active": "Active: {{count}}",
       "pending": "Pending: {{count}}",
       "completed": "Completed: {{count}}",
-      "trades": "Trades: {{count}}"
+      "trades": "Trades: {{count}}",
+      "compact": {
+        "cycles": "C",
+        "active": "A",
+        "pending": "P",
+        "completed": "D",
+        "trades": "T"
+      }
     },
     "grid": {
       "title": "Grid State",
