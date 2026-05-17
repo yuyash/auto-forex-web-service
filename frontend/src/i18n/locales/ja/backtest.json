@@ -223,6 +223,7 @@
     "initialPositionImportSourceLabel": "{{type}}: {{name}}（{{status}}{{instrument}}）",
     "initialPositionImportInstrument": " / {{instrument}}",
     "initialPositionImportFailed": "初期ポジションをインポートできませんでした。",
+    "initialPositionImportSkippedByTargetLimits": "選択中の戦略設定の上限を超えるため、{{count}} 件のポジションはインポートしませんでした。L 上限: {{layerCount}} 件、R 上限: {{retracementCount}} 件。現在の上限: L{{maxLayer}} / R{{maxRetracement}}。",
     "initialPositionOandaImportFailed": "OANDA のオープンポジションをインポートできませんでした。",
     "importOandaOpenPositions": "OANDA のオープンポジションをインポート",
     "initialPositionCycleTempId": "C{{cycle}}",

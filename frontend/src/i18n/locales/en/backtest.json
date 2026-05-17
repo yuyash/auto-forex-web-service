@@ -223,6 +223,7 @@
     "initialPositionImportSourceLabel": "{{type}}: {{name}} ({{status}}{{instrument}})",
     "initialPositionImportInstrument": " / {{instrument}}",
     "initialPositionImportFailed": "Could not import initial positions.",
+    "initialPositionImportSkippedByTargetLimits": "{{count}} position(s) were not imported because they exceed the selected strategy limits. Layer limit: {{layerCount}}, retracement limit: {{retracementCount}}. Current limit: L{{maxLayer}} / R{{maxRetracement}}.",
     "initialPositionOandaImportFailed": "Could not import open OANDA positions.",
     "importOandaOpenPositions": "Import OANDA open positions",
     "initialPositionCycleTempId": "C{{cycle}}",

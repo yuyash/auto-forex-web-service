@@ -19,7 +19,7 @@ from tests.integration.factories import (
 )
 
 
-def _snowball_config(user, *, r_max: int = 3):
+def _snowball_config(user, *, r_max: int = 3, f_max: int = 3):
     parameters = SNOWBALL_PARAMETER_SERVICE.default_parameters()
     parameters.update(
         {
@@ -28,7 +28,7 @@ def _snowball_config(user, *, r_max: int = 3):
             "trend_lot_size": 1,
             "m_pips": 50,
             "r_max": r_max,
-            "f_max": 3,
+            "f_max": f_max,
             "stop_loss_enabled": True,
             "stop_loss_mode": "auto",
         }
@@ -112,6 +112,11 @@ def test_import_from_task_includes_open_and_pending_for_backtest_but_only_pendin
         "open": 1,
         "pending": 1,
         "closed_slots": 0,
+        "skipped_positions": 0,
+        "skipped_layer_limit": 0,
+        "skipped_retracement_limit": 0,
+        "target_max_layer": None,
+        "target_max_retracement": None,
     }
     assert trading_result["summary"] == {
         "cycles": 1,
@@ -119,6 +124,11 @@ def test_import_from_task_includes_open_and_pending_for_backtest_but_only_pendin
         "open": 0,
         "pending": 1,
         "closed_slots": 0,
+        "skipped_positions": 0,
+        "skipped_layer_limit": 0,
+        "skipped_retracement_limit": 0,
+        "target_max_layer": None,
+        "target_max_retracement": None,
     }
 
 
@@ -187,6 +197,79 @@ def test_import_from_task_includes_closed_slot_placeholders_for_active_cycles():
         "open": 2,
         "pending": 0,
         "closed_slots": 1,
+        "skipped_positions": 0,
+        "skipped_layer_limit": 0,
+        "skipped_retracement_limit": 0,
+        "target_max_layer": None,
+        "target_max_retracement": None,
+    }
+
+
+@pytest.mark.django_db
+def test_import_from_task_skips_positions_outside_target_grid_limits():
+    user = UserFactory()
+    source_task = BacktestTaskFactory(
+        user=user,
+        config=_snowball_config(user, r_max=4, f_max=4),
+        instrument="USD_JPY",
+        pip_size=Decimal("0.01"),
+        account_currency="USD",
+        initial_balance=Decimal("100000"),
+        initial_positions_enabled=True,
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 3,
+                        "units": 1000,
+                        "entry_price": "149.40",
+                    },
+                    {
+                        "layer_number": 4,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "148.80",
+                    },
+                ],
+            }
+        ],
+    )
+    target_config = _snowball_config(user, r_max=2, f_max=2)
+    BacktestInitialPositionService().sync_for_task(source_task)
+    source_task.status = TaskStatus.STOPPED
+    source_task.save(update_fields=["status", "updated_at"])
+
+    result = InitialPositionImportService().import_from_task(
+        user=user,
+        source_task_type=TaskType.BACKTEST.value,
+        source_task_id=str(source_task.pk),
+        target_task_type=TaskType.BACKTEST.value,
+        target_config_id=str(target_config.pk),
+    )
+
+    assert [
+        (position["layer_number"], position["retracement_count"])
+        for position in result["cycles"][0]["positions"]
+    ] == [(1, 0)]
+    assert result["summary"] == {
+        "cycles": 1,
+        "positions": 1,
+        "open": 1,
+        "pending": 0,
+        "closed_slots": 0,
+        "skipped_positions": 2,
+        "skipped_layer_limit": 1,
+        "skipped_retracement_limit": 1,
+        "target_max_layer": 2,
+        "target_max_retracement": 2,
     }
 
 
@@ -319,6 +402,11 @@ def test_import_from_oanda_builds_direction_cycles(monkeypatch):
         "open": 3,
         "pending": 0,
         "closed_slots": 0,
+        "skipped_positions": 0,
+        "skipped_layer_limit": 0,
+        "skipped_retracement_limit": 0,
+        "target_max_layer": 3,
+        "target_max_retracement": 1,
     }
     long_cycle, short_cycle = result["cycles"]
     assert long_cycle["direction"] == "long"

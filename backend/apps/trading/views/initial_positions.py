@@ -49,6 +49,7 @@ class InitialPositionImportFromTaskSerializer(serializers.Serializer):
     source_task_type = serializers.CharField(max_length=16)
     source_task_id = serializers.UUIDField()
     target_task_type = serializers.CharField(max_length=16)
+    target_config_id = serializers.UUIDField(required=False)
 
 
 class InitialPositionImportFromOandaSerializer(serializers.Serializer):
@@ -98,6 +99,9 @@ class InitialPositionImportFromTaskView(APIView):
                 source_task_type=str(data["source_task_type"]),
                 source_task_id=str(data["source_task_id"]),
                 target_task_type=str(data["target_task_type"]),
+                target_config_id=(
+                    str(data["target_config_id"]) if data.get("target_config_id") else None
+                ),
             )
         except InitialPositionImportError as exc:
             return Response(

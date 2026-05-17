@@ -28,6 +28,11 @@ export interface InitialPositionImportResult {
     open: number;
     pending: number;
     closed_slots: number;
+    skipped_positions?: number;
+    skipped_layer_limit?: number;
+    skipped_retracement_limit?: number;
+    target_max_layer?: number | null;
+    target_max_retracement?: number | null;
   };
 }
 
@@ -35,6 +40,7 @@ export interface ImportFromTaskRequest {
   source_task_type: InitialPositionTaskType;
   source_task_id: string;
   target_task_type: InitialPositionTaskType;
+  target_config_id?: string;
 }
 
 export interface ImportFromOandaRequest {

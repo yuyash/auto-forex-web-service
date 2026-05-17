@@ -164,30 +164,10 @@ export function addInitialPositionSlotStructureIssues(
         position,
       ]);
     });
-    const maxLayer = Math.max(0, ...Array.from(byLayer.keys()));
 
-    for (let layer = 1; layer <= maxLayer; layer += 1) {
-      const layerPositions = byLayer.get(layer) ?? [];
-      if (layerPositions.length === 0) {
-        const offender = validPositions.find(
-          (position) => position.layer > layer
-        );
-        if (offender) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [
-              'initial_position_cycles',
-              cycleIndex,
-              'positions',
-              offender.positionIndex,
-              'layer_number',
-            ],
-            message: `Layer L${layer} must exist before higher layers.`,
-          });
-        }
-        continue;
-      }
-
+    for (const [layer, layerPositions] of [...byLayer.entries()].sort(
+      ([left], [right]) => left - right
+    )) {
       const byRetracement = new Map<number, (typeof validPositions)[number]>();
       layerPositions.forEach((position) => {
         byRetracement.set(position.retracement, position);

@@ -48,6 +48,22 @@ class ImportMode:
     include_pending: bool
 
 
+@dataclass(frozen=True, slots=True)
+class TargetGridLimits:
+    max_layer: int
+    max_retracement: int
+
+
+@dataclass(slots=True)
+class ImportSkipSummary:
+    layer_limit: int = 0
+    retracement_limit: int = 0
+
+    @property
+    def positions(self) -> int:
+        return self.layer_limit + self.retracement_limit
+
+
 def import_mode_for_target(target_task_type: str) -> ImportMode:
     """Resolve which source position states may be imported for a target type."""
     if target_task_type == TaskType.TRADING.value:
@@ -78,9 +94,11 @@ class InitialPositionImportService:
         source_task_type: str,
         source_task_id: str,
         target_task_type: str,
+        target_config_id: str | None = None,
     ) -> dict[str, Any]:
         """Build initial-position cycles from a task's active/pending Snowball state."""
         mode = import_mode_for_target(target_task_type)
+        target_limits = self._target_grid_limits(user=user, config_id=target_config_id)
         task_type = self._parse_task_type(source_task_type)
         task = self._get_source_task(
             user=user,
@@ -96,12 +114,15 @@ class InitialPositionImportService:
                 imported_open=0,
                 imported_pending=0,
                 imported_closed_slots=0,
+                skipped=ImportSkipSummary(),
+                target_limits=target_limits,
             )
 
-        cycles = self._cycles_from_state(
+        cycles, skipped = self._cycles_from_state(
             state=state,
             include_open=mode.include_open,
             include_pending=mode.include_pending,
+            target_limits=target_limits,
         )
         imported_open, imported_pending, imported_closed_slots = _count_imported_positions(cycles)
         return self._result(
@@ -110,6 +131,8 @@ class InitialPositionImportService:
             imported_open=imported_open,
             imported_pending=imported_pending,
             imported_closed_slots=imported_closed_slots,
+            skipped=skipped,
+            target_limits=target_limits,
         )
 
     def import_from_oanda(
@@ -161,6 +184,8 @@ class InitialPositionImportService:
             imported_open=imported_open,
             imported_pending=imported_pending,
             imported_closed_slots=imported_closed_slots,
+            skipped=ImportSkipSummary(),
+            target_limits=TargetGridLimits(max_layer=cfg.f_max, max_retracement=cfg.r_max),
         )
 
     def _backtest_sources(self, user: Any) -> QuerySet[BacktestTask]:
@@ -256,13 +281,27 @@ class InitialPositionImportService:
                 return state
         return queryset.order_by("-updated_at").first()
 
+    def _target_grid_limits(
+        self,
+        *,
+        user: Any,
+        config_id: str | None,
+    ) -> TargetGridLimits | None:
+        if not config_id:
+            return None
+        config = self._get_config(user=user, config_id=config_id)
+        self._ensure_snowball_config(config)
+        cfg = SNOWBALL_PARAMETER_SERVICE.parse_config(config)
+        return TargetGridLimits(max_layer=cfg.f_max, max_retracement=cfg.r_max)
+
     def _cycles_from_state(
         self,
         *,
         state: ExecutionState,
         include_open: bool,
         include_pending: bool,
-    ) -> list[dict[str, Any]]:
+        target_limits: TargetGridLimits | None,
+    ) -> tuple[list[dict[str, Any]], ImportSkipSummary]:
         try:
             snowball_state = SnowballStrategyState.from_strategy_state(state.strategy_state)
         except Exception as exc:
@@ -272,6 +311,7 @@ class InitialPositionImportService:
             ) from exc
 
         cycles: list[dict[str, Any]] = []
+        skipped = ImportSkipSummary()
         for cycle in sorted(snowball_state.cycles, key=_cycle_import_sort_key):
             if cycle.completed:
                 continue
@@ -292,6 +332,11 @@ class InitialPositionImportService:
                         positions.append(_position_from_pending(slot.pending_rebuild))
                     elif slot.entry is None and slot.pending_rebuild is None and slot.ever_closed:
                         positions.append(_position_from_closed_slot(layer.layer_number, slot.index))
+            positions = _filter_positions_for_target_limits(
+                positions=positions,
+                target_limits=target_limits,
+                skipped=skipped,
+            )
             if positions:
                 positions.sort(
                     key=lambda item: (
@@ -300,7 +345,7 @@ class InitialPositionImportService:
                     )
                 )
                 cycles.append({"direction": cycle.direction.value, "positions": positions})
-        return cycles
+        return cycles, skipped
 
     def _position_from_oanda_trade(
         self,
@@ -357,6 +402,8 @@ class InitialPositionImportService:
         imported_open: int,
         imported_pending: int,
         imported_closed_slots: int,
+        skipped: ImportSkipSummary,
+        target_limits: TargetGridLimits | None,
     ) -> dict[str, Any]:
         return {
             "cycles": cycles,
@@ -367,6 +414,13 @@ class InitialPositionImportService:
                 "open": imported_open,
                 "pending": imported_pending,
                 "closed_slots": imported_closed_slots,
+                "skipped_positions": skipped.positions,
+                "skipped_layer_limit": skipped.layer_limit,
+                "skipped_retracement_limit": skipped.retracement_limit,
+                "target_max_layer": target_limits.max_layer if target_limits is not None else None,
+                "target_max_retracement": (
+                    target_limits.max_retracement if target_limits is not None else None
+                ),
             },
         }
 
@@ -408,6 +462,29 @@ def _position_from_closed_slot(layer_number: int, retracement_count: int) -> dic
         "retracement_count": retracement_count,
         "status": POSITION_STATUS_CLOSED_SLOT,
     }
+
+
+def _filter_positions_for_target_limits(
+    *,
+    positions: list[dict[str, Any]],
+    target_limits: TargetGridLimits | None,
+    skipped: ImportSkipSummary,
+) -> list[dict[str, Any]]:
+    if target_limits is None:
+        return positions
+
+    filtered: list[dict[str, Any]] = []
+    for position in positions:
+        layer_number = int(position["layer_number"])
+        retracement_count = int(position["retracement_count"])
+        if layer_number > target_limits.max_layer:
+            skipped.layer_limit += 1
+            continue
+        if retracement_count > target_limits.max_retracement:
+            skipped.retracement_limit += 1
+            continue
+        filtered.append(position)
+    return filtered
 
 
 def _count_imported_positions(cycles: list[dict[str, Any]]) -> tuple[int, int, int]:

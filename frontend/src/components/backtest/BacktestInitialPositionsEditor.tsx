@@ -34,6 +34,7 @@ import { initialPositionImportsApi } from '../../services/api';
 import type { TickDataPoint } from '../../services/api/market';
 import type {
   InitialPositionImportSource,
+  InitialPositionImportResult,
   InitialPositionTaskType,
 } from '../../services/api/initialPositionImports';
 import type {
@@ -72,7 +73,6 @@ interface InitialPositionOrderWarning {
     | 'duplicate'
     | 'layerOutOfRange'
     | 'retracementOutOfRange'
-    | 'missingLayer'
     | 'layerStart'
     | 'missingRetracement';
   cycleNumber: number;
@@ -81,7 +81,6 @@ interface InitialPositionOrderWarning {
   duplicateOf?: number;
   maxLayer?: number;
   maxRetracement?: number;
-  missingLayer?: number;
   missingRetracement?: number;
 }
 
@@ -116,6 +115,7 @@ export function BacktestInitialPositionsEditor({
   const [selectedSourceKey, setSelectedSourceKey] = useState('');
   const [importing, setImporting] = useState<'task' | 'oanda' | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importInfo, setImportInfo] = useState<string | null>(null);
   const [selectedAddSlotKeys, setSelectedAddSlotKeys] = useState<
     Record<number, string>
   >({});
@@ -248,13 +248,16 @@ export function BacktestInitialPositionsEditor({
     if (!source) return;
     setImporting('task');
     setImportError(null);
+    setImportInfo(null);
     try {
       const result = await initialPositionImportsApi.importFromTask({
         source_task_type: source.task_type,
         source_task_id: source.id,
         target_task_type: taskType,
+        target_config_id: selectedConfig?.id ?? configId,
       });
       onChange(appendImportedCycles(value, result.cycles));
+      setImportInfo(importLimitMessage(result, t));
     } catch {
       setImportError(
         t('backtest:form.initialPositionImportFailed', {
@@ -270,6 +273,7 @@ export function BacktestInitialPositionsEditor({
     if (!canImportFromOanda) return;
     setImporting('oanda');
     setImportError(null);
+    setImportInfo(null);
     try {
       const result = await initialPositionImportsApi.importFromOanda({
         account_id: accountId!,
@@ -277,6 +281,7 @@ export function BacktestInitialPositionsEditor({
         instrument: instrument!,
       });
       onChange(appendImportedCycles(value, result.cycles));
+      setImportInfo(importLimitMessage(result, t));
     } catch {
       setImportError(
         t('backtest:form.initialPositionOandaImportFailed', {
@@ -296,6 +301,7 @@ export function BacktestInitialPositionsEditor({
 
   const resetInitialPositions = () => {
     setImportError(null);
+    setImportInfo(null);
     setSelectedAddSlotKeys({});
     setCrossCycleAnchorShiftEnabled(true);
     setAllCycleAnchorShiftEnabled(true);
@@ -339,6 +345,7 @@ export function BacktestInitialPositionsEditor({
               {error}
             </Typography>
           ) : null}
+          {importInfo ? <Alert severity="info">{importInfo}</Alert> : null}
           {importError ? <Alert severity="error">{importError}</Alert> : null}
 
           <Stack
@@ -896,24 +903,10 @@ function initialPositionOrderWarnings(
     validPositions.forEach((item) => {
       byLayer.set(item.layer, [...(byLayer.get(item.layer) ?? []), item]);
     });
-    const maxLayer = Math.max(0, ...Array.from(byLayer.keys()));
 
-    for (let layer = 1; layer <= maxLayer; layer += 1) {
-      const layerPositions = byLayer.get(layer) ?? [];
-      if (layerPositions.length === 0) {
-        const offender = validPositions.find((item) => item.layer > layer);
-        warnings.push({
-          type: 'missingLayer',
-          cycleNumber: cycleIndex + 1,
-          positionNumber: offender?.positionNumber,
-          actual: offender
-            ? slotLabel(offender.layer, offender.retracement)
-            : `L${layer}`,
-          missingLayer: layer,
-        });
-        continue;
-      }
-
+    for (const [, layerPositions] of [...byLayer.entries()].sort(
+      ([left], [right]) => left - right
+    )) {
       const byRetracement = new Map<number, (typeof validPositions)[number]>();
       layerPositions.forEach((item) => {
         byRetracement.set(item.retracement, item);
@@ -1182,13 +1175,6 @@ function formatInitialPositionIssue(
         ...base,
         maxRetracement: warning.maxRetracement,
       });
-    case 'missingLayer':
-      return t('backtest:form.initialPositionMissingLayerWarning', {
-        defaultValue:
-          'Cycle C{{cycle}} position P{{position}} cannot use {{actual}} because L{{missingLayer}} is missing.',
-        ...base,
-        missingLayer: warning.missingLayer,
-      });
     case 'layerStart':
       return t('backtest:form.initialPositionLayerStartWarning', {
         defaultValue:
@@ -1429,6 +1415,25 @@ function appendImportedCycles(
       positions: sortPositionsBySlot(cycle.positions),
     })),
   ];
+}
+
+function importLimitMessage(
+  result: InitialPositionImportResult,
+  t: (key: string, options?: Record<string, unknown>) => string
+) {
+  const skipped = result.summary.skipped_positions ?? 0;
+  if (skipped <= 0) {
+    return null;
+  }
+  return t('backtest:form.initialPositionImportSkippedByTargetLimits', {
+    defaultValue:
+      '{{count}} position(s) were not imported because they exceed the selected strategy limits. Layer limit: {{layerCount}}, retracement limit: {{retracementCount}}. Current limit: L{{maxLayer}} / R{{maxRetracement}}.',
+    count: skipped,
+    layerCount: result.summary.skipped_layer_limit ?? 0,
+    retracementCount: result.summary.skipped_retracement_limit ?? 0,
+    maxLayer: result.summary.target_max_layer ?? '-',
+    maxRetracement: result.summary.target_max_retracement ?? '-',
+  });
 }
 
 function importSourceKey(source: InitialPositionImportSource) {
