@@ -1,4 +1,9 @@
 const FIELD_ORDER_PRIORITY: Record<string, number> = {
+  r_max: 20,
+  f_max: 21,
+  post_r_max_base_factor: 22,
+  refill_limit_enabled: 23,
+  refill_up_to: 24,
   stop_loss_enabled: 100,
   stop_loss_mode: 101,
   stop_loss_pips_head: 102,
@@ -17,8 +22,6 @@ const FIELD_ORDER_PRIORITY: Record<string, number> = {
   rebuild_take_profit_pips_gamma: 115,
   rebuild_take_profit_manual_pips: 116,
   reseed_on_all_pending: 117,
-  refill_limit_enabled: 118,
-  refill_up_to: 119,
 };
 
 function fieldPriority(fieldName: string): number {

@@ -233,6 +233,12 @@ export function TaskStrategyTab({
     refreshInterval: 5_000,
     params: listParams,
   });
+  const detailParams = useMemo(
+    () => ({
+      include_trades: showOhlcChart ? 1 : 0,
+    }),
+    [showOhlcChart]
+  );
   const {
     data: detailData,
     isLoading: isDetailLoading,
@@ -246,6 +252,7 @@ export function TaskStrategyTab({
     enabled: Boolean(selectedCycleId),
     enableRealTimeUpdates: true,
     refreshInterval: 5_000,
+    params: detailParams,
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);

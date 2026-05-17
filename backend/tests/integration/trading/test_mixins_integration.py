@@ -742,7 +742,7 @@ class TestEvents:
 
         response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
-            {"cycle_id": str(cycle_b)},
+            {"cycle_id": str(cycle_b), "include_trades": "true"},
         )
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["cycles"]) == 1

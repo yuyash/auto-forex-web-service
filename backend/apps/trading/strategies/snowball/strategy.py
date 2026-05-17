@@ -570,9 +570,14 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
+        manual_rebuild_take_profit_active = (
+            self.config.stop_loss_enabled
+            and self.config.rebuild_enabled
+            and self.config.rebuild_take_profit_mode == "manual"
+        )
         self._grid_order_violation = self.grid_policy.validate_ordering(
             cycle,
-            check_take_profit=self.config.rebuild_take_profit_mode != "manual",
+            check_take_profit=not manual_rebuild_take_profit_active,
         )
         if not self._grid_order_violation:
             self._last_tolerated_grid_order_violation = None

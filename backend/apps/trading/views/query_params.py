@@ -385,6 +385,14 @@ INCLUDE_METRICS_SPEC = QueryFieldSpec(
     kind="bool",
     help_text="Include aggregate execution metrics.",
 )
+INCLUDE_TRADES_SPEC = QueryFieldSpec(
+    name="include_trades",
+    kind="bool",
+    help_text=(
+        "Include the full trade ledger in strategy cycle detail responses. "
+        "Use the paginated trades endpoint for ordinary detail rendering."
+    ),
+)
 ACTIVITY_PAGE_SIZE_SPEC = _page_size_spec(
     default=ActivityPagination.page_size,
     max_value=ActivityPagination.max_page_size,
@@ -584,6 +592,7 @@ QUERY_GROUP_SPECS = {
             CYCLE_STATUS_SPEC,
             POSITION_ID_SPEC,
             CYCLE_TRADE_ID_SPEC,
+            INCLUDE_TRADES_SPEC,
         ),
         description="OpenAPI serializer for strategy event visualization parameters.",
         base=QueryParamsSerializer,
@@ -1164,6 +1173,7 @@ class StrategyEventsQueryParams:
     cycle_status: str
     position_id: str
     trade_id: str
+    include_trades: bool
 
     @classmethod
     def from_request(
@@ -1182,6 +1192,7 @@ class StrategyEventsQueryParams:
             cycle_status=cast(str, parsed["cycle_status"]) or "all",
             position_id=cast(str, parsed["position_id"] or "").strip(),
             trade_id=cast(str, parsed["trade_id"] or "").strip(),
+            include_trades=cast(bool, parsed["include_trades"]),
         )
 
 

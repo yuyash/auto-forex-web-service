@@ -222,11 +222,6 @@ describe('isParameterVisible', () => {
     refill_limit_enabled: {
       type: 'boolean',
       default: true,
-      dependsOn: {
-        field: 'stop_loss_enabled',
-        values: [true],
-        and: [{ field: 'rebuild_enabled', values: [true] }],
-      },
     },
     refill_up_to: {
       type: 'integer',
@@ -331,14 +326,14 @@ describe('isParameterVisible', () => {
     ).toBe(true);
   });
 
-  it('hides the refill limit toggle when rebuild is disabled', () => {
+  it('keeps the refill limit toggle visible independently of rebuild settings', () => {
     expect(
       isParameterVisible(
         'refill_limit_enabled',
         { stop_loss_enabled: true, rebuild_enabled: false },
         schemaProps
       )
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isParameterVisible(
         'refill_up_to',
@@ -349,7 +344,7 @@ describe('isParameterVisible', () => {
         },
         schemaProps
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('cascades visibility through nested dependsOn chains', () => {

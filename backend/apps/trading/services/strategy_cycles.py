@@ -6,9 +6,9 @@ filtering, and sorting.  The service has two modes:
 * **List mode** (no ``cycle_id``): returns a page of cycles with lightweight
   per-cycle aggregates (counts, PnL, grid_state) plus an overall ``summary``
   computed after filters are applied.  Individual trades are **not** included.
-* **Detail mode** (``cycle_id`` supplied): returns a single cycle with its
-  full trade ledger, identical in shape to the list mode entries but with
-  ``trades`` populated.
+* **Detail mode** (``cycle_id`` supplied): returns a single cycle aggregate.
+  The full trade ledger is only serialised when ``include_trades`` is true;
+  ordinary detail screens should use the paginated trades endpoint.
 
 Heavy full-trade serialisation is therefore avoided on every list render.
 """
@@ -67,6 +67,7 @@ class StrategyCyclesService:
         cycle_status: str = "all",
         position_id: str = "",
         trade_id: str = "",
+        include_trades: bool = False,
     ) -> dict[str, Any]:
         if not execution_id:
             return self._empty_response(execution_id=None, strategy_type="")
@@ -129,6 +130,7 @@ class StrategyCyclesService:
                 cycle_grid_state_map=cycle_grid_state_map,
                 state_cycle_meta_by_id=state_cycle_meta_by_id,
                 last_tick_ts=last_tick_ts,
+                include_trades=include_trades,
             )
 
         return self._build_list_response(
@@ -150,7 +152,7 @@ class StrategyCyclesService:
         )
 
     # ------------------------------------------------------------------
-    # Detail mode (single cycle with full trade ledger)
+    # Detail mode (single cycle aggregate, optional full trade ledger)
     # ------------------------------------------------------------------
 
     def _build_detail_response(
@@ -166,6 +168,7 @@ class StrategyCyclesService:
         cycle_grid_state_map: dict[str, dict[str, Any]],
         state_cycle_meta_by_id: dict[str, _StateCycleMeta],
         last_tick_ts: str | None,
+        include_trades: bool,
     ) -> dict[str, Any]:
         from apps.trading.models.trades import Trade
 
@@ -221,11 +224,15 @@ class StrategyCyclesService:
                 "money_context": _task_money_context_dict(task=task, task_type=task_type),
             }
 
-        metrics_by_minute = _load_metrics_for_trades(
-            task_type=task_type,
-            task_id=str(task.pk),
-            execution_id=execution_id,
-            trades=rows,
+        metrics_by_minute = (
+            _load_metrics_for_trades(
+                task_type=task_type,
+                task_id=str(task.pk),
+                execution_id=execution_id,
+                trades=rows,
+            )
+            if include_trades
+            else {}
         )
         unrealized_pnl_by_position = _load_unrealized_pnl_map(rows)
 
@@ -237,7 +244,7 @@ class StrategyCyclesService:
             grid_state=cycle_grid_state_map.get(cycle_id),
             state_meta=state_cycle_meta_by_id.get(cycle_id),
             unrealized_pnl_by_position=unrealized_pnl_by_position,
-            include_trades=True,
+            include_trades=include_trades,
         )
         _attach_cycle_display_money([cycle], task=task, task_type=task_type)
 
@@ -617,38 +624,45 @@ def _load_metrics_for_trades(
     trades: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     """Load minute-level metrics closest to each trade timestamp."""
+    from django.db.models.functions import TruncMinute
+
     from apps.trading.models.metrics import Metrics
 
     if not trades:
         return {}
 
-    minute_keys: set[str] = set()
+    minute_buckets: set[datetime] = set()
     for t in trades:
         ts = t.get("timestamp")
         if ts:
             bucket = ts.replace(second=0, microsecond=0)
-            minute_keys.add(bucket.isoformat())
+            minute_buckets.add(bucket)
 
-    if not minute_keys:
+    if not minute_buckets:
         return {}
 
     timestamps = [t["timestamp"] for t in trades if t.get("timestamp")]
     min_ts = min(timestamps) - timedelta(minutes=1)
     max_ts = max(timestamps) + timedelta(minutes=1)
 
-    rows = Metrics.objects.filter(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
-        timestamp__gte=min_ts,
-        timestamp__lte=max_ts,
-    ).values_list("timestamp", "metrics")
+    rows = (
+        Metrics.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+            timestamp__gte=min_ts,
+            timestamp__lte=max_ts,
+        )
+        .annotate(minute_bucket=TruncMinute("timestamp"))
+        .filter(minute_bucket__in=minute_buckets)
+        .order_by("minute_bucket", "timestamp")
+        .values_list("minute_bucket", "metrics")
+    )
 
     result: dict[str, dict[str, Any]] = {}
-    for ts, metrics in rows:
-        if isinstance(metrics, dict):
-            key = ts.replace(second=0, microsecond=0).isoformat()
-            result[key] = metrics
+    for bucket, metrics in rows:
+        if bucket is not None and isinstance(metrics, dict):
+            result[bucket.isoformat()] = metrics
 
     return result
 
