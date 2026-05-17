@@ -21,6 +21,8 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FolderIcon from '@mui/icons-material/Folder';
 import { useNavigate } from 'react-router-dom';
 import type { StrategyConfig } from '../../types/configuration';
+import ConfigurationCopyDialog from './ConfigurationCopyDialog';
+import { getConfigurationCopyErrorMessage } from './configurationCopyError';
 import ConfigurationDeleteDialog from './ConfigurationDeleteDialog';
 import {
   useStrategies,
@@ -45,6 +47,7 @@ const ConfigurationCard = ({
   const { formatDate } = useDateTimeFormatter();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const menuOpen = Boolean(anchorEl);
   const { strategies } = useStrategies();
@@ -84,7 +87,14 @@ const ConfigurationCard = ({
 
   const handleCopy = () => {
     handleMenuClose();
-    copyMutation.mutate({ id: configuration.id });
+    copyMutation.reset();
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopyConfirm = (name: string) => {
+    void copyMutation
+      .mutate({ id: configuration.id, name })
+      .catch(() => undefined);
   };
 
   const handleOpenDetail = () => {
@@ -181,6 +191,7 @@ const ConfigurationCard = ({
               {configuration.name}
             </Typography>
             <IconButton
+              aria-label={t('common:actions.moreActions')}
               onClick={(e) => {
                 e.stopPropagation();
                 handleMenuOpen(e);
@@ -285,10 +296,12 @@ const ConfigurationCard = ({
           </Tooltip>
           <Tooltip title={t('common:actions.copy')}>
             <IconButton
+              aria-label={t('common:actions.copy')}
               onClick={(e) => {
                 e.stopPropagation();
                 handleCopy();
               }}
+              disabled={copyMutation.isLoading}
               sx={{ mr: 0.5 }}
             >
               <ContentCopyIcon fontSize="small" />
@@ -360,6 +373,16 @@ const ConfigurationCard = ({
         open={deleteDialogOpen}
         configuration={configuration}
         onClose={() => setDeleteDialogOpen(false)}
+      />
+
+      <ConfigurationCopyDialog
+        open={copyDialogOpen}
+        configurationName={configuration.name}
+        isLoading={copyMutation.isLoading}
+        apiError={getConfigurationCopyErrorMessage(copyMutation.error)}
+        onCancel={() => setCopyDialogOpen(false)}
+        onConfirm={handleCopyConfirm}
+        onNameChange={copyMutation.reset}
       />
     </>
   );

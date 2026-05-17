@@ -76,6 +76,16 @@
     "confirmCheckbox": "この設定を削除すると{{count}}個のタスクに影響することを理解しています",
     "cannotBeUndone": "この操作は元に戻せません。"
   },
+  "copyDialog": {
+    "title": "設定をコピー",
+    "description": "「{{name}}」のコピーを新しい名前で作成します。戦略タイプとパラメータは複製されます。",
+    "nameLabel": "新しい設定名",
+    "defaultName": "{{name}}（コピー）",
+    "nameMustDiffer": "新しい名前は元の名前と異なる必要があります",
+    "characterCount": "{{count}}/{{max}} 文字",
+    "copying": "コピー中...",
+    "confirm": "設定をコピー"
+  },
   "card": {
     "editConfiguration": "設定を編集",
     "deleteConfiguration": "設定を削除",
