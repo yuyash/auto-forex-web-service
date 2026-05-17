@@ -50,6 +50,9 @@ export function buildSlotBuildCounts(
 ): Record<string, number> {
   if (!cycle) return {};
 
+  const countsFromGridState = slotBuildCountsFromGridState(cycle.grid_state);
+  if (countsFromGridState) return countsFromGridState;
+
   const uniquePositionIdsBySlot = new Map<string, Set<string>>();
   const slotByPositionId = new Map<string, { layer: number; slot: number }>();
 
@@ -71,6 +74,24 @@ export function buildSlotBuildCounts(
       positionIds.size,
     ])
   );
+}
+
+function slotBuildCountsFromGridState(
+  gridState?: StrategyGridState | null
+): Record<string, number> | null {
+  if (!gridState) return null;
+
+  const counts: Record<string, number> = {};
+  let foundPersistedCount = false;
+  for (const layer of gridState.layers) {
+    for (const slot of layer.slots) {
+      if (typeof slot.build_count !== 'number') continue;
+      foundPersistedCount = true;
+      counts[getSlotBuildCountKey(layer.layer, slot.slot)] = slot.build_count;
+    }
+  }
+
+  return foundPersistedCount ? counts : null;
 }
 
 export function gridHasPositions(gridState: StrategyGridState): boolean {
@@ -171,6 +192,7 @@ export function buildDisplayGridState(
         slot,
         state,
         position_id: currentSlot?.position_id ?? null,
+        build_count: currentSlot?.build_count,
       });
     }
 

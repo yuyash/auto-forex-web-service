@@ -157,4 +157,31 @@ describe('gridState helpers', () => {
 
     expect(buildSlotBuildCounts(cycle)).toEqual({ '1:0': 2 });
   });
+
+  it('uses persisted grid slot build counts when trades are omitted', () => {
+    const cycle = makeCycle({
+      grid_state: {
+        layers: [
+          {
+            layer: 1,
+            slots: [
+              { slot: 0, state: 'empty', position_id: null, build_count: 2 },
+              { slot: 1, state: 'empty', position_id: null, build_count: 1 },
+            ],
+          },
+        ],
+        summary: {
+          filled: 0,
+          stopped: 0,
+          rebuilt: 0,
+          empty: 2,
+          layer_count: 1,
+          slot_count_per_layer: 2,
+        },
+      },
+      trades: [],
+    });
+
+    expect(buildSlotBuildCounts(cycle)).toEqual({ '1:0': 2, '1:1': 1 });
+  });
 });

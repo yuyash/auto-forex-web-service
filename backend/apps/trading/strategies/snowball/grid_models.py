@@ -34,6 +34,13 @@ class Slot:
     entry: Entry | None = None
     ever_closed: bool = False
     pending_rebuild: StopLossClosedEntry | None = None
+    build_count: int = 0
+
+    def __post_init__(self) -> None:
+        if self.build_count == 0 and (
+            self.entry is not None or self.pending_rebuild is not None or self.ever_closed
+        ):
+            self.build_count = 1
 
     @property
     def is_occupied(self) -> bool:
@@ -70,6 +77,7 @@ class Slot:
 
     def fill(self, entry: Entry) -> None:
         self.entry = entry
+        self.build_count += 1
 
     def close(self, *, refillable: bool) -> Entry | None:
         e = self.entry
@@ -95,17 +103,20 @@ class Slot:
         self.entry = entry
         self.pending_rebuild = None
         self.ever_closed = False
+        self.build_count += 1
 
     def reset(self) -> None:
         self.entry = None
         self.ever_closed = False
         self.pending_rebuild = None
+        self.build_count = 0
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
             "index": self.index,
             "entry": self.entry.to_dict() if self.entry else None,
             "ever_closed": self.ever_closed,
+            "build_count": self.build_count,
         }
         if self.pending_rebuild is not None:
             d["pending_rebuild"] = self.pending_rebuild.to_dict()
@@ -116,16 +127,45 @@ class Slot:
         d = SNOWBALL_STATE_PARSER.require_dict(d, field_name="slot")
         raw_entry = d.get("entry")
         raw_pending = d.get("pending_rebuild")
+        ever_closed = SNOWBALL_STATE_PARSER.strict_bool(
+            SNOWBALL_STATE_PARSER.require(d, "ever_closed"), field_name="ever_closed"
+        )
+        build_count = SNOWBALL_STATE_PARSER.optional_int(d, "build_count")
         return Slot(
             index=SNOWBALL_STATE_PARSER.strict_int(
                 SNOWBALL_STATE_PARSER.require(d, "index"), field_name="index"
             ),
             entry=Entry.from_dict(raw_entry) if raw_entry else None,
-            ever_closed=SNOWBALL_STATE_PARSER.strict_bool(
-                SNOWBALL_STATE_PARSER.require(d, "ever_closed"), field_name="ever_closed"
-            ),
+            ever_closed=ever_closed,
             pending_rebuild=(StopLossClosedEntry.from_dict(raw_pending) if raw_pending else None),
+            build_count=(
+                build_count
+                if build_count is not None
+                else _infer_legacy_build_count(
+                    raw_entry=raw_entry,
+                    raw_pending=raw_pending,
+                    ever_closed=ever_closed,
+                )
+            ),
         )
+
+
+def _infer_legacy_build_count(
+    *,
+    raw_entry: Any,
+    raw_pending: Any,
+    ever_closed: bool,
+) -> int:
+    """Best-effort count for persisted states created before build_count."""
+    if isinstance(raw_entry, dict):
+        lifecycle_count = SNOWBALL_STATE_PARSER.optional_int(raw_entry, "lifecycle_stop_loss_count")
+        return max(1, 1 + (lifecycle_count or 0))
+    if isinstance(raw_pending, dict):
+        lifecycle_count = SNOWBALL_STATE_PARSER.optional_int(
+            raw_pending, "lifecycle_stop_loss_count"
+        )
+        return max(1, lifecycle_count or 0)
+    return 1 if ever_closed else 0
 
 
 # ---------------------------------------------------------------------------

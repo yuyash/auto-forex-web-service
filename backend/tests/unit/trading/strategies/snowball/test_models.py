@@ -347,10 +347,34 @@ class TestSlot:
         entry = _entry()
         slot.fill(entry)
         assert slot.is_occupied
+        assert slot.build_count == 1
         closed = slot.close(refillable=False)
         assert closed is entry
         assert slot.is_empty
         assert slot.ever_closed
+
+    def test_build_count_increments_on_rebuild(self):
+        slot = Slot(index=1)
+        slot.fill(_entry(entry_id=1))
+        slot.close_for_stop_loss(
+            StopLossClosedEntry(
+                entry_price=Decimal("150.00"),
+                close_price=Decimal("150.50"),
+                units=1000,
+                direction=Direction.LONG,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                step=1,
+                cycle_id=1,
+                lifecycle_stop_loss_count=1,
+            )
+        )
+        rebuilt = _entry(entry_id=2)
+        rebuilt.is_rebuild = True
+        slot.complete_rebuild(rebuilt)
+
+        assert slot.build_count == 2
 
     def test_refillable_close(self):
         slot = Slot(index=1)
@@ -366,6 +390,18 @@ class TestSlot:
         assert restored.index == 3
         assert restored.ever_closed is True
         assert restored.entry is None
+        assert restored.build_count == 1
+
+    def test_from_dict_infers_legacy_build_count(self):
+        d = {
+            "index": 3,
+            "entry": None,
+            "ever_closed": True,
+        }
+
+        restored = Slot.from_dict(d)
+
+        assert restored.build_count == 1
 
 
 class TestLayer:

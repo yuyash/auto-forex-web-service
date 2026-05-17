@@ -78,7 +78,9 @@ class TestBuildCycleGridStateMap:
             "empty",
         ]
         assert grid_state["layers"][0]["slots"][0]["position_id"] == "pos-1"
+        assert grid_state["layers"][0]["slots"][0]["build_count"] == 1
         assert grid_state["layers"][0]["slots"][1]["position_id"] == "sl-pos-1-1"
+        assert grid_state["layers"][0]["slots"][1]["build_count"] == 1
 
 
 class TestBuildCycleStatusMap:

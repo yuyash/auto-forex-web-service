@@ -75,6 +75,7 @@ class SnowballVisualizationBuilder:
                         "slot": slot.index,
                         "state": state,
                         "position_id": position_id,
+                        "build_count": slot.build_count,
                     }
                 )
 
