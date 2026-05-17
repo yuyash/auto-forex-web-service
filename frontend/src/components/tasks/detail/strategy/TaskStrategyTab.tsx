@@ -133,6 +133,7 @@ function formatCyclePnl(
 export function TaskStrategyTab({
   taskId,
   taskType,
+  strategyType,
   instrument,
   executionRunId,
   timezone = 'UTC',
@@ -148,7 +149,9 @@ export function TaskStrategyTab({
       ),
     [t]
   );
-  const [sortOrder, setSortOrderState] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrderState] = useState<'asc' | 'desc'>(
+    strategyType === 'snowball' ? 'desc' : 'asc'
+  );
   const [statusFilter, setStatusFilterState] = useState<
     'all' | 'active' | 'completed' | 'pending'
   >('all');

@@ -109,6 +109,10 @@ type ReturnBarChartDefinition = {
   color: string;
 };
 
+const DAY_SECONDS = 86_400;
+const TWO_WEEKS_SECONDS = 14 * DAY_SECONDS;
+const TWO_YEARS_SECONDS = 2 * 365 * DAY_SECONDS;
+
 /** Metrics to chart and their display order */
 const CHART_METRICS: MetricChartDefinition[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
@@ -448,6 +452,49 @@ function buildPeriodReturnData(
     values,
     lastValue: values[values.length - 1],
   };
+}
+
+function defaultReturnPeriodForRangeSeconds(
+  rangeSeconds: number | null
+): ReturnPeriod {
+  if (rangeSeconds == null || !Number.isFinite(rangeSeconds)) return 'day';
+  if (rangeSeconds <= TWO_WEEKS_SECONDS) return 'day';
+  if (rangeSeconds <= TWO_YEARS_SECONDS) return 'week';
+  return 'month';
+}
+
+function timestampMs(value?: string | null): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function returnRangeSeconds({
+  data,
+  since,
+  until,
+  startTime,
+  endTime,
+}: {
+  data: MetricPoint[];
+  since: string;
+  until: string;
+  startTime?: string;
+  endTime?: string | null;
+}): number | null {
+  const startMs =
+    timestampMs(since) ??
+    timestampMs(startTime) ??
+    (data.length > 0 ? data[0].t * 1000 : null);
+  const endMs =
+    timestampMs(until) ??
+    timestampMs(endTime) ??
+    (data.length > 0 ? data[data.length - 1].t * 1000 : null);
+
+  if (startMs == null || endMs == null || endMs <= startMs) {
+    return null;
+  }
+  return (endMs - startMs) / 1000;
 }
 
 /**
@@ -811,40 +858,43 @@ export function TaskMetricsTab({
   const [ohlcRefreshToken, setOhlcRefreshToken] = useState(0);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedReturnPeriod, setSelectedReturnPeriod] =
-    useState<ReturnPeriod>('day');
+    useState<ReturnPeriod | null>(null);
 
   const hasOhlc = !!(instrument && startTime);
   const chartMetricDefinitions =
     strategyType === 'snowball_net'
       ? SNOWBALL_NET_CHART_METRICS
       : CHART_METRICS;
-  const returnChartDataMap = useMemo(() => {
-    const map: Record<
-      string,
-      { labels: string[]; values: number[]; lastValue: number }
-    > = {};
-    for (const chart of RETURN_BAR_CHARTS) {
-      const chartData = buildPeriodReturnData(data, chart.period, timezone);
-      if (chartData && chartData.labels.length > 0) {
-        map[chart.key] = chartData;
-      }
-    }
-    return map;
-  }, [data, timezone]);
+  const hasTotalReturnData = useMemo(
+    () => data.some((point) => totalReturnValue(point) != null),
+    [data]
+  );
   const availableReturnCharts = useMemo(
+    () => (hasTotalReturnData ? RETURN_BAR_CHARTS : []),
+    [hasTotalReturnData]
+  );
+  const defaultReturnPeriod = useMemo(
     () =>
-      RETURN_BAR_CHARTS.filter((chart) => {
-        const chartData = returnChartDataMap[chart.key];
-        return chartData && chartData.labels.length > 0;
-      }),
-    [returnChartDataMap]
+      defaultReturnPeriodForRangeSeconds(
+        returnRangeSeconds({ data, since, until, startTime, endTime })
+      ),
+    [data, endTime, since, startTime, until]
   );
 
+  const requestedReturnPeriod = selectedReturnPeriod ?? defaultReturnPeriod;
   const effectiveReturnPeriod =
-    availableReturnCharts.find((chart) => chart.period === selectedReturnPeriod)
-      ?.period ??
+    availableReturnCharts.find(
+      (chart) => chart.period === requestedReturnPeriod
+    )?.period ??
     availableReturnCharts[0]?.period ??
-    selectedReturnPeriod;
+    requestedReturnPeriod;
+  const activeReturnChartData = useMemo(
+    () =>
+      hasTotalReturnData
+        ? buildPeriodReturnData(data, effectiveReturnPeriod, timezone)
+        : null,
+    [data, effectiveReturnPeriod, hasTotalReturnData, timezone]
+  );
 
   const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
@@ -1242,7 +1292,7 @@ export function TaskMetricsTab({
               availableReturnCharts.find(
                 (candidate) => candidate.period === effectiveReturnPeriod
               ) ?? availableReturnCharts[0];
-            const cd = chart ? returnChartDataMap[chart.key] : undefined;
+            const cd = chart ? activeReturnChartData : undefined;
             if (!chart || !cd || cd.labels.length === 0) return null;
             const maxChars = cd.values.reduce((max, value) => {
               const label = formatYLabel(value, 'pct');

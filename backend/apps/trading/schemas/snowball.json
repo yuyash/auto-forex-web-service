@@ -445,43 +445,6 @@
       "itemLabel_ja": "R{index} ロスカット幅（pips）"
     },
 
-    "refill_limit_enabled": {
-      "type": "boolean",
-      "title": "Set Refillable Slot Limit",
-      "title_ja": "再建玉可能スロットに上限を設定する",
-      "description": "When enabled, only counter slots up to the configured limit become refillable after normal take-profit close. When disabled, every counter slot through r_max can be refilled.",
-      "description_ja": "有効時、通常利確後に再建玉できる逆行側スロットを設定した上限までに制限します。無効時は r_max までの全逆行側スロットを再建玉できます。",
-      "default": true,
-      "dependsOn": {
-        "field": "stop_loss_enabled",
-        "values": [true],
-        "and": [{ "field": "rebuild_enabled", "values": [true] }]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "refill_up_to": {
-      "type": "integer",
-      "title": "Refill Up To Slot",
-      "title_ja": "再建玉可能スロット上限",
-      "description": "When the refillable slot limit is enabled, counter slots from R1 through this number are refillable after normal close instead of triggering a new layer.",
-      "description_ja": "再建玉可能スロット上限が有効な場合、R1からこの番号までの逆行側スロットは通常決済後に再建玉可能になります。",
-      "default": 2,
-      "minimum": 1,
-      "dependsOn": { "field": "refill_limit_enabled", "values": [true] },
-      "comparisonRules": [
-        {
-          "field": "r_max",
-          "operator": "lte",
-          "message": "Must be less than or equal to Max Steps",
-          "message_ja": "最大段数以下にしてください"
-        }
-      ],
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
     "rebuild_enabled": {
       "type": "boolean",
       "title": "Rebuild After Stop Loss",
@@ -515,6 +478,43 @@
         "values": [true],
         "and": [{ "field": "rebuild_enabled", "values": [true] }]
       },
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
+    "refill_limit_enabled": {
+      "type": "boolean",
+      "title": "Set Refillable Slot Limit",
+      "title_ja": "再建玉可能スロットに上限を設定する",
+      "description": "When enabled, only counter slots up to the configured limit become refillable after normal take-profit close. When disabled, every counter slot through r_max can be refilled.",
+      "description_ja": "有効時、通常利確後に再建玉できる逆行側スロットを設定した上限までに制限します。無効時は r_max までの全逆行側スロットを再建玉できます。",
+      "default": true,
+      "dependsOn": {
+        "field": "stop_loss_enabled",
+        "values": [true],
+        "and": [{ "field": "rebuild_enabled", "values": [true] }]
+      },
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
+    "refill_up_to": {
+      "type": "integer",
+      "title": "Refill Up To Slot",
+      "title_ja": "再建玉可能スロット上限",
+      "description": "When the refillable slot limit is enabled, counter slots from R1 through this number are refillable after normal close instead of triggering a new layer.",
+      "description_ja": "再建玉可能スロット上限が有効な場合、R1からこの番号までの逆行側スロットは通常決済後に再建玉可能になります。",
+      "default": 2,
+      "minimum": 1,
+      "dependsOn": { "field": "refill_limit_enabled", "values": [true] },
+      "comparisonRules": [
+        {
+          "field": "r_max",
+          "operator": "lte",
+          "message": "Must be less than or equal to Max Steps",
+          "message_ja": "最大段数以下にしてください"
+        }
+      ],
       "group": "Rebuild",
       "group_ja": "再建"
     },

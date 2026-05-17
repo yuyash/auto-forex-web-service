@@ -217,4 +217,78 @@ describe('TaskMetricsTab', () => {
     ]);
     expect(latestBarChart?.xAxis?.[0]?.data).not.toContain('2026-W02');
   });
+
+  it('defaults period returns to weekly for a one-year range', () => {
+    const data: MetricPoint[] = [
+      ['2026-01-01T00:00:00Z', 0],
+      ['2026-04-01T00:00:00Z', 0.03],
+      ['2026-08-01T00:00:00Z', 0.05],
+      ['2026-12-31T00:00:00Z', 0.08],
+    ].map(([iso, totalReturn]) => ({
+      t: Math.floor(new Date(iso).getTime() / 1000),
+      metrics: {
+        total_return: totalReturn,
+      },
+    }));
+
+    render(
+      <TaskMetricsTab
+        data={data}
+        isLoading={false}
+        error={null}
+        interval={240}
+        since=""
+        until=""
+        onIntervalChange={vi.fn()}
+        onSinceChange={vi.fn()}
+        onUntilChange={vi.fn()}
+        onRefresh={vi.fn()}
+        timezone="UTC"
+      />
+    );
+
+    const latestBarChart = barChartProps.at(-1);
+    expect(latestBarChart?.xAxis?.[0]?.data).toEqual([
+      '2025-12-29',
+      '2026-03-30',
+      '2026-07-27',
+      '2026-12-28',
+    ]);
+  });
+
+  it('defaults period returns to monthly beyond two years', () => {
+    const data: MetricPoint[] = [
+      ['2024-01-01T00:00:00Z', 0],
+      ['2025-06-01T00:00:00Z', 0.04],
+      ['2027-01-02T00:00:00Z', 0.09],
+    ].map(([iso, totalReturn]) => ({
+      t: Math.floor(new Date(iso).getTime() / 1000),
+      metrics: {
+        total_return: totalReturn,
+      },
+    }));
+
+    render(
+      <TaskMetricsTab
+        data={data}
+        isLoading={false}
+        error={null}
+        interval={1440}
+        since=""
+        until=""
+        onIntervalChange={vi.fn()}
+        onSinceChange={vi.fn()}
+        onUntilChange={vi.fn()}
+        onRefresh={vi.fn()}
+        timezone="UTC"
+      />
+    );
+
+    const latestBarChart = barChartProps.at(-1);
+    expect(latestBarChart?.xAxis?.[0]?.data).toEqual([
+      '2024-01',
+      '2025-06',
+      '2027-01',
+    ]);
+  });
 });
