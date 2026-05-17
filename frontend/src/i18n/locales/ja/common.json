@@ -599,6 +599,12 @@
       "rebuild": "再建玉",
       "initialPositionSeed": "初期ポジション",
       "initialPositionSeedShort": "初期",
+      "initialPositionFilter": {
+        "label": "初期ポジションフィルタ",
+        "all": "全て",
+        "initial": "初期",
+        "normal": "通常"
+      },
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",

@@ -535,6 +535,10 @@ class TaskActivityQueryService:
             queryset = queryset.filter(is_open=True)
         elif query.position_status == "closed":
             queryset = queryset.filter(is_open=False)
+        if query.initial_position_filter == "initial":
+            queryset = queryset.filter(is_initial_position_seed=True)
+        elif query.initial_position_filter == "normal":
+            queryset = queryset.filter(is_initial_position_seed=False)
         if query.direction:
             queryset = queryset.filter(direction=query.direction)
         if query.execution.since:

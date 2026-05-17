@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { InitialPositionFilter } from '../../../hooks/useTaskPositions';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -11,6 +12,8 @@ function toIsoDateTime(value: string): string | undefined {
 export function useTaskPositionFilters() {
   const [cycleIdFilter, setCycleIdFilter] = useState('');
   const [positionIdFilter, setPositionIdFilter] = useState('');
+  const [initialPositionFilter, setInitialPositionFilter] =
+    useState<InitialPositionFilter>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -42,6 +45,8 @@ export function useTaskPositionFilters() {
     hasPositionIdFilter,
     isPositionIdFilterValid,
     effectivePositionId,
+    initialPositionFilter,
+    setInitialPositionFilter,
     dateFrom,
     setDateFrom,
     dateTo,

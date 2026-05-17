@@ -599,6 +599,12 @@
       "rebuild": "Rebuild",
       "initialPositionSeed": "Initial Position",
       "initialPositionSeedShort": "Initial",
+      "initialPositionFilter": {
+        "label": "Initial position filter",
+        "all": "All",
+        "initial": "Initial",
+        "normal": "Normal"
+      },
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",

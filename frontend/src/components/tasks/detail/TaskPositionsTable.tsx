@@ -111,6 +111,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     hasPositionIdFilter,
     isPositionIdFilterValid,
     effectivePositionId,
+    initialPositionFilter,
+    setInitialPositionFilter,
     dateFrom,
     setDateFrom,
     dateTo,
@@ -150,6 +152,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     viewMode,
     effectiveCycleId,
     effectivePositionId,
+    initialPositionFilter,
     rangeFrom,
     rangeTo,
   });
@@ -1281,7 +1284,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         </Box>
         <TaskPositionFilterBar
           cycleIdFilter={cycleIdFilter}
-          onCycleIdFilterChange={setCycleIdFilter}
+          onCycleIdFilterChange={(value) => {
+            setCycleIdFilter(value);
+            resetPages();
+          }}
           hasCycleIdFilter={hasCycleIdFilter}
           isCycleIdFilterValid={isCycleIdFilterValid}
           positionIdFilter={positionIdFilter}
@@ -1291,6 +1297,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           }}
           hasPositionIdFilter={hasPositionIdFilter}
           isPositionIdFilterValid={isPositionIdFilterValid}
+          initialPositionFilter={initialPositionFilter}
+          onInitialPositionFilterChange={(value) => {
+            setInitialPositionFilter(value);
+            resetPages();
+          }}
           dateFrom={dateFrom}
           dateTo={dateTo}
           onDateFromChange={(value) => {
@@ -1487,13 +1498,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           <>
             <TaskPositionFilterBar
               cycleIdFilter={cycleIdFilter}
-              onCycleIdFilterChange={setCycleIdFilter}
+              onCycleIdFilterChange={(value) => {
+                setCycleIdFilter(value);
+                resetPages();
+              }}
               hasCycleIdFilter={hasCycleIdFilter}
               isCycleIdFilterValid={isCycleIdFilterValid}
               positionIdFilter={positionIdFilter}
-              onPositionIdFilterChange={setPositionIdFilter}
+              onPositionIdFilterChange={(value) => {
+                setPositionIdFilter(value);
+                resetPages();
+              }}
               hasPositionIdFilter={hasPositionIdFilter}
               isPositionIdFilterValid={isPositionIdFilterValid}
+              initialPositionFilter={initialPositionFilter}
+              onInitialPositionFilterChange={(value) => {
+                setInitialPositionFilter(value);
+                resetPages();
+              }}
             />
             {statusPairs.map((pair) => (
               <React.Fragment key={pair.key}>

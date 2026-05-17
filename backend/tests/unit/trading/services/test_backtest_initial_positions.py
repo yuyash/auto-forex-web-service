@@ -579,6 +579,7 @@ def test_sync_for_task_creates_preview_execution_records_before_start():
     assert state.last_tick_timestamp == task.start_time - timedelta(seconds=1)
     assert state.strategy_state["initialised"] is True
     assert len(state.strategy_state["cycles"]) == 1
+    assert state.strategy_state["cycles"][0]["is_initial_position_seed"] is True
 
     positions = Position.objects.filter(
         task_type=TaskType.BACKTEST,
@@ -827,6 +828,7 @@ def test_sync_for_task_seeds_closed_slot_placeholders_without_position_records()
     cycle = state.strategy_state["cycles"][0]
     l1r1 = cycle["grid"]["layers"][0]["slots"][1]
 
+    assert cycle["is_initial_position_seed"] is True
     assert l1r1["entry"] is None
     assert l1r1["ever_closed"] is True
     assert "pending_rebuild" not in l1r1

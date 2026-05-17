@@ -50,6 +50,8 @@ export interface TaskPosition {
   updated_at?: string | null;
 }
 
+export type InitialPositionFilter = 'all' | 'initial' | 'normal';
+
 interface UseTaskPositionsOptions {
   taskId: string | number;
   taskType: TaskType;
@@ -67,6 +69,8 @@ interface UseTaskPositionsOptions {
   cycleId?: string;
   /** Filter positions by position ID prefix (e.g. first 8 chars of UUID). */
   positionId?: string;
+  /** Filter positions by initial-position seed marker. */
+  initialPositionFilter?: InitialPositionFilter;
   /** ISO 8601 timestamp - only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -107,6 +111,7 @@ export const useTaskPositions = ({
   ordering = '-entry_time',
   cycleId,
   positionId,
+  initialPositionFilter = 'all',
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
@@ -128,6 +133,7 @@ export const useTaskPositions = ({
         ordering,
         cycleId ?? '',
         positionId ?? '',
+        initialPositionFilter,
         since ?? '',
       ].join('|'),
     [
@@ -144,6 +150,7 @@ export const useTaskPositions = ({
       ordering,
       cycleId,
       positionId,
+      initialPositionFilter,
       since,
     ]
   );
@@ -159,6 +166,9 @@ export const useTaskPositions = ({
     if (ordering) params.ordering = ordering;
     if (cycleId) params.cycle_id = cycleId;
     if (positionId) params.position_id = positionId;
+    if (initialPositionFilter !== 'all') {
+      params.initial_position_filter = initialPositionFilter;
+    }
     return params;
   }, [
     executionRunId,
@@ -170,6 +180,7 @@ export const useTaskPositions = ({
     ordering,
     cycleId,
     positionId,
+    initialPositionFilter,
   ]);
 
   const resource = useIncrementalTaskResource<TaskPosition>({
@@ -198,8 +209,14 @@ export const useTaskPositions = ({
         mergedById.set(position.id, position);
       }
       const merged = Array.from(mergedById.values()).filter((position) => {
-        if (status === 'open') return position.is_open;
-        if (status === 'closed') return !position.is_open;
+        if (status === 'open' && !position.is_open) return false;
+        if (status === 'closed' && position.is_open) return false;
+        if (initialPositionFilter === 'initial') {
+          return position.is_initial_position_seed === true;
+        }
+        if (initialPositionFilter === 'normal') {
+          return position.is_initial_position_seed !== true;
+        }
         return true;
       });
       return merged.length > pageSize ? merged.slice(0, pageSize) : merged;

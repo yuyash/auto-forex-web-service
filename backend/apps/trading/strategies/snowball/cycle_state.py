@@ -32,6 +32,7 @@ class SnowballCycle:
     counter_close_count: int = 0
     status: CycleStatus = CycleStatus.ACTIVE
     trade_cycle_id: str | None = None
+    is_initial_position_seed: bool = False
 
     # Realised P/L accumulated over every close that happened within this
     # cycle.  Used for end-of-cycle sanity logging (a completed cycle is
@@ -185,6 +186,7 @@ class SnowballCycle:
             "counter_close_count": self.counter_close_count,
             "status": self.status.value,
             "trade_cycle_id": self.trade_cycle_id,
+            "is_initial_position_seed": self.is_initial_position_seed,
             "realized_pnl": str(self.realized_pnl),
         }
 
@@ -221,6 +223,7 @@ class SnowballCycle:
             ),
             status=status,
             trade_cycle_id=SNOWBALL_STATE_PARSER.optional_str(data, "trade_cycle_id"),
+            is_initial_position_seed=data.get("is_initial_position_seed") is True,
             realized_pnl=SNOWBALL_STATE_PARSER.strict_decimal(
                 SNOWBALL_STATE_PARSER.require(data, "realized_pnl"), field_name="realized_pnl"
             ),
