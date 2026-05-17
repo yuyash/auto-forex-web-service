@@ -117,6 +117,13 @@ class OrderService:
             dry_run,
         )
 
+    def _account_currency(self) -> AccountCurrency:
+        """Return the currency used for account-balance PnL deltas."""
+        account_currency = getattr(self.account, "currency", "") if self.account else ""
+        if not account_currency:
+            account_currency = getattr(self.task, "account_currency", "")
+        return AccountCurrency(str(account_currency or ""))
+
     def open_position(
         self,
         instrument: str,
@@ -312,7 +319,7 @@ class OrderService:
                     realized_delta = -realized_delta
                 conv = Instrument(position.instrument).quote_to_account_rate(
                     oanda_order.price or position.entry_price,
-                    AccountCurrency(self.account.currency if self.account else ""),
+                    self._account_currency(),
                 )
                 realized_delta = realized_delta * Decimal(original_units) * conv
             else:
@@ -324,7 +331,7 @@ class OrderService:
                     realized_delta = -realized_delta
                 conv = Instrument(position.instrument).quote_to_account_rate(
                     close_price or position.entry_price,
-                    AccountCurrency(self.account.currency if self.account else ""),
+                    self._account_currency(),
                 )
                 realized_delta = realized_delta * close_units_decimal * conv
 

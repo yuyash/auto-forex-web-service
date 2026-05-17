@@ -112,6 +112,61 @@ class TestOpenPosition:
 class TestClosePosition:
     """Tests for OrderService.close_position with dry_run=True."""
 
+    def test_full_close_uses_backtest_account_currency_for_jpy_account(self):
+        task = BacktestTaskFactory(account_currency="JPY")
+        svc, task = _make_service(task)
+
+        position, _ = svc.open_position(
+            instrument="USD_JPY",
+            units=1000,
+            direction=Direction.LONG,
+            override_price=Decimal("150.000"),
+        )
+
+        _, realized_pnl, _ = svc.close_position(
+            position,
+            override_price=Decimal("151.000"),
+        )
+
+        assert realized_pnl == Decimal("1000.000")
+
+    def test_full_close_converts_quote_pnl_for_usd_account(self):
+        task = BacktestTaskFactory(account_currency="USD")
+        svc, task = _make_service(task)
+
+        position, _ = svc.open_position(
+            instrument="USD_JPY",
+            units=1000,
+            direction=Direction.LONG,
+            override_price=Decimal("150.000"),
+        )
+
+        _, realized_pnl, _ = svc.close_position(
+            position,
+            override_price=Decimal("151.000"),
+        )
+
+        assert realized_pnl == Decimal("1000.000") / Decimal("151.000")
+
+    def test_partial_close_uses_backtest_account_currency_for_jpy_account(self):
+        task = BacktestTaskFactory(account_currency="JPY")
+        svc, task = _make_service(task)
+
+        position, _ = svc.open_position(
+            instrument="USD_JPY",
+            units=2000,
+            direction=Direction.LONG,
+            override_price=Decimal("150.000"),
+        )
+
+        _, realized_pnl, _ = svc.close_position(
+            position,
+            units=500,
+            override_price=Decimal("151.000"),
+        )
+
+        assert realized_pnl == Decimal("500.000")
+
     def test_full_close(self):
         svc, task = _make_service()
 
