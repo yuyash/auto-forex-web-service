@@ -363,6 +363,118 @@ class TestStrategyEventsPagination:
         assert response.data["cycles"][0]["trade_count"] == 2
         assert response.data["cycles"][0]["trades"] == []
 
+    def test_detail_mode_returns_persisted_grid_build_counts_without_trade_ledger(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        cycle_id = uuid4()
+        first_position_id = uuid4()
+        open_ts = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            id=first_position_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price="150.000",
+            entry_time=open_ts,
+            is_open=True,
+        )
+        Trade.objects.create(
+            id=cycle_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=open_ts,
+            direction="long",
+            units=1000,
+            instrument="USD_JPY",
+            price="150.000",
+            execution_method="open_position",
+            cycle_id=cycle_id,
+            position_id=first_position_id,
+        )
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            current_balance=Decimal("10000"),
+            ticks_processed=1,
+            strategy_state={
+                "cycles": [
+                    {
+                        "cycle_id": 1,
+                        "direction": "long",
+                        "status": "active",
+                        "trade_cycle_id": str(cycle_id),
+                        "grid": {
+                            "layers": [
+                                {
+                                    "layer_number": 1,
+                                    "base_units": 1000,
+                                    "refill_up_to": 2,
+                                    "slots": [
+                                        {
+                                            "index": 0,
+                                            "entry": {
+                                                "entry_id": 1,
+                                                "step": 1,
+                                                "direction": "long",
+                                                "entry_price": "150.000",
+                                                "close_price": "150.300",
+                                                "units": 1000,
+                                                "opened_at": open_ts.isoformat(),
+                                                "role": "initial",
+                                                "layer_number": 1,
+                                                "retracement_count": 0,
+                                                "root_entry_id": 1,
+                                                "parent_entry_id": 1,
+                                                "position_id": str(first_position_id),
+                                                "expected_interval_pips": None,
+                                                "actual_interval_pips": None,
+                                                "expected_tp_pips": None,
+                                                "validation_status": "",
+                                                "stop_loss_price": None,
+                                                "is_rebuild": False,
+                                                "lifecycle_realized_pnl": "0",
+                                                "lifecycle_stop_loss_count": 0,
+                                            },
+                                            "ever_closed": False,
+                                            "build_count": 2,
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                        "hedge_entries": [],
+                        "counter_close_count": 0,
+                        "realized_pnl": "0",
+                    }
+                ],
+                "protection_level": "normal",
+                "initialised": True,
+                "next_entry_id": 2,
+                "last_bid": None,
+                "last_ask": None,
+                "last_mid": None,
+                "account_balance": "10000",
+                "account_nav": "10000",
+                "metrics": {},
+            },
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": str(cycle_id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        cycle = response.data["cycles"][0]
+        assert cycle["trades"] == []
+        assert cycle["grid_state"]["layers"][0]["slots"][0]["build_count"] == 2
+
     def test_initial_position_seed_flag_is_returned_for_cycles_and_trades(self):
         task = _make_task()
         client = _auth_client(task.user)

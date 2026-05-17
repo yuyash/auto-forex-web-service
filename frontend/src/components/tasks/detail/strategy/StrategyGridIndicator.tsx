@@ -194,8 +194,9 @@ function GridRow({
       </Typography>
       {layer.slots.map((slot) => {
         const color = stateMainColor(theme, slot.state);
+        const buildCountKey = getSlotBuildCountKey(layer.layer, slot.slot);
         const buildCount = Math.min(
-          slotBuildCounts?.[getSlotBuildCountKey(layer.layer, slot.slot)] ?? 0,
+          slotBuildCounts?.[buildCountKey] ?? slot.build_count ?? 0,
           999
         );
         const tooltip = `L${layer.layer}/R${slot.slot} ${t(

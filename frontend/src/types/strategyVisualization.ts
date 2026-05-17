@@ -10,6 +10,7 @@ export interface StrategyGridSlot {
   slot: number;
   state: StrategyGridSlotState;
   position_id?: string | null;
+  build_count?: number;
 }
 
 export interface StrategyGridLayer {
