@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.0...backend-v2.0.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* initial position detail display ([#753](https://github.com/yuyash/auto-forex-web-service/issues/753)) ([67410ed](https://github.com/yuyash/auto-forex-web-service/commit/67410ed72796a58eccd3fd8b8a965d470291ada6))
+
 ## [2.0.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.2...backend-v2.0.0) (2026-05-17)
 
 
