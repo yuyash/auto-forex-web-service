@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.4...frontend-v2.0.5) (2026-05-17)
+
+
+### Bug Fixes
+
+* **snowball:** expose counter layer controls ([#761](https://github.com/yuyash/auto-forex-web-service/issues/761)) ([58e93d5](https://github.com/yuyash/auto-forex-web-service/commit/58e93d5c782e761ad6001a2a209da6454a47b1c7))
+
 ## [2.0.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.3...frontend-v2.0.4) (2026-05-17)
 
 
