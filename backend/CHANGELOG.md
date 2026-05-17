@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.2...backend-v2.0.0) (2026-05-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* **strategy:** simplify snowball rebuild configuration ([#751](https://github.com/yuyash/auto-forex-web-service/issues/751))
+
+### Features
+
+* **strategy:** simplify snowball rebuild configuration ([#751](https://github.com/yuyash/auto-forex-web-service/issues/751)) ([0c7c08b](https://github.com/yuyash/auto-forex-web-service/commit/0c7c08bf6e92410ed4f9b5eea339c2c11ff11e89))
+
 ## [1.58.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.1...backend-v1.58.2) (2026-05-17)
 
 
