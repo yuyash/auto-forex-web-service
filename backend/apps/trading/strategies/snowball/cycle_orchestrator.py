@@ -261,12 +261,6 @@ class SnowballActiveCycleProcessor:
         order_checked_without_new_mutations = False
         if allow_new_positions and not counter_close_events:
             strategy._validate_grid_ordering(cycle)
-            if strategy._grid_order_violation and strategy.config.grid_order_validation_enabled:
-                return CycleProcessingResult(
-                    events=events,
-                    stop_reason=f"Grid ordering violation: {strategy._grid_order_violation}",
-                    is_error=True,
-                )
             if strategy._grid_order_violation:
                 self.logger.debug(
                     "Skipping Snowball counter adds while grid ordering is violated: %s",
@@ -313,18 +307,6 @@ class SnowballActiveCycleProcessor:
 
         if not order_checked_without_new_mutations:
             strategy._validate_grid_ordering(cycle)
-        if strategy._grid_order_violation and strategy.config.grid_order_validation_enabled:
-            trace.record(
-                phase="grid_order",
-                outcome="stop",
-                reason="grid_ordering_violation",
-                cycle=cycle,
-            )
-            return CycleProcessingResult(
-                events=events,
-                stop_reason=f"Grid ordering violation: {strategy._grid_order_violation}",
-                is_error=True,
-            )
         if strategy._grid_order_violation:
             strategy._grid_order_violation = None
 
@@ -376,32 +358,12 @@ class SnowballCycleReseeder:
         dir_cycles: list[SnowballCycle],
     ) -> list[StrategyEvent]:
         if not dir_cycles:
-            if (
-                strategy.config.stop_loss_enabled
-                and not strategy.config.rebuild_enabled
-                and not strategy.config.complete_cycle_when_empty
-            ):
-                self.logger.debug(
-                    "No active %s cycle but auto re-seed disabled; staying idle "
-                    "(stop_loss_enabled, rebuild_enabled=False, complete_cycle_when_empty=False)",
-                    direction.value.upper(),
-                )
-                return []
             self.logger.info("No active %s cycle; creating new cycle", direction.value.upper())
             new_events, _ = strategy._create_cycle(ss, tick, direction)
             return new_events
         if strategy.config.reseed_on_all_pending and all(cycle.is_pending for cycle in dir_cycles):
             self.logger.info(
                 "All %s cycles pending; creating new cycle (reseed_on_all_pending)",
-                direction.value.upper(),
-            )
-            new_events, _ = strategy._create_cycle(ss, tick, direction)
-            return new_events
-        if strategy.config.reseed_on_grid_exhausted and all(
-            cycle.is_grid_exhausted(strategy.config.f_max) for cycle in dir_cycles
-        ):
-            self.logger.info(
-                "All %s cycle grids exhausted; creating new cycle (reseed_on_grid_exhausted)",
                 direction.value.upper(),
             )
             new_events, _ = strategy._create_cycle(ss, tick, direction)

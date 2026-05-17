@@ -52,7 +52,6 @@ class StopLossRebuildPlan:
 
     trigger_price: Decimal
     close_price: Decimal
-    adjustment_note: str
 
 
 class StopLossAssigner:
@@ -146,7 +145,7 @@ class StopLossAssigner:
         pending: StopLossClosedEntry,
     ) -> None:
         """Assign stop-loss to a rebuilt entry using rebuild-specific settings."""
-        if not strategy.config.stop_loss_enabled or strategy.config.disable_loss_cut_after_rebuild:
+        if not strategy.config.stop_loss_enabled:
             return
 
         if strategy.config.rebuild_stop_loss_mode == "same":
@@ -292,8 +291,6 @@ class StopLossCloseProcessor:
                 entry = slot.entry
                 if entry is None or entry.stop_loss_price is None:
                     continue
-                if entry.is_rebuild and strategy.config.disable_loss_cut_after_rebuild:
-                    continue
                 if entry.is_hedge:
                     continue
                 if self.protection_policy.temporarily_protected(
@@ -381,19 +378,12 @@ class StopLossRebuildPricePlanner:
         layer: Layer,
         slot: Slot,
         pending: StopLossClosedEntry,
-        apply_adjustment: bool,
-        entry_buffer_price: Decimal,
-        exit_buffer_price: Decimal,
     ) -> StopLossRebuildPlan | None:
         """Return a rebuild plan when the trigger price has been reached."""
         if pending.closed_at is not None and tick.timestamp <= pending.closed_at:
             return None
 
-        trigger_price = self.trigger_price(
-            pending,
-            apply_adjustment,
-            entry_buffer_price,
-        )
+        trigger_price = self.trigger_price(pending, strategy.config.rebuild_entry_price_mode)
         trigger_price = self.clamp_entry_price(cycle, layer, slot, pending, trigger_price)
         if not self.trigger_hit(pending, tick, trigger_price):
             return None
@@ -405,38 +395,20 @@ class StopLossRebuildPricePlanner:
             slot=slot,
             pending=pending,
             trigger_price=trigger_price,
-            apply_adjustment=apply_adjustment,
-            exit_buffer_price=exit_buffer_price,
-        )
-        adjustment_note = self.adjustment_note(
-            pending=pending,
-            trigger_price=trigger_price,
-            close_price=close_price,
-            apply_adjustment=apply_adjustment,
-            entry_buffer_price=entry_buffer_price,
         )
         return StopLossRebuildPlan(
             trigger_price=trigger_price,
             close_price=close_price,
-            adjustment_note=adjustment_note,
         )
 
     def trigger_price(
         self,
         pending: StopLossClosedEntry,
-        apply_adjustment: bool,
-        entry_buffer_price: Decimal,
+        entry_price_mode: str,
     ) -> Decimal:
         """Return the price that must be reached to rebuild the entry."""
-        base_price = self.base_trigger_price(pending)
-        if not apply_adjustment or entry_buffer_price <= 0:
-            return base_price
-        if pending.direction == Direction.LONG:
-            return base_price + entry_buffer_price
-        return base_price - entry_buffer_price
-
-    def base_trigger_price(self, pending: StopLossClosedEntry) -> Decimal:
-        """Return the unbuffered rebuild trigger price."""
+        if entry_price_mode == "stop_loss_exit":
+            return pending.stop_loss_exit_price or pending.stop_loss_price or pending.entry_price
         return pending.entry_price
 
     def clamp_entry_price(
@@ -477,8 +449,6 @@ class StopLossRebuildPricePlanner:
         slot: Slot,
         pending: StopLossClosedEntry,
         trigger_price: Decimal,
-        apply_adjustment: bool,
-        exit_buffer_price: Decimal,
     ) -> Decimal:
         """Return adjusted and clamped rebuild take-profit price."""
         close_price = SNOWBALL_PRICING.rebuild_take_profit_price(
@@ -487,11 +457,6 @@ class StopLossRebuildPricePlanner:
             pip_size=strategy.pip_size,
             config=strategy.config,
         )
-        if apply_adjustment and exit_buffer_price > 0:
-            if pending.direction == Direction.LONG:
-                close_price += exit_buffer_price
-            else:
-                close_price -= exit_buffer_price
         close_price = self.clamp_take_profit(cycle, layer, slot, pending, close_price)
         self.propagate_take_profit(cycle, layer, slot, pending, close_price)
         return close_price
@@ -539,23 +504,6 @@ class StopLossRebuildPricePlanner:
                 pending.retracement_count,
                 adjusted_close_price,
             )
-
-    def adjustment_note(
-        self,
-        *,
-        pending: StopLossClosedEntry,
-        trigger_price: Decimal,
-        close_price: Decimal,
-        apply_adjustment: bool,
-        entry_buffer_price: Decimal,
-    ) -> str:
-        """Return a compact description of rebuild price adjustments."""
-        if close_price == pending.close_price and not (apply_adjustment and entry_buffer_price > 0):
-            return ""
-        return (
-            f", adj: entry {pending.entry_price:.5f}->{trigger_price:.5f}"
-            f", TP {pending.close_price:.5f}->{close_price:.5f}"
-        )
 
     def _clamped_entry_price(
         self,
@@ -647,6 +595,9 @@ class StopLossRebuildEntryFactory:
         stop_loss_note = (
             f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else ""
         )
+        entry_note = (
+            f", entry={plan.trigger_price:.5f}" if plan.trigger_price != pending.entry_price else ""
+        )
         return SNOWBALL_EVENTS.entry_rebuild_event(
             entry,
             timestamp=tick.timestamp,
@@ -655,21 +606,20 @@ class StopLossRebuildEntryFactory:
                 f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
                 f"L{pending.layer_number}/R{pending.retracement_count}, "
                 f"units={pending.units}, TP={plan.close_price:.5f}"
-                f"{stop_loss_note}{plan.adjustment_note}"
+                f"{entry_note}{stop_loss_note}"
             ),
         )
 
     def log_rebuild(self, pending: StopLossClosedEntry, plan: StopLossRebuildPlan) -> None:
         """Log the rebuilt entry details."""
         self.logger.info(
-            "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d%s",
+            "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d",
             pending.direction.value.upper(),
             pending.layer_number,
             pending.retracement_count,
             plan.trigger_price,
             plan.close_price,
             pending.units,
-            plan.adjustment_note,
         )
 
 
@@ -699,12 +649,6 @@ class StopLossRebuildProcessor:
             return []
 
         events: list[StrategyEvent] = []
-        apply_adjustment = (
-            strategy.config.rebuild_price_adjustment_enabled
-            and strategy.config.rebuild_take_profit_mode in {"same", "same_pips"}
-        )
-        entry_buffer_price = strategy.config.rebuild_entry_price_buffer_pips * strategy.pip_size
-        exit_buffer_price = strategy.config.rebuild_exit_price_buffer_pips * strategy.pip_size
 
         for layer in cycle.grid.layers:
             for slot in layer.slots:
@@ -718,9 +662,6 @@ class StopLossRebuildProcessor:
                     layer=layer,
                     slot=slot,
                     pending=pending,
-                    apply_adjustment=apply_adjustment,
-                    entry_buffer_price=entry_buffer_price,
-                    exit_buffer_price=exit_buffer_price,
                 )
                 if plan is None:
                     continue

@@ -183,11 +183,10 @@ class SnowballProductionScenarioFactory:
         )
 
     def ignored_grid_violation(self) -> SnowballOnTickScenario:
-        """Validation-disabled grid violation must warn internally and continue."""
+        """Grid violation must warn internally and continue."""
         strategy = self.strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         strategy.configure_runtime(account_currency="JPY", hedging_enabled=False)
         snowball_state = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
@@ -334,9 +333,7 @@ class SnowballProductionScenarioFactory:
             "counter_tp_multiplier": "1.2",
             "round_step_pips": "0.1",
             "shrink_enabled": False,
-            "lock_enabled": False,
             "m_th": "70",
-            "n_th": "85",
             "pip_size": "0.01",
         }
         params.update(overrides)

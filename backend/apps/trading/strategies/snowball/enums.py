@@ -12,7 +12,6 @@ class ProtectionLevel(str, Enum):
 
     NORMAL = "normal"
     SHRINK = "shrink"
-    LOCKED = "locked"
     EMERGENCY = "emergency"
 
 

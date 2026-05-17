@@ -319,9 +319,6 @@
       "close_position": "ポジション決済",
       "trend_tp": "順行方向の利益確定",
       "counter_tp": "逆行方向の利益確定",
-      "lock_entered": "ロック開始",
-      "lock_released": "ロック解除",
-      "lock_hedge_neutralize": "ロック中和",
       "not_applicable": "対象外",
       "counter": "逆行方向",
       "trend": "順行方向",
@@ -342,7 +339,7 @@
       "counterAdds": "逆行追加回数",
       "counterRuns": "逆行サイクル数",
       "trendRuns": "順行サイクル数",
-      "help": "表示上のサイクルは順行と逆行で分離しています。進行中サイクルはまだ終了していないサイクル、完了サイクルは通常終了したサイクル、介入サイクルは縮退やロックなど保護動作が入ったサイクルを表します。",
+      "help": "表示上のサイクルは順行と逆行で分離しています。進行中サイクルはまだ終了していないサイクル、完了サイクルは通常終了したサイクル、介入サイクルは縮退など保護動作が入ったサイクルを表します。",
       "runTypeHelp": "順行サイクルと逆行サイクルは別々の単位として数えています。"
     },
     "cycleList": {
@@ -590,10 +587,7 @@
       "closeReasonTp": "利確",
       "closeReasonCounterTp": "逆行利確",
       "closeReasonLayerInitialTp": "初期レイヤー利確",
-      "closeReasonLockHedgeNeutralize": "ロックヘッジ中和",
       "closeReasonShrinkEntered": "縮退開始",
-      "closeReasonLockEntered": "ロック開始",
-      "closeReasonLockReleased": "ロック解除",
       "stopLossPrice": "ロスカット価格",
       "isRebuild": "再建玉",
       "rebuild": "再建玉",
@@ -667,8 +661,7 @@
           "volatilityLockProtection": "プロテクション決済（ボラティリティロック）",
           "marginProtection": "プロテクション決済（証拠金保護）",
           "counterTp": "通常決済（逆行利確）",
-          "layerInitialTp": "通常決済（初期レイヤー利確）",
-          "lockHedgeNeutralize": "通常決済（ロックヘッジ中和）"
+          "layerInitialTp": "通常決済（初期レイヤー利確）"
         },
         "details": {
           "exitFormula": "決済価格計算式",

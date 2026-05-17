@@ -4,19 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 from logging import getLogger
 from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
-from apps.trading.enums import Direction, EventType
+from apps.trading.enums import EventType
 from apps.trading.events import ClosePositionEvent, GenericStrategyEvent, StrategyEvent
 from apps.trading.money import AccountCurrency
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
-from apps.trading.strategies.snowball.events import SNOWBALL_EVENTS, SnowballEventFactory
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry
 from apps.trading.utils import Instrument, format_money
@@ -39,10 +37,6 @@ class ShrinkResult:
 
 class SnowballProtectionService:
     """Own Snowball margin-protection decisions and state transitions."""
-
-    def __init__(self, *, event_factory: SnowballEventFactory | None = None) -> None:
-        """Initialize protection with event-building collaborators."""
-        self.event_factory = event_factory or SNOWBALL_EVENTS
 
     def margin_ratio(
         self,
@@ -100,130 +94,6 @@ class SnowballProtectionService:
         event.strategy_type = "snowball"
         event.validation_status = "fail"
         return [event], f"Emergency stop: margin ratio {ratio:.1f}% >= threshold {threshold}%"
-
-    def handle_lock(
-        self,
-        *,
-        strategy: ProtectionStrategy,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent] | None:
-        cfg = strategy.config
-        if not cfg.lock_enabled or ratio < cfg.n_th:
-            return None
-        if ss.protection_level == ProtectionLevel.LOCKED:
-            return None
-
-        ss.protection_level = ProtectionLevel.LOCKED
-        ss.lock_entered_at = tick.timestamp.isoformat()
-        events: list[StrategyEvent] = []
-
-        all_entries = ss.all_entries()
-        long_units = sum(e.units for e in all_entries if e.is_long)
-        short_units = sum(e.units for e in all_entries if e.is_short)
-        net = long_units - short_units
-
-        logger.warning("LOCK MODE entered: margin ratio %.1f%% >= n_th=%.1f%%", ratio, cfg.n_th)
-
-        if net != 0:
-            hedge_dir = Direction.SHORT if net > 0 else Direction.LONG
-            hedge_units = abs(net)
-            hedge_entry = Entry.open(
-                state=ss,
-                tick=tick,
-                direction=hedge_dir,
-                units=hedge_units,
-                step=0,
-                close_price=Decimal("0"),
-                role="hedge",
-                layer_number=0,
-                retracement_count=0,
-            )
-            active = ss.active_cycles()
-            target_cycle = next(
-                (c for c in active if c.direction == hedge_dir),
-                active[0] if active else None,
-            )
-            if target_cycle is not None:
-                target_cycle.hedge_entries.append(hedge_entry)
-            ss.lock_hedge_ids.append(hedge_entry.entry_id)
-
-            open_evt = self.event_factory.entry_open_event(
-                hedge_entry,
-                timestamp=tick.timestamp,
-                description=(
-                    f"Lock hedge ({hedge_dir.value.upper()}) | "
-                    f"[PROTECTION] units={hedge_units}, net={net}, ratio={ratio:.1f}%"
-                ),
-            )
-            open_evt.basket = "hedge"
-            open_evt.close_reason = "lock_hedge_open"
-            open_evt.validation_status = "not_applicable"
-            open_evt.step = 0
-            events.append(open_evt)
-
-        status_evt = GenericStrategyEvent(
-            event_type=EventType.STATUS_CHANGED,
-            timestamp=tick.timestamp,
-            data={"kind": "snowball_locked", "ratio": str(ratio)},
-        )
-        status_evt.strategy_type = "snowball"
-        status_evt.close_reason = "lock_entered"
-        events.append(status_evt)
-        return events
-
-    def handle_lock_release(
-        self,
-        *,
-        strategy: ProtectionStrategy,
-        close_entry: Callable[..., ClosePositionEvent],
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent]:
-        if ss.protection_level != ProtectionLevel.LOCKED:
-            return []
-        cfg = strategy.config
-        unlock_ok = ratio < cfg.m_th - Decimal("5")
-        if ss.cooldown_until:
-            cd = datetime.fromisoformat(ss.cooldown_until)
-            if tick.timestamp < cd:
-                unlock_ok = False
-        if not unlock_ok:
-            return []
-
-        events: list[StrategyEvent] = []
-        for hid in list(ss.lock_hedge_ids):
-            for cycle in ss.cycles:
-                for entry in list(cycle.hedge_entries):
-                    if entry.entry_id == hid:
-                        events.append(
-                            close_entry(
-                                tick,
-                                entry,
-                                description=f"[PROTECTION] Lock hedge unwound | ratio={ratio:.1f}%",
-                                close_reason="lock_hedge_neutralize",
-                                validation_status="not_applicable",
-                                cycle=cycle,
-                            )
-                        )
-                        cycle.hedge_entries.remove(entry)
-        ss.lock_hedge_ids = []
-        ss.lock_entered_at = None
-        ss.cooldown_until = None
-        ss.protection_level = (
-            ProtectionLevel.SHRINK if ratio >= cfg.m_th else ProtectionLevel.NORMAL
-        )
-        unlock_evt = GenericStrategyEvent(
-            event_type=EventType.STATUS_CHANGED,
-            timestamp=tick.timestamp,
-            data={"kind": "snowball_unlocked", "ratio": str(ratio)},
-        )
-        unlock_evt.strategy_type = "snowball"
-        unlock_evt.close_reason = "lock_released"
-        events.append(unlock_evt)
-        return events
 
     def handle_shrink(
         self,

@@ -22,8 +22,8 @@ class GridConfig:
     r_max: int
     f_max: int
     post_r_max_base_factor: Decimal
+    refill_limit_enabled: bool
     refill_up_to: int
-    grid_order_validation_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +58,6 @@ class StopLossConfig:
     pips_flat_steps: int
     pips_gamma: Decimal
     manual_pips: list[Decimal]
-    disable_after_rebuild: bool
     preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
 
@@ -66,6 +65,9 @@ class StopLossConfig:
 @dataclass(frozen=True, slots=True)
 class RebuildConfig:
     enabled: bool
+    refill_limit_enabled: bool
+    refill_up_to: int
+    entry_price_mode: str
     stop_loss_mode: str
     stop_loss_manual_pips: list[Decimal]
     take_profit_mode: str
@@ -74,10 +76,6 @@ class RebuildConfig:
     take_profit_pips_flat_steps: int
     take_profit_pips_gamma: Decimal
     take_profit_manual_pips: list[Decimal]
-    price_adjustment_enabled: bool
-    entry_price_buffer_pips: Decimal
-    exit_price_buffer_pips: Decimal
-    complete_cycle_when_empty: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,12 +83,8 @@ class RebuildPolicyConfig:
     """High-level rebuild and reseed policy settings."""
 
     enabled: bool
-    complete_cycle_when_empty: bool
+    entry_price_mode: str
     reseed_on_all_pending: bool
-    reseed_on_grid_exhausted: bool
-    price_adjustment_enabled: bool
-    entry_price_buffer_pips: Decimal
-    exit_price_buffer_pips: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,9 +92,6 @@ class ProtectionConfig:
     shrink_enabled: bool
     m_th: Decimal
     m1_th: Decimal
-    lock_enabled: bool
-    n_th: Decimal
-    cooldown_sec: int
     emergency_enabled: bool
     emergency_threshold: Decimal
 
@@ -112,9 +103,6 @@ class RiskLimitConfig:
     shrink_enabled: bool
     margin_shrink_threshold: Decimal
     margin_shrink_target: Decimal
-    lock_enabled: bool
-    lock_threshold: Decimal
-    cooldown_sec: int
     emergency_enabled: bool
     emergency_threshold: Decimal
     stop_loss_enabled: bool
@@ -131,7 +119,10 @@ class SnowballStrategyConfig:
     r_max: int
     f_max: int
     post_r_max_base_factor: Decimal
-    refill_up_to: int  # R1..R(refill_up_to) refillable after close; 0 = none
+
+    # Slot refill after normal close
+    refill_limit_enabled: bool
+    refill_up_to: int  # R1..R(refill_up_to) refillable when limit is enabled
 
     # Counter-trend interval formula
     n_pips_head: Decimal
@@ -165,11 +156,8 @@ class SnowballStrategyConfig:
     shrink_enabled: bool
     m_th: Decimal
     m1_th: Decimal
-    lock_enabled: bool
-    n_th: Decimal
-    cooldown_sec: int
     stop_loss_enabled: bool
-    disable_loss_cut_after_rebuild: bool
+    rebuild_entry_price_mode: str
     rebuild_stop_loss_mode: str
     rebuild_stop_loss_manual_pips: list[Decimal]
     rebuild_take_profit_mode: str
@@ -178,25 +166,16 @@ class SnowballStrategyConfig:
     rebuild_take_profit_pips_flat_steps: int
     rebuild_take_profit_pips_gamma: Decimal
     rebuild_take_profit_manual_pips: list[Decimal]
-    grid_order_validation_enabled: bool
     preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
     # When ``stop_loss_enabled`` is True, controls whether a stopped-out
-    # slot is rebuilt (re-opened) once price returns to the original
-    # entry.  Historical behaviour is ``True`` — stop-losses always
+    # slot is rebuilt (re-opened) once price reaches the configured
+    # rebuild entry price. Historical behaviour is ``True`` — stop-losses
     # create a pending_rebuild snapshot and the slot comes back when
     # price revisits.  Setting this to ``False`` makes a stop-loss close
     # the slot permanently (no pending_rebuild snapshot is retained),
     # so the grid shrinks on each SL instead of recovering.
     rebuild_enabled: bool
-    # When True, a cycle that loses its last live entry is immediately
-    # moved to COMPLETED so the re-seed logic can start a fresh cycle
-    # on the next tick.  Intended for the ``stop_loss_enabled=True,
-    # rebuild_enabled=False`` combination, where pending_rebuild
-    # snapshots do not exist and the only way for a cycle to hold state
-    # is as COMPLETED (already the default in that combination, but
-    # this flag keeps the semantics explicit at the config layer).
-    complete_cycle_when_empty: bool
     emergency_enabled: bool
     emergency_threshold: Decimal
 
@@ -204,28 +183,7 @@ class SnowballStrategyConfig:
 
     # Cycle re-seed: create a new cycle when all positions in a direction
     # are pending stop-loss rebuild (no open positions).
-    # - reseed_on_all_pending: triggers as soon as every cycle for the
-    #   direction has zero live entries (some slots may still be empty).
-    # - reseed_on_grid_exhausted: triggers only when every slot in every
-    #   layer is in pending-rebuild state (the grid is fully saturated
-    #   with stop-loss closures).
-    # At most one of these may be True.
     reseed_on_all_pending: bool
-    reseed_on_grid_exhausted: bool
-
-    # Rebuild price adjustment: when a stop-loss fires and the position
-    # is later rebuilt with the ``same`` or ``same_pips`` TP policy, two
-    # optional buffers (in pips) can shift the rebuild trigger/TP slightly
-    # in the favourable direction while grid-ordering constraints remain
-    # enforced:
-    # - ``rebuild_entry_price_buffer_pips``: shifts the rebuild trigger
-    #   price in the favourable direction (requires a slightly better
-    #   entry than the original).
-    # - ``rebuild_exit_price_buffer_pips``: shifts the inherited rebuild
-    #   TP in the favourable direction.
-    rebuild_price_adjustment_enabled: bool
-    rebuild_entry_price_buffer_pips: Decimal
-    rebuild_exit_price_buffer_pips: Decimal
 
     @property
     def grid(self) -> GridConfig:
@@ -236,9 +194,14 @@ class SnowballStrategyConfig:
             r_max=self.r_max,
             f_max=self.f_max,
             post_r_max_base_factor=self.post_r_max_base_factor,
-            refill_up_to=self.refill_up_to,
-            grid_order_validation_enabled=self.grid_order_validation_enabled,
+            refill_limit_enabled=self.refill_limit_enabled,
+            refill_up_to=self.effective_refill_up_to,
         )
+
+    @property
+    def effective_refill_up_to(self) -> int:
+        """Return the runtime refill slot limit after the limit toggle."""
+        return self.refill_up_to if self.refill_limit_enabled else self.r_max
 
     @property
     def intervals(self) -> CounterIntervalConfig:
@@ -271,7 +234,6 @@ class SnowballStrategyConfig:
             pips_flat_steps=self.stop_loss_pips_flat_steps,
             pips_gamma=self.stop_loss_pips_gamma,
             manual_pips=self.stop_loss_manual_pips,
-            disable_after_rebuild=self.disable_loss_cut_after_rebuild,
             preserve_highest_retracement_enabled=self.preserve_highest_retracement_enabled,
             preserve_highest_r_from=self.preserve_highest_r_from,
         )
@@ -280,6 +242,9 @@ class SnowballStrategyConfig:
     def rebuild(self) -> RebuildConfig:
         return RebuildConfig(
             enabled=self.rebuild_enabled,
+            refill_limit_enabled=self.refill_limit_enabled,
+            refill_up_to=self.refill_up_to,
+            entry_price_mode=self.rebuild_entry_price_mode,
             stop_loss_mode=self.rebuild_stop_loss_mode,
             stop_loss_manual_pips=self.rebuild_stop_loss_manual_pips,
             take_profit_mode=self.rebuild_take_profit_mode,
@@ -288,22 +253,14 @@ class SnowballStrategyConfig:
             take_profit_pips_flat_steps=self.rebuild_take_profit_pips_flat_steps,
             take_profit_pips_gamma=self.rebuild_take_profit_pips_gamma,
             take_profit_manual_pips=self.rebuild_take_profit_manual_pips,
-            price_adjustment_enabled=self.rebuild_price_adjustment_enabled,
-            entry_price_buffer_pips=self.rebuild_entry_price_buffer_pips,
-            exit_price_buffer_pips=self.rebuild_exit_price_buffer_pips,
-            complete_cycle_when_empty=self.complete_cycle_when_empty,
         )
 
     @property
     def rebuild_policy(self) -> RebuildPolicyConfig:
         return RebuildPolicyConfig(
             enabled=self.rebuild_enabled,
-            complete_cycle_when_empty=self.complete_cycle_when_empty,
+            entry_price_mode=self.rebuild_entry_price_mode,
             reseed_on_all_pending=self.reseed_on_all_pending,
-            reseed_on_grid_exhausted=self.reseed_on_grid_exhausted,
-            price_adjustment_enabled=self.rebuild_price_adjustment_enabled,
-            entry_price_buffer_pips=self.rebuild_entry_price_buffer_pips,
-            exit_price_buffer_pips=self.rebuild_exit_price_buffer_pips,
         )
 
     @property
@@ -312,9 +269,6 @@ class SnowballStrategyConfig:
             shrink_enabled=self.shrink_enabled,
             m_th=self.m_th,
             m1_th=self.m1_th,
-            lock_enabled=self.lock_enabled,
-            n_th=self.n_th,
-            cooldown_sec=self.cooldown_sec,
             emergency_enabled=self.emergency_enabled,
             emergency_threshold=self.emergency_threshold,
         )
@@ -325,9 +279,6 @@ class SnowballStrategyConfig:
             shrink_enabled=self.shrink_enabled,
             margin_shrink_threshold=self.m_th,
             margin_shrink_target=self.m1_th,
-            lock_enabled=self.lock_enabled,
-            lock_threshold=self.n_th,
-            cooldown_sec=self.cooldown_sec,
             emergency_enabled=self.emergency_enabled,
             emergency_threshold=self.emergency_threshold,
             stop_loss_enabled=self.stop_loss_enabled,
@@ -365,14 +316,17 @@ class SnowballStrategyConfig:
         n_pips_gamma = _parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4")
         interval_mode = _parse_str(raw.get("interval_mode"), "constant")
         rebuild_take_profit_mode = _parse_str(raw.get("rebuild_take_profit_mode"), "same_pips")
-        rebuild_price_adjustment_enabled = _parse_bool(
-            raw.get("rebuild_price_adjustment_enabled", True), True
-        )
-        if rebuild_take_profit_mode not in {"same", "same_pips"}:
-            rebuild_price_adjustment_enabled = False
-        grid_order_validation_enabled = _parse_bool(
-            raw.get("grid_order_validation_enabled", True), True
-        )
+        raw_refill_up_to = raw.get("refill_up_to", 2)
+        refill_up_to = _parse_int(raw_refill_up_to, 2)
+        if "refill_limit_enabled" in raw:
+            refill_limit_enabled = _parse_bool(raw.get("refill_limit_enabled"), True)
+        elif "refill_enabled" in raw:
+            legacy_refill_enabled = _parse_bool(raw.get("refill_enabled"), True)
+            refill_limit_enabled = True
+            if not legacy_refill_enabled:
+                refill_up_to = 0
+        else:
+            refill_limit_enabled = True
 
         return SnowballStrategyConfig(
             base_units=_parse_int(raw.get("base_units", 1000), 1000),
@@ -381,7 +335,8 @@ class SnowballStrategyConfig:
             r_max=_parse_int(raw.get("r_max", 7), 7),
             f_max=_parse_int(raw.get("f_max", 3), 3),
             post_r_max_base_factor=_parse_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
-            refill_up_to=_parse_int(raw.get("refill_up_to", 2), 2),
+            refill_limit_enabled=refill_limit_enabled,
+            refill_up_to=refill_up_to,
             n_pips_head=n_pips_head,
             n_pips_tail=n_pips_tail,
             n_pips_flat_steps=n_pips_flat_steps,
@@ -404,12 +359,9 @@ class SnowballStrategyConfig:
             shrink_enabled=_parse_bool(raw.get("shrink_enabled", False), False),
             m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
             m1_th=_parse_decimal(raw.get("m1_th", "50"), "50"),
-            lock_enabled=_parse_bool(raw.get("lock_enabled", False), False),
-            n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
-            cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=_parse_bool(raw.get("stop_loss_enabled", False), False),
-            disable_loss_cut_after_rebuild=_parse_bool(
-                raw.get("disable_loss_cut_after_rebuild", True), True
+            rebuild_entry_price_mode=_parse_str(
+                raw.get("rebuild_entry_price_mode"), "original_entry"
             ),
             rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same_pips"),
             rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,
@@ -427,7 +379,6 @@ class SnowballStrategyConfig:
                 raw.get("rebuild_take_profit_pips_gamma", "1.4"), "1.4"
             ),
             rebuild_take_profit_manual_pips=rebuild_take_profit_manual_pips,
-            grid_order_validation_enabled=grid_order_validation_enabled,
             preserve_highest_retracement_enabled=_parse_bool(
                 raw.get("preserve_highest_retracement_enabled", False), False
             ),
@@ -437,21 +388,10 @@ class SnowballStrategyConfig:
                 else 0
             ),
             rebuild_enabled=_parse_bool(raw.get("rebuild_enabled", True), True),
-            complete_cycle_when_empty=_parse_bool(
-                raw.get("complete_cycle_when_empty", False), False
-            ),
             emergency_enabled=_parse_bool(raw.get("emergency_enabled", True), True),
             emergency_threshold=_parse_decimal(raw.get("emergency_threshold", "95"), "95"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=_parse_bool(raw.get("reseed_on_all_pending", False), False),
-            reseed_on_grid_exhausted=_parse_bool(raw.get("reseed_on_grid_exhausted", False), False),
-            rebuild_price_adjustment_enabled=rebuild_price_adjustment_enabled,
-            rebuild_entry_price_buffer_pips=_parse_decimal(
-                raw.get("rebuild_entry_price_buffer_pips", "0"), "0"
-            ),
-            rebuild_exit_price_buffer_pips=_parse_decimal(
-                raw.get("rebuild_exit_price_buffer_pips", "0"), "0"
-            ),
         )
 
     @classmethod
@@ -459,6 +399,10 @@ class SnowballStrategyConfig:
         """Parse a persisted config without silently filling missing fields."""
         defaults = cls.from_dict({}).to_dict()
         missing = sorted(key for key in defaults if key not in raw)
+        if "rebuild_entry_price_mode" in missing:
+            missing.remove("rebuild_entry_price_mode")
+        if "refill_limit_enabled" in missing:
+            missing.remove("refill_limit_enabled")
         if "preserve_highest_r_from" in missing and not _parse_bool(
             raw.get("preserve_highest_retracement_enabled", False), False
         ):
@@ -486,6 +430,7 @@ class SnowballStrategyConfig:
             "r_max": self.r_max,
             "f_max": self.f_max,
             "post_r_max_base_factor": str(self.post_r_max_base_factor),
+            "refill_limit_enabled": self.refill_limit_enabled,
             "refill_up_to": self.refill_up_to,
             "n_pips_head": str(self.n_pips_head),
             "n_pips_tail": str(self.n_pips_tail),
@@ -507,11 +452,8 @@ class SnowballStrategyConfig:
             "shrink_enabled": self.shrink_enabled,
             "m_th": str(self.m_th),
             "m1_th": str(self.m1_th),
-            "lock_enabled": self.lock_enabled,
-            "n_th": str(self.n_th),
-            "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
-            "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
+            "rebuild_entry_price_mode": self.rebuild_entry_price_mode,
             "rebuild_stop_loss_mode": self.rebuild_stop_loss_mode,
             "rebuild_stop_loss_manual_pips": [str(v) for v in self.rebuild_stop_loss_manual_pips],
             "rebuild_take_profit_mode": self.rebuild_take_profit_mode,
@@ -522,19 +464,13 @@ class SnowballStrategyConfig:
             "rebuild_take_profit_manual_pips": [
                 str(v) for v in self.rebuild_take_profit_manual_pips
             ],
-            "grid_order_validation_enabled": self.grid_order_validation_enabled,
             "preserve_highest_retracement_enabled": self.preserve_highest_retracement_enabled,
             "preserve_highest_r_from": self.preserve_highest_r_from,
             "rebuild_enabled": self.rebuild_enabled,
-            "complete_cycle_when_empty": self.complete_cycle_when_empty,
             "emergency_enabled": self.emergency_enabled,
             "emergency_threshold": str(self.emergency_threshold),
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
-            "reseed_on_grid_exhausted": self.reseed_on_grid_exhausted,
-            "rebuild_price_adjustment_enabled": self.rebuild_price_adjustment_enabled,
-            "rebuild_entry_price_buffer_pips": str(self.rebuild_entry_price_buffer_pips),
-            "rebuild_exit_price_buffer_pips": str(self.rebuild_exit_price_buffer_pips),
         }
 
     def validate(self) -> None:
@@ -554,14 +490,10 @@ class SnowballStrategyConfig:
             raise ValueError(
                 "preserve_highest_r_from must be 0 when preserve_highest_retracement_enabled is false"
             )
-        if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
-            raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
             raise ValueError("m_th must be between 0 and 100")
         if self.shrink_enabled and not Decimal("0") < self.m1_th < self.m_th:
             raise ValueError("m1_th must be between 0 and m_th")
-        if self.lock_enabled and not Decimal("0") < self.n_th < Decimal("100"):
-            raise ValueError("n_th must be between 0 and 100")
         if not self.n_pips_head >= self.n_pips_tail > 0:
             raise ValueError("Must satisfy n_pips_head >= n_pips_tail > 0")
         if not self.n_pips_flat_steps < self.r_max:
@@ -577,16 +509,16 @@ class SnowballStrategyConfig:
                 )
             if any(v < 1 for v in self.manual_intervals):
                 raise ValueError("All manual_intervals values must be >= 1")
-        if not 0 <= self.refill_up_to < self.r_max:
-            raise ValueError(f"refill_up_to must be >= 0 and < r_max ({self.r_max})")
-        if self.reseed_on_all_pending and self.reseed_on_grid_exhausted:
+        if self.refill_up_to < 0:
+            raise ValueError("refill_up_to must be >= 0")
+        if self.refill_limit_enabled and self.refill_up_to > self.r_max:
             raise ValueError(
-                "reseed_on_all_pending and reseed_on_grid_exhausted cannot both be true"
+                f"refill_up_to must be <= r_max ({self.r_max}) when refill limit is enabled"
             )
-        if self.rebuild_entry_price_buffer_pips < 0:
-            raise ValueError("rebuild_entry_price_buffer_pips must be >= 0")
-        if self.rebuild_exit_price_buffer_pips < 0:
-            raise ValueError("rebuild_exit_price_buffer_pips must be >= 0")
+        if self.rebuild_entry_price_mode not in {"original_entry", "stop_loss_exit"}:
+            raise ValueError(
+                "rebuild_entry_price_mode must be either 'original_entry' or 'stop_loss_exit'"
+            )
         # Stop-loss progression.
         if not self.stop_loss_pips_head >= self.stop_loss_pips_tail > 0:
             raise ValueError("Must satisfy stop_loss_pips_head >= stop_loss_pips_tail > 0")
@@ -650,23 +582,6 @@ class SnowballStrategyConfig:
                 )
             if any(v <= 0 for v in self.rebuild_take_profit_manual_pips):
                 raise ValueError("All rebuild_take_profit_manual_pips values must be > 0")
-        if (
-            self.rebuild_take_profit_mode not in {"same", "same_pips"}
-            and self.rebuild_price_adjustment_enabled
-        ):
-            raise ValueError(
-                "rebuild_price_adjustment_enabled must be false when "
-                "rebuild_take_profit_mode is not 'same' or 'same_pips'"
-            )
-        if self.rebuild_take_profit_mode == "manual" and self.grid_order_validation_enabled:
-            raise ValueError(
-                "grid_order_validation_enabled must be false when "
-                "rebuild_take_profit_mode is 'manual'"
-            )
-        if self.complete_cycle_when_empty and not self.stop_loss_enabled:
-            raise ValueError("complete_cycle_when_empty requires stop_loss_enabled to be true")
-        if self.complete_cycle_when_empty and self.rebuild_enabled:
-            raise ValueError("complete_cycle_when_empty requires rebuild_enabled to be false")
         if not self.stop_loss_enabled and not self.rebuild_enabled:
             raise ValueError("rebuild_enabled=false requires stop_loss_enabled to be true")
 

@@ -320,11 +320,8 @@ class SnowballStrategy(Strategy):
                     "margin_protection": "Margin protection",
                     "counter_tp": "Counter-trend take profit",
                     "layer_initial_tp": "Layer initial take profit",
-                    "lock_hedge_neutralize": "Lock hedge neutralization",
                 },
                 "strategy_event_labels": {
-                    "snowball_locked": "Snowball locked",
-                    "snowball_unlocked": "Snowball unlocked",
                     "snowball_shrink": "Snowball shrink",
                 },
             },
@@ -581,22 +578,16 @@ class SnowballStrategy(Strategy):
             self._last_tolerated_grid_order_violation = None
             return
 
-        if self.config.grid_order_validation_enabled:
-            logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
-            return
-
         if self._grid_order_violation == self._last_tolerated_grid_order_violation:
             logger.debug(
-                "Grid ordering violation still tolerated because "
-                "grid_order_validation_enabled=false: %s",
+                "Grid ordering violation still present: %s",
                 self._grid_order_violation,
             )
             return
 
         self._last_tolerated_grid_order_violation = self._grid_order_violation
         logger.info(
-            "Grid ordering violation tolerated because "
-            "grid_order_validation_enabled=false; pausing counter adds until ordering recovers: %s",
+            "Grid ordering violation detected; pausing counter adds until ordering recovers: %s",
             self._grid_order_violation,
         )
 
@@ -842,7 +833,12 @@ class SnowballStrategy(Strategy):
         assert prev_layer is not None
         new_layer_number = prev_layer.layer_number + 1
         new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
-        layer = Layer.create(new_layer_number, cfg.r_max, new_base_units, cfg.refill_up_to)
+        layer = Layer.create(
+            new_layer_number,
+            cfg.r_max,
+            new_base_units,
+            cfg.effective_refill_up_to,
+        )
         cycle.add_layer(layer)
 
         # The new layer's R0 is placed at the position where the previous

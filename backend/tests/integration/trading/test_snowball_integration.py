@@ -45,8 +45,7 @@ SNOWBALL_FULL_PARAMS: dict[str, Any] = {
     "round_step_pips": "0.5",
     "shrink_enabled": True,
     "m_th": "70",
-    "lock_enabled": True,
-    "n_th": "85",
+    "rebuild_entry_price_mode": "stop_loss_exit",
 }
 
 
@@ -85,7 +84,7 @@ class TestSnowballRegistry:
             parameters={"base_units": 2000},
         )
         assert normalised["base_units"] == 2000
-        assert normalised["disable_loss_cut_after_rebuild"] is True
+        assert normalised["rebuild_entry_price_mode"] == "original_entry"
 
     def test_normalize_then_validate_defaults(self):
         """Full round-trip: normalize defaults → validate against schema."""

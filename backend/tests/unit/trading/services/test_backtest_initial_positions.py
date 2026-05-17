@@ -348,6 +348,85 @@ def test_validate_initial_position_cycles_allows_refillable_empty_gaps_before_cl
 
 
 @pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_gap_above_enabled_refill_limit():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {"layer_number": 1, "retracement_count": 3, "status": "closed_slot"},
+                ],
+            }
+        ]
+    )
+    task.config.parameters = {
+        **task.config.parameters,
+        "r_max": 3,
+        "refill_limit_enabled": True,
+        "refill_up_to": 1,
+    }
+    task.config.save(update_fields=["parameters"])
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[1].retracement_count"]
+        == "Layer L1 cannot skip R2 before R3."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_allows_refill_gap_when_limit_disabled():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {"layer_number": 1, "retracement_count": 3, "status": "closed_slot"},
+                ],
+            }
+        ]
+    )
+    task.config.parameters = {
+        **task.config.parameters,
+        "r_max": 3,
+        "refill_limit_enabled": False,
+        "refill_up_to": 1,
+    }
+    task.config.save(update_fields=["parameters"])
+
+    normalized = validate_initial_position_cycles(
+        task=task,
+        config=task.config,
+        cycles=task.initial_position_cycles,
+        pip_size=task.pip_size,
+    )
+
+    assert [(p.layer_number, p.retracement_count, p.status) for p in normalized[0].positions] == [
+        (1, 0, "open"),
+        (1, 3, "closed_slot"),
+    ]
+
+
+@pytest.mark.django_db
 def test_validate_initial_position_cycles_rejects_closed_slot_with_position_values():
     task = _task(
         initial_position_cycles=[

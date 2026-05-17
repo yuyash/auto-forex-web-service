@@ -75,7 +75,7 @@ class SnowballCycleFactory:
         )
 
         cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
-        layer = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
+        layer = Layer.create(1, cfg.r_max, cfg.base_units, cfg.effective_refill_up_to)
         slot = layer.slot_at(0)
         assert slot is not None  # noqa: S101
         slot.fill(entry)

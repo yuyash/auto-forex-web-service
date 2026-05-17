@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from decimal import Decimal
 
 from django.test import override_settings
@@ -25,7 +25,7 @@ class TestSnowballProductionScenarios:
         assert result.should_stop is False
         assert result.is_error is False
 
-    def test_validation_disabled_grid_violation_continues_without_public_error(self, caplog):
+    def test_grid_violation_continues_without_public_error(self, caplog):
         scenario = SnowballProductionScenarioFactory().ignored_grid_violation()
 
         with caplog.at_level(
@@ -38,12 +38,12 @@ class TestSnowballProductionScenarios:
         assert result.should_stop is False
         assert result.is_error is False
         assert result.stop_reason == ""
-        tolerated_logs = [
+        detected_logs = [
             record
             for record in caplog.records
-            if "Grid ordering violation tolerated" in record.getMessage()
+            if "Grid ordering violation detected; pausing counter adds" in record.getMessage()
         ]
-        assert len(tolerated_logs) == 1
+        assert len(detected_logs) == 1
         assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
     def test_cross_layer_pending_rebuild_recovers_grid_ordering(self):

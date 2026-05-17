@@ -61,18 +61,9 @@ class SnowballCycle:
     def is_fully_pending(self) -> bool:
         """True if the cycle is PENDING and every slot is awaiting rebuild.
 
-        .. note:: This property cannot check ``f_max`` — use
-           :meth:`is_grid_exhausted` when the config is available.
+        Empty or unused slots are not considered pending.
         """
         return self.is_pending and self.grid.is_fully_pending(f_max=0)
-
-    def is_grid_exhausted(self, f_max: int) -> bool:
-        """True if the cycle is PENDING and the grid is fully saturated.
-
-        All ``f_max`` layers must exist and every slot in every
-        layer must be in pending-rebuild state.
-        """
-        return self.is_pending and self.grid.is_fully_pending(f_max=f_max)
 
     # -- Convenience --
 
@@ -244,11 +235,6 @@ class SnowballStrategyState:
     cycles: list[SnowballCycle] = field(default_factory=list)
     next_entry_id: int = 1
 
-    # Lock state
-    lock_hedge_ids: list[int] = field(default_factory=list)
-    lock_entered_at: str | None = None
-    cooldown_until: str | None = None
-
     # Price tracking
     last_bid: Decimal | None = None
     last_ask: Decimal | None = None
@@ -288,9 +274,6 @@ class SnowballStrategyState:
             "initialised": self.initialised,
             "cycles": [c.to_dict() for c in self.cycles],
             "next_entry_id": self.next_entry_id,
-            "lock_hedge_ids": list(self.lock_hedge_ids),
-            "lock_entered_at": self.lock_entered_at,
-            "cooldown_until": self.cooldown_until,
             "last_bid": str(self.last_bid) if self.last_bid is not None else None,
             "last_ask": str(self.last_ask) if self.last_ask is not None else None,
             "last_mid": str(self.last_mid) if self.last_mid is not None else None,
@@ -311,7 +294,7 @@ class SnowballStrategyState:
             raise ValueError("Snowball state field metrics must be an object")
 
         return SnowballStrategyState(
-            protection_level=ProtectionLevel(
+            protection_level=SnowballStrategyState._parse_protection_level(
                 SNOWBALL_STATE_PARSER.require(data, "protection_level")
             ),
             initialised=SNOWBALL_STATE_PARSER.strict_bool(
@@ -324,15 +307,6 @@ class SnowballStrategyState:
                     SNOWBALL_STATE_PARSER.require(data, "next_entry_id"), field_name="next_entry_id"
                 ),
             ),
-            lock_hedge_ids=[
-                SNOWBALL_STATE_PARSER.strict_int(i, field_name="lock_hedge_ids")
-                for i in SNOWBALL_STATE_PARSER.require_list(
-                    SNOWBALL_STATE_PARSER.require(data, "lock_hedge_ids"),
-                    field_name="lock_hedge_ids",
-                )
-            ],
-            lock_entered_at=SNOWBALL_STATE_PARSER.optional_str(data, "lock_entered_at"),
-            cooldown_until=SNOWBALL_STATE_PARSER.optional_str(data, "cooldown_until"),
             last_bid=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_bid"),
             last_ask=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_ask"),
             last_mid=SNOWBALL_STATE_PARSER.optional_decimal(data, "last_mid"),
@@ -353,3 +327,9 @@ class SnowballStrategyState:
         if not isinstance(raw, dict):
             raise ValueError("Snowball strategy_state must be an object")
         return cls.from_dict(raw)
+
+    @staticmethod
+    def _parse_protection_level(value: Any) -> ProtectionLevel:
+        if value == "locked":
+            return ProtectionLevel.NORMAL
+        return ProtectionLevel(value)

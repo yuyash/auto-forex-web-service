@@ -2,7 +2,7 @@
 
 Covers: initialisation, trend basket rotation, counter basket adds/closes,
 slot vacate after TP, layer progression, f_max exhaustion, margin
-protection (shrink / lock / emergency), spread guard, and
+protection (shrink / emergency), spread guard, and
 dynamic TP (ATR) scenarios.
 """
 
@@ -74,9 +74,7 @@ def _strategy(**overrides) -> SnowballStrategy:
         "counter_tp_multiplier": "1.2",
         "round_step_pips": "0.1",
         "shrink_enabled": False,
-        "lock_enabled": False,
         "m_th": "70",
-        "n_th": "85",
         "pip_size": "0.01",
     }
     params.update(overrides)
@@ -1081,7 +1079,7 @@ class TestExecutionFillSync:
 class TestShrinkMode:
     def test_shrink_closes_from_front(self, monkeypatch):
         """Shrink should close the oldest position (L0/R0) first."""
-        s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
+        s = _strategy(shrink_enabled=True, m_th="70")
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
@@ -1186,7 +1184,7 @@ class TestShrinkMode:
 
     def test_shrink_preserves_existing_counter_tp(self, monkeypatch):
         """Shrink must not rewrite surviving counter TPs."""
-        s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
+        s = _strategy(shrink_enabled=True, m_th="70")
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
         layer = Layer.create(1, 7, 1000)
@@ -1244,78 +1242,13 @@ class TestShrinkMode:
 
 
 # ==================================================================
-# 6. Lock mode
-# ==================================================================
-
-
-class TestLockMode:
-    def test_lock_opens_hedge_and_blocks_trading(self, monkeypatch):
-        s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
-        state = DummyState(current_balance=Decimal("1000000"))
-        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        state.ticks_processed += 1
-
-        monkeypatch.setattr(
-            snowball_strategy_module.SNOWBALL_PROTECTION,
-            "margin_ratio",
-            lambda **_: Decimal("90"),
-        )
-        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
-        assert any(
-            isinstance(e, GenericStrategyEvent)
-            and isinstance(e.data, dict)
-            and e.data.get("kind") == "snowball_locked"
-            for e in result.events
-        )
-
-    def test_locked_state_blocks_normal_trading(self, monkeypatch):
-        s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
-        state = DummyState(current_balance=Decimal("1000000"))
-        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        state.ticks_processed += 1
-
-        monkeypatch.setattr(
-            snowball_strategy_module.SNOWBALL_PROTECTION,
-            "margin_ratio",
-            lambda **_: Decimal("90"),
-        )
-        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
-        state.ticks_processed += 1
-
-        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "150.00", "150.02"), state=state)
-        opens = _open_events(result)
-        assert len(opens) == 0
-
-    def test_new_lock_allows_same_tick_take_profit(self, monkeypatch):
-        s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
-        state = DummyState(current_balance=Decimal("1000000"))
-        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        state.ticks_processed += 1
-        monkeypatch.setattr(
-            snowball_strategy_module.SNOWBALL_PROTECTION,
-            "margin_ratio",
-            lambda **_: Decimal("90"),
-        )
-
-        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.60", "150.62"), state=state)
-
-        assert _signal_events(result, "snowball_locked")
-        assert any(e.close_reason == "tp" for e in _close_events(result))
-        assert _open_events(result) == []
-        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
-        assert persisted.protection_level.value == "locked"
-
-
-# ==================================================================
-# 7. Emergency stop
+# 6. Emergency stop
 # ==================================================================
 
 
 class TestEmergencyStop:
     def test_emergency_stop_at_95_percent(self, monkeypatch):
         s = _strategy(
-            lock_enabled=True,
-            n_th="85",
             m_th="70",
             shrink_enabled=False,
         )
@@ -1334,8 +1267,9 @@ class TestEmergencyStop:
 
 
 class TestGridOrderingValidation:
-    def test_long_cycle_fails_when_entry_prices_are_not_descending(self):
+    def test_long_cycle_does_not_fail_when_entry_prices_are_not_descending(self):
         s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        s.configure_runtime(account_currency="JPY", hedging_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
         layer = Layer.create(1, 7, 1000, 3)
@@ -1376,15 +1310,14 @@ class TestGridOrderingValidation:
         state = DummyState(strategy_state=ss.to_dict())
         result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.10", "160.12"), state=state)
 
-        assert result.should_stop is True
-        assert result.is_error is True
-        assert "Grid ordering violation" in (result.stop_reason or "")
+        assert result.should_stop is False
+        assert result.is_error is False
+        assert result.stop_reason == ""
 
-    def test_violation_warns_and_does_not_fail_task_when_validation_disabled(self, caplog):
+    def test_violation_warns_and_does_not_fail_task(self, caplog):
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         s.configure_runtime(account_currency="JPY", hedging_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
@@ -1438,14 +1371,13 @@ class TestGridOrderingValidation:
         assert result.is_error is False
         assert result.stop_reason == ""
         assert any(
-            "Grid ordering violation tolerated" in record.getMessage() for record in caplog.records
+            "Grid ordering violation detected" in record.getMessage() for record in caplog.records
         )
 
     def test_cycle_tp_uses_dynamic_head_after_front_slot_removed(self):
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=3, direction=Direction.LONG)
@@ -1486,7 +1418,6 @@ class TestGridOrderingValidation:
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=4, direction=Direction.LONG)
@@ -1681,7 +1612,6 @@ class TestGridOrderingValidation:
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         s.configure_runtime(account_currency="JPY", hedging_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
@@ -1744,7 +1674,6 @@ class TestGridOrderingValidation:
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=5, direction=Direction.LONG)
@@ -1836,7 +1765,6 @@ class TestGridOrderingValidation:
         s = _strategy(
             counter_tp_mode="fixed",
             counter_tp_pips="25",
-            grid_order_validation_enabled=False,
         )
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=6, direction=Direction.LONG)
@@ -1963,8 +1891,9 @@ class TestGridOrderingValidation:
         assert events == []
         assert layer.slot_at(3).entry is None
 
-    def test_short_cycle_fails_when_tp_prices_are_not_ascending(self):
+    def test_short_cycle_does_not_fail_when_tp_prices_are_not_ascending(self):
         s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        s.configure_runtime(account_currency="JPY", hedging_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=2, direction=Direction.SHORT)
         layer = Layer.create(1, 7, 1000, 3)
@@ -2005,6 +1934,6 @@ class TestGridOrderingValidation:
         state = DummyState(strategy_state=ss.to_dict())
         result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "149.90", "149.92"), state=state)
 
-        assert result.should_stop is True
-        assert result.is_error is True
-        assert "Grid ordering violation" in (result.stop_reason or "")
+        assert result.should_stop is False
+        assert result.is_error is False
+        assert result.stop_reason == ""

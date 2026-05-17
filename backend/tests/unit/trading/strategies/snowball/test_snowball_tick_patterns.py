@@ -29,7 +29,6 @@ import pytest
 
 from apps.trading.enums import Direction, EventType
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.grid_models import Layer, Slot
@@ -58,11 +57,8 @@ PROD_CONFIG: dict[str, Any] = {
     "counter_tp_multiplier": "1.2",
     "round_step_pips": "0.1",
     "shrink_enabled": False,
-    "lock_enabled": False,
     "m_th": "70",
     "m1_th": "50",
-    "n_th": "85",
-    "cooldown_sec": 300,
     "emergency_enabled": True,
     "post_r_max_base_factor": "1",
     "refill_up_to": 3,
@@ -368,11 +364,8 @@ class TestSnowballStopLossRebuild:
 
         assert len(runner.rebuild_events) >= 1, "Expected rebuild events after price returned"
 
-    def test_rebuild_gets_stop_loss_when_flag_disabled(self):
-        runner = TickRunner(
-            stop_loss=True,
-            overrides={"disable_loss_cut_after_rebuild": False},
-        )
+    def test_rebuild_gets_stop_loss(self):
+        runner = TickRunner(stop_loss=True)
         runner.tick(START_PRICE)
 
         bottom = START_PRICE - Decimal("1.50")
@@ -381,20 +374,6 @@ class TestSnowballStopLossRebuild:
 
         assert runner.rebuild_events, "Expected at least one rebuilt entry"
         assert all(evt.stop_loss_price is not None for evt in runner.rebuild_events)
-
-    def test_rebuild_has_no_stop_loss_when_flag_enabled(self):
-        runner = TickRunner(
-            stop_loss=True,
-            overrides={"disable_loss_cut_after_rebuild": True},
-        )
-        runner.tick(START_PRICE)
-
-        bottom = START_PRICE - Decimal("1.50")
-        runner.tick_range(START_PRICE, bottom, step_pips=1)
-        runner.tick_range(bottom, START_PRICE, step_pips=1)
-
-        assert runner.rebuild_events, "Expected at least one rebuilt entry"
-        assert all(evt.stop_loss_price is None for evt in runner.rebuild_events)
 
     def test_rebuild_reuses_position_id(self):
         """Rebuild events should carry original_position_id."""
@@ -410,11 +389,8 @@ class TestSnowballStopLossRebuild:
             # but the event type should be REBUILD_POSITION
             assert evt.event_type == EventType.REBUILD_POSITION
 
-    def test_rebuilt_position_can_be_loss_cut_again_when_flag_disabled(self):
-        runner = TickRunner(
-            stop_loss=True,
-            overrides={"disable_loss_cut_after_rebuild": False},
-        )
+    def test_rebuilt_position_can_be_loss_cut_again(self):
+        runner = TickRunner(stop_loss=True)
         runner.tick(START_PRICE)
 
         bottom = START_PRICE - Decimal("1.50")
@@ -442,27 +418,6 @@ class TestSnowballStopLossRebuild:
             if getattr(e, "close_reason", "") == "stop_loss" and e.entry_id == rebuild_evt.entry_id
         ]
         assert rebuilt_stop_loss_closes, "Expected rebuilt entries to be loss-cut again"
-
-    def test_rebuilt_position_is_not_loss_cut_again_when_flag_enabled(self):
-        runner = TickRunner(
-            stop_loss=True,
-            overrides={"disable_loss_cut_after_rebuild": True},
-        )
-        runner.tick(START_PRICE)
-
-        bottom = START_PRICE - Decimal("1.50")
-        runner.tick_range(START_PRICE, bottom, step_pips=1)
-        runner.tick_range(bottom, START_PRICE, step_pips=1)
-        rebuilt_entry_ids = {evt.entry_id for evt in runner.rebuild_events}
-        assert rebuilt_entry_ids, "Expected a rebuild before verifying second SL behavior"
-        runner.tick_range(START_PRICE, bottom, step_pips=1)
-
-        rebuilt_stop_loss_closes = [
-            e
-            for e in runner.close_events
-            if getattr(e, "close_reason", "") == "stop_loss" and e.entry_id in rebuilt_entry_ids
-        ]
-        assert not rebuilt_stop_loss_closes
 
     def test_no_premature_layer_after_stop_loss(self):
         """Stop-loss closed slots should not trigger new layer addition."""
@@ -590,7 +545,7 @@ class TestSnowballStopLossRebuild:
 
 
 class TestSnowballCycleReseedOptions:
-    """Verify opt-in cycle reseeding from pending and saturated grids."""
+    """Verify opt-in cycle reseeding from pending cycles."""
 
     @pytest.mark.parametrize("stop_loss", [False, True], ids=["no_sl", "sl"])
     def test_reseed_on_all_pending_starts_new_cycle(self, stop_loss: bool) -> None:
@@ -598,7 +553,6 @@ class TestSnowballCycleReseedOptions:
             stop_loss=stop_loss,
             overrides={
                 "reseed_on_all_pending": True,
-                "reseed_on_grid_exhausted": False,
             },
         )
         runner.tick(START_PRICE)
@@ -623,85 +577,6 @@ class TestSnowballCycleReseedOptions:
         assert any(c.cycle_id == long_cycle.cycle_id and c.is_pending for c in long_cycles)
         assert sum(1 for c in long_cycles if c.is_active) == 1
         assert len(long_cycles) == 2
-
-    @pytest.mark.parametrize("stop_loss", [False, True], ids=["no_sl", "sl"])
-    def test_reseed_on_grid_exhausted_starts_new_cycle_after_all_layers_pending(
-        self, stop_loss: bool
-    ) -> None:
-        runner = TickRunner(
-            stop_loss=stop_loss,
-            overrides={
-                "r_max": 1,
-                "f_max": 2,
-                "manual_intervals": ["20"],
-                "reseed_on_all_pending": False,
-                "reseed_on_grid_exhausted": True,
-            },
-        )
-        runner.tick(START_PRICE)
-
-        ss = runner.ss
-        long_cycle = next(c for c in ss.cycles if c.direction == Direction.LONG)
-        long_cycle.grid.layers.append(
-            Layer.create(2, runner.strategy.config.r_max, runner.strategy.config.base_units, 0)
-        )
-        for layer in long_cycle.grid.layers:
-            for slot in layer.slots:
-                slot.entry = None
-                slot.pending_rebuild = _pending_snapshot_for_slot(
-                    cycle_id=long_cycle.cycle_id,
-                    layer_number=layer.layer_number,
-                    retracement_count=slot.index,
-                    entry_price=START_PRICE - Decimal(layer.layer_number + slot.index) / 100,
-                )
-        runner.state.strategy_state = ss.to_dict()
-
-        result = runner.tick(START_PRICE - Decimal("1.00"))
-
-        runner.assert_no_error(result)
-        long_cycles = runner.long_cycles()
-        assert any(
-            c.cycle_id == long_cycle.cycle_id
-            and c.status == CycleStatus.PENDING
-            and c.is_grid_exhausted(runner.strategy.config.f_max)
-            for c in long_cycles
-        )
-        assert sum(1 for c in long_cycles if c.is_active) == 1
-        assert len(long_cycles) == 2
-
-    def test_reseed_on_grid_exhausted_waits_until_all_configured_layers_exist(self) -> None:
-        runner = TickRunner(
-            stop_loss=False,
-            overrides={
-                "r_max": 1,
-                "f_max": 2,
-                "manual_intervals": ["20"],
-                "reseed_on_all_pending": False,
-                "reseed_on_grid_exhausted": True,
-            },
-        )
-        runner.tick(START_PRICE)
-
-        ss = runner.ss
-        long_cycle = next(c for c in ss.cycles if c.direction == Direction.LONG)
-        for layer in long_cycle.grid.layers:
-            for slot in layer.slots:
-                slot.entry = None
-                slot.pending_rebuild = _pending_snapshot_for_slot(
-                    cycle_id=long_cycle.cycle_id,
-                    layer_number=layer.layer_number,
-                    retracement_count=slot.index,
-                    entry_price=START_PRICE - Decimal(slot.index) / 100,
-                )
-        runner.state.strategy_state = ss.to_dict()
-
-        result = runner.tick(START_PRICE - Decimal("1.00"))
-
-        runner.assert_no_error(result)
-        long_cycles = runner.long_cycles()
-        assert len(long_cycles) == 1
-        assert long_cycles[0].status == CycleStatus.PENDING
-        assert not long_cycles[0].is_grid_exhausted(runner.strategy.config.f_max)
 
 
 class TestSnowballTPOrdering:
@@ -754,14 +629,13 @@ class TestCounterAddLoopWithinTick:
 
     @pytest.fixture
     def runner(self) -> TickRunner:
-        # Use a tight f_max and drop shrink/lock so stop-loss stays on.
+        # Use a tight f_max and keep shrink off so stop-loss stays on.
         overrides = {
             "f_max": 2,
             "r_max": 5,
             "manual_intervals": ["20", "20", "20", "20", "20"],
             "stop_loss_enabled": True,
             "shrink_enabled": False,
-            "lock_enabled": False,
             "reseed_on_all_pending": False,
             "preserve_highest_r_from": 0,
         }
@@ -933,114 +807,58 @@ class TestLifecycleNegativePnlWarnings:
         )
 
 
-class TestSnowballRebuildPriceAdjustment:
-    """Verify rebuild entry/exit buffers without SL-loss recovery."""
+class TestSnowballRebuildEntryPriceMode:
+    """Verify whether rebuilds trigger at the original or stop-loss exit price."""
 
-    def _run_sl_to_rebuild(
-        self,
-        *,
-        adjustment_enabled: bool,
-        entry_buffer_pips: str = "0",
-        exit_buffer_pips: str = "0",
-    ) -> TickRunner:
-        """Drive a sequence that causes an SL close followed by a rebuild."""
+    REBUILD_MODE_OVERRIDES = {
+        "r_max": 1,
+        "f_max": 0,
+        "refill_up_to": 0,
+        "interval_mode": "manual",
+        "manual_intervals": ["200"],
+        "stop_loss_mode": "constant",
+        "stop_loss_pips_head": "50",
+        "stop_loss_pips_tail": "50",
+        "reseed_on_all_pending": False,
+    }
+
+    def test_original_entry_price_mode_is_default(self):
+        cfg = SnowballStrategyConfig.from_dict({})
+        assert cfg.rebuild_entry_price_mode == "original_entry"
+
+    def test_stop_loss_exit_mode_rebuilds_before_original_entry_returns(self):
         runner = TickRunner(
             stop_loss=True,
             overrides={
-                "rebuild_price_adjustment_enabled": adjustment_enabled,
-                "rebuild_entry_price_buffer_pips": entry_buffer_pips,
-                "rebuild_exit_price_buffer_pips": exit_buffer_pips,
+                **self.REBUILD_MODE_OVERRIDES,
+                "rebuild_entry_price_mode": "stop_loss_exit",
             },
         )
         runner.tick(START_PRICE)
 
         bottom = START_PRICE - Decimal("1.50")
         runner.tick_range(START_PRICE, bottom, step_pips=1)
-        runner.tick_range(bottom, START_PRICE, step_pips=1)
-        return runner
+        assert any(e for e in runner.close_events if getattr(e, "close_reason", "") == "stop_loss")
 
-    def test_rebuild_adjustment_enabled_is_default(self):
-        cfg = SnowballStrategyConfig.from_dict({})
-        assert cfg.rebuild_price_adjustment_enabled is True
-        assert cfg.rebuild_entry_price_buffer_pips == Decimal("0")
-        assert cfg.rebuild_exit_price_buffer_pips == Decimal("0")
+        runner.tick_range(bottom, START_PRICE - Decimal("0.47"), step_pips=1)
 
-    def test_rebuild_inherits_original_tp_without_exit_buffer(self):
-        """Enabling rebuild adjustment must not widen TP to recover SL losses."""
-        runner_off = self._run_sl_to_rebuild(adjustment_enabled=False)
-        runner_on = self._run_sl_to_rebuild(adjustment_enabled=True)
-
-        assert runner_off.rebuild_events, "expected rebuilds in baseline"
-        assert runner_on.rebuild_events, "expected rebuilds with adjustment"
-
-        # Pair up by entry_id so we compare the same slot.
-        off_by_id = {e.entry_id: e for e in runner_off.rebuild_events}
-        on_by_id = {e.entry_id: e for e in runner_on.rebuild_events}
-        matched = set(off_by_id) & set(on_by_id)
-        assert matched, "no overlapping rebuild entry_ids to compare"
-
-        for eid in matched:
-            off_tp = Decimal(str(off_by_id[eid].planned_exit_price))
-            on_tp = Decimal(str(on_by_id[eid].planned_exit_price))
-            assert on_tp == off_tp
-
-    def test_exit_buffer_shifts_inherited_tp(self):
-        """A positive exit buffer shifts the inherited TP in the favourable direction."""
-        base = self._run_sl_to_rebuild(adjustment_enabled=True, exit_buffer_pips="0")
-        with_buf = self._run_sl_to_rebuild(adjustment_enabled=True, exit_buffer_pips="3")
-
-        base_by_id = {e.entry_id: e for e in base.rebuild_events}
-        buf_by_id = {e.entry_id: e for e in with_buf.rebuild_events}
-        matched = set(base_by_id) & set(buf_by_id)
-        assert matched
-
-        for eid in matched:
-            base_tp = Decimal(str(base_by_id[eid].planned_exit_price))
-            buf_tp = Decimal(str(buf_by_id[eid].planned_exit_price))
-            direction = base_by_id[eid].direction
-            if direction == "long":
-                assert buf_tp > base_tp, (
-                    f"long rebuild TP with buffer {buf_tp} should be > {base_tp}"
-                )
-            else:
-                assert buf_tp < base_tp, (
-                    f"short rebuild TP with buffer {buf_tp} should be < {base_tp}"
-                )
-
-    def test_entry_buffer_delays_rebuild_trigger(self):
-        """A positive entry buffer should reduce or delay rebuilds on a tight bounce."""
-        # A small bounce that just barely reaches the original entry price
-        # without any buffer will not be enough once a buffer is applied.
-        runner_no_buf = TickRunner(
-            stop_loss=True,
-            overrides={
-                "rebuild_price_adjustment_enabled": True,
-                "rebuild_entry_price_buffer_pips": "0",
-            },
+        assert any(event.direction == "long" for event in runner.rebuild_events), (
+            "Expected long rebuild before original entry price returned"
         )
-        runner_no_buf.tick(START_PRICE)
+
+    def test_original_entry_mode_waits_for_original_entry_price(self):
+        runner = TickRunner(stop_loss=True, overrides=self.REBUILD_MODE_OVERRIDES)
+        runner.tick(START_PRICE)
+
         bottom = START_PRICE - Decimal("1.50")
-        runner_no_buf.tick_range(START_PRICE, bottom, step_pips=1)
-        # Bounce back exactly to START_PRICE — enough without buffer.
-        runner_no_buf.tick_range(bottom, START_PRICE, step_pips=1)
-        no_buf_rebuilds = len(runner_no_buf.rebuild_events)
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        runner.tick_range(bottom, START_PRICE - Decimal("0.50"), step_pips=1)
 
-        runner_buf = TickRunner(
-            stop_loss=True,
-            overrides={
-                "rebuild_price_adjustment_enabled": True,
-                "rebuild_entry_price_buffer_pips": "10",
-            },
-        )
-        runner_buf.tick(START_PRICE)
-        runner_buf.tick_range(START_PRICE, bottom, step_pips=1)
-        runner_buf.tick_range(bottom, START_PRICE, step_pips=1)
-        buf_rebuilds = len(runner_buf.rebuild_events)
+        assert not any(event.direction == "long" for event in runner.rebuild_events)
 
-        # With a large entry buffer the bounce stops short of the trigger
-        # price, so strictly fewer (or zero) rebuilds should fire.
-        assert buf_rebuilds <= no_buf_rebuilds
-        assert no_buf_rebuilds > 0, "sanity: unbuffered run should rebuild"
+        runner.tick_range(START_PRICE - Decimal("0.49"), START_PRICE + Decimal("0.02"), step_pips=1)
+
+        assert any(event.direction == "long" for event in runner.rebuild_events)
 
 
 class TestSnowballRebuildTpGridClamp:
@@ -1055,7 +873,6 @@ class TestSnowballRebuildTpGridClamp:
         """
         from apps.trading.enums import Direction
         from apps.trading.strategies.snowball.entries import StopLossClosedEntry
-        from apps.trading.strategies.snowball.grid_models import Layer
 
         layer = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
         for idx in range(8):
@@ -1259,7 +1076,6 @@ class TestSnowballRebuildCrossLayerTpOrdering:
         """
         from apps.trading.enums import Direction
         from apps.trading.strategies.snowball.entries import StopLossClosedEntry
-        from apps.trading.strategies.snowball.grid_models import Layer
 
         l1 = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
         l2 = Layer(layer_number=2, slots=[], base_units=1000, refill_up_to=3)

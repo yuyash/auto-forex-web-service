@@ -319,9 +319,6 @@
       "close_position": "Close Position",
       "trend_tp": "Trend Take Profit",
       "counter_tp": "Counter Take Profit",
-      "lock_entered": "Lock Entered",
-      "lock_released": "Lock Released",
-      "lock_hedge_neutralize": "Lock Hedge Neutralize",
       "not_applicable": "Not Applicable",
       "counter": "Counter",
       "trend": "Trend",
@@ -590,10 +587,7 @@
       "closeReasonTp": "Take Profit",
       "closeReasonCounterTp": "Counter TP",
       "closeReasonLayerInitialTp": "Layer Initial TP",
-      "closeReasonLockHedgeNeutralize": "Lock Hedge Neutralize",
       "closeReasonShrinkEntered": "Shrink Entered",
-      "closeReasonLockEntered": "Lock Entered",
-      "closeReasonLockReleased": "Lock Released",
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild",
@@ -667,8 +661,7 @@
           "volatilityLockProtection": "Protection Close (Volatility Lock)",
           "marginProtection": "Protection Close (Margin Protection)",
           "counterTp": "Normal Close (Counter TP)",
-          "layerInitialTp": "Normal Close (Layer Initial TP)",
-          "lockHedgeNeutralize": "Normal Close (Lock Hedge Neutralize)"
+          "layerInitialTp": "Normal Close (Layer Initial TP)"
         },
         "details": {
           "exitFormula": "Exit Formula",

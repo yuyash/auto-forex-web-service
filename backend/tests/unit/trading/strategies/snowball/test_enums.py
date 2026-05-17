@@ -11,11 +11,10 @@ class TestProtectionLevel:
     def test_values(self):
         assert ProtectionLevel.NORMAL == "normal"
         assert ProtectionLevel.SHRINK == "shrink"
-        assert ProtectionLevel.LOCKED == "locked"
         assert ProtectionLevel.EMERGENCY == "emergency"
 
     def test_from_string(self):
-        assert ProtectionLevel("locked") is ProtectionLevel.LOCKED
+        assert ProtectionLevel("shrink") is ProtectionLevel.SHRINK
 
 
 class TestIntervalMode:

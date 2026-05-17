@@ -13,6 +13,7 @@ import pytest
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction, EventType, StrategyType
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+from apps.trading.strategies.snowball.cycle_orchestrator import SnowballCycleReseeder
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.grid_models import Layer, Slot
@@ -57,9 +58,7 @@ def _strategy(overrides: dict[str, Any] | None = None) -> SnowballStrategy:
         "interval_mode": "constant",
         "counter_tp_mode": "weighted_avg",
         "shrink_enabled": False,
-        "lock_enabled": False,
         "m_th": "70",
-        "n_th": "85",
     }
     if overrides:
         params.update(overrides)
@@ -187,10 +186,9 @@ class TestSnowballStrategyClassMethods:
         result = SnowballStrategy.normalize_parameters({"base_units": 2000})
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
-        assert result["disable_loss_cut_after_rebuild"] is True
+        assert result["rebuild_entry_price_mode"] == "original_entry"
         assert result["rebuild_stop_loss_mode"] == "same_pips"
         assert result["rebuild_take_profit_mode"] == "same_pips"
-        assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
         assert result["stop_loss_mode"] == "auto"
         assert "rebuild_take_profit_recovery_enabled" not in result
@@ -202,13 +200,11 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(defaults, dict)
         assert "base_units" in defaults
         assert "m_pips" in defaults
-        assert "disable_loss_cut_after_rebuild" in defaults
-        assert defaults["disable_loss_cut_after_rebuild"] is True
+        assert defaults["rebuild_entry_price_mode"] == "original_entry"
         assert "rebuild_stop_loss_mode" in defaults
         assert "rebuild_take_profit_mode" in defaults
         assert defaults["rebuild_stop_loss_mode"] == "same_pips"
         assert defaults["rebuild_take_profit_mode"] == "same_pips"
-        assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
         assert defaults["stop_loss_mode"] == "auto"
         assert "rebuild_take_profit_recovery_enabled" not in defaults
@@ -611,7 +607,6 @@ class TestSnowballRebuildStopLossModes:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
-                "disable_loss_cut_after_rebuild": False,
                 "rebuild_stop_loss_mode": "same",
             }
         )
@@ -637,7 +632,6 @@ class TestSnowballRebuildStopLossModes:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
-                "disable_loss_cut_after_rebuild": False,
                 "rebuild_stop_loss_mode": "same_pips",
             }
         )
@@ -684,7 +678,6 @@ class TestSnowballRebuildStopLossModes:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
-                "disable_loss_cut_after_rebuild": False,
                 "rebuild_stop_loss_mode": "manual",
                 "rebuild_stop_loss_manual_pips": ["8", "12", "16", "20", "24", "28", "32", "36"],
             }
@@ -832,13 +825,11 @@ class TestSnowballRebuildTakeProfitModes:
         )
         planner = StopLossRebuildPricePlanner()
 
-        trigger = planner.trigger_price(
-            pending=pending,
-            apply_adjustment=False,
-            entry_buffer_price=Decimal("0"),
-        )
+        trigger = planner.trigger_price(pending, "original_entry")
+        stop_loss_trigger = planner.trigger_price(pending, "stop_loss_exit")
 
         assert trigger == Decimal("157.397")
+        assert stop_loss_trigger == Decimal("157.698")
 
     def test_rebuild_waits_until_after_stop_loss_tick(self):
         strategy = _strategy(
@@ -869,9 +860,6 @@ class TestSnowballRebuildTakeProfitModes:
             layer=layer,
             slot=slot,
             pending=pending,
-            apply_adjustment=False,
-            entry_buffer_price=Decimal("0"),
-            exit_buffer_price=Decimal("0"),
         )
         next_tick_plan = planner.plan(
             strategy=strategy,
@@ -880,9 +868,6 @@ class TestSnowballRebuildTakeProfitModes:
             layer=layer,
             slot=slot,
             pending=pending,
-            apply_adjustment=False,
-            entry_buffer_price=Decimal("0"),
-            exit_buffer_price=Decimal("0"),
         )
 
         assert same_tick_plan is None
@@ -1054,7 +1039,7 @@ class TestSnowballReconciliation:
 
 
 # ===================================================================
-# Stop-loss rebuild toggle (rebuild_enabled / complete_cycle_when_empty)
+# Stop-loss rebuild toggle (rebuild_enabled)
 # ===================================================================
 
 
@@ -1169,44 +1154,27 @@ class TestSnowballRebuildDisabled:
         assert r1_slot.entry is None
         assert r1_slot.pending_rebuild is not None
 
+    def test_missing_direction_reseeds_when_rebuild_is_disabled(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_enabled": False,
+            }
+        )
+        s._hedging_enabled = False
+        ss = SnowballStrategyState()
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "150.00", "150.02")
 
-class TestSnowballCompleteCycleWhenEmpty:
-    """``complete_cycle_when_empty`` gates automatic re-seed.
+        events = SnowballCycleReseeder().reseed(
+            s,
+            ss,
+            tick,
+            allow_new_positions=True,
+        )
 
-    Only relevant when ``rebuild_enabled=False``.  With the flag set,
-    the strategy re-seeds a fresh cycle as soon as the last live entry
-    of the direction closes; without it, the strategy stays idle for
-    that direction.
-    """
-
-    def test_config_validation_requires_stop_loss_enabled(self):
-        with pytest.raises(
-            ValueError, match="complete_cycle_when_empty requires stop_loss_enabled"
-        ):
-            SnowballStrategyConfig.from_dict(
-                {
-                    "stop_loss_enabled": False,
-                    "rebuild_enabled": False,
-                    "complete_cycle_when_empty": True,
-                }
-            ).validate()
-
-    def test_config_validation_requires_rebuild_disabled(self):
-        with pytest.raises(
-            ValueError, match="complete_cycle_when_empty requires rebuild_enabled to be false"
-        ):
-            SnowballStrategyConfig.from_dict(
-                {
-                    "stop_loss_enabled": True,
-                    "rebuild_enabled": True,
-                    "complete_cycle_when_empty": True,
-                }
-            ).validate()
-
-    def test_defaults_rebuild_true_complete_cycle_false(self):
-        cfg = SnowballStrategyConfig.from_dict({})
-        assert cfg.rebuild_enabled is True
-        assert cfg.complete_cycle_when_empty is False
+        assert events
+        assert len(ss.cycles) == 1
+        assert ss.cycles[0].direction == Direction.LONG
 
 
 # ===================================================================

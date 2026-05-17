@@ -56,7 +56,7 @@ describe('conditionMatchesValue', () => {
 describe('matchesDependsOn', () => {
   const schemaProps: Record<string, ConfigProperty> = {
     stop_loss_enabled: { type: 'boolean', default: false },
-    rebuild_price_adjustment_enabled: { type: 'boolean', default: true },
+    rebuild_enabled: { type: 'boolean', default: true },
   };
 
   it('returns true when the field matches a listed value', () => {
@@ -81,7 +81,7 @@ describe('matchesDependsOn', () => {
 
   it('falls back to the schema default when the field is missing', () => {
     const cond: DependsOnCondition = {
-      field: 'rebuild_price_adjustment_enabled',
+      field: 'rebuild_enabled',
       values: [true],
     };
     // empty params — default true satisfies the condition
@@ -94,7 +94,7 @@ describe('matchesDependsOn', () => {
       values: [true],
       and: [
         {
-          field: 'rebuild_price_adjustment_enabled',
+          field: 'rebuild_enabled',
           values: [true],
         },
       ],
@@ -103,7 +103,7 @@ describe('matchesDependsOn', () => {
       matchesDependsOn(
         {
           stop_loss_enabled: true,
-          rebuild_price_adjustment_enabled: true,
+          rebuild_enabled: true,
         },
         cond,
         schemaProps
@@ -113,7 +113,7 @@ describe('matchesDependsOn', () => {
       matchesDependsOn(
         {
           stop_loss_enabled: true,
-          rebuild_price_adjustment_enabled: false,
+          rebuild_enabled: false,
         },
         cond,
         schemaProps
@@ -127,7 +127,7 @@ describe('matchesDependsOn', () => {
       values: [true],
       or: [
         {
-          field: 'rebuild_price_adjustment_enabled',
+          field: 'rebuild_enabled',
           values: [true],
         },
       ],
@@ -137,7 +137,7 @@ describe('matchesDependsOn', () => {
       matchesDependsOn(
         {
           stop_loss_enabled: false,
-          rebuild_price_adjustment_enabled: true,
+          rebuild_enabled: true,
         },
         cond,
         schemaProps
@@ -148,15 +148,15 @@ describe('matchesDependsOn', () => {
   it('requires dependency fields to be visible before matching their defaults', () => {
     const props: Record<string, ConfigProperty> = {
       stop_loss_enabled: { type: 'boolean', default: false },
-      rebuild_price_adjustment_enabled: {
-        type: 'boolean',
-        default: true,
+      rebuild_entry_price_mode: {
+        type: 'string',
+        default: 'original_entry',
         dependsOn: { field: 'stop_loss_enabled', values: [true] },
       },
     };
     const cond: DependsOnCondition = {
-      field: 'rebuild_price_adjustment_enabled',
-      values: [true],
+      field: 'rebuild_entry_price_mode',
+      values: ['original_entry'],
     };
 
     expect(matchesDependsOn({ stop_loss_enabled: false }, cond, props)).toBe(
@@ -182,42 +182,48 @@ describe('matchesDependsOn', () => {
 describe('isParameterVisible', () => {
   const schemaProps: Record<string, ConfigProperty> = {
     stop_loss_enabled: { type: 'boolean', default: false },
+    rebuild_enabled: {
+      type: 'boolean',
+      default: true,
+      dependsOn: { field: 'stop_loss_enabled', values: [true] },
+    },
+    rebuild_entry_price_mode: {
+      type: 'string',
+      default: 'original_entry',
+      dependsOn: {
+        field: 'stop_loss_enabled',
+        values: [true],
+        and: [{ field: 'rebuild_enabled', values: [true] }],
+      },
+    },
     rebuild_take_profit_mode: {
       type: 'string',
       default: 'same',
-      dependsOn: { field: 'stop_loss_enabled', values: [true] },
-    },
-    rebuild_price_adjustment_enabled: {
-      type: 'boolean',
-      default: true,
       dependsOn: {
-        field: 'rebuild_take_profit_mode',
-        values: ['same'],
-        and: [{ field: 'stop_loss_enabled', values: [true] }],
-      },
-    },
-    grid_order_validation_enabled: {
-      type: 'boolean',
-      default: true,
-      dependsOn: {
-        field: 'rebuild_take_profit_mode',
-        values: [
-          'same',
-          'constant',
-          'additive',
-          'subtractive',
-          'multiplicative',
-          'divisive',
-        ],
-      },
-    },
-    rebuild_exit_price_buffer_pips: {
-      type: 'number',
-      default: 0,
-      dependsOn: {
-        field: 'rebuild_price_adjustment_enabled',
+        field: 'stop_loss_enabled',
         values: [true],
+        and: [{ field: 'rebuild_enabled', values: [true] }],
       },
+    },
+    rebuild_stop_loss_mode: {
+      type: 'string',
+      default: 'same_pips',
+      dependsOn: {
+        field: 'stop_loss_enabled',
+        values: [true],
+        and: [{ field: 'rebuild_enabled', values: [true] }],
+      },
+    },
+    rebuild_stop_loss_manual_pips: {
+      type: 'array',
+      default: [],
+      dependsOn: { field: 'rebuild_stop_loss_mode', values: ['manual'] },
+    },
+    refill_limit_enabled: { type: 'boolean', default: true },
+    refill_up_to: {
+      type: 'integer',
+      default: 2,
+      dependsOn: { field: 'refill_limit_enabled', values: [true] },
     },
     base_units: { type: 'integer', default: 1000 },
   };
@@ -229,7 +235,7 @@ describe('isParameterVisible', () => {
   it('hides a field when its dependency is not met', () => {
     expect(
       isParameterVisible(
-        'rebuild_price_adjustment_enabled',
+        'rebuild_entry_price_mode',
         { stop_loss_enabled: false },
         schemaProps
       )
@@ -239,64 +245,102 @@ describe('isParameterVisible', () => {
   it('shows a field whose dependency is met in params', () => {
     expect(
       isParameterVisible(
-        'rebuild_price_adjustment_enabled',
+        'rebuild_entry_price_mode',
         { stop_loss_enabled: true },
         schemaProps
       )
     ).toBe(true);
   });
 
-  it('hides rebuild price adjustment and grid validation for manual rebuild TP', () => {
+  it('keeps rebuild settings visible when stop loss and rebuild are enabled', () => {
     expect(
       isParameterVisible(
-        'rebuild_price_adjustment_enabled',
+        'rebuild_take_profit_mode',
         {
           stop_loss_enabled: true,
-          rebuild_take_profit_mode: 'manual',
+          rebuild_enabled: true,
+        },
+        schemaProps
+      )
+    ).toBe(true);
+    expect(
+      isParameterVisible(
+        'rebuild_entry_price_mode',
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: true,
+        },
+        schemaProps
+      )
+    ).toBe(true);
+  });
+
+  it('hides rebuild settings when rebuild is disabled', () => {
+    expect(
+      isParameterVisible(
+        'rebuild_entry_price_mode',
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: false,
         },
         schemaProps
       )
     ).toBe(false);
     expect(
       isParameterVisible(
-        'grid_order_validation_enabled',
+        'rebuild_take_profit_mode',
         {
           stop_loss_enabled: true,
-          rebuild_take_profit_mode: 'manual',
+          rebuild_enabled: false,
         },
         schemaProps
       )
     ).toBe(false);
   });
 
-  it('cascades visibility through nested dependsOn chains', () => {
-    // rebuild_exit_price_buffer_pips depends on
-    // rebuild_price_adjustment_enabled, which in turn depends on
-    // stop_loss_enabled (via its own dependsOn).  When stop_loss is
-    // off, the buffer field should stay hidden because its direct
-    // dependency resolves to the schema default (true) unless the
-    // params explicitly turn it off.
+  it('hides the refill slot limit when the limit toggle is disabled', () => {
     expect(
       isParameterVisible(
-        'rebuild_exit_price_buffer_pips',
+        'refill_up_to',
+        { refill_limit_enabled: false },
+        schemaProps
+      )
+    ).toBe(false);
+    expect(
+      isParameterVisible(
+        'refill_up_to',
+        { refill_limit_enabled: true },
+        schemaProps
+      )
+    ).toBe(true);
+  });
+
+  it('cascades visibility through nested dependsOn chains', () => {
+    expect(
+      isParameterVisible(
+        'rebuild_stop_loss_manual_pips',
         { stop_loss_enabled: false },
         schemaProps
       )
     ).toBe(false);
     expect(
       isParameterVisible(
-        'rebuild_exit_price_buffer_pips',
-        { stop_loss_enabled: true },
+        'rebuild_stop_loss_manual_pips',
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: true,
+          rebuild_stop_loss_mode: 'manual',
+        },
         schemaProps
       )
     ).toBe(true);
-    // Explicitly disabling the feature hides the buffer.
     expect(
       isParameterVisible(
-        'rebuild_exit_price_buffer_pips',
+        'rebuild_stop_loss_manual_pips',
         {
           stop_loss_enabled: true,
-          rebuild_price_adjustment_enabled: false,
+          rebuild_enabled: true,
+          rebuild_stop_loss_mode: 'same_pips',
         },
         schemaProps
       )
