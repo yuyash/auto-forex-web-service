@@ -354,6 +354,7 @@ export function buildTradingTaskSettingDefinitions(
   } = {}
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
   const formatBoolean = formatBooleanWithTranslation(t);
+  const formatInitialPositions = formatInitialPositionCycles(t);
 
   return [
     { key: 'id', label: t('common:labels.taskId', 'Task ID') },
@@ -403,6 +404,22 @@ export function buildTradingTaskSettingDefinitions(
       key: 'hedging_enabled',
       label: t('common:labels.hedgingEnabled', 'Hedging enabled'),
       format: formatBoolean,
+    },
+    {
+      key: 'initial_positions_enabled',
+      label: t(
+        'backtest:form.initialPositionsEnabled',
+        'Create initial positions'
+      ),
+      format: formatBoolean,
+    },
+    {
+      key: 'initial_position_cycles',
+      label: t(
+        'backtest:form.initialPositionCycles',
+        'Initial position cycles'
+      ),
+      format: formatInitialPositions,
     },
     {
       key: 'api_retry_max_attempts',

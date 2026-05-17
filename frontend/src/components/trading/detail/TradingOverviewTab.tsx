@@ -8,6 +8,10 @@ import {
   type ExecutionStatusExtraItem,
 } from '../../tasks/detail/ExecutionStatusSummary';
 import { HistoricalStrategyConfigDialog } from '../../tasks/detail/HistoricalStrategyConfigDialog';
+import {
+  InitialPositionSettingValue,
+  selectInitialPositionSettingValue,
+} from '../../tasks/detail/InitialPositionSettingValue';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildTradingTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -64,10 +68,11 @@ export function TradingOverviewTab({
   executionStatusRefreshing = false,
   isViewingHistorical = false,
   historicalStrategyConfig,
+  executionId,
   historicalTaskConfig,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
-  const { t } = useTranslation(['trading', 'common']);
+  const { t } = useTranslation(['trading', 'common', 'backtest']);
   const { user } = useAuth();
   const { formatDateTime } = useDateTimeFormatter({
     includeSeconds: true,
@@ -179,9 +184,29 @@ export function TradingOverviewTab({
           };
         }
 
+        if (definition.key === 'initial_position_cycles') {
+          return {
+            ...definition,
+            render: (
+              value: unknown,
+              context: {
+                task: Record<string, unknown>;
+                snapshot?: Record<string, unknown> | null;
+                source: Record<string, unknown>;
+              }
+            ) => (
+              <InitialPositionSettingValue
+                value={selectInitialPositionSettingValue(value, context)}
+                executionId={executionId}
+              />
+            ),
+          };
+        }
+
         return definition;
       }),
     [
+      executionId,
       historicalStrategyConfig,
       hasExecutionConfigSnapshot,
       isSuperuser,
