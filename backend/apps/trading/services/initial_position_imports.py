@@ -15,6 +15,11 @@ from apps.market.services.oanda_retry import OandaRetryPolicy
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import BacktestTask, ExecutionState, StrategyConfiguration
 from apps.trading.models import TradingTask
+from apps.trading.services.backtest_initial_positions import (
+    POSITION_STATUS_CLOSED_SLOT,
+    POSITION_STATUS_OPEN,
+    POSITION_STATUS_PENDING_REBUILD,
+)
 from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry, StopLossClosedEntry
 from apps.trading.strategies.snowball.parameters import SNOWBALL_PARAMETER_SERVICE
@@ -85,19 +90,26 @@ class InitialPositionImportService:
         self._ensure_snowball_task(task)
         state = self._latest_state_for_task(task=task, task_type=task_type)
         if state is None:
-            return self._result(cycles=[], source="task", imported_open=0, imported_pending=0)
+            return self._result(
+                cycles=[],
+                source="task",
+                imported_open=0,
+                imported_pending=0,
+                imported_closed_slots=0,
+            )
 
         cycles = self._cycles_from_state(
             state=state,
             include_open=mode.include_open,
             include_pending=mode.include_pending,
         )
-        imported_open, imported_pending = _count_imported_positions(cycles)
+        imported_open, imported_pending, imported_closed_slots = _count_imported_positions(cycles)
         return self._result(
             cycles=cycles,
             source="task",
             imported_open=imported_open,
             imported_pending=imported_pending,
+            imported_closed_slots=imported_closed_slots,
         )
 
     def import_from_oanda(
@@ -142,12 +154,13 @@ class InitialPositionImportService:
             ]
             cycles.append({"direction": direction, "positions": positions})
 
-        imported_open, imported_pending = _count_imported_positions(cycles)
+        imported_open, imported_pending, imported_closed_slots = _count_imported_positions(cycles)
         return self._result(
             cycles=cycles,
             source="oanda",
             imported_open=imported_open,
             imported_pending=imported_pending,
+            imported_closed_slots=imported_closed_slots,
         )
 
     def _backtest_sources(self, user: Any) -> QuerySet[BacktestTask]:
@@ -262,13 +275,23 @@ class InitialPositionImportService:
         for cycle in sorted(snowball_state.cycles, key=_cycle_import_sort_key):
             if cycle.completed:
                 continue
+            has_importable_position = any(
+                (include_open and slot.entry is not None)
+                or (include_pending and slot.pending_rebuild is not None)
+                for layer in cycle.layers
+                for slot in layer.slots
+            )
+            if not has_importable_position:
+                continue
             positions: list[dict[str, Any]] = []
-            for layer in cycle.layers:
+            for layer in sorted(cycle.layers, key=lambda item: item.layer_number):
                 for slot in sorted(layer.slots, key=lambda item: item.index):
                     if include_open and slot.entry is not None:
                         positions.append(_position_from_entry(slot.entry))
-                    if include_pending and slot.pending_rebuild is not None:
+                    elif include_pending and slot.pending_rebuild is not None:
                         positions.append(_position_from_pending(slot.pending_rebuild))
+                    elif slot.entry is None and slot.pending_rebuild is None and slot.ever_closed:
+                        positions.append(_position_from_closed_slot(layer.layer_number, slot.index))
             if positions:
                 positions.sort(
                     key=lambda item: (
@@ -294,7 +317,7 @@ class InitialPositionImportService:
             "retracement_count": retracement_count,
             "units": str(int(abs(Decimal(str(trade.units))))),
             "entry_price": str(trade.entry_price),
-            "status": "open",
+            "status": POSITION_STATUS_OPEN,
             "oanda_trade_id": str(trade.trade_id),
         }
 
@@ -333,15 +356,17 @@ class InitialPositionImportService:
         source: str,
         imported_open: int,
         imported_pending: int,
+        imported_closed_slots: int,
     ) -> dict[str, Any]:
         return {
             "cycles": cycles,
             "source": source,
             "summary": {
                 "cycles": len(cycles),
-                "positions": imported_open + imported_pending,
+                "positions": imported_open + imported_pending + imported_closed_slots,
                 "open": imported_open,
                 "pending": imported_pending,
+                "closed_slots": imported_closed_slots,
             },
         }
 
@@ -353,7 +378,7 @@ def _position_from_entry(entry: Entry) -> dict[str, Any]:
         "units": str(abs(int(entry.units))),
         "entry_price": str(entry.entry_price),
         "planned_exit_price": str(entry.close_price),
-        "status": "open",
+        "status": POSITION_STATUS_OPEN,
     }
     if entry.stop_loss_price is not None:
         payload["stop_loss_price"] = str(entry.stop_loss_price)
@@ -367,7 +392,7 @@ def _position_from_pending(pending: StopLossClosedEntry) -> dict[str, Any]:
         "units": str(abs(int(pending.units))),
         "entry_price": str(pending.entry_price),
         "planned_exit_price": str(pending.close_price),
-        "status": "pending_rebuild",
+        "status": POSITION_STATUS_PENDING_REBUILD,
         "close_reason": "stop_loss",
     }
     if pending.stop_loss_price is not None:
@@ -377,16 +402,27 @@ def _position_from_pending(pending: StopLossClosedEntry) -> dict[str, Any]:
     return payload
 
 
-def _count_imported_positions(cycles: list[dict[str, Any]]) -> tuple[int, int]:
+def _position_from_closed_slot(layer_number: int, retracement_count: int) -> dict[str, Any]:
+    return {
+        "layer_number": layer_number,
+        "retracement_count": retracement_count,
+        "status": POSITION_STATUS_CLOSED_SLOT,
+    }
+
+
+def _count_imported_positions(cycles: list[dict[str, Any]]) -> tuple[int, int, int]:
     imported_open = 0
     imported_pending = 0
+    imported_closed_slots = 0
     for cycle in cycles:
         for position in cycle.get("positions", []):
-            if position.get("status") == "pending_rebuild":
+            if position.get("status") == POSITION_STATUS_PENDING_REBUILD:
                 imported_pending += 1
+            elif position.get("status") == POSITION_STATUS_CLOSED_SLOT:
+                imported_closed_slots += 1
             else:
                 imported_open += 1
-    return imported_open, imported_pending
+    return imported_open, imported_pending, imported_closed_slots
 
 
 def _cycle_import_sort_key(cycle: Any) -> int:

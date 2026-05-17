@@ -27,6 +27,7 @@ export interface InitialPositionImportResult {
     positions: number;
     open: number;
     pending: number;
+    closed_slots: number;
   };
 }
 

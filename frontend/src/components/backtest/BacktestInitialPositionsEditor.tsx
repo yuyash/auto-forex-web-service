@@ -941,6 +941,9 @@ function initialPositionOrderWarnings(
         if (byRetracement.has(retracement)) {
           continue;
         }
+        if (retracement > 0 && retracement <= config.refillUpTo) {
+          continue;
+        }
         const offender = [...layerPositions]
           .filter((item) => item.retracement > retracement)
           .sort((left, right) => left.retracement - right.retracement)[0];
@@ -1078,9 +1081,14 @@ function isCycleAnchorShiftEnabled(
 
 function isAnchorSlot(position: BacktestInitialPosition) {
   return (
+    !isClosedSlotPosition(position) &&
     intNum(position.layer_number, 0) === 1 &&
     intNum(position.retracement_count, -1) === 0
   );
+}
+
+function isClosedSlotPosition(position: BacktestInitialPosition) {
+  return position.status === 'closed_slot';
 }
 
 function entryPriceDelta(
@@ -1115,6 +1123,9 @@ function shiftPositionPrices(
   delta: number,
   includeEntry: boolean
 ): BacktestInitialPosition {
+  if (isClosedSlotPosition(position)) {
+    return position;
+  }
   return {
     ...position,
     entry_price: includeEntry
@@ -1126,7 +1137,10 @@ function shiftPositionPrices(
   };
 }
 
-function shiftRequiredPrice(value: number | string, delta: number) {
+function shiftRequiredPrice(
+  value: number | string | null | undefined,
+  delta: number
+) {
   const current = num(value, NaN);
   return Number.isFinite(current)
     ? Number((current + delta).toFixed(5))
@@ -1197,7 +1211,7 @@ function nextAvailableSlots(
   cycle: BacktestInitialPositionCycle,
   config: SnowballUiConfig
 ): SlotAddress[] {
-  const slotsByLayer = new Map<number, Set<number>>();
+  const slotsByLayer = new Map<number, Map<number, BacktestInitialPosition>>();
   cycle.positions.forEach((position) => {
     const layer = intNum(position.layer_number, 0);
     const retracement = intNum(position.retracement_count, -1);
@@ -1210,9 +1224,9 @@ function nextAvailableSlots(
       return;
     }
     if (!slotsByLayer.has(layer)) {
-      slotsByLayer.set(layer, new Set<number>());
+      slotsByLayer.set(layer, new Map<number, BacktestInitialPosition>());
     }
-    slotsByLayer.get(layer)?.add(retracement);
+    slotsByLayer.get(layer)?.set(retracement, position);
   });
 
   if (slotsByLayer.size === 0) {
@@ -1222,16 +1236,13 @@ function nextAvailableSlots(
   const slots: SlotAddress[] = [];
   const maxLayer = Math.max(...Array.from(slotsByLayer.keys()));
   for (let layer = 1; layer <= Math.min(maxLayer, config.fMax); layer += 1) {
-    const retracements = slotsByLayer.get(layer);
-    if (!retracements || !retracements.has(0)) {
+    const positions = slotsByLayer.get(layer);
+    if (!positions || !positions.has(0)) {
       continue;
     }
-    const maxRetracement = Math.max(...Array.from(retracements));
-    if (!isContiguousRetracementPrefix(retracements, maxRetracement)) {
-      continue;
-    }
-    if (maxRetracement < config.rMax) {
-      slots.push({ layer, retracement: maxRetracement + 1 });
+    const nextCounterSlot = nextAvailableCounterSlot(positions, config);
+    if (nextCounterSlot !== null) {
+      slots.push({ layer, retracement: nextCounterSlot });
     }
   }
 
@@ -1243,7 +1254,7 @@ function nextAvailableSlots(
 }
 
 function canAddNextLayer(
-  slotsByLayer: Map<number, Set<number>>,
+  slotsByLayer: Map<number, Map<number, BacktestInitialPosition>>,
   maxLayer: number,
   fMax: number
 ) {
@@ -1258,16 +1269,38 @@ function canAddNextLayer(
   return true;
 }
 
-function isContiguousRetracementPrefix(
-  retracements: Set<number>,
-  maxRetracement: number
+function nextAvailableCounterSlot(
+  positions: Map<number, BacktestInitialPosition>,
+  config: SnowballUiConfig
 ) {
-  for (let retracement = 0; retracement <= maxRetracement; retracement += 1) {
-    if (!retracements.has(retracement)) {
-      return false;
+  const presentRetracements = [...positions.entries()]
+    .filter(([, position]) => isPresentSlotPosition(position))
+    .map(([retracement]) => retracement);
+  const highestPresent =
+    presentRetracements.length > 0 ? Math.max(...presentRetracements) : null;
+
+  for (let retracement = 1; retracement <= config.rMax; retracement += 1) {
+    const position = positions.get(retracement);
+    if (!position) {
+      if (highestPresent !== null && highestPresent > retracement) {
+        return null;
+      }
+      return retracement;
     }
+    if ((position.status ?? 'open') === 'pending_rebuild') {
+      continue;
+    }
+    if ((position.status ?? 'open') === 'open') {
+      continue;
+    }
+    return null;
   }
-  return true;
+  return null;
+}
+
+function isPresentSlotPosition(position: BacktestInitialPosition) {
+  const status = position.status ?? 'open';
+  return status === 'open' || status === 'pending_rebuild';
 }
 
 function selectedAddSlotKey(
@@ -1336,6 +1369,10 @@ function normalizePositionForConfig(
   position: BacktestInitialPosition,
   config: SnowballUiConfig
 ): BacktestInitialPosition {
+  if (isClosedSlotPosition(position)) {
+    return closedSlotPosition(position);
+  }
+
   if (config.stopLossEnabled) {
     return position;
   }
@@ -1353,6 +1390,16 @@ function normalizePositionForConfig(
   return {
     ...position,
     stop_loss_price: undefined,
+  };
+}
+
+function closedSlotPosition(
+  position: BacktestInitialPosition
+): BacktestInitialPosition {
+  return {
+    layer_number: position.layer_number,
+    retracement_count: position.retracement_count,
+    status: 'closed_slot',
   };
 }
 
@@ -1415,6 +1462,7 @@ function SeedPositionRow({
   const rawStatus = position.status ?? 'open';
   const status =
     !stopLossEnabled && rawStatus === 'pending_rebuild' ? 'open' : rawStatus;
+  const isClosedSlot = status === 'closed_slot';
   const statusOptions: Array<{
     value: BacktestInitialPositionStatus;
     label: string;
@@ -1426,6 +1474,10 @@ function SeedPositionRow({
     {
       value: 'closed',
       label: t('backtest:form.initialPositionStatus.closed'),
+    },
+    {
+      value: 'closed_slot',
+      label: t('backtest:form.initialPositionStatus.closedSlot'),
     },
     ...(stopLossEnabled
       ? [
@@ -1460,77 +1512,92 @@ function SeedPositionRow({
             />
           </Stack>
         </Grid>
-        <Grid size={{ xs: 12, sm: 1.6 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t('common:tables.positions.units', {
-              defaultValue: 'Units',
-            })}
-            type="text"
-            inputMode="decimal"
-            value={position.units ?? ''}
-            onChange={(event) =>
-              update({
-                units: event.target.value,
-                planned_exit_price: undefined,
-                stop_loss_price: undefined,
-                exit_price: status === 'open' ? undefined : position.exit_price,
-              })
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 1.8 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t('common:tables.positions.openPrice', {
-              defaultValue: 'Entry',
-            })}
-            type="text"
-            inputMode="decimal"
-            value={position.entry_price ?? ''}
-            onChange={(event) =>
-              update({
-                entry_price: event.target.value,
-                planned_exit_price: undefined,
-                stop_loss_price: undefined,
-                exit_price: status === 'open' ? undefined : position.exit_price,
-              })
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 1.8 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t('backtest:form.plannedExitPrice', {
-              defaultValue: 'Planned exit',
-            })}
-            type="text"
-            inputMode="decimal"
-            value={position.planned_exit_price ?? ''}
-            onChange={(event) =>
-              update({ planned_exit_price: event.target.value })
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 1.8 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t('backtest:form.stopLossPrice', {
-              defaultValue: 'Stop loss',
-            })}
-            type="text"
-            inputMode="decimal"
-            value={stopLossEnabled ? (position.stop_loss_price ?? '') : ''}
-            disabled={!stopLossEnabled}
-            onChange={(event) =>
-              update({ stop_loss_price: event.target.value })
-            }
-          />
-        </Grid>
+        {isClosedSlot ? (
+          <Grid size={{ xs: 12, sm: 7 }}>
+            <Alert severity="info" sx={{ py: 0 }}>
+              {t('backtest:form.closedSlotPlaceholderHelper', {
+                defaultValue:
+                  'This slot is seeded as closed. It preserves grid behavior and does not use prices or units.',
+              })}
+            </Alert>
+          </Grid>
+        ) : (
+          <>
+            <Grid size={{ xs: 12, sm: 1.6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('common:tables.positions.units', {
+                  defaultValue: 'Units',
+                })}
+                type="text"
+                inputMode="decimal"
+                value={position.units ?? ''}
+                onChange={(event) =>
+                  update({
+                    units: event.target.value,
+                    planned_exit_price: undefined,
+                    stop_loss_price: undefined,
+                    exit_price:
+                      status === 'open' ? undefined : position.exit_price,
+                  })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 1.8 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('common:tables.positions.openPrice', {
+                  defaultValue: 'Entry',
+                })}
+                type="text"
+                inputMode="decimal"
+                value={position.entry_price ?? ''}
+                onChange={(event) =>
+                  update({
+                    entry_price: event.target.value,
+                    planned_exit_price: undefined,
+                    stop_loss_price: undefined,
+                    exit_price:
+                      status === 'open' ? undefined : position.exit_price,
+                  })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 1.8 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('backtest:form.plannedExitPrice', {
+                  defaultValue: 'Planned exit',
+                })}
+                type="text"
+                inputMode="decimal"
+                value={position.planned_exit_price ?? ''}
+                onChange={(event) =>
+                  update({ planned_exit_price: event.target.value })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 1.8 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('backtest:form.stopLossPrice', {
+                  defaultValue: 'Stop loss',
+                })}
+                type="text"
+                inputMode="decimal"
+                value={stopLossEnabled ? (position.stop_loss_price ?? '') : ''}
+                disabled={!stopLossEnabled}
+                onChange={(event) =>
+                  update({ stop_loss_price: event.target.value })
+                }
+              />
+            </Grid>
+          </>
+        )}
         <Grid size={{ xs: 12, sm: 1.8 }}>
           <FormControl fullWidth size="small">
             <InputLabel>
@@ -1546,16 +1613,36 @@ function SeedPositionRow({
                   .value as BacktestInitialPositionStatus;
                 update({
                   status: nextStatus,
+                  units:
+                    nextStatus === 'closed_slot' ? undefined : position.units,
+                  entry_price:
+                    nextStatus === 'closed_slot'
+                      ? undefined
+                      : position.entry_price,
+                  planned_exit_price:
+                    nextStatus === 'closed_slot'
+                      ? undefined
+                      : position.planned_exit_price,
+                  stop_loss_price:
+                    nextStatus === 'closed_slot'
+                      ? undefined
+                      : position.stop_loss_price,
                   exit_price:
-                    nextStatus === 'open'
+                    nextStatus === 'open' || nextStatus === 'closed_slot'
                       ? undefined
                       : defaultExitPrice(position, nextStatus),
                   close_reason:
-                    nextStatus === 'pending_rebuild'
-                      ? 'stop_loss'
-                      : nextStatus === 'closed'
-                        ? position.close_reason || 'tp'
-                        : '',
+                    nextStatus === 'closed_slot'
+                      ? ''
+                      : nextStatus === 'pending_rebuild'
+                        ? 'stop_loss'
+                        : nextStatus === 'closed'
+                          ? position.close_reason || 'tp'
+                          : '',
+                  oanda_trade_id:
+                    nextStatus === 'closed_slot'
+                      ? undefined
+                      : position.oanda_trade_id,
                 });
               }}
             >
@@ -1567,7 +1654,7 @@ function SeedPositionRow({
             </Select>
           </FormControl>
         </Grid>
-        {status !== 'open' ? (
+        {status !== 'open' && !isClosedSlot ? (
           <Grid size={{ xs: 12, sm: 1.8 }}>
             <TextField
               fullWidth
@@ -1581,7 +1668,7 @@ function SeedPositionRow({
           </Grid>
         ) : null}
       </Grid>
-      {status !== 'open' ? (
+      {status !== 'open' && !isClosedSlot ? (
         <Box sx={{ mt: 1.5, maxWidth: { xs: 'none', sm: 260 } }}>
           <TextField
             fullWidth
@@ -1605,6 +1692,7 @@ interface SnowballUiConfig {
   trendLotSize: number;
   rMax: number;
   fMax: number;
+  refillUpTo: number;
   mPips: number;
   counterTpMode: string;
   counterTpPips: number;
@@ -1641,6 +1729,7 @@ function snowballConfig(
     trendLotSize: intNum(params.trend_lot_size, 1),
     rMax: intNum(params.r_max, 7),
     fMax: intNum(params.f_max, 3),
+    refillUpTo: intNum(params.refill_up_to, 2),
     mPips: num(params.m_pips, 50),
     counterTpMode: String(params.counter_tp_mode ?? 'weighted_avg'),
     counterTpPips: num(params.counter_tp_pips, 25),
@@ -1668,6 +1757,9 @@ function withDefaultPrices(
   cycle: BacktestInitialPositionCycle,
   config: SnowballUiConfig
 ): BacktestInitialPosition {
+  if (isClosedSlotPosition(position)) {
+    return closedSlotPosition(position);
+  }
   const entry = num(position.entry_price, NaN);
   if (!Number.isFinite(entry)) {
     return position;
@@ -1712,7 +1804,10 @@ function defaultTakeProfit(
     if (layer <= 1) return raw;
     const bound = [...cycle.positions]
       .reverse()
-      .find((p) => intNum(p.layer_number, 0) === layer - 1)?.planned_exit_price;
+      .find(
+        (p) =>
+          !isClosedSlotPosition(p) && intNum(p.layer_number, 0) === layer - 1
+      )?.planned_exit_price;
     const boundNum = num(bound, NaN);
     if (!Number.isFinite(boundNum)) return raw;
     if (direction === 'long' && raw > boundNum) return boundNum;
@@ -1722,6 +1817,7 @@ function defaultTakeProfit(
   if (config.counterTpMode === 'weighted_avg') {
     const prior = cycle.positions.filter(
       (p) =>
+        !isClosedSlotPosition(p) &&
         intNum(p.layer_number, 0) === layer &&
         intNum(p.retracement_count, 0) < retracement
     );
@@ -1874,6 +1970,9 @@ function defaultExitPrice(
   position: BacktestInitialPosition,
   status: BacktestInitialPositionStatus
 ) {
+  if (status === 'closed_slot') {
+    return undefined;
+  }
   return status === 'pending_rebuild'
     ? position.stop_loss_price || position.entry_price
     : position.planned_exit_price || position.entry_price;
