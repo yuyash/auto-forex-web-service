@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.1...backend-v1.58.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* **trading:** mark initial cycles and filter seed positions ([#749](https://github.com/yuyash/auto-forex-web-service/issues/749)) ([c233a40](https://github.com/yuyash/auto-forex-web-service/commit/c233a40289a9ff7e6711460bc00a17bb7f8747a6))
+
 ## [1.58.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.0...backend-v1.58.1) (2026-05-17)
 
 
