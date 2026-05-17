@@ -35,13 +35,14 @@ export enum JurisdictionEnum {
 export type BacktestInitialPositionStatus =
   | 'open'
   | 'closed'
+  | 'closed_slot'
   | 'pending_rebuild';
 
 export interface BacktestInitialPositionRequest {
   layer_number: number;
   retracement_count: number;
-  units: number | string;
-  entry_price: number | string;
+  units?: number | string | null;
+  entry_price?: number | string | null;
   planned_exit_price?: number | string | null;
   stop_loss_price?: number | string | null;
   status?: BacktestInitialPositionStatus;

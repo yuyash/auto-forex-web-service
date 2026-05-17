@@ -166,10 +166,152 @@ def test_validate_initial_position_cycles_rejects_missing_retracement_prefix():
                     },
                     {
                         "layer_number": 1,
-                        "retracement_count": 2,
+                        "retracement_count": 4,
                         "units": 3000,
                         "entry_price": "149.40",
                     },
+                ],
+            }
+        ]
+    )
+    task.config.parameters = {
+        **task.config.parameters,
+        "r_max": 4,
+        "refill_up_to": 2,
+    }
+    task.config.save(update_fields=["parameters"])
+
+    with pytest.raises(InitialPositionValidationError) as exc_info:
+        validate_initial_position_cycles(
+            task=task,
+            config=task.config,
+            cycles=task.initial_position_cycles,
+            pip_size=task.pip_size,
+        )
+
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[1].retracement_count"]
+        == "Layer L1 cannot skip R3 before R4."
+    )
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_allows_closed_slot_placeholders_without_prices():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "planned_exit_price": "150.50",
+                        "stop_loss_price": "149.70",
+                        "status": "pending_rebuild",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "status": "closed_slot",
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.30",
+                    },
+                ],
+            }
+        ]
+    )
+
+    normalized = validate_initial_position_cycles(
+        task=task,
+        config=task.config,
+        cycles=task.initial_position_cycles,
+        pip_size=task.pip_size,
+    )
+
+    closed_slot = normalized[0].positions[1]
+    assert closed_slot.status == "closed_slot"
+    assert closed_slot.units is None
+    assert closed_slot.entry_price is None
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_allows_refillable_empty_gaps_before_closed_slots():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "planned_exit_price": "150.50",
+                        "stop_loss_price": "149.70",
+                        "status": "pending_rebuild",
+                    },
+                    {"layer_number": 1, "retracement_count": 1, "status": "closed_slot"},
+                    {"layer_number": 1, "retracement_count": 2, "status": "closed_slot"},
+                    {"layer_number": 1, "retracement_count": 4, "status": "closed_slot"},
+                    {"layer_number": 2, "retracement_count": 0, "status": "closed_slot"},
+                    {
+                        "layer_number": 3,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.20",
+                        "planned_exit_price": "149.70",
+                        "stop_loss_price": "148.90",
+                        "status": "pending_rebuild",
+                    },
+                ],
+            }
+        ]
+    )
+    task.config.parameters = {
+        **task.config.parameters,
+        "r_max": 5,
+        "f_max": 3,
+        "refill_up_to": 3,
+    }
+    task.config.save(update_fields=["parameters"])
+
+    normalized = validate_initial_position_cycles(
+        task=task,
+        config=task.config,
+        cycles=task.initial_position_cycles,
+        pip_size=task.pip_size,
+    )
+
+    assert [(p.layer_number, p.retracement_count, p.status) for p in normalized[0].positions] == [
+        (1, 0, "pending_rebuild"),
+        (1, 1, "closed_slot"),
+        (1, 2, "closed_slot"),
+        (1, 4, "closed_slot"),
+        (2, 0, "closed_slot"),
+        (3, 0, "pending_rebuild"),
+    ]
+
+
+@pytest.mark.django_db
+def test_validate_initial_position_cycles_rejects_closed_slot_with_position_values():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                        "status": "closed_slot",
+                    }
                 ],
             }
         ]
@@ -184,8 +326,12 @@ def test_validate_initial_position_cycles_rejects_missing_retracement_prefix():
         )
 
     assert (
-        exc_info.value.errors["initial_position_cycles[0].positions[1].retracement_count"]
-        == "Layer L1 cannot skip R1 before R2."
+        exc_info.value.errors["initial_position_cycles[0].positions[0].units"]
+        == "Closed slot placeholders cannot define units."
+    )
+    assert (
+        exc_info.value.errors["initial_position_cycles[0].positions[0].entry_price"]
+        == "Closed slot placeholders cannot define an entry price."
     )
 
 
@@ -587,6 +733,59 @@ def test_sync_for_task_can_seed_pending_rebuild_positions():
             task_id=task.pk,
             execution_id=task.execution_id,
             is_initial_position_seed=True,
+        ).count()
+        == 2
+    )
+
+
+@pytest.mark.django_db
+def test_sync_for_task_seeds_closed_slot_placeholders_without_position_records():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "status": "closed_slot",
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.30",
+                    },
+                ],
+            }
+        ]
+    )
+
+    BacktestInitialPositionService().sync_for_task(task)
+    task.refresh_from_db()
+
+    state = ExecutionState.objects.get(
+        task_type=TaskType.BACKTEST,
+        task_id=task.pk,
+        execution_id=task.execution_id,
+    )
+    cycle = state.strategy_state["cycles"][0]
+    l1r1 = cycle["grid"]["layers"][0]["slots"][1]
+
+    assert l1r1["entry"] is None
+    assert l1r1["ever_closed"] is True
+    assert "pending_rebuild" not in l1r1
+    assert (
+        Position.objects.filter(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
         ).count()
         == 2
     )

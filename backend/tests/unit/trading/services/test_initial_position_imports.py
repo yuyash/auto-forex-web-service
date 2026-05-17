@@ -111,12 +111,82 @@ def test_import_from_task_includes_open_and_pending_for_backtest_but_only_pendin
         "positions": 2,
         "open": 1,
         "pending": 1,
+        "closed_slots": 0,
     }
     assert trading_result["summary"] == {
         "cycles": 1,
         "positions": 1,
         "open": 0,
         "pending": 1,
+        "closed_slots": 0,
+    }
+
+
+@pytest.mark.django_db
+def test_import_from_task_includes_closed_slot_placeholders_for_active_cycles():
+    user = UserFactory()
+    task = BacktestTaskFactory(
+        user=user,
+        config=_snowball_config(user),
+        instrument="USD_JPY",
+        pip_size=Decimal("0.01"),
+        account_currency="USD",
+        initial_balance=Decimal("100000"),
+        initial_positions_enabled=True,
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 1,
+                        "units": 2000,
+                        "entry_price": "149.70",
+                        "planned_exit_price": "150.20",
+                        "exit_price": "150.20",
+                        "status": "closed",
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.30",
+                    },
+                ],
+            }
+        ],
+    )
+    BacktestInitialPositionService().sync_for_task(task)
+    task.status = TaskStatus.STOPPED
+    task.save(update_fields=["status", "updated_at"])
+
+    result = InitialPositionImportService().import_from_task(
+        user=task.user,
+        source_task_type=TaskType.BACKTEST.value,
+        source_task_id=str(task.pk),
+        target_task_type=TaskType.BACKTEST.value,
+    )
+
+    positions = result["cycles"][0]["positions"]
+    assert [position["status"] for position in positions] == [
+        "open",
+        "closed_slot",
+        "open",
+    ]
+    assert "entry_price" not in positions[1]
+    assert "units" not in positions[1]
+    assert result["summary"] == {
+        "cycles": 1,
+        "positions": 3,
+        "open": 2,
+        "pending": 0,
+        "closed_slots": 1,
     }
 
 
@@ -248,6 +318,7 @@ def test_import_from_oanda_builds_direction_cycles(monkeypatch):
         "positions": 3,
         "open": 3,
         "pending": 0,
+        "closed_slots": 0,
     }
     long_cycle, short_cycle = result["cycles"]
     assert long_cycle["direction"] == "long"

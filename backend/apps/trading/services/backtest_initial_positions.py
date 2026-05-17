@@ -49,10 +49,12 @@ SEED_VERSION = 1
 
 POSITION_STATUS_OPEN = "open"
 POSITION_STATUS_CLOSED = "closed"
+POSITION_STATUS_CLOSED_SLOT = "closed_slot"
 POSITION_STATUS_PENDING_REBUILD = "pending_rebuild"
 POSITION_STATUSES = {
     POSITION_STATUS_OPEN,
     POSITION_STATUS_CLOSED,
+    POSITION_STATUS_CLOSED_SLOT,
     POSITION_STATUS_PENDING_REBUILD,
 }
 PREVIEWABLE_TASK_STATUSES = {
@@ -76,8 +78,8 @@ class NormalizedSeedPosition:
     source_path: str
     layer_number: int
     retracement_count: int
-    units: int
-    entry_price: Decimal
+    units: int | None
+    entry_price: Decimal | None
     planned_exit_price: Decimal | None
     stop_loss_price: Decimal | None
     status: str
@@ -213,6 +215,7 @@ def _validate_initial_position_cycles_impl(
             _validate_slot_structure(
                 positions=normalized_positions,
                 path=path,
+                refill_up_to=cfg.refill_up_to,
                 errors=errors,
             )
 
@@ -442,6 +445,13 @@ class BacktestInitialPositionService:
                         }
                     )
 
+                if position_spec.status == POSITION_STATUS_CLOSED_SLOT:
+                    slot.ever_closed = True
+                    slot.entry = None
+                    slot.pending_rebuild = None
+                    state.strategy_state = snowball_state.to_dict()
+                    continue
+
                 if (
                     position_spec.layer_number == first.layer_number
                     and position_spec.retracement_count == first.retracement_count
@@ -650,12 +660,12 @@ def _normalize_position(
 ) -> NormalizedSeedPosition | None:
     layer_number = _int_value(raw.get("layer_number"))
     retracement_count = _int_value(raw.get("retracement_count"))
+    status = str(raw.get("status") or POSITION_STATUS_OPEN).strip().lower()
     units = _int_value(raw.get("units"))
     entry_price = _decimal_value(raw.get("entry_price"))
     planned_exit_price = _optional_decimal_value(raw.get("planned_exit_price"))
     stop_loss_price = _optional_decimal_value(raw.get("stop_loss_price"))
     exit_price = _optional_decimal_value(raw.get("exit_price"))
-    status = str(raw.get("status") or POSITION_STATUS_OPEN).strip().lower()
     close_reason = str(raw.get("close_reason") or "").strip().lower()
     oanda_trade_id = str(raw.get("oanda_trade_id") or "").strip()
 
@@ -663,10 +673,6 @@ def _normalize_position(
         errors[f"{path}.layer_number"] = "Layer is required."
     if retracement_count is None:
         errors[f"{path}.retracement_count"] = "Retracement is required."
-    if units is None or units <= 0:
-        errors[f"{path}.units"] = "Units must be a positive integer."
-    if entry_price is None or entry_price <= 0:
-        errors[f"{path}.entry_price"] = "Entry price must be positive."
     if planned_exit_price is not None and planned_exit_price <= 0:
         errors[f"{path}.planned_exit_price"] = "Planned exit price must be positive."
     if stop_loss_price is not None and stop_loss_price <= 0:
@@ -674,7 +680,36 @@ def _normalize_position(
     if exit_price is not None and exit_price <= 0:
         errors[f"{path}.exit_price"] = "Exit price must be positive."
     if status not in POSITION_STATUSES:
-        errors[f"{path}.status"] = "Status must be open, closed, or pending_rebuild."
+        errors[f"{path}.status"] = "Status must be open, closed, closed_slot, or pending_rebuild."
+
+    if status == POSITION_STATUS_CLOSED_SLOT:
+        if raw.get("units") not in (None, ""):
+            errors[f"{path}.units"] = "Closed slot placeholders cannot define units."
+        if raw.get("entry_price") not in (None, ""):
+            errors[f"{path}.entry_price"] = "Closed slot placeholders cannot define an entry price."
+        if planned_exit_price is not None:
+            errors[f"{path}.planned_exit_price"] = (
+                "Closed slot placeholders cannot define a planned exit price."
+            )
+        if stop_loss_price is not None:
+            errors[f"{path}.stop_loss_price"] = (
+                "Closed slot placeholders cannot define a stop loss price."
+            )
+        if exit_price is not None:
+            errors[f"{path}.exit_price"] = "Closed slot placeholders cannot define an exit price."
+        if close_reason:
+            errors[f"{path}.close_reason"] = (
+                "Closed slot placeholders cannot define a close reason."
+            )
+        if oanda_trade_id:
+            errors[f"{path}.oanda_trade_id"] = (
+                "Closed slot placeholders cannot define an OANDA trade id."
+            )
+    else:
+        if units is None or units <= 0:
+            errors[f"{path}.units"] = "Units must be a positive integer."
+        if entry_price is None or entry_price <= 0:
+            errors[f"{path}.entry_price"] = "Entry price must be positive."
 
     if (
         layer_number is None
@@ -683,6 +718,24 @@ def _normalize_position(
         or errors.get(f"{path}.retracement_count")
     ):
         return None
+
+    if status == POSITION_STATUS_CLOSED_SLOT:
+        if any(key.startswith(f"{path}.") for key in errors):
+            return None
+        return NormalizedSeedPosition(
+            source_path=path,
+            layer_number=int(layer_number),
+            retracement_count=int(retracement_count),
+            units=None,
+            entry_price=None,
+            planned_exit_price=None,
+            stop_loss_price=None,
+            status=status,
+            exit_price=None,
+            close_reason="",
+            oanda_trade_id="",
+        )
+
     if units is None or entry_price is None:
         return None
 
@@ -710,9 +763,16 @@ def _validate_slot_structure(
     *,
     positions: list[NormalizedSeedPosition],
     path: str,
+    refill_up_to: int,
     errors: dict[str, Any],
 ) -> None:
-    """Validate that used Snowball slots form valid per-layer prefixes."""
+    """Validate that seeded Snowball slots can represent a runtime grid.
+
+    R0 is never refillable, so every used layer must include it and higher
+    layers cannot skip an earlier layer.  Counter slots up to ``refill_up_to``
+    may be absent because normal runtime can close them and make them
+    available again while later slots remain present or sealed.
+    """
     if not positions:
         return
 
@@ -752,8 +812,10 @@ def _validate_slot_structure(
             )
             continue
 
-        for retracement_count in range(0, max_retracement + 1):
+        for retracement_count in range(1, max_retracement + 1):
             if retracement_count in by_retracement:
+                continue
+            if retracement_count <= refill_up_to:
                 continue
             offender = next(
                 position
@@ -775,11 +837,14 @@ def _fill_default_prices(
     config: Any,
     pip_size: Decimal,
 ) -> None:
+    if position.status == POSITION_STATUS_CLOSED_SLOT:
+        return
     prior = [
         p
         for p in previous_positions
         if (p.layer_number, p.retracement_count)
         < (position.layer_number, position.retracement_count)
+        and p.status != POSITION_STATUS_CLOSED_SLOT
     ]
     if position.planned_exit_price is None:
         position.planned_exit_price = _default_take_profit(
@@ -810,6 +875,9 @@ def _validate_normalized_cycle_consistency(
     errors: dict[str, Any],
 ) -> None:
     for position_index, position in enumerate(positions):
+        if position.status == POSITION_STATUS_CLOSED_SLOT:
+            continue
+        assert position.entry_price is not None  # noqa: S101
         pos_path = position.source_path
         if position.status == POSITION_STATUS_OPEN:
             if position.exit_price is not None:
@@ -844,15 +912,30 @@ def _validate_normalized_cycle_consistency(
                     "Short position stop loss must be above entry price."
                 )
 
-    for position_index, position in enumerate(positions[1:], start=1):
-        previous = positions[position_index - 1]
+    priced_positions = [
+        position
+        for position in positions
+        if position.status != POSITION_STATUS_CLOSED_SLOT and position.entry_price is not None
+    ]
+    for position_index, position in enumerate(priced_positions[1:], start=1):
+        previous = priced_positions[position_index - 1]
         pos_path = position.source_path
-        if direction == Direction.LONG and position.entry_price >= previous.entry_price:
+        if (
+            direction == Direction.LONG
+            and previous.entry_price is not None
+            and position.entry_price is not None
+            and position.entry_price >= previous.entry_price
+        ):
             errors[f"{pos_path}.entry_price"] = (
                 f"Entry price for {_slot_label(position)} must be lower than "
                 f"{_slot_label(previous)} in a long cycle."
             )
-        if direction == Direction.SHORT and position.entry_price <= previous.entry_price:
+        if (
+            direction == Direction.SHORT
+            and previous.entry_price is not None
+            and position.entry_price is not None
+            and position.entry_price <= previous.entry_price
+        ):
             errors[f"{pos_path}.entry_price"] = (
                 f"Entry price for {_slot_label(position)} must be higher than "
                 f"{_slot_label(previous)} in a short cycle."
@@ -871,6 +954,8 @@ def _default_take_profit(
     config: Any,
     pip_size: Decimal,
 ) -> Decimal:
+    assert position.entry_price is not None  # noqa: S101
+    assert position.units is not None  # noqa: S101
     if position.retracement_count == 0:
         close_price = _take_profit_from_pips(
             direction=direction,
@@ -901,9 +986,11 @@ def _default_take_profit(
             if p.layer_number == position.layer_number
             and p.status in {POSITION_STATUS_OPEN, POSITION_STATUS_PENDING_REBUILD}
         ]
-        total_units = position.units + sum(p.units for p in layer_positions)
+        total_units = position.units + sum(p.units or 0 for p in layer_positions)
         weighted_price = position.entry_price * Decimal(str(position.units))
         for prior_position in layer_positions:
+            if prior_position.entry_price is None or prior_position.units is None:
+                continue
             weighted_price += prior_position.entry_price * Decimal(str(prior_position.units))
         return weighted_price / Decimal(str(total_units))
 
@@ -923,6 +1010,7 @@ def _default_stop_loss(
     config: Any,
     pip_size: Decimal,
 ) -> Decimal | None:
+    assert position.entry_price is not None  # noqa: S101
     calculator = SnowballCalculator(config)
     slot_number = position.retracement_count + 1
     if config.stop_loss_mode == "auto":
@@ -962,6 +1050,8 @@ def _entry_from_seed(
     opened_at,
     pip_size: Decimal,
 ) -> Entry:
+    assert position.units is not None  # noqa: S101
+    assert position.entry_price is not None  # noqa: S101
     role = _entry_role(position)
     root_entry_id = entry_id if role == "initial" else cycle_id
     parent_entry_id = None if role == "initial" else cycle_id

@@ -246,6 +246,7 @@
     "plannedExitPrice": "Planned exit",
     "stopLossPrice": "Stop loss",
     "stopLossDisabled": "Stop loss is disabled in the strategy configuration.",
+    "closedSlotPlaceholderHelper": "This slot is seeded as closed. It preserves grid behavior and does not use prices or units.",
     "firstTickLoading": "Loading the first tick in the backtest period...",
     "firstTickPrice": "First tick: {{timestamp}} / Bid {{bid}} / Ask {{ask}} / Mid {{mid}}",
     "firstTickUnavailable": "No tick was found in the backtest period.",
@@ -255,6 +256,7 @@
     "initialPositionStatus": {
       "open": "Open",
       "closed": "Closed",
+      "closedSlot": "Closed slot",
       "pendingRebuild": "Pending rebuild"
     },
     "dateRangeHelperText": "Backtesting requires historical data. Future dates are not allowed.",

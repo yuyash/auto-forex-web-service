@@ -246,6 +246,7 @@
     "plannedExitPrice": "予定決済価格",
     "stopLossPrice": "ストップロス価格",
     "stopLossDisabled": "Strategy Configuration でロスカットが無効です。",
+    "closedSlotPlaceholderHelper": "このスロットはクローズ済みとして初期化されます。グリッドの挙動だけを保持するため、価格や Units は使用しません。",
     "firstTickLoading": "バックテスト期間の先頭 Tick を取得中...",
     "firstTickPrice": "期間先頭 Tick: {{timestamp}} / Bid {{bid}} / Ask {{ask}} / Mid {{mid}}",
     "firstTickUnavailable": "バックテスト期間内の先頭 Tick が見つかりません。",
@@ -255,7 +256,8 @@
     "initialPositionStatus": {
       "open": "オープン",
       "closed": "クローズ済み",
-      "pendingRebuild": "再構築待ち"
+      "closedSlot": "クローズ済みスロット",
+      "pendingRebuild": "再建待ち"
     },
     "dateRangeHelperText": "バックテストには過去のデータが必要です。未来の日付は使用できません。",
     "reviewErrorsCorrectionHint": "戻るをクリックして前のステップに戻り、これらのエラーを修正してください。",

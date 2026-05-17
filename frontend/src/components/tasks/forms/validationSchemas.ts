@@ -12,12 +12,6 @@ const dataSourceValues = [
   DataSource.S3,
 ] as const;
 
-const requiredPositiveNumberInputSchema = z
-  .union([z.number(), z.string()])
-  .refine(
-    (value) => Number.isFinite(Number(value)) && Number(value) > 0,
-    'Must be a positive number'
-  );
 const requiredPositiveIntegerInputSchema = z
   .union([z.number(), z.string()])
   .refine(
@@ -41,22 +35,71 @@ const optionalPositiveNumberSchema = z
       (Number.isFinite(Number(value)) && Number(value) > 0),
     'Must be a positive number'
   );
+const optionalPositiveIntegerInputSchema = z
+  .union([z.number(), z.string(), z.null()])
+  .optional()
+  .refine(
+    (value) =>
+      value === undefined ||
+      value === null ||
+      value === '' ||
+      (Number.isInteger(Number(value)) && Number(value) > 0),
+    'Must be a positive integer'
+  );
 
-const initialPositionSchema = z.object({
-  layer_number: requiredPositiveIntegerInputSchema,
-  retracement_count: nonNegativeIntegerInputSchema,
-  units: requiredPositiveIntegerInputSchema,
-  entry_price: requiredPositiveNumberInputSchema,
-  planned_exit_price: optionalPositiveNumberSchema,
-  stop_loss_price: optionalPositiveNumberSchema,
-  status: z
-    .enum(['open', 'closed', 'pending_rebuild'])
-    .optional()
-    .default('open'),
-  exit_price: optionalPositiveNumberSchema,
-  close_reason: z.string().optional(),
-  oanda_trade_id: z.string().optional(),
-});
+const initialPositionSchema = z
+  .object({
+    layer_number: requiredPositiveIntegerInputSchema,
+    retracement_count: nonNegativeIntegerInputSchema,
+    units: optionalPositiveIntegerInputSchema,
+    entry_price: optionalPositiveNumberSchema,
+    planned_exit_price: optionalPositiveNumberSchema,
+    stop_loss_price: optionalPositiveNumberSchema,
+    status: z
+      .enum(['open', 'closed', 'closed_slot', 'pending_rebuild'])
+      .optional()
+      .default('open'),
+    exit_price: optionalPositiveNumberSchema,
+    close_reason: z.string().optional(),
+    oanda_trade_id: z.string().optional(),
+  })
+  .superRefine((position, ctx) => {
+    if (position.status === 'closed_slot') {
+      for (const field of [
+        'units',
+        'entry_price',
+        'planned_exit_price',
+        'stop_loss_price',
+        'exit_price',
+        'close_reason',
+        'oanda_trade_id',
+      ] as const) {
+        if (hasInitialPositionInput(position[field])) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'Closed slot placeholders cannot define position values',
+          });
+        }
+      }
+      return;
+    }
+
+    if (!hasInitialPositionInput(position.units)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['units'],
+        message: 'Must be a positive integer',
+      });
+    }
+    if (!hasInitialPositionInput(position.entry_price)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['entry_price'],
+        message: 'Must be a positive number',
+      });
+    }
+  });
 
 const initialPositionCycleSchema = z.object({
   direction: z.enum(['long', 'short']),
@@ -149,7 +192,6 @@ export function addInitialPositionSlotStructureIssues(
       layerPositions.forEach((position) => {
         byRetracement.set(position.retracement, position);
       });
-      const maxRetracement = Math.max(...Array.from(byRetracement.keys()));
       if (!byRetracement.has(0)) {
         const offender = [...layerPositions].sort(
           (left, right) => left.retracement - right.retracement
@@ -167,31 +209,6 @@ export function addInitialPositionSlotStructureIssues(
         });
         continue;
       }
-
-      for (
-        let retracement = 0;
-        retracement <= maxRetracement;
-        retracement += 1
-      ) {
-        if (byRetracement.has(retracement)) {
-          continue;
-        }
-        const offender = [...layerPositions]
-          .filter((position) => position.retracement > retracement)
-          .sort((left, right) => left.retracement - right.retracement)[0];
-        ctx.addIssue({
-          code: 'custom',
-          path: [
-            'initial_position_cycles',
-            cycleIndex,
-            'positions',
-            offender.positionIndex,
-            'retracement_count',
-          ],
-          message: `Layer L${layer} cannot skip R${retracement} before R${offender.retracement}.`,
-        });
-        break;
-      }
     }
   });
 }
@@ -202,6 +219,10 @@ function integerValue(value: unknown): number | null {
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
+}
+
+function hasInitialPositionInput(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== '';
 }
 
 // Configuration validation schema
