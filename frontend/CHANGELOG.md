@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.1...frontend-v2.0.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* **backtest:** improve create form numeric defaults ([#755](https://github.com/yuyash/auto-forex-web-service/issues/755)) ([347edeb](https://github.com/yuyash/auto-forex-web-service/commit/347edeb18708d75e6c892f1117905851c67f416c))
+
 ## [2.0.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.0...frontend-v2.0.1) (2026-05-17)
 
 
