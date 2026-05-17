@@ -581,10 +581,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         tp: 'closeReasonTp',
         counter_tp: 'closeReasonCounterTp',
         layer_initial_tp: 'closeReasonLayerInitialTp',
-        lock_hedge_neutralize: 'closeReasonLockHedgeNeutralize',
         shrink_entered: 'closeReasonShrinkEntered',
-        lock_entered: 'closeReasonLockEntered',
-        lock_released: 'closeReasonLockReleased',
       };
 
       const i18nKey = closeReasonKeyMap[r.close_reason];

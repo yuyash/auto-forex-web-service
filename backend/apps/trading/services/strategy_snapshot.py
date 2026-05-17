@@ -14,8 +14,6 @@ SNOWBALL_SNAPSHOT_CARD_KEYS = (
     "open_short_units",
     "account_balance",
     "account_nav",
-    "lock_entered_at",
-    "cooldown_until",
 )
 
 SNOWBALL_NET_SNAPSHOT_CARD_KEYS = (
@@ -68,8 +66,6 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "account_balance": str(parsed.account_balance),
             "account_nav": str(parsed.account_nav),
             "last_mid": str(parsed.last_mid) if parsed.last_mid is not None else None,
-            "lock_entered_at": parsed.lock_entered_at,
-            "cooldown_until": parsed.cooldown_until,
             "margin_ratio": parsed.metrics.get("margin_ratio"),
         }
     except Exception:  # noqa: BLE001

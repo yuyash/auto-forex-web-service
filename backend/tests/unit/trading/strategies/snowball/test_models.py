@@ -21,15 +21,17 @@ class TestSnowballStrategyConfig:
         assert cfg.m_pips == Decimal("50")
         assert cfg.r_max == 7
         assert cfg.f_max == 3
+        assert cfg.refill_limit_enabled is True
+        assert cfg.refill_up_to == 2
+        assert cfg.effective_refill_up_to == 2
         assert cfg.interval_mode == "constant"
         assert cfg.stop_loss_mode == "auto"
         assert cfg.counter_tp_mode == "weighted_avg"
-        assert cfg.disable_loss_cut_after_rebuild is True
+        assert cfg.rebuild_entry_price_mode == "original_entry"
         assert cfg.rebuild_stop_loss_mode == "same_pips"
         assert cfg.rebuild_stop_loss_manual_pips == []
         assert cfg.rebuild_take_profit_mode == "same_pips"
         assert cfg.rebuild_take_profit_manual_pips == []
-        assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
 
@@ -58,12 +60,9 @@ class TestSnowballStrategyConfig:
                 "counter_tp_pips": "21",
                 "stop_loss_enabled": True,
                 "rebuild_enabled": True,
+                "rebuild_entry_price_mode": "stop_loss_exit",
                 "reseed_on_all_pending": True,
-                "rebuild_entry_price_buffer_pips": "0.2",
-                "rebuild_exit_price_buffer_pips": "0.3",
                 "shrink_enabled": False,
-                "lock_enabled": True,
-                "n_th": "85",
             }
         )
 
@@ -72,16 +71,15 @@ class TestSnowballStrategyConfig:
         assert cfg.take_profit.mode == "fixed"
         assert cfg.take_profit.pips == Decimal("21")
         assert cfg.rebuild_policy.reseed_on_all_pending is True
-        assert cfg.rebuild_policy.entry_price_buffer_pips == Decimal("0.2")
-        assert cfg.rebuild_policy.exit_price_buffer_pips == Decimal("0.3")
-        assert cfg.risk_limits.lock_enabled is True
+        assert cfg.rebuild_policy.entry_price_mode == "stop_loss_exit"
+        assert cfg.rebuild.refill_limit_enabled is True
+        assert cfg.rebuild.refill_up_to == 2
         assert cfg.risk_limits.stop_loss_enabled is True
 
     def test_from_dict_parses_string_booleans(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
                 "shrink_enabled": "false",
-                "lock_enabled": "true",
                 "stop_loss_enabled": "false",
                 "rebuild_enabled": "0",
                 "emergency_enabled": "yes",
@@ -89,22 +87,42 @@ class TestSnowballStrategyConfig:
         )
 
         assert cfg.shrink_enabled is False
-        assert cfg.lock_enabled is True
         assert cfg.stop_loss_enabled is False
         assert cfg.rebuild_enabled is False
         assert cfg.emergency_enabled is True
+
+    def test_refill_limit_toggle_allows_all_counter_slots(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {"r_max": 5, "refill_limit_enabled": False, "refill_up_to": 2}
+        )
+
+        assert cfg.refill_limit_enabled is False
+        assert cfg.refill_up_to == 2
+        assert cfg.effective_refill_up_to == 5
+        assert cfg.grid.refill_up_to == 5
+
+    def test_legacy_zero_refill_limit_keeps_refill_disabled(self):
+        cfg = SnowballStrategyConfig.from_dict({"refill_up_to": 0})
+
+        assert cfg.refill_limit_enabled is True
+        assert cfg.effective_refill_up_to == 0
+
+    def test_legacy_refill_enabled_false_keeps_refill_disabled(self):
+        cfg = SnowballStrategyConfig.from_dict({"refill_enabled": False, "refill_up_to": 2})
+
+        assert cfg.refill_limit_enabled is True
+        assert cfg.refill_up_to == 0
+        assert cfg.effective_refill_up_to == 0
 
     def test_to_dict_roundtrip(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
                 "m_pips": "30",
-                "disable_loss_cut_after_rebuild": True,
+                "rebuild_entry_price_mode": "stop_loss_exit",
                 "rebuild_stop_loss_mode": "manual",
                 "rebuild_stop_loss_manual_pips": ["11", "12", "13", "14", "15", "16"],
                 "rebuild_take_profit_mode": "manual",
                 "rebuild_take_profit_manual_pips": ["21", "22", "23", "24", "25", "26"],
-                "rebuild_price_adjustment_enabled": True,
-                "grid_order_validation_enabled": True,
                 "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
             }
@@ -113,7 +131,8 @@ class TestSnowballStrategyConfig:
         cfg2 = SnowballStrategyConfig.from_dict(d)
         assert cfg2.m_pips == Decimal("30")
         assert cfg2.base_units == cfg.base_units
-        assert cfg2.disable_loss_cut_after_rebuild is True
+        assert cfg2.refill_limit_enabled is True
+        assert cfg2.rebuild_entry_price_mode == "stop_loss_exit"
         assert cfg2.rebuild_stop_loss_mode == "manual"
         assert cfg2.rebuild_stop_loss_manual_pips == [
             Decimal("11"),
@@ -132,16 +151,12 @@ class TestSnowballStrategyConfig:
             Decimal("25"),
             Decimal("26"),
         ]
-        assert cfg2.rebuild_price_adjustment_enabled is False
-        assert cfg2.grid_order_validation_enabled is True
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
 
-    def test_validate_m_th_n_th_order(self):
-        with pytest.raises(ValueError, match="m_th < n_th"):
-            SnowballStrategyConfig.from_dict(
-                {"shrink_enabled": True, "lock_enabled": True, "m_th": "90", "n_th": "80"}
-            ).validate()
+    def test_validate_rebuild_entry_price_mode(self):
+        with pytest.raises(ValueError, match="rebuild_entry_price_mode"):
+            SnowballStrategyConfig.from_dict({"rebuild_entry_price_mode": "unknown"}).validate()
 
     def test_validate_manual_intervals_count(self):
         with pytest.raises(ValueError, match="manual_intervals"):
@@ -158,13 +173,24 @@ class TestSnowballStrategyConfig:
         cfg = SnowballStrategyConfig.from_dict(
             {
                 "shrink_enabled": True,
-                "lock_enabled": True,
                 "m_th": "70",
-                "n_th": "85",
                 "m_pips": "30",
             }
         )
         cfg.validate()
+
+    def test_validate_refill_limit_only_applies_when_refill_limit_enabled(self):
+        SnowballStrategyConfig.from_dict(
+            {"r_max": 3, "refill_limit_enabled": False, "refill_up_to": 5}
+        ).validate()
+        SnowballStrategyConfig.from_dict(
+            {"r_max": 3, "refill_limit_enabled": True, "refill_up_to": 3}
+        ).validate()
+
+        with pytest.raises(ValueError, match="refill_up_to"):
+            SnowballStrategyConfig.from_dict(
+                {"r_max": 3, "refill_limit_enabled": True, "refill_up_to": 4}
+            ).validate()
 
     def test_validate_rebuild_manual_stop_loss_requires_all_slots(self):
         with pytest.raises(ValueError, match="rebuild_stop_loss_manual_pips"):
@@ -193,7 +219,7 @@ class TestSnowballStrategyConfig:
                 }
             ).validate()
 
-    def test_rebuild_manual_take_profit_disables_price_adjustment_only(self):
+    def test_rebuild_manual_take_profit_is_valid(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
                 "rebuild_take_profit_mode": "manual",
@@ -207,26 +233,22 @@ class TestSnowballStrategyConfig:
                     "16",
                     "17",
                 ],
-                "rebuild_price_adjustment_enabled": True,
-                "grid_order_validation_enabled": True,
             }
         )
 
-        assert cfg.rebuild_price_adjustment_enabled is False
-        assert cfg.grid_order_validation_enabled is True
+        cfg.validate()
+        assert cfg.rebuild_take_profit_mode == "manual"
 
-    def test_rebuild_same_pips_take_profit_keeps_price_adjustment_enabled(self):
+    def test_rebuild_stop_loss_exit_entry_price_mode_is_valid(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
-                "rebuild_take_profit_mode": "same_pips",
-                "rebuild_price_adjustment_enabled": True,
+                "rebuild_entry_price_mode": "stop_loss_exit",
             }
         )
 
         cfg.validate()
 
-        assert cfg.rebuild_take_profit_mode == "same_pips"
-        assert cfg.rebuild_price_adjustment_enabled is True
+        assert cfg.rebuild_entry_price_mode == "stop_loss_exit"
 
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):

@@ -1,6 +1,6 @@
 /**
  * useMetricsOverlay — hook that attaches metric overlay series
- * (Margin Ratio, ATR, Lock Threshold) directly onto the parent
+ * (Margin Ratio, ATR, Volatility Threshold) directly onto the parent
  * candlestick chart so they share the exact same X-axis.
  *
  * Data is fetched based on the chart's visible time range:
@@ -108,7 +108,7 @@ function attachSeries(chart: IChartApi) {
     color: '#f97316',
     lineWidth: 1,
     lineStyle: 1,
-    title: 'Lock Threshold',
+    title: 'Volatility Threshold',
     priceScaleId: 'metrics-right',
     crosshairMarkerVisible: false,
     lastValueVisible: true,

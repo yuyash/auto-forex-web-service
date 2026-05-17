@@ -14,6 +14,8 @@ SNOWBALL_FULL_PARAMS = {
     "r_max": 5,
     "f_max": 2,
     "post_r_max_base_factor": 1.5,
+    "refill_limit_enabled": True,
+    "refill_up_to": 1,
     "n_pips_head": 25,
     "n_pips_tail": 10,
     "n_pips_flat_steps": 1,
@@ -27,8 +29,7 @@ SNOWBALL_FULL_PARAMS = {
     "shrink_enabled": True,
     "m_th": 70,
     "m1_th": 50,
-    "lock_enabled": True,
-    "n_th": 85,
+    "rebuild_entry_price_mode": "stop_loss_exit",
 }
 
 
@@ -55,6 +56,8 @@ class TestSnowballStrategyEndpoints:
         assert resp.status_code == 200
         defaults = resp.data["defaults"]
         assert defaults["base_units"] == 1000
+        assert defaults["refill_limit_enabled"] is True
+        assert defaults["refill_up_to"] == 2
 
     def test_snowball_schema_has_interval_mode_enum(self, authenticated_client):
         resp = authenticated_client.get("/api/trading/strategies/")
@@ -65,6 +68,12 @@ class TestSnowballStrategyEndpoints:
         im = schema["properties"]["interval_mode"]
         assert "constant" in im["enum"]
         assert "manual" in im["enum"]
+        assert schema["properties"]["refill_limit_enabled"]["group"] == "Rebuild"
+        assert schema["properties"]["refill_up_to"]["group"] == "Rebuild"
+        assert schema["properties"]["refill_up_to"]["dependsOn"]["field"] == "refill_limit_enabled"
+        assert schema["properties"]["refill_up_to"]["minimum"] == 1
+        assert schema["properties"]["refill_up_to"]["comparisonRules"][0]["field"] == "r_max"
+        assert schema["properties"]["refill_up_to"]["comparisonRules"][0]["operator"] == "lte"
 
 
 # ===================================================================
@@ -277,17 +286,15 @@ class TestSnowballValidationEdgeCases:
         )
         assert resp.status_code in (200, 201), resp.data
 
-    def test_m_th_n_th_ordering_rejected(self, authenticated_client):
+    def test_invalid_rebuild_entry_price_mode_rejected(self, authenticated_client):
         resp = authenticated_client.post(
             "/api/trading/strategy-configs/",
             {
-                "name": "E2E Snowball Threshold Bad",
+                "name": "E2E Snowball Rebuild Mode Bad",
                 "strategy_type": "snowball",
                 "parameters": {
-                    "shrink_enabled": True,
-                    "lock_enabled": True,
-                    "m_th": 90,
-                    "n_th": 85,
+                    "stop_loss_enabled": True,
+                    "rebuild_entry_price_mode": "unknown",
                 },
             },
             format="json",

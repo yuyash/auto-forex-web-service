@@ -1728,13 +1728,28 @@ function snowballConfig(
   const nTail = num(params.n_pips_tail, 14);
   const nFlat = intNum(params.n_pips_flat_steps, 2);
   const nGamma = num(params.n_pips_gamma, 1.4);
+  const rMax = intNum(params.r_max, 7);
+  const refillUpTo = intNum(params.refill_up_to, 2);
+  const legacyRefillEnabled =
+    params.refill_enabled === undefined
+      ? undefined
+      : boolValue(params.refill_enabled, true);
+  const refillLimitEnabled = boolValue(
+    params.refill_limit_enabled,
+    legacyRefillEnabled ?? true
+  );
   return {
     pipSize: num(pipSize, num(params.pip_size, Number(DEFAULT_PIP_SIZE))),
     baseUnits: intNum(params.base_units, 1000),
     trendLotSize: intNum(params.trend_lot_size, 1),
-    rMax: intNum(params.r_max, 7),
+    rMax,
     fMax: intNum(params.f_max, 3),
-    refillUpTo: intNum(params.refill_up_to, 2),
+    refillUpTo:
+      legacyRefillEnabled === false && params.refill_limit_enabled === undefined
+        ? 0
+        : refillLimitEnabled
+          ? refillUpTo
+          : rMax,
     mPips: num(params.m_pips, 50),
     counterTpMode: String(params.counter_tp_mode ?? 'weighted_avg'),
     counterTpPips: num(params.counter_tp_pips, 25),

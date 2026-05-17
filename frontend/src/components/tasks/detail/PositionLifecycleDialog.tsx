@@ -231,8 +231,6 @@ function closeReasonLabel(
       'tables.positions.lifecycle.closeReasons.marginProtection',
     counter_tp: 'tables.positions.lifecycle.closeReasons.counterTp',
     layer_initial_tp: 'tables.positions.lifecycle.closeReasons.layerInitialTp',
-    lock_hedge_neutralize:
-      'tables.positions.lifecycle.closeReasons.lockHedgeNeutralize',
   };
   const key = mapping[reason];
   if (key && t) return t(key);

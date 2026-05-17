@@ -16,9 +16,23 @@ const strategies: Strategy[] = [
           type: 'boolean',
           title: 'Start New Cycle When Pending',
         },
-        rebuild_entry_price_buffer_pips: {
+        refill_limit_enabled: {
+          type: 'boolean',
+          title: 'Set Refillable Slot Limit',
+        },
+        refill_up_to: {
+          type: 'integer',
+          title: 'Refill Up To Slot',
+          dependsOn: { field: 'refill_limit_enabled', values: [true] },
+        },
+        rebuild_entry_price_mode: {
           type: 'string',
-          title: 'Entry Price Buffer',
+          title: 'Rebuild Entry Price Mode',
+          dependsOn: {
+            field: 'stop_loss_enabled',
+            values: [true],
+            and: [{ field: 'rebuild_enabled', values: [true] }],
+          },
         },
       },
     },
@@ -33,7 +47,9 @@ describe('HistoricalStrategyConfigDialog', () => {
       strategy_type: 'snowball',
       parameters: {
         reseed_on_all_pending: true,
-        rebuild_entry_price_buffer_pips: '0',
+        stop_loss_enabled: true,
+        rebuild_enabled: true,
+        rebuild_entry_price_mode: 'original_entry',
       },
       current: {
         id: 'config-1',
@@ -41,7 +57,9 @@ describe('HistoricalStrategyConfigDialog', () => {
         strategy_type: 'snowball',
         parameters: {
           reseed_on_all_pending: false,
-          rebuild_entry_price_buffer_pips: '5',
+          stop_loss_enabled: true,
+          rebuild_enabled: true,
+          rebuild_entry_price_mode: 'stop_loss_exit',
         },
       },
       initial: {},
@@ -66,10 +84,53 @@ describe('HistoricalStrategyConfigDialog', () => {
       screen.getByText('Start New Cycle When Pending')
     ).toBeInTheDocument();
     expect(screen.getByText('false')).toBeInTheDocument();
-    expect(screen.queryByText('true')).not.toBeInTheDocument();
-    expect(screen.getByText('Entry Price Buffer')).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.getByText('Rebuild Entry Price Mode')).toBeInTheDocument();
+    expect(screen.getByText('stop_loss_exit')).toBeInTheDocument();
+    expect(screen.queryByText('original_entry')).not.toBeInTheDocument();
+  });
+
+  it('hides rebuild-only snapshot parameters when rebuild is disabled', () => {
+    const config: NonNullable<TaskExecution['strategy_config']> = {
+      id: 'config-1',
+      name: 'No Rebuild Config',
+      strategy_type: 'snowball',
+      parameters: {
+        stop_loss_enabled: true,
+        rebuild_enabled: false,
+        refill_limit_enabled: false,
+        refill_up_to: 2,
+        rebuild_entry_price_mode: 'stop_loss_exit',
+      },
+      current: {
+        id: 'config-1',
+        name: 'No Rebuild Config',
+        strategy_type: 'snowball',
+        parameters: {
+          stop_loss_enabled: true,
+          rebuild_enabled: false,
+          refill_limit_enabled: false,
+          refill_up_to: 2,
+          rebuild_entry_price_mode: 'stop_loss_exit',
+        },
+      },
+      initial: {},
+      revisions: [],
+    };
+
+    render(
+      <HistoricalStrategyConfigDialog
+        open
+        onClose={() => undefined}
+        config={config}
+        strategies={strategies}
+      />
+    );
+
+    expect(
+      screen.queryByText('Rebuild Entry Price Mode')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('stop_loss_exit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Refill Up To Slot')).not.toBeInTheDocument();
   });
 
   it('renders an edit link when the displayed snapshot is current', () => {

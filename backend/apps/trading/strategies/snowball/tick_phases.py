@@ -87,9 +87,6 @@ class SnowballExecutionStateBoundary:
         strategy_state["protection_level"] = snowball_state.protection_level.value
         strategy_state["initialised"] = snowball_state.initialised
         strategy_state["next_entry_id"] = snowball_state.next_entry_id
-        strategy_state["lock_hedge_ids"] = list(snowball_state.lock_hedge_ids)
-        strategy_state["lock_entered_at"] = snowball_state.lock_entered_at
-        strategy_state["cooldown_until"] = snowball_state.cooldown_until
         strategy_state["last_bid"] = (
             str(snowball_state.last_bid) if snowball_state.last_bid is not None else None
         )
@@ -225,7 +222,7 @@ class SnowballAccountMetricsPhase:
 
 
 class SnowballProtectionPhase:
-    """Apply emergency, lock, lock-release, and shrink protection."""
+    """Apply emergency and shrink protection."""
 
     def __init__(self, *, serializer: SnowballTickStateSerializer | None = None) -> None:
         self.serializer = serializer or SnowballTickStateSerializer()
@@ -250,66 +247,15 @@ class SnowballProtectionPhase:
                 )
             )
 
-        lock_events = SNOWBALL_PROTECTION.handle_lock(
-            strategy=context.strategy,
-            ss=context.snowball_state,
-            tick=context.tick,
-            ratio=context.ratio,
-        )
-        if lock_events is not None:
-            context.events.extend(lock_events)
-        context.allow_new_positions = (
-            lock_events is None
-            and context.snowball_state.protection_level != ProtectionLevel.LOCKED
-        )
-
-        lock_release_result = self._handle_lock_release(context, lock_events=lock_events)
-        if lock_release_result.completed:
-            return lock_release_result
-
-        shrink_result = self._handle_shrink(context, lock_events=lock_events)
+        shrink_result = self._handle_shrink(context)
         if shrink_result.completed:
             return shrink_result
 
-        if (
-            lock_events is None
-            and context.snowball_state.protection_level != ProtectionLevel.NORMAL
-        ):
+        if context.snowball_state.protection_level != ProtectionLevel.NORMAL:
             context.snowball_state.protection_level = ProtectionLevel.NORMAL
         return SnowballTickPhaseOutcome()
 
-    def _handle_lock_release(
-        self,
-        context: SnowballTickContext,
-        *,
-        lock_events: list[StrategyEvent] | None,
-    ) -> SnowballTickPhaseOutcome:
-        if (
-            lock_events is not None
-            or context.snowball_state.protection_level != ProtectionLevel.LOCKED
-        ):
-            return SnowballTickPhaseOutcome()
-
-        release_events = SNOWBALL_PROTECTION.handle_lock_release(
-            strategy=context.strategy,
-            close_entry=context.strategy._close_entry,
-            ss=context.snowball_state,
-            tick=context.tick,
-            ratio=context.ratio,
-        )
-        return SnowballTickPhaseOutcome(
-            result=self.serializer.result(context, events=release_events)
-        )
-
-    def _handle_shrink(
-        self,
-        context: SnowballTickContext,
-        *,
-        lock_events: list[StrategyEvent] | None,
-    ) -> SnowballTickPhaseOutcome:
-        if lock_events is not None:
-            return SnowballTickPhaseOutcome()
-
+    def _handle_shrink(self, context: SnowballTickContext) -> SnowballTickPhaseOutcome:
         shrink_events = SNOWBALL_PROTECTION.handle_shrink(
             strategy=context.strategy,
             close_entry=context.strategy._close_entry,

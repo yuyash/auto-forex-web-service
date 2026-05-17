@@ -4,7 +4,7 @@
 
 ```
 r_max = 3, f_max = 2, m_pips = 50, n_pips = 30
-refill_up_to = 1, m_th = 70%, m1_th = 50%, n_th = 85%
+refill_up_to = 1, m_th = 70%, m1_th = 50%
 hedging_enabled = true (LONG + SHORT 並行)
 ```
 
@@ -221,40 +221,7 @@ flowchart TD
 
 ---
 
-## 6. Lock プロテクション — 両建てヘッジ
-
-```mermaid
-sequenceDiagram
-    participant P as 価格
-    participant G as PositionGrid
-    participant E as Engine
-    participant M as マージン監視
-
-    Note over G: LONG: L0:[R0●][R1●]<br/>SHORT: L0:[R0●][R1●][R2●]
-
-    M->>E: margin_ratio=87% ≥ n_th=85%
-    Note over E: Lock 発動
-
-    E->>E: net = long_units - short_units
-    Note over E: net < 0 → LONG ヘッジ追加
-    E->>G: hedge OPEN (LONG, |net| units)
-    Note over E: 全取引停止（Lock中）
-
-    loop Lock 中の各 tick
-        P->>E: tick受信
-        M->>E: ratio チェック
-        Note over E: ratio ≥ m_th-5 → Lock 継続
-    end
-
-    M->>E: ratio=63% < m_th-5=65%
-    Note over E: Lock 解除
-    E->>G: hedge CLOSE (lock_hedge_neutralize)
-    Note over E: 通常取引再開
-```
-
----
-
-## 7. Emergency Stop
+## 6. Emergency Stop
 
 ```mermaid
 sequenceDiagram
@@ -270,7 +237,7 @@ sequenceDiagram
 
 ---
 
-## 8. on_tick 全体フロー
+## 7. on_tick 全体フロー
 
 ```mermaid
 flowchart TD
@@ -278,13 +245,7 @@ flowchart TD
     B --> C[margin_ratio 算出]
     C --> D{ratio ≥ 95%?}
     D -->|Yes| E[🚨 Emergency Stop]
-    D -->|No| F{ratio ≥ n_th?}
-    F -->|Yes| G[Lock 発動: ヘッジ追加]
-    F -->|No| H{Lock 中?}
-    H -->|Yes| I{ratio < m_th-5?}
-    I -->|Yes| J[Lock 解除: ヘッジ決済]
-    I -->|No| K[何もしない]
-    H -->|No| L{ratio ≥ m_th?}
+    D -->|No| L{ratio ≥ m_th?}
     L -->|Yes| M[Shrink: 前方から決済]
     L -->|No| N{初期化済?}
     N -->|No| O[LONG + SHORT サイクル作成]

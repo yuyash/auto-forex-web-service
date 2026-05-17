@@ -69,17 +69,6 @@
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
-    "refill_up_to": {
-      "type": "integer",
-      "title": "Refill Up To Slot",
-      "title_ja": "再建玉可能スロット上限",
-      "description": "Slots from the first through this number are refillable after close instead of triggering a new layer. 0 means no refill.",
-      "description_ja": "1番目からこの番号までのスロットは決済後に再建玉可能。0の場合は再建玉なし。",
-      "default": 2,
-      "minimum": 0,
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
-    },
     "interval_mode": {
       "type": "string",
       "title": "Interval Mode",
@@ -324,7 +313,7 @@
     "stop_loss_mode": {
       "type": "string",
       "title": "Stop Loss Distance Mode",
-      "title_ja": "ロスカット幅モード",
+      "title_ja": "ロスカット幅の設定",
       "description": "How the stop-loss is calculated. Auto reproduces the legacy Snowball behaviour based on the next interval and TP. Constant uses the same fixed pip distance for every slot. The other modes use a dedicated per-slot pip progression.",
       "description_ja": "ロスカットの計算方法。自動は旧 Snowball の挙動（次の間隔と TP を使う計算）を再現します。固定は全スロットで同じ pips 幅を使います。その他のモードは専用の段階的 pips 設定を使います。",
       "enum": [
@@ -456,52 +445,81 @@
       "itemLabel_ja": "R{index} ロスカット幅（pips）"
     },
 
+    "refill_limit_enabled": {
+      "type": "boolean",
+      "title": "Set Refillable Slot Limit",
+      "title_ja": "再建玉可能スロットに上限を設定する",
+      "description": "When enabled, only counter slots up to the configured limit become refillable after normal take-profit close. When disabled, every counter slot through r_max can be refilled.",
+      "description_ja": "有効時、通常利確後に再建玉できる逆行側スロットを設定した上限までに制限します。無効時は r_max までの全逆行側スロットを再建玉できます。",
+      "default": true,
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
+    "refill_up_to": {
+      "type": "integer",
+      "title": "Refill Up To Slot",
+      "title_ja": "再建玉可能スロット上限",
+      "description": "When the refillable slot limit is enabled, counter slots from R1 through this number are refillable after normal close instead of triggering a new layer.",
+      "description_ja": "再建玉可能スロット上限が有効な場合、R1からこの番号までの逆行側スロットは通常決済後に再建玉可能になります。",
+      "default": 2,
+      "minimum": 1,
+      "dependsOn": { "field": "refill_limit_enabled", "values": [true] },
+      "comparisonRules": [
+        {
+          "field": "r_max",
+          "operator": "lte",
+          "message": "Must be less than or equal to Max Steps",
+          "message_ja": "最大段数以下にしてください"
+        }
+      ],
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
     "rebuild_enabled": {
       "type": "boolean",
       "title": "Rebuild After Stop Loss",
       "title_ja": "ロスカット後に再建する",
-      "description": "When enabled (default), a stopped-out slot is rebuilt (re-opened) once price returns to the original entry. When disabled, a stop-loss seals the slot permanently and the grid shrinks on every hit.",
-      "description_ja": "有効時（既定）、ロスカットされたスロットは価格が元の建玉価格に戻ったときに再建されます。無効にすると、ロスカットはそのスロットを完全に終了し、ロスカットのたびにグリッドが縮小します。",
+      "description": "When enabled (default), a stopped-out slot is rebuilt (re-opened) once price reaches the configured rebuild entry price.",
+      "description_ja": "有効時にロスカットされたスロットは価格が設定された再建エントリー価格に到達したときに再建されます。",
       "default": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Rebuild",
       "group_ja": "再建"
     },
 
-    "complete_cycle_when_empty": {
-      "type": "boolean",
-      "title": "Start New Cycle When Empty",
-      "title_ja": "全決済時に新規サイクル開始",
-      "description": "When rebuild is disabled, enable this to complete the cycle and start a fresh cycle as soon as every position is closed by stop-loss or take-profit. Otherwise the strategy stays idle for the direction after the last position closes. Requires Rebuild After Stop Loss to be disabled.",
-      "description_ja": "再建が無効な場合、すべてのポジションがロスカットまたは利確で決済された時点でサイクルを完了し、直ちに新しいサイクルを開始します。無効のままだと、最後のポジションが決済された後はその方向の新規サイクルは作成されません。再建無効と組み合わせて使用します。",
-      "default": false,
+    "rebuild_entry_price_mode": {
+      "type": "string",
+      "title": "Rebuild Entry Price Mode",
+      "title_ja": "再建時のエントリー価格設定",
+      "description": "Choose when a stopped-out slot is rebuilt",
+      "description_ja": "ロスカットされたスロットをいつ再建するかを選択します。",
+      "enum": ["original_entry", "stop_loss_exit"],
+      "enum_labels": {
+        "original_entry": "Original Entry Price",
+        "stop_loss_exit": "Stop-Loss Exit Price"
+      },
+      "enum_labels_ja": {
+        "original_entry": "元の建玉価格",
+        "stop_loss_exit": "ロスカット価格"
+      },
+      "default": "original_entry",
       "dependsOn": {
-        "field": "rebuild_enabled",
-        "values": [false],
-        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+        "field": "stop_loss_enabled",
+        "values": [true],
+        "and": [{ "field": "rebuild_enabled", "values": [true] }]
       },
       "group": "Rebuild",
       "group_ja": "再建"
     },
 
-    "disable_loss_cut_after_rebuild": {
-      "type": "boolean",
-      "title": "Disable Loss Cut After Rebuild",
-      "title_ja": "再建後ロスカット無効",
-      "description": "When enabled, rebuilt positions are kept open and will not be loss-cut again after a stop-loss rebuild.",
-      "description_ja": "有効時、ロスカット後に再建されたポジションはそのまま保持され、再度ロスカットされません。",
-      "default": true,
-      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Stop Loss",
-      "group_ja": "ロスカット"
-    },
-
     "rebuild_stop_loss_mode": {
       "type": "string",
       "title": "Rebuild Stop Loss Mode",
-      "title_ja": "再建後ロスカットモード",
-      "description": "How to set the stop-loss on rebuilt positions when loss cut after rebuild is allowed. Same reuses the absolute stop-loss price that closed the previous position. Same Pips keeps the original stop-loss distance measured in pips. Manual uses a per-slot absolute pip distance from the rebuilt entry price.",
-      "description_ja": "再建後もロスカットを有効にする場合の、再建ポジションのロスカット設定方法です。Same は直前のポジションを決済したロスカット価格をそのまま再利用します。Same Pips は元のロスカット幅を pips 距離として維持します。Manual は再建ポジションの建値からの絶対 pips 幅をスロットごとに使います。",
+      "title_ja": "再建後のロスカット価格設定",
+      "description": "How to set the stop-loss on rebuilt positions.",
+      "description_ja": "再建されたポジションのロスカット価格を設定する方法です。",
       "enum": ["same", "same_pips", "manual"],
       "enum_labels": {
         "same": "Same as Original SL Price",
@@ -520,12 +538,9 @@
       },
       "default": "same_pips",
       "dependsOn": {
-        "field": "rebuild_enabled",
+        "field": "stop_loss_enabled",
         "values": [true],
-        "and": [
-          { "field": "stop_loss_enabled", "values": [true] },
-          { "field": "disable_loss_cut_after_rebuild", "values": [false] }
-        ]
+        "and": [{ "field": "rebuild_enabled", "values": [true] }]
       },
       "group": "Rebuild",
       "group_ja": "再建"
@@ -550,9 +565,9 @@
     "rebuild_take_profit_mode": {
       "type": "string",
       "title": "Rebuild Take-Profit Mode",
-      "title_ja": "再建時 利確幅モード",
-      "description": "How to set the take-profit price on rebuilt positions. Same reuses the original absolute take-profit price. Same Pips keeps the original take-profit distance measured in pips. Other modes calculate a fresh take-profit distance from the rebuilt entry price.",
-      "description_ja": "再建ポジションの利確価格の設定方法です。Same は元の絶対利確価格を再利用します。Same Pips は元の利確幅を pips 距離として維持します。その他のモードでは、再建時の建値から新しい利確幅を計算します。",
+      "title_ja": "再建時の利確幅設定",
+      "description": "How to set the take-profit price on rebuilt positions.",
+      "description_ja": "再建されたポジションの利確価格の設定方法です。",
       "enum": [
         "same",
         "same_pips",
@@ -595,9 +610,9 @@
       },
       "default": "same_pips",
       "dependsOn": {
-        "field": "rebuild_enabled",
+        "field": "stop_loss_enabled",
         "values": [true],
-        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+        "and": [{ "field": "rebuild_enabled", "values": [true] }]
       },
       "group": "Rebuild",
       "group_ja": "再建"
@@ -613,7 +628,13 @@
       "minimum": 0.1,
       "dependsOn": {
         "field": "rebuild_take_profit_mode",
-        "values": ["constant", "additive", "subtractive", "multiplicative", "divisive"]
+        "values": [
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
       },
       "group": "Rebuild",
       "group_ja": "再建"
@@ -675,7 +696,10 @@
       "description_ja": "rebuild_take_profit_mode が manual のときに使う、再建ポジション用のスロットごとの絶対利確幅（pips）です。再建ポジションの建値基準で、LONG では上、SHORT では下に自動配置されます。",
       "default": [],
       "items": { "type": "number", "minimum": 0.1 },
-      "dependsOn": { "field": "rebuild_take_profit_mode", "values": ["manual"] },
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["manual"]
+      },
       "group": "Rebuild",
       "group_ja": "再建",
       "linkedCount": { "field": "r_max", "offset": 1 },
@@ -683,47 +707,23 @@
       "itemLabel_ja": "再建 R{index} 利確幅（pips）"
     },
 
-    "grid_order_validation_enabled": {
-      "type": "boolean",
-      "title": "Fail On Grid Ordering Violation",
-      "title_ja": "グリッド順序違反で失敗",
-      "description": "When enabled, any detected grid entry/TP ordering violation is logged and stops the task as an error. When disabled, the strategy still logs the violation but continues running.",
-      "description_ja": "有効時、グリッドの建玉価格/利確価格の順序違反を検出するとログ出力し、タスクをエラーで停止します。無効時は違反をログ出力しますが、タスクは継続します。",
-      "default": true,
-      "dependsOn": {
-        "field": "rebuild_take_profit_mode",
-        "values": [
-          "same",
-          "same_pips",
-          "constant",
-          "additive",
-          "subtractive",
-          "multiplicative",
-          "divisive"
-        ]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
     "preserve_highest_retracement_enabled": {
       "type": "boolean",
       "title": "Preserve Highest Retracement",
-      "title_ja": "最上位リトレース保持",
+      "title_ja": "上位リトレース保持",
       "description": "When enabled, the highest live R-slot in each layer can ignore stop-loss if it reaches the configured threshold.",
-      "description_ja": "有効時、各レイヤーで現在もっとも高いRスロットは、設定した閾値以上であればロスカットを無視できます。",
+      "description_ja": "有効時、各レイヤーで設定した閾値以上のポジションはロスカットされません。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Stop Loss",
       "group_ja": "ロスカット"
     },
-
     "preserve_highest_r_from": {
       "type": "integer",
       "title": "Preserve Highest R From",
-      "title_ja": "最上位R保護開始番号",
+      "title_ja": "R保護開始番号",
       "description": "Keep the highest live R-slot in each layer open even when stop-loss is hit, but only when that highest slot number is at or above this threshold.",
-      "description_ja": "各レイヤーでライブ中の最上位Rスロットがロスカット価格に達しても、そのR番号がこの閾値以上なら維持します。",
+      "description_ja": "ロスカット価格に達しても、そのR番号がこの閾値以上ならロスカットしません。",
       "default": 1,
       "minimum": 1,
       "dependsOn": {
@@ -739,70 +739,10 @@
       "type": "boolean",
       "title": "Re-seed When Any Pending",
       "title_ja": "保留発生時に新規サイクル作成",
-      "description": "When enabled, a new cycle is created for a direction if all existing cycles have zero live positions (at least one slot is awaiting stop-loss rebuild, but empty/unused slots may remain). This keeps the strategy trading at the current price as soon as all live entries are stopped out. Mutually exclusive with 'Re-seed When Grid Exhausted'. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ある方向のすべてのサイクルでライブポジションがゼロになった場合（少なくとも1つのスロットがロスカット後のリビルド待ちだが、未使用スロットが残っている場合も含む）、新しいサイクルを作成します。「グリッド飽和時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
+      "description": "When enabled, a new cycle is created for a direction if all existing cycles have zero live positions (at least one slot is awaiting stop-loss rebuild, but empty/unused slots may remain). This keeps the strategy trading at the current price as soon as all live entries are stopped out. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ある方向のすべてのサイクルでライブポジションがゼロになった場合（少なくとも1つのスロットがロスカット後のリビルド待ちだが、未使用スロットが残っている場合も含む）、新しいサイクルを作成します。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "reseed_on_grid_exhausted": {
-      "type": "boolean",
-      "title": "Re-seed When All Layers Exhausted",
-      "title_ja": "全レイヤー飽和時に新規サイクル作成",
-      "description": "When enabled, a new cycle is created for a direction only when all layers up to f_max have been opened and every slot in every layer is in pending-rebuild state (no live entries and no empty slots remain). This is stricter than 'Re-seed When Any Pending' and waits until all configured layers are completely exhausted before starting a new cycle. Mutually exclusive with 'Re-seed When Any Pending'. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ある方向で f_max までの全レイヤーが作成済みで、かつ全レイヤーの全スロットがリビルド待ち状態になった場合にのみ新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、設定済みの全レイヤーが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
-      "default": false,
-      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "rebuild_price_adjustment_enabled": {
-      "type": "boolean",
-      "title": "Adjust Rebuild Prices",
-      "title_ja": "再建時の注文・決済価格を調整",
-      "description": "When enabled, optional entry and exit buffers can shift the rebuild trigger and inherited take-profit in the favourable direction while preserving grid ordering.",
-      "description_ja": "有効時、任意の注文価格・決済価格バッファにより、再建の発動価格と引き継いだ利確価格を利益方向へ調整します。グリッド順序は維持されます。",
-      "default": true,
-      "dependsOn": {
-        "field": "rebuild_take_profit_mode",
-        "values": ["same", "same_pips"],
-        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "rebuild_entry_price_buffer_pips": {
-      "type": "number",
-      "title": "Rebuild Entry Buffer (pips)",
-      "title_ja": "再建時 注文価格バッファ（pips）",
-      "description": "Additional safety buffer (in pips) applied to the rebuild trigger price in the favourable direction. The rebuild is triggered only when the market price is at least this many pips better than the original entry price, giving a slightly more conservative re-entry against unavoidable slippage. 0 means no buffer.",
-      "description_ja": "再建の発動価格に対して、利益方向へ追加する安全バッファ（pips）。元の建玉価格より少なくともこの pips 分だけ有利な市場価格になるまで再建を待つことで、スリッページに対する余裕を作ります。0 はバッファなし。",
-      "default": 0,
-      "minimum": 0,
-      "dependsOn": {
-        "field": "rebuild_price_adjustment_enabled",
-        "values": [true]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
-    },
-
-    "rebuild_exit_price_buffer_pips": {
-      "type": "number",
-      "title": "Rebuild Exit Buffer (pips)",
-      "title_ja": "再建時 決済価格バッファ（pips）",
-      "description": "Additional safety buffer (in pips) applied once to the final rebuild take-profit in the favourable direction. 0 means no buffer.",
-      "description_ja": "最終的な再建ポジションの利確価格に対して、利益方向へ一度だけ追加する安全バッファ（pips）です。0 はバッファなし。",
-      "default": 0,
-      "minimum": 0,
-      "dependsOn": {
-        "field": "rebuild_price_adjustment_enabled",
-        "values": [true]
-      },
       "group": "Rebuild",
       "group_ja": "再建"
     },
@@ -822,16 +762,12 @@
       "type": "number",
       "title": "Margin Level 1 - Shrink (%)",
       "title_ja": "証拠金レベル1 - 縮小（%）",
-      "description": "Margin closeout ratio threshold to enter shrink mode. Lock mode also uses this level as the release baseline.",
-      "description_ja": "縮小モードに入る証拠金精算割合の閾値。ロックモードでは解除基準としても使用されます。",
+      "description": "Margin closeout ratio threshold to enter shrink mode.",
+      "description_ja": "縮小モードに入る証拠金精算割合の閾値。",
       "default": 70,
       "minimum": 1,
       "maximum": 99,
-      "dependsOn": {
-        "field": "shrink_enabled",
-        "values": [true],
-        "or": [{ "field": "lock_enabled", "values": [true] }]
-      },
+      "dependsOn": { "field": "shrink_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -848,42 +784,6 @@
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
-    "lock_enabled": {
-      "type": "boolean",
-      "title": "Enable Lock",
-      "title_ja": "ロック有効",
-      "description": "When enabled, a net-zero hedge is added when margin closeout ratio reaches the lock threshold.",
-      "description_ja": "有効時、証拠金精算割合がロック閾値に達すると、ネットゼロヘッジを追加します。",
-      "default": false,
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "n_th": {
-      "type": "number",
-      "title": "Margin Level 2 - Lock (%)",
-      "title_ja": "証拠金レベル2 - ロック（%）",
-      "description": "Margin closeout ratio threshold to enter lock mode (add net-zero hedge).",
-      "description_ja": "ロックモードに入る証拠金精算割合の閾値（ネットゼロヘッジ追加）。",
-      "default": 85,
-      "minimum": 1,
-      "maximum": 99,
-      "dependsOn": { "field": "lock_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "cooldown_sec": {
-      "type": "integer",
-      "title": "Cooldown (seconds)",
-      "title_ja": "クールダウン（秒）",
-      "description": "Waiting period after lock release before resuming normal trading.",
-      "description_ja": "ロック解除後、通常取引を再開するまでの待機時間。",
-      "default": 300,
-      "minimum": 0,
-      "dependsOn": { "field": "lock_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-
     "emergency_enabled": {
       "type": "boolean",
       "title": "Enable Emergency Stop",

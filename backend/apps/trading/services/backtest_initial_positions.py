@@ -214,7 +214,7 @@ def _validate_initial_position_cycles_impl(
             normalized_positions.sort(key=lambda p: (p.layer_number, p.retracement_count))
             _validate_slot_structure(
                 positions=normalized_positions,
-                refill_up_to=cfg.refill_up_to,
+                refill_up_to=cfg.effective_refill_up_to,
                 errors=errors,
             )
 
@@ -436,7 +436,9 @@ class BacktestInitialPositionService:
                     layer_number=position_spec.layer_number,
                     r_max=engine.strategy.config.r_max,  # type: ignore[attr-defined]
                     base_units=engine.strategy.config.base_units,  # type: ignore[attr-defined]
-                    refill_up_to=engine.strategy.config.refill_up_to,  # type: ignore[attr-defined]
+                    refill_up_to=(
+                        engine.strategy.config.effective_refill_up_to  # type: ignore[attr-defined]
+                    ),
                 )
                 slot = layer.slot_at(position_spec.retracement_count)
                 if slot is None:

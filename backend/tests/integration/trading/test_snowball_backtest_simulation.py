@@ -197,7 +197,6 @@ class TestSnowballBacktestSimulation:
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "8",
                 "shrink_enabled": False,
-                "lock_enabled": False,
                 "refill_up_to": 0,
             },
             ticks=[
@@ -280,7 +279,6 @@ class TestSnowballBacktestSimulation:
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "20",
                 "shrink_enabled": False,
-                "lock_enabled": False,
             },
             ticks=[
                 _tick(base, "150.00", "150.02"),
@@ -323,7 +321,6 @@ class TestSnowballBacktestSimulation:
             "counter_tp_mode": "fixed",
             "counter_tp_pips": "8",
             "shrink_enabled": False,
-            "lock_enabled": False,
         }
         all_ticks = [
             _tick(base, "150.00", "150.02"),
@@ -472,7 +469,6 @@ class TestSnowballBacktestSimulation:
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "25",
                 "shrink_enabled": False,
-                "lock_enabled": False,
             },
             ticks=[
                 _tick(base, "150.00", "150.02"),

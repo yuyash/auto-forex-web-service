@@ -68,8 +68,6 @@
     "open_short_units": "Open Short Size",
     "account_balance": "Account Balance",
     "account_nav": "Account NAV",
-    "lock_entered_at": "Lock Entered At",
-    "cooldown_until": "Cooldown Until",
     "status": "Status",
     "direction": "Direction",
     "net_units": "Net Units",
@@ -93,7 +91,6 @@
     "protection_level": {
       "normal": "Normal",
       "shrink": "Shrink",
-      "locked": "Locked",
       "emergency": "Emergency",
       "unknown": "Unknown"
     },

@@ -81,7 +81,10 @@
       "title_ja": "自動開始 最大スプレッド（pips）",
       "default": 3,
       "minimum": 0.1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -91,7 +94,10 @@
       "title_ja": "自動開始 最大ボラティリティ（ATR pips）",
       "default": 25,
       "minimum": 0.1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -103,7 +109,10 @@
       "description_ja": "自動方向フィルタ専用の現在ATRが、同じく専用の基準ATRのこの倍率を超える場合に開始を見送ります。",
       "default": 3,
       "minimum": 0.1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -115,7 +124,10 @@
       "description_ja": "自動方向セーフティフィルタだけで使う現在ATRの期間です。",
       "default": 14,
       "minimum": 1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -127,7 +139,10 @@
       "description_ja": "自動方向セーフティフィルタだけで使う基準ATRの期間です。",
       "default": 96,
       "minimum": 1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -139,7 +154,10 @@
       "description_ja": "ATRメトリクスが未確定の間、自動方向セーフティフィルタだけで使う代替Tickボラティリティ期間です。",
       "default": 60,
       "minimum": 1,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -151,7 +169,10 @@
       "description_ja": "長期EMAの傾き絶対値がこの値を超える場合、自動開始を見送ります。",
       "default": 5,
       "minimum": 0.01,
-      "dependsOn": { "field": "auto_direction_filter_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "auto_direction_filter_enabled",
+        "values": [true]
+      },
       "group": "Trade Direction",
       "group_ja": "取引方向"
     },
@@ -245,7 +266,10 @@
       "description_ja": "ネット建玉の絶対上限。最大ネットユニット数で指定する方式のときだけ使われます。",
       "default": 8000,
       "minimum": 0,
-      "dependsOn": { "field": "capacity_limit_mode", "values": ["max_net_units"] },
+      "dependsOn": {
+        "field": "capacity_limit_mode",
+        "values": ["max_net_units"]
+      },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -256,10 +280,16 @@
       "description": "Fixed uses Add Lot Progression. Remaining Linear divides remaining capacity up to Max Net Units across remaining add steps.",
       "description_ja": "固定は増し玉ロット増加方式に従います。残余線形は最大ネットユニットまでの残り余力を残り増し玉段数へ均等配分します。",
       "enum": ["fixed", "remaining_linear"],
-      "enum_labels": { "fixed": "Fixed", "remaining_linear": "Remaining Linear" },
+      "enum_labels": {
+        "fixed": "Fixed",
+        "remaining_linear": "Remaining Linear"
+      },
       "enum_labels_ja": { "fixed": "固定", "remaining_linear": "残余線形" },
       "default": "fixed",
-      "dependsOn": { "field": "capacity_limit_mode", "values": ["max_net_units"] },
+      "dependsOn": {
+        "field": "capacity_limit_mode",
+        "values": ["max_net_units"]
+      },
       "group": "Risk Limits",
       "group_ja": "リスク上限"
     },
@@ -369,10 +399,17 @@
     "interval_mode": {
       "type": "string",
       "title": "Add Interval Mode",
-      "title_ja": "増し玉間隔モード",
+      "title_ja": "増し玉間隔設定",
       "description": "How adverse pips from the average price are converted into add thresholds.",
       "description_ja": "平均価格からの逆行pipsを増し玉閾値に変換する方法。",
-      "enum": ["constant", "additive", "subtractive", "multiplicative", "divisive", "manual"],
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive",
+        "manual"
+      ],
       "enum_labels": {
         "constant": "Constant",
         "additive": "Additive",
@@ -414,14 +451,20 @@
         {
           "field": "n_pips_head",
           "operator": "gte",
-          "dependsOn": { "field": "interval_mode", "values": ["additive", "multiplicative"] },
+          "dependsOn": {
+            "field": "interval_mode",
+            "values": ["additive", "multiplicative"]
+          },
           "message": "Must be greater than or equal to Interval Head for Additive or Multiplicative modes",
           "message_ja": "加算または乗算モードでは間隔初期値以上にしてください"
         },
         {
           "field": "n_pips_head",
           "operator": "lte",
-          "dependsOn": { "field": "interval_mode", "values": ["subtractive", "divisive"] },
+          "dependsOn": {
+            "field": "interval_mode",
+            "values": ["subtractive", "divisive"]
+          },
           "message": "Must be less than or equal to Interval Head for Subtractive or Divisive modes",
           "message_ja": "減算または除算モードでは間隔初期値以下にしてください"
         }
