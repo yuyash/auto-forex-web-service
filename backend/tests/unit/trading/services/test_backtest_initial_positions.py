@@ -108,6 +108,55 @@ def test_validate_initial_position_cycles_allows_sparse_layers():
 
 
 @pytest.mark.django_db
+def test_validate_initial_position_cycles_allows_sparse_layer_numbers():
+    task = _task(
+        initial_position_cycles=[
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "150.00",
+                    },
+                    {
+                        "layer_number": 2,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "149.40",
+                    },
+                    {
+                        "layer_number": 4,
+                        "retracement_count": 0,
+                        "units": 1000,
+                        "entry_price": "148.80",
+                    },
+                ],
+            }
+        ]
+    )
+    task.config.parameters = {
+        **task.config.parameters,
+        "f_max": 4,
+    }
+    task.config.save(update_fields=["parameters"])
+
+    normalized = validate_initial_position_cycles(
+        task=task,
+        config=task.config,
+        cycles=task.initial_position_cycles,
+        pip_size=task.pip_size,
+    )
+
+    assert [(p.layer_number, p.retracement_count) for p in normalized[0].positions] == [
+        (1, 0),
+        (2, 0),
+        (4, 0),
+    ]
+
+
+@pytest.mark.django_db
 def test_validate_initial_position_cycles_rejects_missing_layer_r0():
     task = _task(
         initial_position_cycles=[

@@ -214,7 +214,6 @@ def _validate_initial_position_cycles_impl(
             normalized_positions.sort(key=lambda p: (p.layer_number, p.retracement_count))
             _validate_slot_structure(
                 positions=normalized_positions,
-                path=path,
                 refill_up_to=cfg.refill_up_to,
                 errors=errors,
             )
@@ -762,16 +761,16 @@ def _normalize_position(
 def _validate_slot_structure(
     *,
     positions: list[NormalizedSeedPosition],
-    path: str,
     refill_up_to: int,
     errors: dict[str, Any],
 ) -> None:
     """Validate that seeded Snowball slots can represent a runtime grid.
 
-    R0 is never refillable, so every used layer must include it and higher
-    layers cannot skip an earlier layer.  Counter slots up to ``refill_up_to``
-    may be absent because normal runtime can close them and make them
-    available again while later slots remain present or sealed.
+    R0 is never refillable, so every used layer must include it.  Layer
+    numbers may be sparse because normal runtime removes empty non-L1 layers
+    while higher layers can remain active.  Counter slots up to
+    ``refill_up_to`` may be absent because runtime can close them and make
+    them available again while later slots remain present or sealed.
     """
     if not positions:
         return
@@ -787,22 +786,7 @@ def _validate_slot_structure(
     if not by_layer:
         return
 
-    max_layer = max(by_layer)
-    for layer_number in range(1, max_layer + 1):
-        layer_positions = by_layer.get(layer_number)
-        if not layer_positions:
-            offender = next(
-                (position for position in positions if position.layer_number > layer_number),
-                None,
-            )
-            key = (
-                f"{offender.source_path}.layer_number"
-                if offender is not None
-                else f"{path}.positions"
-            )
-            errors[key] = f"Layer L{layer_number} must exist before higher layers."
-            continue
-
+    for layer_number, layer_positions in sorted(by_layer.items()):
         by_retracement = {position.retracement_count: position for position in layer_positions}
         max_retracement = max(by_retracement)
         if 0 not in by_retracement:
