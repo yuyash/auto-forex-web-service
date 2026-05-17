@@ -19,6 +19,11 @@ const strategies: Strategy[] = [
         refill_limit_enabled: {
           type: 'boolean',
           title: 'Set Refillable Slot Limit',
+          dependsOn: {
+            field: 'stop_loss_enabled',
+            values: [true],
+            and: [{ field: 'rebuild_enabled', values: [true] }],
+          },
         },
         refill_up_to: {
           type: 'integer',
@@ -130,6 +135,9 @@ describe('HistoricalStrategyConfigDialog', () => {
       screen.queryByText('Rebuild Entry Price Mode')
     ).not.toBeInTheDocument();
     expect(screen.queryByText('stop_loss_exit')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Set Refillable Slot Limit')
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Refill Up To Slot')).not.toBeInTheDocument();
   });
 

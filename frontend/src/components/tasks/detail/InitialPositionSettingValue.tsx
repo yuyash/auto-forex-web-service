@@ -47,15 +47,21 @@ export function selectInitialPositionSettingValue(
     source: Record<string, unknown>;
   }
 ): unknown {
-  if (
+  const snapshotHasInitialPositionCycles =
     context.snapshot &&
-    !Object.prototype.hasOwnProperty.call(
+    Object.prototype.hasOwnProperty.call(
       context.source,
       'initial_position_cycles'
-    )
+    );
+
+  if (
+    context.snapshot &&
+    !snapshotHasInitialPositionCycles &&
+    value === undefined
   ) {
     return [];
   }
+
   return value;
 }
 

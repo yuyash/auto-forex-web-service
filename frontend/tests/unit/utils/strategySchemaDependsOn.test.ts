@@ -219,7 +219,15 @@ describe('isParameterVisible', () => {
       default: [],
       dependsOn: { field: 'rebuild_stop_loss_mode', values: ['manual'] },
     },
-    refill_limit_enabled: { type: 'boolean', default: true },
+    refill_limit_enabled: {
+      type: 'boolean',
+      default: true,
+      dependsOn: {
+        field: 'stop_loss_enabled',
+        values: [true],
+        and: [{ field: 'rebuild_enabled', values: [true] }],
+      },
+    },
     refill_up_to: {
       type: 'integer',
       default: 2,
@@ -302,17 +310,46 @@ describe('isParameterVisible', () => {
     expect(
       isParameterVisible(
         'refill_up_to',
-        { refill_limit_enabled: false },
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: true,
+          refill_limit_enabled: false,
+        },
         schemaProps
       )
     ).toBe(false);
     expect(
       isParameterVisible(
         'refill_up_to',
-        { refill_limit_enabled: true },
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: true,
+          refill_limit_enabled: true,
+        },
         schemaProps
       )
     ).toBe(true);
+  });
+
+  it('hides the refill limit toggle when rebuild is disabled', () => {
+    expect(
+      isParameterVisible(
+        'refill_limit_enabled',
+        { stop_loss_enabled: true, rebuild_enabled: false },
+        schemaProps
+      )
+    ).toBe(false);
+    expect(
+      isParameterVisible(
+        'refill_up_to',
+        {
+          stop_loss_enabled: true,
+          rebuild_enabled: false,
+          refill_limit_enabled: true,
+        },
+        schemaProps
+      )
+    ).toBe(false);
   });
 
   it('cascades visibility through nested dependsOn chains', () => {

@@ -69,6 +69,13 @@ class TestSnowballStrategyEndpoints:
         assert "constant" in im["enum"]
         assert "manual" in im["enum"]
         assert schema["properties"]["refill_limit_enabled"]["group"] == "Rebuild"
+        assert (
+            schema["properties"]["refill_limit_enabled"]["dependsOn"]["field"]
+            == "stop_loss_enabled"
+        )
+        assert schema["properties"]["refill_limit_enabled"]["dependsOn"]["and"] == [
+            {"field": "rebuild_enabled", "values": [True]}
+        ]
         assert schema["properties"]["refill_up_to"]["group"] == "Rebuild"
         assert schema["properties"]["refill_up_to"]["dependsOn"]["field"] == "refill_limit_enabled"
         assert schema["properties"]["refill_up_to"]["minimum"] == 1
