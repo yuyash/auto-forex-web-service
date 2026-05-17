@@ -102,6 +102,51 @@ def _seed_cycles(task, count: int, start: datetime) -> list[UUID]:
     return cycle_ids
 
 
+def _snowball_state_with_closed_slot_initial_cycle() -> dict:
+    return {
+        "protection_level": "normal",
+        "initialised": True,
+        "cycles": [
+            {
+                "cycle_id": 1,
+                "direction": "long",
+                "grid": {
+                    "layers": [
+                        {
+                            "layer_number": 1,
+                            "slots": [
+                                {
+                                    "index": 0,
+                                    "entry": None,
+                                    "ever_closed": True,
+                                }
+                            ],
+                            "base_units": 1000,
+                            "refill_up_to": 3,
+                        }
+                    ]
+                },
+                "hedge_entries": [],
+                "counter_close_count": 0,
+                "status": "completed",
+                "trade_cycle_id": None,
+                "is_initial_position_seed": True,
+                "realized_pnl": "0",
+            }
+        ],
+        "next_entry_id": 2,
+        "lock_hedge_ids": [],
+        "lock_entered_at": None,
+        "cooldown_until": None,
+        "last_bid": None,
+        "last_ask": None,
+        "last_mid": None,
+        "account_balance": "100000",
+        "account_nav": "100000",
+        "metrics": {},
+    }
+
+
 @pytest.mark.django_db
 class TestStrategyEventsPagination:
     """GET /api/trading/tasks/backtest/{id}/strategy-events/ list mode."""
@@ -333,6 +378,54 @@ class TestStrategyEventsPagination:
             trade["is_initial_position_seed"]
             for trade in detail_response.data["cycles"][0]["trades"]
         )
+
+    def test_closed_slot_initial_state_cycle_is_returned_and_marked(self):
+        task = _make_task()
+        task.initial_positions_enabled = True
+        task.initial_position_cycles = [
+            {
+                "direction": "long",
+                "positions": [
+                    {
+                        "layer_number": 1,
+                        "retracement_count": 0,
+                        "status": "closed_slot",
+                    }
+                ],
+            }
+        ]
+        task.save(update_fields=["initial_positions_enabled", "initial_position_cycles"])
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            strategy_state=_snowball_state_with_closed_slot_initial_cycle(),
+            current_balance=Decimal("100000"),
+            last_tick_timestamp=task.start_time,
+        )
+        client = _auth_client(task.user)
+
+        list_response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
+
+        assert list_response.status_code == status.HTTP_200_OK
+        assert list_response.data["pagination"]["total_count"] == 1
+        cycle = list_response.data["cycles"][0]
+        assert UUID(cycle["cycle_id"])
+        assert cycle["direction"] == "long"
+        assert cycle["status"] == "completed"
+        assert cycle["trade_count"] == 0
+        assert cycle["is_initial_position_seed"] is True
+        assert cycle["grid_state"]["summary"]["empty"] == 1
+
+        detail_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": cycle["cycle_id"]},
+        )
+
+        assert detail_response.status_code == status.HTTP_200_OK
+        assert detail_response.data["cycles"][0]["cycle_id"] == cycle["cycle_id"]
+        assert detail_response.data["cycles"][0]["is_initial_position_seed"] is True
+        assert detail_response.data["cycles"][0]["trades"] == []
 
     def test_summary_reflects_filtered_universe(self):
         task = _make_task()

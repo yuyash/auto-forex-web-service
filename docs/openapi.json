@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.58.0",
+        "version": "1.58.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -3659,6 +3659,20 @@
                     },
                     {
                         "in": "query",
+                        "name": "initial_position_filter",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "initial",
+                                "normal"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter positions by initial-position seed marker.\n\n* `all` - all\n* `initial` - initial\n* `normal` - normal"
+                    },
+                    {
+                        "in": "query",
                         "name": "ordering",
                         "schema": {
                             "type": "string"
@@ -6000,6 +6014,20 @@
                             "type": "boolean"
                         },
                         "description": "Include position trade_ids in the response."
+                    },
+                    {
+                        "in": "query",
+                        "name": "initial_position_filter",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "initial",
+                                "normal"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Filter positions by initial-position seed marker.\n\n* `all` - all\n* `initial` - initial\n* `normal` - normal"
                     },
                     {
                         "in": "query",

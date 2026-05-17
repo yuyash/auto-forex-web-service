@@ -1148,6 +1148,55 @@ class TestPositions:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["results"][0]["is_initial_position_seed"] is True
 
+    def test_positions_filter_by_initial_position_seed_flag(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        initial_position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=True,
+            is_initial_position_seed=True,
+        )
+        normal_position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.SHORT,
+            units=1000,
+            entry_price=Decimal("150.000"),
+            entry_time=now + timedelta(minutes=1),
+            is_open=True,
+            is_initial_position_seed=False,
+        )
+
+        initial_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"initial_position_filter": "initial"},
+        )
+        normal_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"initial_position_filter": "normal"},
+        )
+        all_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"initial_position_filter": "all"},
+        )
+
+        assert initial_response.status_code == status.HTTP_200_OK
+        assert [row["id"] for row in initial_response.data["results"]] == [str(initial_position.id)]
+        assert normal_response.status_code == status.HTTP_200_OK
+        assert [row["id"] for row in normal_response.data["results"]] == [str(normal_position.id)]
+        assert all_response.status_code == status.HTTP_200_OK
+        assert all_response.data["count"] == 2
+
     def test_positions_include_realized_pnl_money_for_closed_rows(self):
         task = _make_task()
         client = _auth_client(task.user)

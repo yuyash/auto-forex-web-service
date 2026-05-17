@@ -423,7 +423,11 @@ class BacktestInitialPositionService:
         for cycle_spec in normalized_cycles:
             first = cycle_spec.positions[0]
             root_entry_id = snowball_state.allocate_id()
-            cycle = SnowballCycle(cycle_id=root_entry_id, direction=cycle_spec.direction)
+            cycle = SnowballCycle(
+                cycle_id=root_entry_id,
+                direction=cycle_spec.direction,
+                is_initial_position_seed=True,
+            )
             snowball_state.cycles.append(cycle)
 
             for position_spec in cycle_spec.positions:

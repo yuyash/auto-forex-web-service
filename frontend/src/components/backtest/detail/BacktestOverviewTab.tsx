@@ -5,6 +5,10 @@ import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { ExecutionStatusSummary } from '../../tasks/detail/ExecutionStatusSummary';
 import { HistoricalStrategyConfigDialog } from '../../tasks/detail/HistoricalStrategyConfigDialog';
+import {
+  InitialPositionSettingValue,
+  selectInitialPositionSettingValue,
+} from '../../tasks/detail/InitialPositionSettingValue';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
 import { buildBacktestTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -73,6 +77,7 @@ export function BacktestOverviewTab({
   language,
   isViewingHistorical = false,
   historicalStrategyConfig,
+  executionId,
   historicalTaskConfig,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
@@ -205,9 +210,29 @@ export function BacktestOverviewTab({
             };
           }
 
+          if (definition.key === 'initial_position_cycles') {
+            return {
+              ...definition,
+              render: (
+                value: unknown,
+                context: {
+                  task: Record<string, unknown>;
+                  snapshot?: Record<string, unknown> | null;
+                  source: Record<string, unknown>;
+                }
+              ) => (
+                <InitialPositionSettingValue
+                  value={selectInitialPositionSettingValue(value, context)}
+                  executionId={executionId}
+                />
+              ),
+            };
+          }
+
           return definition;
         }),
     [
+      executionId,
       historicalStrategyConfig,
       hasExecutionConfigSnapshot,
       isSuperuser,

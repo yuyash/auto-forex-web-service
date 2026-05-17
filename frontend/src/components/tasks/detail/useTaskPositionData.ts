@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import {
   useTaskPositions,
+  type InitialPositionFilter,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
 import type { TaskType } from '../../../types/common';
@@ -20,6 +21,7 @@ interface UseTaskPositionDataOptions {
   viewMode: PositionViewMode;
   effectiveCycleId: string;
   effectivePositionId: string;
+  initialPositionFilter: InitialPositionFilter;
   rangeFrom?: string;
   rangeTo?: string;
 }
@@ -53,6 +55,7 @@ export function useTaskPositionData({
   viewMode,
   effectiveCycleId,
   effectivePositionId,
+  initialPositionFilter,
   rangeFrom,
   rangeTo,
 }: UseTaskPositionDataOptions) {
@@ -86,6 +89,7 @@ export function useTaskPositionData({
     executionRunId,
     cycleId: effectiveCycleId || undefined,
     positionId: effectivePositionId || undefined,
+    initialPositionFilter,
     rangeFrom,
     rangeTo,
     ordering,
@@ -243,6 +247,7 @@ interface UseTaskPositionQueryOptions {
   setRowsPerPage: (rowsPerPage: number) => void;
   cycleId?: string;
   positionId?: string;
+  initialPositionFilter: InitialPositionFilter;
   rangeFrom?: string;
   rangeTo?: string;
   ordering: string;
@@ -261,6 +266,7 @@ function useTaskPositionQuery({
   setRowsPerPage,
   cycleId,
   positionId,
+  initialPositionFilter,
   rangeFrom,
   rangeTo,
   ordering,
@@ -276,6 +282,7 @@ function useTaskPositionQuery({
     pageSize: rowsPerPage,
     cycleId,
     positionId,
+    initialPositionFilter,
     rangeFrom,
     rangeTo,
     ordering,

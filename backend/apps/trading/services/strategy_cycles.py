@@ -16,10 +16,11 @@ Heavy full-trade serialisation is therefore avoided on every list render.
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.db.models import Q
 
@@ -36,6 +37,18 @@ _PROTECTION_METHODS: frozenset[str] = frozenset(
 # Minimum number of characters required for substring filters on UUIDs to
 # keep the query cheap while still being useful for search-by-prefix.
 _MIN_ID_FILTER_LENGTH = 3
+
+
+@dataclass(frozen=True, slots=True)
+class _StateCycleMeta:
+    public_id: str
+    internal_id: str
+    direction: str
+    status: str
+    started_at: datetime | None
+    grid_state: dict[str, Any] | None
+    is_initial_position_seed: bool
+    initial_position_seed_count: int
 
 
 class StrategyCyclesService:
@@ -79,6 +92,30 @@ class StrategyCyclesService:
             strategy_type=strategy_type,
             strategy_state=strategy_state,
         )
+        state_cycle_meta_by_id = _load_state_initial_cycle_meta(
+            task=task,
+            task_type=task_type,
+            execution_id=str(execution_id),
+            strategy_state=strategy_state,
+            cycle_grid_state_map=cycle_grid_state_map,
+        )
+        if state_cycle_meta_by_id:
+            cycle_status_map = {
+                **cycle_status_map,
+                **{
+                    cycle_id: meta.status
+                    for cycle_id, meta in state_cycle_meta_by_id.items()
+                    if meta.status
+                },
+            }
+            cycle_grid_state_map = {
+                **cycle_grid_state_map,
+                **{
+                    cycle_id: meta.grid_state
+                    for cycle_id, meta in state_cycle_meta_by_id.items()
+                    if meta.grid_state is not None
+                },
+            }
 
         if cycle_id:
             return self._build_detail_response(
@@ -90,6 +127,7 @@ class StrategyCyclesService:
                 strategy_capabilities=strategy_capabilities,
                 cycle_status_map=cycle_status_map,
                 cycle_grid_state_map=cycle_grid_state_map,
+                state_cycle_meta_by_id=state_cycle_meta_by_id,
                 last_tick_ts=last_tick_ts,
             )
 
@@ -101,6 +139,7 @@ class StrategyCyclesService:
             strategy_capabilities=strategy_capabilities,
             cycle_status_map=cycle_status_map,
             cycle_grid_state_map=cycle_grid_state_map,
+            state_cycle_meta_by_id=state_cycle_meta_by_id,
             last_tick_ts=last_tick_ts,
             page=cycle_page,
             page_size=cycle_page_size,
@@ -125,6 +164,7 @@ class StrategyCyclesService:
         strategy_capabilities: dict[str, Any],
         cycle_status_map: dict[str, str],
         cycle_grid_state_map: dict[str, dict[str, Any]],
+        state_cycle_meta_by_id: dict[str, _StateCycleMeta],
         last_tick_ts: str | None,
     ) -> dict[str, Any]:
         from apps.trading.models.trades import Trade
@@ -158,6 +198,19 @@ class StrategyCyclesService:
         )
 
         if not rows:
+            state_cycle = _build_state_only_cycle(state_cycle_meta_by_id.get(cycle_id))
+            if state_cycle is not None:
+                _attach_cycle_display_money([state_cycle], task=task, task_type=task_type)
+                return {
+                    "execution_id": execution_id,
+                    "visualization": strategy_capabilities.get("visualization", {}),
+                    "cycles": [state_cycle],
+                    "summary": _build_summary([state_cycle]),
+                    "pagination": None,
+                    "last_tick_timestamp": last_tick_ts,
+                    "strategy_type": strategy_type,
+                    "money_context": _task_money_context_dict(task=task, task_type=task_type),
+                }
             return {
                 "execution_id": execution_id,
                 "visualization": strategy_capabilities.get("visualization", {}),
@@ -182,6 +235,7 @@ class StrategyCyclesService:
             metrics_by_minute=metrics_by_minute,
             authoritative_status=cycle_status_map.get(cycle_id),
             grid_state=cycle_grid_state_map.get(cycle_id),
+            state_meta=state_cycle_meta_by_id.get(cycle_id),
             unrealized_pnl_by_position=unrealized_pnl_by_position,
             include_trades=True,
         )
@@ -212,6 +266,7 @@ class StrategyCyclesService:
         strategy_capabilities: dict[str, Any],
         cycle_status_map: dict[str, str],
         cycle_grid_state_map: dict[str, dict[str, Any]],
+        state_cycle_meta_by_id: dict[str, _StateCycleMeta],
         last_tick_ts: str | None,
         page: int,
         page_size: int,
@@ -226,6 +281,10 @@ class StrategyCyclesService:
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=execution_id,
+        )
+        cycle_meta = _merge_state_only_cycle_meta(
+            cycle_meta=cycle_meta,
+            state_cycle_meta_by_id=state_cycle_meta_by_id,
         )
 
         # Step 2: apply id-substring filters that require scanning the
@@ -308,6 +367,7 @@ class StrategyCyclesService:
                 aggregate=aggregates.per_cycle[cid],
                 authoritative_status=cycle_status_map.get(cid),
                 grid_state=cycle_grid_state_map.get(cid),
+                state_meta=state_cycle_meta_by_id.get(cid),
                 unrealized_pnl_by_position=unrealized_pnl_by_position,
             )
             for cid in page_cycle_ids
@@ -398,6 +458,127 @@ def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:
     if row is not None:
         return row.isoformat()
     return None
+
+
+def _load_state_initial_cycle_meta(
+    *,
+    task: Any,
+    task_type: str,
+    execution_id: str,
+    strategy_state: dict[str, Any] | None,
+    cycle_grid_state_map: dict[str, dict[str, Any]],
+) -> dict[str, _StateCycleMeta]:
+    """Return initial-position cycle metadata persisted in Snowball state.
+
+    Initial-position imports can contain closed slots only. Those slots affect
+    Snowball state but do not create Trade rows, so the strategy page needs a
+    state-derived cycle row to make them visible and identifiable.
+    """
+    if not isinstance(strategy_state, dict):
+        return {}
+
+    raw_cycles = strategy_state.get("cycles")
+    if not isinstance(raw_cycles, list):
+        return {}
+
+    legacy_initial_cycle_count = _legacy_initial_cycle_count(task)
+    result: dict[str, _StateCycleMeta] = {}
+    for index, raw_cycle in enumerate(raw_cycles):
+        if not isinstance(raw_cycle, dict):
+            continue
+
+        internal_id = str(raw_cycle.get("cycle_id") or "").strip()
+        if not internal_id:
+            continue
+        trade_cycle_id = str(raw_cycle.get("trade_cycle_id") or "").strip()
+        explicit_seed = raw_cycle.get("is_initial_position_seed") is True
+        legacy_state_only_seed = index < legacy_initial_cycle_count and not trade_cycle_id
+        if not explicit_seed and not legacy_state_only_seed:
+            continue
+
+        public_id = trade_cycle_id or _state_only_initial_cycle_public_id(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=execution_id,
+            internal_cycle_id=internal_id,
+        )
+        grid_state = (
+            cycle_grid_state_map.get(public_id)
+            or cycle_grid_state_map.get(trade_cycle_id)
+            or cycle_grid_state_map.get(internal_id)
+        )
+        result[public_id] = _StateCycleMeta(
+            public_id=public_id,
+            internal_id=internal_id,
+            direction=str(raw_cycle.get("direction") or "").lower(),
+            status=str(raw_cycle.get("status") or "completed").lower(),
+            started_at=_initial_state_cycle_started_at(task=task, index=index),
+            grid_state=grid_state,
+            is_initial_position_seed=True,
+            initial_position_seed_count=0,
+        )
+
+    return result
+
+
+def _legacy_initial_cycle_count(task: Any) -> int:
+    if getattr(task, "initial_positions_enabled", False) is not True:
+        return 0
+    cycles = getattr(task, "initial_position_cycles", None)
+    return len(cycles) if isinstance(cycles, list) else 0
+
+
+def _state_only_initial_cycle_public_id(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    internal_cycle_id: str,
+) -> str:
+    return str(
+        uuid5(
+            NAMESPACE_URL,
+            (
+                "auto-forex:"
+                f"{task_type}:{task_id}:{execution_id}:"
+                f"snowball-initial-cycle:{internal_cycle_id}"
+            ),
+        )
+    )
+
+
+def _initial_state_cycle_started_at(*, task: Any, index: int) -> datetime | None:
+    start_time = getattr(task, "start_time", None)
+    if not isinstance(start_time, datetime):
+        return None
+    return start_time - timedelta(seconds=1) + timedelta(microseconds=index)
+
+
+def _merge_state_only_cycle_meta(
+    *,
+    cycle_meta: list[tuple[str, Any]],
+    state_cycle_meta_by_id: dict[str, _StateCycleMeta],
+) -> list[tuple[str, Any]]:
+    if not state_cycle_meta_by_id:
+        return cycle_meta
+
+    seen = {cycle_id for cycle_id, _started_at in cycle_meta}
+    state_only = [
+        (meta.public_id, meta.started_at)
+        for meta in state_cycle_meta_by_id.values()
+        if meta.public_id not in seen
+    ]
+    if not state_only:
+        return cycle_meta
+
+    return sorted(
+        [*state_only, *cycle_meta],
+        key=lambda item: (
+            item[1] is None,
+            item[1].isoformat() if item[1] else "",
+            item[0],
+        ),
+    )
 
 
 def _load_strategy_capabilities(strategy_type: str) -> dict[str, Any]:
@@ -805,20 +986,32 @@ def _build_list_cycle(
     aggregate: dict[str, Any],
     authoritative_status: str | None,
     grid_state: dict[str, Any] | None,
+    state_meta: _StateCycleMeta | None,
     unrealized_pnl_by_position: dict[str, Decimal],
 ) -> dict[str, Any]:
     """Shape a single aggregated cycle into the list-mode payload."""
     status = _resolve_cycle_status(aggregate, authoritative_status)
+    direction = aggregate["direction"] or (state_meta.direction if state_meta else "")
 
     unrealized_pnl = Decimal("0")
     for pid in aggregate["still_open_position_ids"]:
         unrealized_pnl += unrealized_pnl_by_position.get(pid, Decimal("0"))
 
-    started_at = aggregate["started_at"]
+    started_at = aggregate["started_at"] or (state_meta.started_at if state_meta else None)
     ended_at = aggregate["last_timestamp"] if status == "completed" else None
+    if ended_at is None and status == "completed" and state_meta is not None:
+        ended_at = state_meta.started_at
+    initial_position_seed_count = aggregate["initial_position_seed_count"]
+    is_initial_position_seed = aggregate["is_initial_position_seed"]
+    if state_meta is not None and state_meta.is_initial_position_seed:
+        initial_position_seed_count = max(
+            initial_position_seed_count,
+            state_meta.initial_position_seed_count,
+        )
+        is_initial_position_seed = True
     return {
         "cycle_id": cycle_id,
-        "direction": aggregate["direction"],
+        "direction": direction,
         "status": status,
         "started_at": started_at.isoformat() if started_at else None,
         "ended_at": ended_at.isoformat() if ended_at else None,
@@ -829,8 +1022,8 @@ def _build_list_cycle(
         "has_protection": aggregate["has_protection"],
         "protection_count": aggregate["protection_count"],
         "rebuild_count": aggregate["rebuild_count"],
-        "initial_position_seed_count": aggregate["initial_position_seed_count"],
-        "is_initial_position_seed": aggregate["is_initial_position_seed"],
+        "initial_position_seed_count": initial_position_seed_count,
+        "is_initial_position_seed": is_initial_position_seed,
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
@@ -838,6 +1031,21 @@ def _build_list_cycle(
         "grid_state": grid_state,
         "trades": [],
     }
+
+
+def _build_state_only_cycle(meta: _StateCycleMeta | None) -> dict[str, Any] | None:
+    if meta is None:
+        return None
+
+    aggregate = _aggregate_cycle(meta.public_id, [])
+    return _build_list_cycle(
+        cycle_id=meta.public_id,
+        aggregate=aggregate,
+        authoritative_status=meta.status,
+        grid_state=meta.grid_state,
+        state_meta=meta,
+        unrealized_pnl_by_position={},
+    )
 
 
 def _resolve_cycle_status(aggregate: dict[str, Any], authoritative_status: str | None) -> str:
@@ -864,6 +1072,7 @@ def _build_cycle(
     metrics_by_minute: dict[str, dict[str, Any]],
     authoritative_status: str | None = None,
     grid_state: dict[str, Any] | None = None,
+    state_meta: _StateCycleMeta | None = None,
     unrealized_pnl_by_position: dict[str, Decimal] | None = None,
     *,
     include_trades: bool = True,
@@ -871,6 +1080,7 @@ def _build_cycle(
     """Detail-mode cycle builder that serialises every trade in the cycle."""
     aggregate = _aggregate_cycle(cycle_id, trades)
     status = _resolve_cycle_status(aggregate, authoritative_status)
+    direction = aggregate["direction"] or (state_meta.direction if state_meta else "")
 
     unrealized_pnl = Decimal("0")
     for pid in aggregate["still_open_position_ids"]:
@@ -881,11 +1091,21 @@ def _build_cycle(
         if trade["execution_method"] in _OPEN_METHODS and trade.get("position_id"):
             open_price_by_pos[str(trade["position_id"])] = Decimal(str(trade["price"]))
 
-    started_at = aggregate["started_at"]
+    started_at = aggregate["started_at"] or (state_meta.started_at if state_meta else None)
     ended_at = aggregate["last_timestamp"] if status == "completed" else None
+    if ended_at is None and status == "completed" and state_meta is not None:
+        ended_at = state_meta.started_at
+    initial_position_seed_count = aggregate["initial_position_seed_count"]
+    is_initial_position_seed = aggregate["is_initial_position_seed"]
+    if state_meta is not None and state_meta.is_initial_position_seed:
+        initial_position_seed_count = max(
+            initial_position_seed_count,
+            state_meta.initial_position_seed_count,
+        )
+        is_initial_position_seed = True
     return {
         "cycle_id": cycle_id,
-        "direction": aggregate["direction"],
+        "direction": direction,
         "status": status,
         "started_at": started_at.isoformat() if started_at else None,
         "ended_at": ended_at.isoformat() if ended_at else None,
@@ -896,16 +1116,15 @@ def _build_cycle(
         "has_protection": aggregate["has_protection"],
         "protection_count": aggregate["protection_count"],
         "rebuild_count": aggregate["rebuild_count"],
-        "initial_position_seed_count": aggregate["initial_position_seed_count"],
-        "is_initial_position_seed": aggregate["is_initial_position_seed"],
+        "initial_position_seed_count": initial_position_seed_count,
+        "is_initial_position_seed": is_initial_position_seed,
         "position_ids": aggregate["position_ids"],
         "realized_pnl": str(aggregate["realized_pnl"]),
         "unrealized_pnl": str(unrealized_pnl),
         "_conversion_mid_price": str(aggregate.get("last_price") or ""),
         "grid_state": grid_state,
         "trades": [
-            _serialize_trade(t, metrics_by_minute, open_price_by_pos, aggregate["direction"])
-            for t in trades
+            _serialize_trade(t, metrics_by_minute, open_price_by_pos, direction) for t in trades
         ]
         if include_trades
         else [],

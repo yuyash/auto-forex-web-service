@@ -342,6 +342,12 @@ POSITION_STATUS_SPEC = QueryFieldSpec(
     choices=("open", "closed"),
     help_text="Position status filter.",
 )
+INITIAL_POSITION_FILTER_SPEC = QueryFieldSpec(
+    name="initial_position_filter",
+    kind="choice",
+    choices=("all", "initial", "normal"),
+    help_text="Filter positions by initial-position seed marker.",
+)
 INCLUDE_TRADE_IDS_SPEC = QueryFieldSpec(
     name="include_trade_ids",
     kind="bool",
@@ -602,6 +608,7 @@ QUERY_GROUP_SPECS = {
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
             CYCLE_ID_SPEC,
             POSITION_STATUS_SPEC,
+            INITIAL_POSITION_FILTER_SPEC,
             DIRECTION_SPEC,
             INCLUDE_TRADE_IDS_SPEC,
             POSITIONS_RANGE_FROM_SPEC,
@@ -892,6 +899,7 @@ class PositionQuery:
     execution: ExecutionScopedQuery
     cycle_id: UUID | None
     position_status: str
+    initial_position_filter: str
     direction: str
     include_trade_ids: bool
     range: DateRangeQuery
@@ -917,6 +925,7 @@ class PositionQuery:
             ),
             cycle_id=cast(UUID | None, parsed["cycle_id"]),
             position_status=cast(str, parsed["position_status"]),
+            initial_position_filter=cast(str, parsed["initial_position_filter"]),
             direction=cast(str, parsed["direction"]),
             include_trade_ids=cast(bool, parsed["include_trade_ids"]),
             range=_build_date_range_query(
