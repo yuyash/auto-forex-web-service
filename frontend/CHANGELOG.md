@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.5...frontend-v2.0.6) (2026-05-17)
+
+
+### Bug Fixes
+
+* **strategy:** persist snowball grid counts ([#763](https://github.com/yuyash/auto-forex-web-service/issues/763)) ([a912c03](https://github.com/yuyash/auto-forex-web-service/commit/a912c03b0798f816d9abb354e9103b4c3120c74f))
+
 ## [2.0.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.4...frontend-v2.0.5) (2026-05-17)
 
 
