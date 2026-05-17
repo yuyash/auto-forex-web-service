@@ -414,11 +414,11 @@ export default function BacktestTaskForm({
       data_source: DataSource.POSTGRESQL,
       start_time: defaultDateRange.start_time,
       end_time: defaultDateRange.end_time,
-      initial_balance: 10000,
+      initial_balance: 1000000,
       account_currency: defaultCurrency,
       display_currency: defaultCurrency,
       commission_per_trade: 0,
-      pip_size: undefined,
+      pip_size: 0.01,
       instrument: defaultInstrument,
       tick_granularity: 'tick',
       tick_window_value_mode: 'first',
@@ -729,6 +729,8 @@ export default function BacktestTaskForm({
           'start_time',
           'end_time',
           'initial_balance',
+          'commission_per_trade',
+          'pip_size',
           'tick_granularity',
           'tick_window_value_mode',
           'initial_positions_enabled',
@@ -1155,7 +1157,7 @@ export default function BacktestTaskForm({
                       value={field.value ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        field.onChange(val === '' ? undefined : Number(val));
+                        field.onChange(val === '' ? undefined : val);
                       }}
                       fullWidth
                       label={t('backtest:form.pipSizeOptional')}
