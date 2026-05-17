@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.58.0...backend-v1.58.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* **initial-positions:** allow sparse imported layers ([#747](https://github.com/yuyash/auto-forex-web-service/issues/747)) ([e0f0014](https://github.com/yuyash/auto-forex-web-service/commit/e0f00146d2df3e0b0bd711972638e6220ff23375))
+
 ## [1.58.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.57.0...backend-v1.58.0) (2026-05-17)
 
 
