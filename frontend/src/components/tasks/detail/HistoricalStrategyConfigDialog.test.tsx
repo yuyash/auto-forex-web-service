@@ -18,16 +18,11 @@ const strategies: Strategy[] = [
         },
         refill_limit_enabled: {
           type: 'boolean',
-          title: 'Set Refillable Slot Limit',
-          dependsOn: {
-            field: 'stop_loss_enabled',
-            values: [true],
-            and: [{ field: 'rebuild_enabled', values: [true] }],
-          },
+          title: 'Move To Next Layer After Closed Steps',
         },
         refill_up_to: {
           type: 'integer',
-          title: 'Refill Up To Slot',
+          title: 'Reusable Steps Through',
           dependsOn: { field: 'refill_limit_enabled', values: [true] },
         },
         rebuild_entry_price_mode: {
@@ -94,7 +89,7 @@ describe('HistoricalStrategyConfigDialog', () => {
     expect(screen.queryByText('original_entry')).not.toBeInTheDocument();
   });
 
-  it('hides rebuild-only snapshot parameters when rebuild is disabled', () => {
+  it('keeps layer rollover visible when rebuild is disabled', () => {
     const config: NonNullable<TaskExecution['strategy_config']> = {
       id: 'config-1',
       name: 'No Rebuild Config',
@@ -136,9 +131,12 @@ describe('HistoricalStrategyConfigDialog', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText('stop_loss_exit')).not.toBeInTheDocument();
     expect(
-      screen.queryByText('Set Refillable Slot Limit')
+      screen.getByText('Move To Next Layer After Closed Steps')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('false').length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText('Reusable Steps Through')
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('Refill Up To Slot')).not.toBeInTheDocument();
   });
 
   it('renders an edit link when the displayed snapshot is current', () => {

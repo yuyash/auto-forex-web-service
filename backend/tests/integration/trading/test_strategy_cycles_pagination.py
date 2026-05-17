@@ -340,13 +340,28 @@ class TestStrategyEventsPagination:
 
         response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
-            {"cycle_id": str(cycle_ids[1])},
+            {"cycle_id": str(cycle_ids[1]), "include_trades": "true"},
         )
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["pagination"] is None
         assert len(response.data["cycles"]) == 1
         assert len(response.data["cycles"][0]["trades"]) == 2
+
+    def test_detail_mode_omits_trade_ledger_by_default(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        cycle_ids = _seed_cycles(task, count=1, start=datetime(2024, 6, 1, tzinfo=timezone.utc))
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": str(cycle_ids[0])},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["cycles"]) == 1
+        assert response.data["cycles"][0]["trade_count"] == 2
+        assert response.data["cycles"][0]["trades"] == []
 
     def test_initial_position_seed_flag_is_returned_for_cycles_and_trades(self):
         task = _make_task()
@@ -363,7 +378,7 @@ class TestStrategyEventsPagination:
         list_response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
         detail_response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
-            {"cycle_id": str(cycle_id)},
+            {"cycle_id": str(cycle_id), "include_trades": "true"},
         )
 
         assert list_response.status_code == status.HTTP_200_OK

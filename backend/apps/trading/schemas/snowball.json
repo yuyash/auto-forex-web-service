@@ -44,8 +44,8 @@
       "description_ja": "1サイクルあたりの逆行側最大増し玉回数（初回建玉を含まない）。",
       "default": 7,
       "minimum": 2,
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
+      "group": "Counter-Side Layer Settings",
+      "group_ja": "逆行側レイヤー設定"
     },
     "f_max": {
       "type": "integer",
@@ -55,19 +55,19 @@
       "description_ja": "1サイクルで許可される最大レイヤー数。初期レイヤーをL1として数えます。たとえば f_max=3 の場合、L1 から L3 までです。",
       "default": 3,
       "minimum": 0,
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
+      "group": "Counter-Side Layer Settings",
+      "group_ja": "逆行側レイヤー設定"
     },
     "post_r_max_base_factor": {
       "type": "number",
       "title": "Post Max-Steps Base Factor",
       "title_ja": "最大段数超過時ロット倍率",
-      "description": "Multiplier applied to base_units when a new cycle starts after reaching the max steps.",
-      "description_ja": "最大段数到達後の新サイクル開始時に基本ユニット数に適用される倍率。",
+      "description": "Multiplier applied to Base Units for each new counter-side layer after the previous layer can no longer add another step.",
+      "description_ja": "前レイヤーで次の逆行段を追加できなくなり、新しい逆行側レイヤーを作成するときに基本ユニット数へ適用される倍率。",
       "default": 1,
       "minimum": 0.1,
-      "group": "Core Parameters",
-      "group_ja": "コアパラメータ"
+      "group": "Counter-Side Layer Settings",
+      "group_ja": "逆行側レイヤー設定"
     },
     "interval_mode": {
       "type": "string",
@@ -717,26 +717,21 @@
 
     "refill_limit_enabled": {
       "type": "boolean",
-      "title": "Set Refillable Slot Limit",
-      "title_ja": "再建玉可能スロットに上限を設定する",
-      "description": "When enabled, only counter slots up to the configured limit become refillable after normal take-profit close. When disabled, every counter slot through r_max can be refilled.",
-      "description_ja": "有効時、通常利確後に再建玉できる逆行側スロットを設定した上限までに制限します。無効時は r_max までの全逆行側スロットを再建玉できます。",
+      "title": "Move To Next Layer After Closed Steps",
+      "title_ja": "決済済み段数を超えたら次レイヤーへ移る",
+      "description": "When enabled, normally closed counter slots above the configured step limit are sealed. Another adverse add then opens the next layer instead of refilling those higher slots. When disabled, every counter slot through Max Steps can be refilled before moving to the next layer.",
+      "description_ja": "有効時、設定した段数を超える逆行側スロットが通常利確で閉じると、そのスロットは封印されます。その後さらに逆行した場合、高い段の再建玉ではなく次レイヤーで積み増します。無効時は最大段数まで全スロットを再建玉できます。",
       "default": true,
-      "dependsOn": {
-        "field": "stop_loss_enabled",
-        "values": [true],
-        "and": [{ "field": "rebuild_enabled", "values": [true] }]
-      },
-      "group": "Rebuild",
-      "group_ja": "再建"
+      "group": "Counter-Side Layer Settings",
+      "group_ja": "逆行側レイヤー設定"
     },
 
     "refill_up_to": {
       "type": "integer",
-      "title": "Refill Up To Slot",
-      "title_ja": "再建玉可能スロット上限",
-      "description": "When the refillable slot limit is enabled, counter slots from R1 through this number are refillable after normal close instead of triggering a new layer.",
-      "description_ja": "再建玉可能スロット上限が有効な場合、R1からこの番号までの逆行側スロットは通常決済後に再建玉可能になります。",
+      "title": "Reusable Steps Through",
+      "title_ja": "再利用する最大段数",
+      "description": "When next-layer rollover is enabled, counter slots from R1 through this number are refillable after normal take-profit close. Slots above this threshold trigger the next layer after they close.",
+      "description_ja": "次レイヤー移行が有効な場合、R1 からこの番号までの逆行側スロットは通常利確後も再利用できます。このしきい値を超えるスロットは、決済後の次の逆行で次レイヤー移行のきっかけになります。",
       "default": 2,
       "minimum": 1,
       "dependsOn": { "field": "refill_limit_enabled", "values": [true] },
@@ -748,8 +743,8 @@
           "message_ja": "最大段数以下にしてください"
         }
       ],
-      "group": "Rebuild",
-      "group_ja": "再建"
+      "group": "Counter-Side Layer Settings",
+      "group_ja": "逆行側レイヤー設定"
     },
 
     "shrink_enabled": {

@@ -166,7 +166,9 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
             "Retrieve strategy cycles built from Trade.cycle_id. "
             "When ``cycle_id`` is omitted, returns a paginated list of cycle "
             "aggregates (no per-cycle trade ledger).  When ``cycle_id`` is "
-            "supplied, returns a single cycle with its full trade ledger."
+            "supplied, returns a single cycle aggregate.  Pass "
+            "``include_trades=true`` only when the full trade ledger is needed; "
+            "ordinary detail views should use the paginated trades endpoint."
         ),
     )
     @action(
@@ -194,6 +196,7 @@ class TaskSubResourceMixin(TaskStrategyDataMixin):
             cycle_status=query.cycle_status,
             position_id=query.position_id,
             trade_id=query.trade_id,
+            include_trades=query.include_trades,
         )
         return Response(response)
 

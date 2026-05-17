@@ -68,15 +68,16 @@ class TestSnowballStrategyEndpoints:
         im = schema["properties"]["interval_mode"]
         assert "constant" in im["enum"]
         assert "manual" in im["enum"]
-        assert schema["properties"]["refill_limit_enabled"]["group"] == "Rebuild"
+        assert schema["properties"]["r_max"]["group"] == "Counter-Side Layer Settings"
+        assert schema["properties"]["f_max"]["group"] == "Counter-Side Layer Settings"
         assert (
-            schema["properties"]["refill_limit_enabled"]["dependsOn"]["field"]
-            == "stop_loss_enabled"
+            schema["properties"]["post_r_max_base_factor"]["group"] == "Counter-Side Layer Settings"
         )
-        assert schema["properties"]["refill_limit_enabled"]["dependsOn"]["and"] == [
-            {"field": "rebuild_enabled", "values": [True]}
-        ]
-        assert schema["properties"]["refill_up_to"]["group"] == "Rebuild"
+        assert (
+            schema["properties"]["refill_limit_enabled"]["group"] == "Counter-Side Layer Settings"
+        )
+        assert "dependsOn" not in schema["properties"]["refill_limit_enabled"]
+        assert schema["properties"]["refill_up_to"]["group"] == "Counter-Side Layer Settings"
         assert schema["properties"]["refill_up_to"]["dependsOn"]["field"] == "refill_limit_enabled"
         assert schema["properties"]["refill_up_to"]["minimum"] == 1
         assert schema["properties"]["refill_up_to"]["comparisonRules"][0]["field"] == "r_max"

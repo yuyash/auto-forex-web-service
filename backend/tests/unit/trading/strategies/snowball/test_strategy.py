@@ -875,23 +875,7 @@ class TestSnowballRebuildTakeProfitModes:
         assert next_tick_plan.trigger_price == Decimal("144.547")
         assert next_tick_plan.close_price == Decimal("144.697")
 
-    def test_manual_take_profit_mode_skips_grid_order_validation(self):
-        s = _strategy(
-            {
-                "stop_loss_enabled": True,
-                "rebuild_take_profit_mode": "manual",
-                "rebuild_take_profit_manual_pips": [
-                    "8",
-                    "12",
-                    "16",
-                    "20",
-                    "24",
-                    "28",
-                    "32",
-                    "36",
-                ],
-            }
-        )
+    def _cycle_with_take_profit_order_violation(self) -> SnowballCycle:
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
         layer = Layer(
             layer_number=1,
@@ -925,10 +909,57 @@ class TestSnowballRebuildTakeProfitModes:
             )
         )
         cycle.grid.layers.append(layer)
+        return cycle
+
+    def test_manual_take_profit_mode_skips_grid_order_validation(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+        cycle = self._cycle_with_take_profit_order_violation()
 
         s._validate_grid_ordering(cycle)
 
         assert s._grid_order_violation is None
+
+    def test_hidden_manual_take_profit_mode_does_not_skip_validation_when_rebuild_off(
+        self,
+    ):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_enabled": False,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+        cycle = self._cycle_with_take_profit_order_violation()
+
+        s._validate_grid_ordering(cycle)
+
+        assert s._grid_order_violation is not None
+        assert "tp_ok=False" in s._grid_order_violation
 
 
 class TestSnowballPricingHelpers:

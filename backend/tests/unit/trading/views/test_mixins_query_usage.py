@@ -66,6 +66,7 @@ def test_strategy_events_uses_strategy_events_query_params():
             cycle_status="active",
             position_id="abc",
             trade_id="",
+            include_trades=False,
         )
         build.return_value = {"cycles": [], "summary": {}}
 
@@ -83,6 +84,7 @@ def test_strategy_events_uses_strategy_events_query_params():
         cycle_status="active",
         position_id="abc",
         trade_id="",
+        include_trades=False,
     )
     assert response.data == {"cycles": [], "summary": {}}
 
