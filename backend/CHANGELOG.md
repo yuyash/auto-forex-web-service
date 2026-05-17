@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.57.0...backend-v1.58.0) (2026-05-17)
+
+
+### Features
+
+* **initial-positions:** preserve closed grid slots ([#745](https://github.com/yuyash/auto-forex-web-service/issues/745)) ([7999990](https://github.com/yuyash/auto-forex-web-service/commit/79999903a875a2d79e86de033eff7b3a04af57ec))
+
 ## [1.57.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.56.1...backend-v1.57.0) (2026-05-16)
 
 
