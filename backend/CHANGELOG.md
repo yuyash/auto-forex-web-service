@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.2...backend-v2.0.3) (2026-05-17)
+
+
+### Bug Fixes
+
+* **strategy:** move snowball refill limit below reseed ([#759](https://github.com/yuyash/auto-forex-web-service/issues/759)) ([b9034a1](https://github.com/yuyash/auto-forex-web-service/commit/b9034a1d043502629c9705b26fe9d624fb9ef38b))
+
 ## [2.0.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.1...backend-v2.0.2) (2026-05-17)
 
 
