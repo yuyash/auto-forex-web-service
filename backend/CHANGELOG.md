@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.1...backend-v2.0.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* snowball rebuild option order ([#757](https://github.com/yuyash/auto-forex-web-service/issues/757)) ([046a753](https://github.com/yuyash/auto-forex-web-service/commit/046a753c9196d4170c71372b1a573cd1d51a9f5f))
+
 ## [2.0.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.0...backend-v2.0.1) (2026-05-17)
 
 
