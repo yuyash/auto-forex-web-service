@@ -73,7 +73,7 @@ describe('gridState helpers', () => {
     expect(grid?.summary.stopped).toBe(1);
   });
 
-  it('marks a slot as rebuilt after a rebuild even if the slot is currently empty', () => {
+  it('marks a rebuilt slot as empty after the rebuilt position closes', () => {
     const cycle = makeCycle(undefined, [
       {
         id: 'cycle-1',
@@ -119,6 +119,50 @@ describe('gridState helpers', () => {
         retracement_count: 0,
         timestamp: '2026-01-01T00:30:00Z',
         position_id: 'pos-2',
+      },
+    ]);
+
+    const grid = buildDisplayGridState(cycle);
+
+    expect(grid?.layers[0].slots[0].state).toBe('empty');
+    expect(grid?.summary.empty).toBe(1);
+  });
+
+  it('marks a slot as rebuilt while the rebuilt position remains open', () => {
+    const cycle = makeCycle(undefined, [
+      {
+        id: 'cycle-1',
+        direction: 'buy',
+        units: 1000,
+        price: '150.000',
+        execution_method: 'open_position',
+        layer_index: 1,
+        retracement_count: 0,
+        timestamp: '2026-01-01T00:00:00Z',
+        position_id: 'pos-1',
+      },
+      {
+        id: 'close-1',
+        direction: 'buy',
+        units: -1000,
+        price: '149.500',
+        execution_method: 'stop_loss',
+        layer_index: 1,
+        retracement_count: 0,
+        timestamp: '2026-01-01T00:10:00Z',
+        position_id: 'pos-1',
+      },
+      {
+        id: 'rebuild-1',
+        direction: 'buy',
+        units: 1000,
+        price: '150.000',
+        execution_method: 'rebuild_position',
+        layer_index: 1,
+        retracement_count: 0,
+        timestamp: '2026-01-01T00:20:00Z',
+        position_id: 'pos-2',
+        is_rebuild: true,
       },
     ]);
 

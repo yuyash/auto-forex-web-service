@@ -119,13 +119,7 @@ export function buildDisplayGridState(
     maxLayer = Math.max(maxLayer, layer);
     maxSlot = Math.max(maxSlot, slot);
     const key = getSlotBuildCountKey(layer, slot);
-    const prev = historicalStateByKey.get(key);
-    if (prev === 'rebuilt') return;
-    if (prev === 'stopped' && nextState === 'filled') return;
-    if (prev === 'stopped' && nextState === 'empty') return;
-    if (nextState === 'rebuilt' || nextState === 'stopped' || prev == null) {
-      historicalStateByKey.set(key, nextState);
-    }
+    historicalStateByKey.set(key, nextState);
   };
 
   for (const trade of cycle.trades) {
@@ -144,7 +138,10 @@ export function buildDisplayGridState(
 
     if (isOpenTrade(trade)) {
       updateHistoricalState(resolved.layer, resolved.slot, 'filled');
+      continue;
     }
+
+    updateHistoricalState(resolved.layer, resolved.slot, 'empty');
   }
 
   for (const layer of currentGridState.layers) {
@@ -181,10 +178,12 @@ export function buildDisplayGridState(
       let state: StrategyGridSlotState = 'empty';
       if (currentSlot && currentSlot.state !== 'empty') {
         state = currentSlot.state;
-      } else if (historicalState === 'rebuilt') {
-        state = 'rebuilt';
-      } else if (historicalState === 'stopped') {
-        state = 'stopped';
+      } else if (
+        historicalState === 'filled' ||
+        historicalState === 'rebuilt' ||
+        historicalState === 'stopped'
+      ) {
+        state = historicalState;
       }
 
       summary[state] += 1;

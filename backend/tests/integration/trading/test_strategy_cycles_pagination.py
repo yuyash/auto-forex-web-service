@@ -475,19 +475,23 @@ class TestStrategyEventsPagination:
         assert cycle["trades"] == []
         assert cycle["grid_state"]["layers"][0]["slots"][0]["build_count"] == 2
 
-    def test_list_and_detail_grid_states_include_historical_slot_states(self):
+    def test_list_and_detail_grid_states_include_current_slot_states(self):
         task = _make_task()
         client = _auth_client(task.user)
         cycle_id = uuid4()
         stopped_position_id = uuid4()
         rebuilt_original_position_id = uuid4()
         rebuilt_position_id = uuid4()
+        live_rebuilt_original_position_id = uuid4()
+        live_rebuilt_position_id = uuid4()
         open_ts = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
 
-        for position_id, entry_price in (
-            (stopped_position_id, "150.000"),
-            (rebuilt_original_position_id, "149.800"),
-            (rebuilt_position_id, "149.800"),
+        for position_id, entry_price, is_open in (
+            (stopped_position_id, "150.000", False),
+            (rebuilt_original_position_id, "149.800", False),
+            (rebuilt_position_id, "149.800", False),
+            (live_rebuilt_original_position_id, "149.600", False),
+            (live_rebuilt_position_id, "149.600", True),
         ):
             Position.objects.create(
                 id=position_id,
@@ -499,7 +503,7 @@ class TestStrategyEventsPagination:
                 units=1000,
                 entry_price=entry_price,
                 entry_time=open_ts,
-                is_open=False,
+                is_open=is_open,
             )
 
         trade_rows = [
@@ -548,6 +552,39 @@ class TestStrategyEventsPagination:
                 "150.100",
                 True,
                 5,
+            ),
+            (
+                uuid4(),
+                live_rebuilt_original_position_id,
+                "open_position",
+                1,
+                2,
+                1000,
+                "149.600",
+                False,
+                6,
+            ),
+            (
+                uuid4(),
+                live_rebuilt_original_position_id,
+                "stop_loss",
+                1,
+                2,
+                -1000,
+                "149.100",
+                False,
+                7,
+            ),
+            (
+                uuid4(),
+                live_rebuilt_position_id,
+                "rebuild_position",
+                1,
+                2,
+                1000,
+                "149.600",
+                True,
+                8,
             ),
         ]
         for (
@@ -615,6 +652,12 @@ class TestStrategyEventsPagination:
                                             "index": 2,
                                             "entry": None,
                                             "ever_closed": False,
+                                            "build_count": 2,
+                                        },
+                                        {
+                                            "index": 3,
+                                            "entry": None,
+                                            "ever_closed": False,
                                             "build_count": 0,
                                         },
                                     ],
@@ -652,12 +695,13 @@ class TestStrategyEventsPagination:
             assert cycle["trades"] == []
             assert [slot["state"] for slot in cycle["grid_state"]["layers"][0]["slots"]] == [
                 "stopped",
+                "empty",
                 "rebuilt",
                 "empty",
             ]
             assert cycle["grid_state"]["summary"]["stopped"] == 1
             assert cycle["grid_state"]["summary"]["rebuilt"] == 1
-            assert cycle["grid_state"]["summary"]["empty"] == 1
+            assert cycle["grid_state"]["summary"]["empty"] == 2
 
     def test_initial_position_seed_flag_is_returned_for_cycles_and_trades(self):
         task = _make_task()
