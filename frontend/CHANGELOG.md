@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.7...frontend-v2.0.8) (2026-05-18)
+
+
+### Bug Fixes
+
+* **strategy:** clear closed rebuilt grid slots ([#767](https://github.com/yuyash/auto-forex-web-service/issues/767)) ([95fe53f](https://github.com/yuyash/auto-forex-web-service/commit/95fe53f26c116c0aadcaadf370c7602a7d9537d6))
+
 ## [2.0.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.6...frontend-v2.0.7) (2026-05-18)
 
 
