@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.5...backend-v2.0.6) (2026-05-18)
+
+
+### Bug Fixes
+
+* **ui:** restore grid states and chart sizing ([#765](https://github.com/yuyash/auto-forex-web-service/issues/765)) ([30293a7](https://github.com/yuyash/auto-forex-web-service/commit/30293a78258fb82d77b1eecbd9307e986cb04334))
+
 ## [2.0.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.4...backend-v2.0.5) (2026-05-17)
 
 
