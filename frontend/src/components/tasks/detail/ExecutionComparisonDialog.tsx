@@ -324,6 +324,8 @@ export function ExecutionComparisonDialog({
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const metricsLoadKeyRef = useRef<string | null>(null);
+  const metricsRequestSeqRef = useRef(0);
   const { strategies } = useStrategies();
 
   // Sort executions by execution_number for consistent ordering
@@ -338,6 +340,11 @@ export function ExecutionComparisonDialog({
   );
 
   // shortExecId is defined at module level
+
+  const metricsLoadKey = useMemo(
+    () => `${taskType}:${taskId}:${sorted.map((exec) => exec.id).join('|')}`,
+    [sorted, taskId, taskType]
+  );
 
   // Build localized parameter label map from strategy schema.
   // Derive strategy_type from the first execution's strategy_config snapshot.
@@ -355,6 +362,7 @@ export function ExecutionComparisonDialog({
   // task_config.start_time / end_time; for trading tasks, from
   // started_at / completed_at (or now if still running).
   const fetchAllMetrics = useCallback(async () => {
+    const requestSeq = ++metricsRequestSeqRef.current;
     setMetricsLoading(true);
     setMetricsError(null);
     try {
@@ -374,19 +382,24 @@ export function ExecutionComparisonDialog({
           return [exec.id, page.results] as const;
         })
       );
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsData(new Map(entries));
       }
     } catch {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsError(t('comparison.error'));
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsLoading(false);
       }
     }
   }, [sorted, taskId, taskType, interval, t]);
+
+  const handleRefreshMetrics = useCallback(async () => {
+    metricsLoadKeyRef.current = metricsLoadKey;
+    await fetchAllMetrics();
+  }, [fetchAllMetrics, metricsLoadKey]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -395,12 +408,36 @@ export function ExecutionComparisonDialog({
     };
   }, []);
 
-  // Re-fetch when switching to metrics tab or when interval/fetchAllMetrics changes
   useEffect(() => {
-    if (open && tabIndex === 3) {
-      fetchAllMetrics();
+    if (!open) {
+      metricsLoadKeyRef.current = null;
+      metricsRequestSeqRef.current += 1;
+      setMetricsData(new Map<string, MetricPoint[]>());
+      setMetricsError(null);
+      setMetricsLoading(false);
+      return;
     }
-  }, [open, tabIndex, fetchAllMetrics]);
+
+    if (
+      metricsLoadKeyRef.current != null &&
+      metricsLoadKeyRef.current !== metricsLoadKey
+    ) {
+      metricsLoadKeyRef.current = null;
+      metricsRequestSeqRef.current += 1;
+      setMetricsData(new Map<string, MetricPoint[]>());
+      setMetricsError(null);
+      setMetricsLoading(false);
+    }
+  }, [open, metricsLoadKey]);
+
+  // Load metrics once when the tab is first opened. Further reloads are manual.
+  useEffect(() => {
+    if (!open || tabIndex !== 3) return;
+    if (metricsLoadKeyRef.current === metricsLoadKey) return;
+
+    metricsLoadKeyRef.current = metricsLoadKey;
+    void fetchAllMetrics();
+  }, [open, tabIndex, metricsLoadKey, fetchAllMetrics]);
 
   return (
     <Dialog
@@ -471,7 +508,7 @@ export function ExecutionComparisonDialog({
             <span>
               <IconButton
                 size="small"
-                onClick={fetchAllMetrics}
+                onClick={handleRefreshMetrics}
                 disabled={metricsLoading}
                 sx={{ ml: 'auto' }}
               >
@@ -516,7 +553,7 @@ export function ExecutionComparisonDialog({
             error={metricsError}
             interval={interval}
             onIntervalChange={setInterval_}
-            onRefresh={fetchAllMetrics}
+            onRefresh={handleRefreshMetrics}
           />
         )}
       </Box>
