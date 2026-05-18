@@ -1066,13 +1066,13 @@ def _merge_grid_state_with_trade_history(
     grid_state: dict[str, Any] | None,
     trades: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """Overlay historical SL/rebuild slot states onto persisted grid state.
+    """Overlay unresolved SL/rebuild slot states onto persisted grid state.
 
     The persisted Snowball grid stores current occupancy and build counts.
-    Completed slots may therefore be ``empty`` even though the cycle history
-    needs to show that a slot was stop-lossed or rebuilt.  List and detail
-    endpoints already load the relevant trade rows for aggregation, so derive
-    the display-only state here without serialising the trade ledger.
+    List and detail endpoints already load the relevant trade rows for
+    aggregation, so derive any current display state from that history without
+    serialising the trade ledger.  Rebuilt is not a permanent historical mark:
+    once the rebuilt position closes, the cell returns to empty.
     """
     if not isinstance(grid_state, dict) or not trades:
         return grid_state
@@ -1097,14 +1097,8 @@ def _merge_grid_state_with_trade_history(
         max_layer = max(max_layer, layer)
         max_slot = max(max_slot, slot)
         key = slot_key(layer, slot)
-        previous = historical_state_by_key.get(key)
-        if previous == "rebuilt":
-            return
-        if previous == "stopped" and next_state in {"filled", "empty"}:
-            return
-        if next_state in {"rebuilt", "stopped"} or previous is None:
-            historical_state_by_key[key] = next_state
-            historical_position_by_key[key] = position_id
+        historical_state_by_key[key] = next_state
+        historical_position_by_key[key] = position_id if next_state != "empty" else None
 
     for trade in trades:
         resolved = _resolve_trade_grid_slot(
@@ -1127,6 +1121,8 @@ def _merge_grid_state_with_trade_history(
             update_historical_state(layer, slot, "stopped", position_id)
         elif execution_method in _OPEN_METHODS:
             update_historical_state(layer, slot, "filled", position_id)
+        else:
+            update_historical_state(layer, slot, "empty", None)
 
     current_slots: dict[str, dict[str, Any]] = {}
     for raw_layer in grid_state.get("layers") or []:
@@ -1167,7 +1163,7 @@ def _merge_grid_state_with_trade_history(
 
             if current_state != "empty":
                 state = current_state
-            elif historical_state in {"rebuilt", "stopped"}:
+            elif historical_state in {"filled", "rebuilt", "stopped"}:
                 state = historical_state
             else:
                 state = "empty"
