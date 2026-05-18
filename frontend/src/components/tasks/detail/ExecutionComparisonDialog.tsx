@@ -100,6 +100,8 @@ const CHART_METRICS: {
   { key: 'ticks_processed', format: 'int' },
 ];
 
+const COMPARISON_METRIC_KEYS = CHART_METRICS.map((metric) => metric.key);
+
 const RATIO_KEYS = new Set(['margin_ratio']);
 const CHART_HEIGHT = 220;
 
@@ -263,6 +265,49 @@ function shortExecId(exec: TaskExecution): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
+function timestampMs(value: unknown): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function executionMetricsRange(exec: TaskExecution): {
+  startMs: number;
+  endMs: number;
+} | null {
+  const cfg = exec.task_config as Record<string, unknown> | null;
+  const startMs =
+    timestampMs(cfg?.start_time) ??
+    timestampMs(exec.started_at) ??
+    timestampMs(exec.created_at);
+  const endMs =
+    timestampMs(cfg?.end_time) ?? timestampMs(exec.completed_at) ?? Date.now();
+  if (startMs == null || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
+function comparisonMetricsInterval(
+  executions: TaskExecution[],
+  selectedInterval: number
+): number {
+  if (selectedInterval >= 1) return selectedInterval;
+
+  let minMs = Infinity;
+  let maxMs = -Infinity;
+  for (const exec of executions) {
+    const range = executionMetricsRange(exec);
+    if (!range) continue;
+    minMs = Math.min(minMs, range.startMs);
+    maxMs = Math.max(maxMs, range.endMs);
+  }
+
+  if (Number.isFinite(minMs) && Number.isFinite(maxMs) && maxMs > minMs) {
+    return computeAutoInterval((maxMs - minMs) / 1000);
+  }
+
+  return 1;
+}
+
 export function ExecutionComparisonDialog({
   open,
   onClose,
@@ -279,6 +324,8 @@ export function ExecutionComparisonDialog({
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const metricsLoadKeyRef = useRef<string | null>(null);
+  const metricsRequestSeqRef = useRef(0);
   const { strategies } = useStrategies();
 
   // Sort executions by execution_number for consistent ordering
@@ -293,6 +340,11 @@ export function ExecutionComparisonDialog({
   );
 
   // shortExecId is defined at module level
+
+  const metricsLoadKey = useMemo(
+    () => `${taskType}:${taskId}:${sorted.map((exec) => exec.id).join('|')}`,
+    [sorted, taskId, taskType]
+  );
 
   // Build localized parameter label map from strategy schema.
   // Derive strategy_type from the first execution's strategy_config snapshot.
@@ -310,30 +362,11 @@ export function ExecutionComparisonDialog({
   // task_config.start_time / end_time; for trading tasks, from
   // started_at / completed_at (or now if still running).
   const fetchAllMetrics = useCallback(async () => {
+    const requestSeq = ++metricsRequestSeqRef.current;
     setMetricsLoading(true);
     setMetricsError(null);
     try {
-      // Compute a shared auto interval from the union range of all executions
-      let sharedInterval = interval;
-      if (sharedInterval === 0) {
-        let unionMinMs = Infinity;
-        let unionMaxMs = -Infinity;
-        for (const exec of sorted) {
-          const cfg = exec.task_config as Record<string, unknown> | null;
-          const startIso =
-            (cfg?.start_time as string) || exec.started_at || null;
-          const endIso = (cfg?.end_time as string) || exec.completed_at || null;
-          const sMs = startIso ? new Date(startIso).getTime() : 0;
-          const eMs = endIso ? new Date(endIso).getTime() : Date.now();
-          if (sMs > 0 && sMs < unionMinMs) unionMinMs = sMs;
-          if (eMs > unionMaxMs) unionMaxMs = eMs;
-        }
-        if (isFinite(unionMinMs) && unionMaxMs > unionMinMs) {
-          sharedInterval = computeAutoInterval(
-            (unionMaxMs - unionMinMs) / 1000
-          );
-        }
-      }
+      const sharedInterval = comparisonMetricsInterval(sorted, interval);
 
       const entries = await Promise.all(
         sorted.map(async (exec) => {
@@ -341,26 +374,32 @@ export function ExecutionComparisonDialog({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: sharedInterval > 1 ? sharedInterval : undefined,
+            interval: sharedInterval,
+            metricKeys: COMPARISON_METRIC_KEYS,
             pageSize: 500,
             maxPages: 10,
           });
           return [exec.id, page.results] as const;
         })
       );
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsData(new Map(entries));
       }
     } catch {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsError(t('comparison.error'));
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsLoading(false);
       }
     }
   }, [sorted, taskId, taskType, interval, t]);
+
+  const handleRefreshMetrics = useCallback(async () => {
+    metricsLoadKeyRef.current = metricsLoadKey;
+    await fetchAllMetrics();
+  }, [fetchAllMetrics, metricsLoadKey]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -369,19 +408,36 @@ export function ExecutionComparisonDialog({
     };
   }, []);
 
-  // Re-fetch when switching to metrics tab or when interval/fetchAllMetrics changes
   useEffect(() => {
-    if (open && tabIndex === 3) {
-      fetchAllMetrics();
+    if (!open) {
+      metricsLoadKeyRef.current = null;
+      metricsRequestSeqRef.current += 1;
+      setMetricsData(new Map<string, MetricPoint[]>());
+      setMetricsError(null);
+      setMetricsLoading(false);
+      return;
     }
-  }, [open, tabIndex, fetchAllMetrics]);
 
-  // Preload metrics when dialog opens
-  useEffect(() => {
-    if (open) {
-      fetchAllMetrics();
+    if (
+      metricsLoadKeyRef.current != null &&
+      metricsLoadKeyRef.current !== metricsLoadKey
+    ) {
+      metricsLoadKeyRef.current = null;
+      metricsRequestSeqRef.current += 1;
+      setMetricsData(new Map<string, MetricPoint[]>());
+      setMetricsError(null);
+      setMetricsLoading(false);
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, metricsLoadKey]);
+
+  // Load metrics once when the tab is first opened. Further reloads are manual.
+  useEffect(() => {
+    if (!open || tabIndex !== 3) return;
+    if (metricsLoadKeyRef.current === metricsLoadKey) return;
+
+    metricsLoadKeyRef.current = metricsLoadKey;
+    void fetchAllMetrics();
+  }, [open, tabIndex, metricsLoadKey, fetchAllMetrics]);
 
   return (
     <Dialog
@@ -452,7 +508,7 @@ export function ExecutionComparisonDialog({
             <span>
               <IconButton
                 size="small"
-                onClick={fetchAllMetrics}
+                onClick={handleRefreshMetrics}
                 disabled={metricsLoading}
                 sx={{ ml: 'auto' }}
               >
@@ -497,7 +553,7 @@ export function ExecutionComparisonDialog({
             error={metricsError}
             interval={interval}
             onIntervalChange={setInterval_}
-            onRefresh={fetchAllMetrics}
+            onRefresh={handleRefreshMetrics}
           />
         )}
       </Box>

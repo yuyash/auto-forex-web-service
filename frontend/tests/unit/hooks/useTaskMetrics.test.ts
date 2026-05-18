@@ -97,6 +97,31 @@ describe('useTaskMetrics', () => {
     expect(mockFetchPaginatedMetrics).not.toHaveBeenCalled();
   });
 
+  it('requests M1-capable series data for the default one-minute interval', async () => {
+    mockFetchPaginatedMetrics.mockResolvedValueOnce({
+      count: 1,
+      next: null,
+      previous: null,
+      data_source: 'aggregate',
+      resume_cursor_timestamp: null,
+      consistency_warnings: [],
+      results: [{ t: 1, metrics: { current_balance: 100 } }],
+    });
+
+    renderHook(() =>
+      useTaskMetrics({
+        taskId: '42',
+        taskType: TaskType.BACKTEST,
+      })
+    );
+
+    await waitFor(() =>
+      expect(mockFetchPaginatedMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({ interval: 1 })
+      )
+    );
+  });
+
   it('polls incrementally from the latest loaded timestamp', async () => {
     mockFetchPaginatedMetrics
       .mockResolvedValueOnce({

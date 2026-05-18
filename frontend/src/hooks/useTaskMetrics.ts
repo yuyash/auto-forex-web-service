@@ -171,7 +171,7 @@ export function useTaskMetrics({
           taskId,
           taskType,
           executionRunId,
-          interval: interval > 1 ? interval : undefined,
+          interval: interval >= 1 ? interval : undefined,
           since: effectiveSince,
           until,
           pageSize: 500,
