@@ -32,6 +32,13 @@ export interface LatestMetricsResponse {
   result: MetricPoint | null;
 }
 
+export function intervalToGranularity(interval?: number): string | undefined {
+  if (interval == null || !Number.isFinite(interval) || interval < 1) {
+    return undefined;
+  }
+  return `M${Math.trunc(interval)}`;
+}
+
 function buildTaskPrefix(taskType: TaskType): string {
   return taskType === TaskType.BACKTEST
     ? '/api/trading/tasks/backtest'
@@ -68,6 +75,7 @@ export async function fetchMetrics(opts: {
   executionRunId?: string;
   interval?: number;
   granularity?: string;
+  metricKeys?: string[];
   page?: number;
   pageSize?: number;
 }): Promise<MetricsPage> {
@@ -78,10 +86,10 @@ export async function fetchMetrics(opts: {
   if (opts.until) searchParams.set('until', opts.until);
   if (opts.executionRunId != null)
     searchParams.set('execution_id', String(opts.executionRunId));
-  const granularity =
-    opts.granularity ??
-    (opts.interval && opts.interval > 1 ? `M${opts.interval}` : undefined);
+  const granularity = opts.granularity ?? intervalToGranularity(opts.interval);
   if (granularity) searchParams.set('granularity', granularity);
+  if (opts.metricKeys?.length)
+    searchParams.set('metric_keys', opts.metricKeys.join(','));
   if (opts.page) searchParams.set('page', String(opts.page));
   if (opts.pageSize) searchParams.set('page_size', String(opts.pageSize));
 
@@ -153,6 +161,7 @@ export async function fetchPaginatedMetrics(opts: {
   executionRunId?: string;
   interval?: number;
   granularity?: string;
+  metricKeys?: string[];
   pageSize?: number;
   /** Maximum number of pages to fetch (default: unlimited). */
   maxPages?: number;

@@ -100,6 +100,8 @@ const CHART_METRICS: {
   { key: 'ticks_processed', format: 'int' },
 ];
 
+const COMPARISON_METRIC_KEYS = CHART_METRICS.map((metric) => metric.key);
+
 const RATIO_KEYS = new Set(['margin_ratio']);
 const CHART_HEIGHT = 220;
 
@@ -263,6 +265,49 @@ function shortExecId(exec: TaskExecution): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
+function timestampMs(value: unknown): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function executionMetricsRange(exec: TaskExecution): {
+  startMs: number;
+  endMs: number;
+} | null {
+  const cfg = exec.task_config as Record<string, unknown> | null;
+  const startMs =
+    timestampMs(cfg?.start_time) ??
+    timestampMs(exec.started_at) ??
+    timestampMs(exec.created_at);
+  const endMs =
+    timestampMs(cfg?.end_time) ?? timestampMs(exec.completed_at) ?? Date.now();
+  if (startMs == null || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
+function comparisonMetricsInterval(
+  executions: TaskExecution[],
+  selectedInterval: number
+): number {
+  if (selectedInterval >= 1) return selectedInterval;
+
+  let minMs = Infinity;
+  let maxMs = -Infinity;
+  for (const exec of executions) {
+    const range = executionMetricsRange(exec);
+    if (!range) continue;
+    minMs = Math.min(minMs, range.startMs);
+    maxMs = Math.max(maxMs, range.endMs);
+  }
+
+  if (Number.isFinite(minMs) && Number.isFinite(maxMs) && maxMs > minMs) {
+    return computeAutoInterval((maxMs - minMs) / 1000);
+  }
+
+  return 1;
+}
+
 export function ExecutionComparisonDialog({
   open,
   onClose,
@@ -313,27 +358,7 @@ export function ExecutionComparisonDialog({
     setMetricsLoading(true);
     setMetricsError(null);
     try {
-      // Compute a shared auto interval from the union range of all executions
-      let sharedInterval = interval;
-      if (sharedInterval === 0) {
-        let unionMinMs = Infinity;
-        let unionMaxMs = -Infinity;
-        for (const exec of sorted) {
-          const cfg = exec.task_config as Record<string, unknown> | null;
-          const startIso =
-            (cfg?.start_time as string) || exec.started_at || null;
-          const endIso = (cfg?.end_time as string) || exec.completed_at || null;
-          const sMs = startIso ? new Date(startIso).getTime() : 0;
-          const eMs = endIso ? new Date(endIso).getTime() : Date.now();
-          if (sMs > 0 && sMs < unionMinMs) unionMinMs = sMs;
-          if (eMs > unionMaxMs) unionMaxMs = eMs;
-        }
-        if (isFinite(unionMinMs) && unionMaxMs > unionMinMs) {
-          sharedInterval = computeAutoInterval(
-            (unionMaxMs - unionMinMs) / 1000
-          );
-        }
-      }
+      const sharedInterval = comparisonMetricsInterval(sorted, interval);
 
       const entries = await Promise.all(
         sorted.map(async (exec) => {
@@ -341,7 +366,8 @@ export function ExecutionComparisonDialog({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: sharedInterval > 1 ? sharedInterval : undefined,
+            interval: sharedInterval,
+            metricKeys: COMPARISON_METRIC_KEYS,
             pageSize: 500,
             maxPages: 10,
           });
@@ -375,13 +401,6 @@ export function ExecutionComparisonDialog({
       fetchAllMetrics();
     }
   }, [open, tabIndex, fetchAllMetrics]);
-
-  // Preload metrics when dialog opens
-  useEffect(() => {
-    if (open) {
-      fetchAllMetrics();
-    }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Dialog
