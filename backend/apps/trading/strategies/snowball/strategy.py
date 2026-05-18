@@ -498,8 +498,9 @@ class SnowballStrategy(Strategy):
             )
         )
 
-        # Close the head slot — not refillable (cycle is ending).
-        layer.close_slot(slot.index, refillable=False)
+        # R0/layer-initial heads still seal, but counter heads must follow the
+        # layer refill policy so pending-rebuild cycles can reuse allowed slots.
+        layer.close_slot(slot.index)
 
         # Do NOT clear pending rebuilds here.  If other slots have
         # pending rebuilds, the cycle status update in on_tick will

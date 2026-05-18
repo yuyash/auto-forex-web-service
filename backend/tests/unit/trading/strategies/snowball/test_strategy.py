@@ -394,6 +394,62 @@ class TestSnowballCycleTp:
         assert layer.slot_at(0).entry is rebuilt_r0
         assert layer.slot_at(1).entry is counter
 
+    @pytest.mark.parametrize(
+        ("refill_limit_enabled", "expected_sealed"),
+        [(False, False), (True, True)],
+    )
+    def test_counter_head_tp_respects_refill_policy_when_r0_is_pending(
+        self, refill_limit_enabled: bool, expected_sealed: bool
+    ):
+        strategy = _strategy(
+            {
+                "r_max": 5,
+                "refill_limit_enabled": refill_limit_enabled,
+                "refill_up_to": 2,
+            }
+        )
+        state = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 5, 1000, strategy.config.effective_refill_up_to)
+        r0_slot = layer.slot_at(0)
+        counter_slot = layer.slot_at(3)
+        assert r0_slot is not None
+        assert counter_slot is not None
+        r0_slot.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.50"),
+            units=1000,
+            direction=Direction.LONG,
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            step=1,
+            cycle_id=1,
+        )
+        counter = Entry(
+            entry_id=2,
+            step=4,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.00"),
+            close_price=Decimal("154.50"),
+            units=4000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=3,
+        )
+        counter_slot.fill(counter)
+        cycle.add_layer(layer)
+        state.cycles.append(cycle)
+
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.50", "154.52")
+
+        events = strategy._process_cycle_tp(state, tick, cycle)
+
+        assert events[0].event_type == EventType.CLOSE_POSITION
+        assert counter_slot.entry is None
+        assert counter_slot.ever_closed is expected_sealed
+
 
 class TestSnowballStopLossProtectionThreshold:
     def _make_cycle_with_entries(self) -> tuple[SnowballStrategyState, SnowballCycle, Entry, Entry]:
