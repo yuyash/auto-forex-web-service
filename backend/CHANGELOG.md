@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.6...backend-v2.0.7) (2026-05-18)
+
+
+### Bug Fixes
+
+* **strategy:** clear closed rebuilt grid slots ([#767](https://github.com/yuyash/auto-forex-web-service/issues/767)) ([95fe53f](https://github.com/yuyash/auto-forex-web-service/commit/95fe53f26c116c0aadcaadf370c7602a7d9537d6))
+* **strategy:** reuse refillable snowball head slots ([6bfe278](https://github.com/yuyash/auto-forex-web-service/commit/6bfe2784028b57c63b1d16629dde06846102b8d9))
+
 ## [2.0.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.5...backend-v2.0.6) (2026-05-18)
 
 
