@@ -241,7 +241,11 @@ class StrategyCyclesService:
             trades=rows,
             metrics_by_minute=metrics_by_minute,
             authoritative_status=cycle_status_map.get(cycle_id),
-            grid_state=cycle_grid_state_map.get(cycle_id),
+            grid_state=_merge_grid_state_with_trade_history(
+                cycle_id=cycle_id,
+                grid_state=cycle_grid_state_map.get(cycle_id),
+                trades=rows,
+            ),
             state_meta=state_cycle_meta_by_id.get(cycle_id),
             unrealized_pnl_by_position=unrealized_pnl_by_position,
             include_trades=include_trades,
@@ -373,7 +377,11 @@ class StrategyCyclesService:
                 cycle_id=cid,
                 aggregate=aggregates.per_cycle[cid],
                 authoritative_status=cycle_status_map.get(cid),
-                grid_state=cycle_grid_state_map.get(cid),
+                grid_state=_merge_grid_state_with_trade_history(
+                    cycle_id=cid,
+                    grid_state=cycle_grid_state_map.get(cid),
+                    trades=aggregates.trades_by_cycle.get(cid, []),
+                ),
                 state_meta=state_cycle_meta_by_id.get(cid),
                 unrealized_pnl_by_position=unrealized_pnl_by_position,
             )
@@ -804,15 +812,17 @@ def _trade_id_icontains_q(needle: str) -> Q:
 class _CycleAggregates:
     """Lightweight container of per-cycle aggregate data for list mode."""
 
-    __slots__ = ("per_cycle", "still_open_position_ids")
+    __slots__ = ("per_cycle", "still_open_position_ids", "trades_by_cycle")
 
     def __init__(
         self,
         per_cycle: dict[str, dict[str, Any]],
         still_open_position_ids: set[str],
+        trades_by_cycle: dict[str, list[dict[str, Any]]] | None = None,
     ) -> None:
         self.per_cycle = per_cycle
         self.still_open_position_ids = still_open_position_ids
+        self.trades_by_cycle = trades_by_cycle or {}
 
 
 def _load_cycle_aggregates(
@@ -853,6 +863,8 @@ def _load_cycle_aggregates(
             "units",
             "price",
             "execution_method",
+            "layer_index",
+            "retracement_count",
             "timestamp",
             "position_id",
             "is_rebuild",
@@ -873,6 +885,7 @@ def _load_cycle_aggregates(
     return _CycleAggregates(
         per_cycle=per_cycle,
         still_open_position_ids=still_open_position_ids,
+        trades_by_cycle=dict(by_cycle),
     )
 
 
@@ -1045,6 +1058,175 @@ def _build_list_cycle(
         "grid_state": grid_state,
         "trades": [],
     }
+
+
+def _merge_grid_state_with_trade_history(
+    *,
+    cycle_id: str,
+    grid_state: dict[str, Any] | None,
+    trades: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Overlay historical SL/rebuild slot states onto persisted grid state.
+
+    The persisted Snowball grid stores current occupancy and build counts.
+    Completed slots may therefore be ``empty`` even though the cycle history
+    needs to show that a slot was stop-lossed or rebuilt.  List and detail
+    endpoints already load the relevant trade rows for aggregation, so derive
+    the display-only state here without serialising the trade ledger.
+    """
+    if not isinstance(grid_state, dict) or not trades:
+        return grid_state
+
+    slot_by_position_id: dict[str, tuple[int, int]] = {}
+    historical_state_by_key: dict[str, str] = {}
+    historical_position_by_key: dict[str, str | None] = {}
+    historical_build_counts: dict[str, set[str]] = defaultdict(set)
+    max_layer = 0
+    max_slot = 0
+
+    def slot_key(layer: int, slot: int) -> str:
+        return f"{layer}:{slot}"
+
+    def update_historical_state(
+        layer: int,
+        slot: int,
+        next_state: str,
+        position_id: str | None,
+    ) -> None:
+        nonlocal max_layer, max_slot
+        max_layer = max(max_layer, layer)
+        max_slot = max(max_slot, slot)
+        key = slot_key(layer, slot)
+        previous = historical_state_by_key.get(key)
+        if previous == "rebuilt":
+            return
+        if previous == "stopped" and next_state in {"filled", "empty"}:
+            return
+        if next_state in {"rebuilt", "stopped"} or previous is None:
+            historical_state_by_key[key] = next_state
+            historical_position_by_key[key] = position_id
+
+    for trade in trades:
+        resolved = _resolve_trade_grid_slot(
+            cycle_id=cycle_id,
+            trade=trade,
+            slot_by_position_id=slot_by_position_id,
+        )
+        if resolved is None:
+            continue
+
+        layer, slot = resolved
+        position_id = str(trade["position_id"]) if trade.get("position_id") else None
+        if position_id:
+            historical_build_counts[slot_key(layer, slot)].add(position_id)
+
+        execution_method = str(trade.get("execution_method") or "")
+        if execution_method == "rebuild_position":
+            update_historical_state(layer, slot, "rebuilt", position_id)
+        elif execution_method == "stop_loss":
+            update_historical_state(layer, slot, "stopped", position_id)
+        elif execution_method in _OPEN_METHODS:
+            update_historical_state(layer, slot, "filled", position_id)
+
+    current_slots: dict[str, dict[str, Any]] = {}
+    for raw_layer in grid_state.get("layers") or []:
+        if not isinstance(raw_layer, dict):
+            continue
+        try:
+            layer_number = int(raw_layer.get("layer"))
+        except (TypeError, ValueError):
+            continue
+        max_layer = max(max_layer, layer_number)
+        for raw_slot in raw_layer.get("slots") or []:
+            if not isinstance(raw_slot, dict):
+                continue
+            try:
+                slot_index = int(raw_slot.get("slot"))
+            except (TypeError, ValueError):
+                continue
+            max_slot = max(max_slot, slot_index)
+            current_slots[slot_key(layer_number, slot_index)] = raw_slot
+
+    summary = {
+        "filled": 0,
+        "stopped": 0,
+        "rebuilt": 0,
+        "empty": 0,
+        "layer_count": 0,
+        "slot_count_per_layer": max_slot + 1 if max_layer > 0 else 0,
+    }
+    layers: list[dict[str, Any]] = []
+
+    for layer_number in range(1, max_layer + 1):
+        slots: list[dict[str, Any]] = []
+        for slot_index in range(0, max_slot + 1):
+            key = slot_key(layer_number, slot_index)
+            current_slot = current_slots.get(key, {})
+            current_state = str(current_slot.get("state") or "empty")
+            historical_state = historical_state_by_key.get(key)
+
+            if current_state != "empty":
+                state = current_state
+            elif historical_state in {"rebuilt", "stopped"}:
+                state = historical_state
+            else:
+                state = "empty"
+
+            if state not in {"filled", "stopped", "rebuilt", "empty"}:
+                state = "empty"
+
+            summary[state] += 1
+            persisted_build_count = current_slot.get("build_count")
+            derived_build_count = len(historical_build_counts.get(key, set()))
+            build_count = (
+                persisted_build_count
+                if isinstance(persisted_build_count, int)
+                else derived_build_count
+                if derived_build_count > 0
+                else None
+            )
+            slot_payload: dict[str, Any] = {
+                "slot": slot_index,
+                "state": state,
+                "position_id": current_slot.get("position_id")
+                or historical_position_by_key.get(key),
+            }
+            if build_count is not None:
+                slot_payload["build_count"] = build_count
+            slots.append(slot_payload)
+        layers.append({"layer": layer_number, "slots": slots})
+
+    summary["layer_count"] = len(layers)
+    return {
+        "layers": layers,
+        "summary": summary,
+    }
+
+
+def _resolve_trade_grid_slot(
+    *,
+    cycle_id: str,
+    trade: dict[str, Any],
+    slot_by_position_id: dict[str, tuple[int, int]],
+) -> tuple[int, int] | None:
+    position_id = str(trade["position_id"]) if trade.get("position_id") else None
+    if position_id and position_id in slot_by_position_id:
+        return slot_by_position_id[position_id]
+
+    is_initial_entry = str(trade.get("id") or "") == str(cycle_id)
+    raw_layer = 1 if is_initial_entry else trade.get("layer_index")
+    raw_slot = 0 if is_initial_entry else trade.get("retracement_count")
+    if raw_layer is None or raw_slot is None:
+        return None
+
+    try:
+        resolved = (int(raw_layer), int(raw_slot))
+    except (TypeError, ValueError):
+        return None
+
+    if position_id and str(trade.get("execution_method") or "") in _OPEN_METHODS:
+        slot_by_position_id[position_id] = resolved
+    return resolved
 
 
 def _build_state_only_cycle(meta: _StateCycleMeta | None) -> dict[str, Any] | None:
