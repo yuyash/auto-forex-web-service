@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskMetricsTab } from '../../../src/components/tasks/detail/TaskMetricsTab';
 import type { MetricPoint } from '../../../src/utils/fetchMetrics';
@@ -7,18 +7,24 @@ const lineChartProps = vi.hoisted(
   () =>
     [] as Array<{
       series?: Array<{ label?: string; data?: Array<number | null> }>;
+      width?: number;
+      height?: number;
     }>
 );
 const barChartProps = vi.hoisted(
   () =>
     [] as Array<{
       xAxis?: Array<{ data?: string[] }>;
+      width?: number;
+      height?: number;
     }>
 );
 
 vi.mock('@mui/x-charts/LineChart', () => ({
   LineChart: (props: {
     series?: Array<{ label?: string; data?: Array<number | null> }>;
+    width?: number;
+    height?: number;
   }) => {
     lineChartProps.push(props);
     return <div data-testid="line-chart" />;
@@ -26,7 +32,11 @@ vi.mock('@mui/x-charts/LineChart', () => ({
 }));
 
 vi.mock('@mui/x-charts/BarChart', () => ({
-  BarChart: (props: { xAxis?: Array<{ data?: string[] }> }) => {
+  BarChart: (props: {
+    xAxis?: Array<{ data?: string[] }>;
+    width?: number;
+    height?: number;
+  }) => {
     barChartProps.push(props);
     return <div data-testid="bar-chart" />;
   },
@@ -62,6 +72,108 @@ describe('TaskMetricsTab', () => {
     );
 
     expect(screen.getByTestId('line-chart')).toBeInTheDocument();
+  });
+
+  it('falls back to the chart panel size when Safari reports a zero-size chart host', async () => {
+    const clientWidthDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'clientWidth'
+    );
+    const clientHeightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'clientHeight'
+    );
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    const measuredSize = (element: HTMLElement) =>
+      element.dataset.chartPanelPlot === 'true'
+        ? { width: 640, height: 300 }
+        : { width: 0, height: 0 };
+
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return measuredSize(this).width;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return measuredSize(this).height;
+      },
+    });
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      const size = measuredSize(this);
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: size.width,
+        bottom: size.height,
+        width: size.width,
+        height: size.height,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+
+    const data: MetricPoint[] = [1_700_000_000, 1_700_000_060].map(
+      (t, index) => ({
+        t,
+        metrics: {
+          current_balance: 10_000 + index,
+          total_return: index * 0.01,
+        },
+      })
+    );
+
+    const { unmount } = render(
+      <TaskMetricsTab
+        data={data}
+        isLoading={false}
+        error={null}
+        interval={1}
+        since=""
+        until=""
+        onIntervalChange={vi.fn()}
+        onSinceChange={vi.fn()}
+        onUntilChange={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    try {
+      await waitFor(() => {
+        expect(
+          lineChartProps.some(
+            (props) => props.width === 640 && props.height === 300
+          )
+        ).toBe(true);
+        expect(
+          barChartProps.some(
+            (props) => props.width === 640 && props.height === 300
+          )
+        ).toBe(true);
+      });
+    } finally {
+      unmount();
+      if (clientWidthDescriptor) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'clientWidth',
+          clientWidthDescriptor
+        );
+      }
+      if (clientHeightDescriptor) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'clientHeight',
+          clientHeightDescriptor
+        );
+      }
+      HTMLElement.prototype.getBoundingClientRect =
+        originalGetBoundingClientRect;
+    }
   });
 
   it('renders SnowballNet strategy chart metrics without win/loss charts', () => {

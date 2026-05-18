@@ -475,6 +475,190 @@ class TestStrategyEventsPagination:
         assert cycle["trades"] == []
         assert cycle["grid_state"]["layers"][0]["slots"][0]["build_count"] == 2
 
+    def test_list_and_detail_grid_states_include_historical_slot_states(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        cycle_id = uuid4()
+        stopped_position_id = uuid4()
+        rebuilt_original_position_id = uuid4()
+        rebuilt_position_id = uuid4()
+        open_ts = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
+
+        for position_id, entry_price in (
+            (stopped_position_id, "150.000"),
+            (rebuilt_original_position_id, "149.800"),
+            (rebuilt_position_id, "149.800"),
+        ):
+            Position.objects.create(
+                id=position_id,
+                task_type=TaskType.BACKTEST,
+                task_id=task.pk,
+                execution_id=task.execution_id,
+                instrument="USD_JPY",
+                direction=Direction.LONG,
+                units=1000,
+                entry_price=entry_price,
+                entry_time=open_ts,
+                is_open=False,
+            )
+
+        trade_rows = [
+            (cycle_id, stopped_position_id, "open_position", 1, 0, 1000, "150.000", False, 0),
+            (uuid4(), stopped_position_id, "stop_loss", 1, 0, -1000, "149.500", False, 1),
+            (
+                uuid4(),
+                rebuilt_original_position_id,
+                "open_position",
+                1,
+                1,
+                1000,
+                "149.800",
+                False,
+                2,
+            ),
+            (
+                uuid4(),
+                rebuilt_original_position_id,
+                "stop_loss",
+                1,
+                1,
+                -1000,
+                "149.300",
+                False,
+                3,
+            ),
+            (
+                uuid4(),
+                rebuilt_position_id,
+                "rebuild_position",
+                1,
+                1,
+                1000,
+                "149.800",
+                True,
+                4,
+            ),
+            (
+                uuid4(),
+                rebuilt_position_id,
+                "close_position",
+                1,
+                1,
+                -1000,
+                "150.100",
+                True,
+                5,
+            ),
+        ]
+        for (
+            trade_id,
+            position_id,
+            execution_method,
+            layer_index,
+            retracement_count,
+            units,
+            price,
+            is_rebuild,
+            minute_offset,
+        ) in trade_rows:
+            Trade.objects.create(
+                id=trade_id,
+                task_type=TaskType.BACKTEST,
+                task_id=task.pk,
+                execution_id=task.execution_id,
+                timestamp=open_ts + timedelta(minutes=minute_offset),
+                direction="long",
+                units=units,
+                instrument="USD_JPY",
+                price=price,
+                execution_method=execution_method,
+                layer_index=layer_index,
+                retracement_count=retracement_count,
+                cycle_id=cycle_id,
+                position_id=position_id,
+                is_rebuild=is_rebuild,
+            )
+
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            current_balance=Decimal("10000"),
+            ticks_processed=1,
+            strategy_state={
+                "cycles": [
+                    {
+                        "cycle_id": 1,
+                        "direction": "long",
+                        "status": "completed",
+                        "trade_cycle_id": str(cycle_id),
+                        "grid": {
+                            "layers": [
+                                {
+                                    "layer_number": 1,
+                                    "base_units": 1000,
+                                    "refill_up_to": 2,
+                                    "slots": [
+                                        {
+                                            "index": 0,
+                                            "entry": None,
+                                            "ever_closed": True,
+                                            "build_count": 1,
+                                        },
+                                        {
+                                            "index": 1,
+                                            "entry": None,
+                                            "ever_closed": True,
+                                            "build_count": 2,
+                                        },
+                                        {
+                                            "index": 2,
+                                            "entry": None,
+                                            "ever_closed": False,
+                                            "build_count": 0,
+                                        },
+                                    ],
+                                }
+                            ]
+                        },
+                        "hedge_entries": [],
+                        "counter_close_count": 0,
+                        "realized_pnl": "0",
+                    }
+                ],
+                "protection_level": "normal",
+                "initialised": True,
+                "next_entry_id": 4,
+                "last_bid": None,
+                "last_ask": None,
+                "last_mid": None,
+                "account_balance": "10000",
+                "account_nav": "10000",
+                "metrics": {},
+            },
+        )
+
+        list_response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
+        detail_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": str(cycle_id)},
+        )
+
+        assert list_response.status_code == status.HTTP_200_OK
+        assert detail_response.status_code == status.HTTP_200_OK
+
+        for response in (list_response, detail_response):
+            cycle = response.data["cycles"][0]
+            assert cycle["trades"] == []
+            assert [slot["state"] for slot in cycle["grid_state"]["layers"][0]["slots"]] == [
+                "stopped",
+                "rebuilt",
+                "empty",
+            ]
+            assert cycle["grid_state"]["summary"]["stopped"] == 1
+            assert cycle["grid_state"]["summary"]["rebuilt"] == 1
+            assert cycle["grid_state"]["summary"]["empty"] == 1
+
     def test_initial_position_seed_flag_is_returned_for_cycles_and_trades(self):
         task = _make_task()
         client = _auth_client(task.user)

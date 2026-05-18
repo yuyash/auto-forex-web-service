@@ -6,7 +6,7 @@
 
 import {
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -644,6 +644,163 @@ const LINE_CHART_LEFT_MARGIN = 8;
 const LINE_CHART_RIGHT_MARGIN = 8;
 const LINE_CHART_TOP_MARGIN = 4;
 const LINE_CHART_BOTTOM_MARGIN = 22;
+const CHART_PANEL_PLOT_SELECTOR = '[data-chart-panel-plot="true"]';
+
+function uniqueHtmlElements(
+  candidates: Array<Element | HTMLElement | null | undefined>
+): HTMLElement[] {
+  const result: HTMLElement[] = [];
+  for (const candidate of candidates) {
+    if (!(candidate instanceof HTMLElement) || result.includes(candidate)) {
+      continue;
+    }
+    result.push(candidate);
+  }
+  return result;
+}
+
+function chartMeasureCandidates(host: HTMLElement): HTMLElement[] {
+  return uniqueHtmlElements([
+    host,
+    host.parentElement,
+    host.closest(CHART_PANEL_PLOT_SELECTOR),
+  ]);
+}
+
+function measureChartHost(host: HTMLElement, fallbackHeight: number) {
+  let measuredWidth = 0;
+  let measuredHeight = 0;
+
+  for (const element of chartMeasureCandidates(host)) {
+    const measured = measureContainer(element);
+    if (
+      measuredWidth <= MIN_CHART_MEASURE_PX &&
+      measured.width > MIN_CHART_MEASURE_PX
+    ) {
+      measuredWidth = measured.width;
+    }
+    if (
+      measuredHeight <= MIN_CHART_MEASURE_PX &&
+      measured.height > MIN_CHART_MEASURE_PX
+    ) {
+      measuredHeight = measured.height;
+    }
+  }
+
+  return {
+    width: measuredWidth,
+    height:
+      measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight,
+  };
+}
+
+const fillChartSx = {
+  width: '100%',
+  height: '100%',
+  position: 'absolute',
+  inset: 0,
+  minWidth: 0,
+  minHeight: 0,
+  overflow: 'hidden',
+  '& > *': {
+    width: '100% !important',
+    maxWidth: '100%',
+    height: '100% !important',
+    minWidth: 0,
+    minHeight: 0,
+  },
+  '& > [class*="MuiChartsWrapper-root"]': {
+    width: '100% !important',
+    maxWidth: '100%',
+    height: '100% !important',
+    minWidth: 0,
+    minHeight: 0,
+    gridTemplateColumns: 'minmax(0, 1fr) !important',
+    justifyContent: 'stretch !important',
+    justifyItems: 'stretch !important',
+    alignItems: 'stretch !important',
+  },
+  '& svg.MuiChartsSurface-root': {
+    width: '100% !important',
+    maxWidth: '100%',
+    height: '100% !important',
+    minWidth: 0,
+    minHeight: 0,
+    justifySelf: 'stretch',
+    alignSelf: 'stretch',
+  },
+} as const;
+
+function useMeasuredChartSize(fallbackHeight: number) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: fallbackHeight });
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    let resizeFrame: number | null = null;
+    const initialFrames: number[] = [];
+
+    const updateSize = () => {
+      const measured = measureChartHost(host, fallbackHeight);
+      setSize((current) => {
+        const nextWidth =
+          measured.width > MIN_CHART_MEASURE_PX
+            ? measured.width
+            : current.width;
+        const nextHeight =
+          measured.height > MIN_CHART_MEASURE_PX
+            ? measured.height
+            : fallbackHeight;
+
+        return current.width === nextWidth && current.height === nextHeight
+          ? current
+          : { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    const scheduleUpdate = () => {
+      if (resizeFrame != null) {
+        cancelAnimationFrame(resizeFrame);
+      }
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        updateSize();
+      });
+    };
+
+    updateSize();
+    initialFrames.push(
+      requestAnimationFrame(() => {
+        updateSize();
+        initialFrames.push(requestAnimationFrame(updateSize));
+      })
+    );
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', scheduleUpdate);
+      return () => {
+        if (resizeFrame != null) cancelAnimationFrame(resizeFrame);
+        initialFrames.forEach(cancelAnimationFrame);
+        window.removeEventListener('resize', scheduleUpdate);
+      };
+    }
+
+    const observer = new ResizeObserver(scheduleUpdate);
+    for (const element of chartMeasureCandidates(host)) {
+      observer.observe(element);
+    }
+
+    return () => {
+      if (resizeFrame != null) cancelAnimationFrame(resizeFrame);
+      initialFrames.forEach(cancelAnimationFrame);
+      observer.disconnect();
+    };
+  }, [fallbackHeight]);
+
+  return { hostRef, size };
+}
 
 function FillLineChart({
   fallbackHeight,
@@ -653,85 +810,15 @@ function FillLineChart({
   fallbackHeight: number;
   children?: ReactNode;
 }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  const { hostRef, size } = useMeasuredChartSize(fallbackHeight);
 
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return undefined;
-
-    const updateSize = () => {
-      const measured = measureContainer(host);
-      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
-      const nextHeight = Math.max(
-        MIN_CHART_MEASURE_PX,
-        measured.height > MIN_CHART_MEASURE_PX
-          ? measured.height
-          : fallbackHeight
-      );
-      setSize((current) =>
-        current.width === nextWidth && current.height === nextHeight
-          ? current
-          : { width: nextWidth, height: nextHeight }
-      );
-    };
-
-    // Safari may not have resolved flex layout yet at mount time.
-    // A rAF delay gives WebKit a chance to finish layout before we
-    // measure. In test environments (jsdom) where rAF fires
-    // synchronously and all sizes are 0, the fallbackHeight path
-    // ensures the chart still renders.
-    const rafId = requestAnimationFrame(() => {
-      updateSize();
-    });
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateSize);
-      return () => {
-        cancelAnimationFrame(rafId);
-        window.removeEventListener('resize', updateSize);
-      };
-    }
-
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(host);
-    return () => {
-      cancelAnimationFrame(rafId);
-      observer.disconnect();
-    };
-  }, [fallbackHeight]);
-
-  // In test environments (jsdom) the container has no layout, so
-  // width/height stay at 0. Use fallbackHeight and a reasonable
-  // default width so the chart still renders.
-  const effectiveWidth = size.width > 0 ? size.width : undefined;
+  const effectiveWidth =
+    size.width > MIN_CHART_MEASURE_PX ? size.width : undefined;
   const effectiveHeight =
     size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight;
 
   return (
-    <Box
-      ref={hostRef}
-      sx={{
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        inset: 0,
-        minWidth: 0,
-        minHeight: 0,
-        '& > *': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-        '& > [class*="MuiChartsWrapper-root"]': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-        '& svg.MuiChartsSurface-root': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-      }}
-    >
+    <Box ref={hostRef} data-metrics-chart-host="true" sx={fillChartSx}>
       <LineChart
         {...chartProps}
         {...(effectiveWidth != null ? { width: effectiveWidth } : {})}
@@ -749,77 +836,15 @@ function FillBarChart({
 }: ComponentProps<typeof BarChart> & {
   fallbackHeight: number;
 }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  const { hostRef, size } = useMeasuredChartSize(fallbackHeight);
 
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return undefined;
-
-    const updateSize = () => {
-      const measured = measureContainer(host);
-      const nextWidth = Math.max(MIN_CHART_MEASURE_PX, measured.width);
-      const nextHeight = Math.max(
-        MIN_CHART_MEASURE_PX,
-        measured.height > MIN_CHART_MEASURE_PX
-          ? measured.height
-          : fallbackHeight
-      );
-      setSize((current) =>
-        current.width === nextWidth && current.height === nextHeight
-          ? current
-          : { width: nextWidth, height: nextHeight }
-      );
-    };
-
-    const rafId = requestAnimationFrame(() => {
-      updateSize();
-    });
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateSize);
-      return () => {
-        cancelAnimationFrame(rafId);
-        window.removeEventListener('resize', updateSize);
-      };
-    }
-
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(host);
-    return () => {
-      cancelAnimationFrame(rafId);
-      observer.disconnect();
-    };
-  }, [fallbackHeight]);
-
-  const effectiveWidth = size.width > 0 ? size.width : undefined;
+  const effectiveWidth =
+    size.width > MIN_CHART_MEASURE_PX ? size.width : undefined;
   const effectiveHeight =
     size.height > MIN_CHART_MEASURE_PX ? size.height : fallbackHeight;
 
   return (
-    <Box
-      ref={hostRef}
-      sx={{
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        inset: 0,
-        minWidth: 0,
-        minHeight: 0,
-        '& > *': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-        '& > [class*="MuiChartsWrapper-root"]': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-        '& svg.MuiChartsSurface-root': {
-          width: '100% !important',
-          height: '100% !important',
-        },
-      }}
-    >
+    <Box ref={hostRef} data-metrics-chart-host="true" sx={fillChartSx}>
       <BarChart
         {...chartProps}
         {...(effectiveWidth != null ? { width: effectiveWidth } : {})}
