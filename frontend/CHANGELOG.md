@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.8...frontend-v2.0.9) (2026-05-18)
+
+
+### Bug Fixes
+
+* **metrics:** auto-select comparison granularity ([#770](https://github.com/yuyash/auto-forex-web-service/issues/770)) ([4ab99b2](https://github.com/yuyash/auto-forex-web-service/commit/4ab99b23b2aeda341aa1b29349bf59eef9114bf9))
+
 ## [2.0.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.7...frontend-v2.0.8) (2026-05-18)
 
 
