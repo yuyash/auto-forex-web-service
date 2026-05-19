@@ -208,6 +208,8 @@ class SnowballStrategyConfig:
     m1_th: Decimal
     stop_loss_enabled: bool
     rebuild_entry_price_mode: str
+    rebuild_entry_buffer_pips: Decimal
+    rebuild_cooldown_seconds: Decimal
     rebuild_stop_loss_mode: str
     rebuild_stop_loss_manual_pips: list[Decimal]
     rebuild_take_profit_mode: str
@@ -497,6 +499,10 @@ class SnowballStrategyConfig:
             rebuild_entry_price_mode=_parse_str(
                 raw.get("rebuild_entry_price_mode"), "original_entry"
             ),
+            rebuild_entry_buffer_pips=_parse_decimal(
+                raw.get("rebuild_entry_buffer_pips", "0"), "0"
+            ),
+            rebuild_cooldown_seconds=_parse_decimal(raw.get("rebuild_cooldown_seconds", "0"), "0"),
             rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same_pips"),
             rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,
             rebuild_take_profit_mode=rebuild_take_profit_mode,
@@ -578,6 +584,10 @@ class SnowballStrategyConfig:
         missing = sorted(key for key in defaults if key not in raw)
         if "rebuild_entry_price_mode" in missing:
             missing.remove("rebuild_entry_price_mode")
+        if "rebuild_entry_buffer_pips" in missing:
+            missing.remove("rebuild_entry_buffer_pips")
+        if "rebuild_cooldown_seconds" in missing:
+            missing.remove("rebuild_cooldown_seconds")
         if "refill_limit_enabled" in missing:
             missing.remove("refill_limit_enabled")
         if "preserve_highest_r_from" in missing and not _parse_bool(
@@ -642,6 +652,8 @@ class SnowballStrategyConfig:
             "m1_th": str(self.m1_th),
             "stop_loss_enabled": self.stop_loss_enabled,
             "rebuild_entry_price_mode": self.rebuild_entry_price_mode,
+            "rebuild_entry_buffer_pips": str(self.rebuild_entry_buffer_pips),
+            "rebuild_cooldown_seconds": str(self.rebuild_cooldown_seconds),
             "rebuild_stop_loss_mode": self.rebuild_stop_loss_mode,
             "rebuild_stop_loss_manual_pips": [str(v) for v in self.rebuild_stop_loss_manual_pips],
             "rebuild_take_profit_mode": self.rebuild_take_profit_mode,
@@ -764,6 +776,10 @@ class SnowballStrategyConfig:
             raise ValueError(
                 "rebuild_entry_price_mode must be either 'original_entry' or 'stop_loss_exit'"
             )
+        if self.rebuild_entry_buffer_pips < 0:
+            raise ValueError("rebuild_entry_buffer_pips must be greater than or equal to 0")
+        if self.rebuild_cooldown_seconds < 0:
+            raise ValueError("rebuild_cooldown_seconds must be greater than or equal to 0")
         # Stop-loss progression.
         if not self.stop_loss_pips_head >= self.stop_loss_pips_tail > 0:
             raise ValueError("Must satisfy stop_loss_pips_head >= stop_loss_pips_tail > 0")

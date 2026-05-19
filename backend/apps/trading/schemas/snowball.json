@@ -837,6 +837,43 @@
       "group_ja": "再建"
     },
 
+    "rebuild_entry_buffer_pips": {
+      "type": "number",
+      "title": "Rebuild Entry Buffer (pips)",
+      "title_ja": "再建トリガーのバッファ（pips）",
+      "description": "Additional pips the price must move past the previous stop-loss level (in the favorable direction) before a stop-loss-exit-anchored rebuild fires. Set above 0 to absorb spread/slippage between consecutive rebuild rounds.",
+      "description_ja": "再建トリガー（ロスカット価格基準）からさらに価格が利益方向にこの pips 数だけ動いてから再建を発火させます。スプレッドやスリッページによる連続再発火を抑えるために使います。0 で無効。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": {
+        "field": "stop_loss_enabled",
+        "values": [true],
+        "and": [
+          { "field": "rebuild_enabled", "values": [true] },
+          { "field": "rebuild_entry_price_mode", "values": ["stop_loss_exit"] }
+        ]
+      },
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
+    "rebuild_cooldown_seconds": {
+      "type": "number",
+      "title": "Rebuild Cooldown (seconds)",
+      "title_ja": "再建クールダウン（秒）",
+      "description": "Minimum seconds that must elapse between a stop-loss close and the corresponding rebuild firing. Use to prevent ping-pong between SL and rebuild on volatile ticks.",
+      "description_ja": "ロスカット約定から再建発火までに必要な最小経過秒数。揺れ動く価格での連続ロスカット↔再建を抑制します。0 で無効。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": {
+        "field": "stop_loss_enabled",
+        "values": [true],
+        "and": [{ "field": "rebuild_enabled", "values": [true] }]
+      },
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
     "rebuild_stop_loss_mode": {
       "type": "string",
       "title": "Rebuild Stop Loss Mode",

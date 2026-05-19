@@ -938,13 +938,198 @@ class TestSnowballRebuildTakeProfitModes:
             stop_loss_exit_price=Decimal("157.698"),
             close_price=Decimal("157.247"),
         )
+        # Anchor the SL level explicitly so the trigger does not fall
+        # through to ``stop_loss_exit_price``.  Real rebuild snapshots
+        # always carry both fields.
+        pending.stop_loss_price = Decimal("157.697")
         planner = StopLossRebuildPricePlanner()
 
-        trigger = planner.trigger_price(pending, "original_entry")
+        original_trigger = planner.trigger_price(pending, "original_entry")
+        # ``stop_loss_exit`` mode anchors the trigger on the SL **level**
+        # rather than the actual fill price.  This keeps successive
+        # rebuilds at the same trigger price even when slippage causes the
+        # exit price to drift across rounds.
         stop_loss_trigger = planner.trigger_price(pending, "stop_loss_exit")
 
-        assert trigger == Decimal("157.397")
-        assert stop_loss_trigger == Decimal("157.698")
+        assert original_trigger == Decimal("157.397")
+        assert stop_loss_trigger == Decimal("157.697")
+
+    def test_rebuild_trigger_anchors_on_sl_level_not_exit_price(self):
+        """Regression: stop_loss_exit anchored on SL level, not slipped fill price.
+
+        Without this anchoring each round of ``stop_loss_exit`` × ``same``
+        rebuilds drifted the trigger one slippage step in the adverse
+        direction, eventually placing the rebuilt SL on the profit side
+        of the new entry and producing spurious profit-bearing
+        ``stop_loss`` closes.
+        """
+        pending = self._make_pending_rebuild(
+            direction=Direction.LONG,
+            entry_price=Decimal("150.000"),
+            stop_loss_loss_pips=Decimal("30"),
+            stop_loss_exit_price=Decimal("149.685"),  # 1.5 pips slipped
+            close_price=Decimal("150.300"),
+        )
+        pending.stop_loss_price = Decimal("149.700")
+        planner = StopLossRebuildPricePlanner()
+
+        trigger = planner.trigger_price(pending, "stop_loss_exit")
+
+        assert trigger == Decimal("149.700")
+
+    def test_apply_entry_buffer_pushes_long_trigger_above_sl(self):
+        pending = self._make_pending_rebuild(
+            direction=Direction.LONG,
+            entry_price=Decimal("150.000"),
+            stop_loss_loss_pips=Decimal("30"),
+            stop_loss_exit_price=Decimal("149.700"),
+            close_price=Decimal("150.300"),
+        )
+        pending.stop_loss_price = Decimal("149.700")
+        planner = StopLossRebuildPricePlanner()
+
+        no_buffer = planner.apply_entry_buffer(
+            pending=pending,
+            trigger_price=Decimal("149.700"),
+            entry_price_mode="stop_loss_exit",
+            buffer_pips=Decimal("0"),
+            pip_size=Decimal("0.001"),
+        )
+        with_buffer = planner.apply_entry_buffer(
+            pending=pending,
+            trigger_price=Decimal("149.700"),
+            entry_price_mode="stop_loss_exit",
+            buffer_pips=Decimal("5"),
+            pip_size=Decimal("0.001"),
+        )
+
+        assert no_buffer == Decimal("149.700")
+        assert with_buffer == Decimal("149.705")
+
+    def test_apply_entry_buffer_pushes_short_trigger_below_sl(self):
+        pending = self._make_pending_rebuild(
+            direction=Direction.SHORT,
+            entry_price=Decimal("150.000"),
+            stop_loss_loss_pips=Decimal("30"),
+            stop_loss_exit_price=Decimal("150.300"),
+            close_price=Decimal("149.700"),
+        )
+        pending.stop_loss_price = Decimal("150.300")
+        planner = StopLossRebuildPricePlanner()
+
+        with_buffer = planner.apply_entry_buffer(
+            pending=pending,
+            trigger_price=Decimal("150.300"),
+            entry_price_mode="stop_loss_exit",
+            buffer_pips=Decimal("4"),
+            pip_size=Decimal("0.001"),
+        )
+
+        assert with_buffer == Decimal("150.296")
+
+    def test_apply_entry_buffer_is_no_op_in_original_entry_mode(self):
+        """Buffer must only apply to ``stop_loss_exit`` mode."""
+        pending = self._make_pending_rebuild(
+            direction=Direction.LONG,
+            entry_price=Decimal("150.000"),
+            stop_loss_loss_pips=Decimal("30"),
+            stop_loss_exit_price=Decimal("149.700"),
+            close_price=Decimal("150.300"),
+        )
+        pending.stop_loss_price = Decimal("149.700")
+        planner = StopLossRebuildPricePlanner()
+
+        buffered = planner.apply_entry_buffer(
+            pending=pending,
+            trigger_price=Decimal("150.000"),
+            entry_price_mode="original_entry",
+            buffer_pips=Decimal("5"),
+            pip_size=Decimal("0.001"),
+        )
+
+        assert buffered == Decimal("150.000")
+
+    def test_cooldown_blocks_rebuild_until_elapsed(self):
+        strategy = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+                "rebuild_cooldown_seconds": "30",
+            }
+        )
+        closed_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        pending = self._make_pending_rebuild(
+            direction=Direction.LONG,
+            entry_price=Decimal("144.547"),
+            stop_loss_loss_pips=Decimal("35"),
+            stop_loss_exit_price=Decimal("144.197"),
+            close_price=Decimal("144.697"),
+        )
+        pending.stop_loss_price = Decimal("144.197")
+        pending.closed_at = closed_at
+        slot = Slot(index=0, pending_rebuild=pending)
+        layer = Layer(layer_number=1, slots=[slot])
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.add_layer(layer)
+        planner = StopLossRebuildPricePlanner()
+
+        # 10 seconds after SL: still within the cooldown window.
+        too_early_plan = planner.plan(
+            strategy=strategy,
+            tick=_make_tick(closed_at + timedelta(seconds=10), "144.547", "144.567"),
+            cycle=cycle,
+            layer=layer,
+            slot=slot,
+            pending=pending,
+        )
+        # 30 seconds after SL: cooldown elapsed.
+        on_time_plan = planner.plan(
+            strategy=strategy,
+            tick=_make_tick(closed_at + timedelta(seconds=30), "144.547", "144.567"),
+            cycle=cycle,
+            layer=layer,
+            slot=slot,
+            pending=pending,
+        )
+
+        assert too_early_plan is None
+        assert on_time_plan is not None
+
+    def test_zero_cooldown_only_blocks_same_tick(self):
+        """When cooldown is 0 only the same-tick guard remains in effect."""
+        strategy = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+                "rebuild_cooldown_seconds": "0",
+            }
+        )
+        closed_at = datetime(2026, 1, 1, tzinfo=UTC)
+        pending = self._make_pending_rebuild(
+            direction=Direction.LONG,
+            entry_price=Decimal("144.547"),
+            stop_loss_loss_pips=Decimal("35"),
+            stop_loss_exit_price=Decimal("144.197"),
+            close_price=Decimal("144.697"),
+        )
+        pending.stop_loss_price = Decimal("144.197")
+        pending.closed_at = closed_at
+        slot = Slot(index=0, pending_rebuild=pending)
+        layer = Layer(layer_number=1, slots=[slot])
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.add_layer(layer)
+        planner = StopLossRebuildPricePlanner()
+
+        next_tick_plan = planner.plan(
+            strategy=strategy,
+            tick=_make_tick(closed_at + timedelta(seconds=1), "144.547", "144.567"),
+            cycle=cycle,
+            layer=layer,
+            slot=slot,
+            pending=pending,
+        )
+
+        assert next_tick_plan is not None
 
     def test_rebuild_waits_until_after_stop_loss_tick(self):
         strategy = _strategy(
