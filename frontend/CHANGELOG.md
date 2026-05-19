@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.1.1...frontend-v2.1.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* **metrics:** stack period bar charts ([#777](https://github.com/yuyash/auto-forex-web-service/issues/777)) ([81f5810](https://github.com/yuyash/auto-forex-web-service/commit/81f58103dfa16329354630d11c2e72e1f23563c0))
+
 ## [2.1.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.1.0...frontend-v2.1.1) (2026-05-19)
 
 
