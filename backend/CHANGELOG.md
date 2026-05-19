@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.7...backend-v2.1.0) (2026-05-19)
+
+
+### Features
+
+* **metrics:** show current base units ([#774](https://github.com/yuyash/auto-forex-web-service/issues/774)) ([e81bcb0](https://github.com/yuyash/auto-forex-web-service/commit/e81bcb0f1c33f38e434f4b6b375d2cf1a3eae274))
+
+
+### Performance
+
+* archive snowball completed cycles ([#772](https://github.com/yuyash/auto-forex-web-service/issues/772)) ([67f8a3b](https://github.com/yuyash/auto-forex-web-service/commit/67f8a3b6fb6b7c72aa159e101ae9ee31f9f80081))
+
 ## [2.0.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.6...backend-v2.0.7) (2026-05-18)
 
 
