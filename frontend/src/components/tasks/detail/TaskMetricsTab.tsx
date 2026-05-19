@@ -27,7 +27,12 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { useTranslation } from 'react-i18next';
-import type { LossCutEvent, MetricPoint } from '../../../utils/fetchMetrics';
+import type {
+  LossCutEvent,
+  MetricPoint,
+  PeriodicTradeMetricPoint,
+  PeriodicTradeMetricsResponse,
+} from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
 import { ChartPanel } from './ChartPanel';
@@ -59,6 +64,7 @@ interface TaskMetricsTabProps {
   error: Error | null;
   currency?: string;
   dataSource?: string;
+  periodicMetrics?: PeriodicTradeMetricsResponse | null;
   resumeCursorTimestamp?: string | null;
   consistencyWarnings?: Array<Record<string, unknown>>;
   interval: number;
@@ -212,12 +218,26 @@ const RETURN_BAR_CHARTS: ReturnBarChartDefinition[] = [
 ];
 
 const RETURN_PERIOD_CHART_KEY = 'period_return';
+const TP_SL_PERIOD_CHART_KEY = 'period_tp_sl_pnl';
+const POSITION_ACTIVITY_PERIOD_CHART_KEY = 'period_position_activity';
 const RETURN_PERIOD_SHORT_LABEL_KEYS: Record<ReturnPeriod, string> = {
   day: 'metrics.return_period_day',
   week: 'metrics.return_period_week',
   month: 'metrics.return_period_month',
   year: 'metrics.return_period_year',
 };
+
+const TP_SL_PERIOD_SERIES: ChartMetric[] = [
+  { key: 'tp_profit', color: '#2e7d32', format: 'currency' },
+  { key: 'sl_loss', color: '#c62828', format: 'currency' },
+];
+
+const POSITION_ACTIVITY_PERIOD_SERIES: ChartMetric[] = [
+  { key: 'period_open_positions', color: '#0288d1', format: 'int' },
+  { key: 'tp_closes', color: '#2e7d32', format: 'int' },
+  { key: 'sl_closes', color: '#c62828', format: 'int' },
+  { key: 'rebuild_opens', color: '#7b1fa2', format: 'int' },
+];
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
@@ -452,6 +472,56 @@ function buildPeriodReturnData(
     values,
     lastValue: values[values.length - 1],
   };
+}
+
+type PeriodicChartData = {
+  labels: string[];
+  series: { metric: ChartMetric; values: number[] }[];
+  yValues: number[];
+  lastValue: number;
+};
+
+function periodicMetricValue(
+  point: PeriodicTradeMetricPoint,
+  key: string
+): number {
+  const sourceKey = key === 'period_open_positions' ? 'open_positions' : key;
+  const value = point[sourceKey as keyof PeriodicTradeMetricPoint];
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function hasPeriodicValues(
+  points: PeriodicTradeMetricPoint[] | undefined,
+  series: ChartMetric[]
+): boolean {
+  return (
+    points?.some((point) =>
+      series.some((metric) => periodicMetricValue(point, metric.key) !== 0)
+    ) ?? false
+  );
+}
+
+function buildPeriodicChartData(
+  points: PeriodicTradeMetricPoint[] | undefined,
+  series: ChartMetric[]
+): PeriodicChartData | null {
+  if (!points || points.length === 0) return null;
+  const labels = points.map((point) => point.label);
+  const chartSeries = series.map((metric) => ({
+    metric,
+    values: points.map((point) => periodicMetricValue(point, metric.key)),
+  }));
+  const yValues = chartSeries.flatMap((item) => item.values);
+  if (yValues.length === 0 || !yValues.some((value) => value !== 0)) {
+    return null;
+  }
+  const lastIndex = points.length - 1;
+  const lastValue = chartSeries.reduce(
+    (sum, item) => sum + (item.values[lastIndex] ?? 0),
+    0
+  );
+  return { labels, series: chartSeries, yValues, lastValue };
 }
 
 function defaultReturnPeriodForRangeSeconds(
@@ -859,6 +929,7 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
+  periodicMetrics,
   consistencyWarnings = [],
   interval,
   since,
@@ -883,6 +954,10 @@ export function TaskMetricsTab({
   const [ohlcRefreshToken, setOhlcRefreshToken] = useState(0);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedReturnPeriod, setSelectedReturnPeriod] =
+    useState<ReturnPeriod | null>(null);
+  const [selectedTpSlPeriod, setSelectedTpSlPeriod] =
+    useState<ReturnPeriod | null>(null);
+  const [selectedPositionActivityPeriod, setSelectedPositionActivityPeriod] =
     useState<ReturnPeriod | null>(null);
 
   const hasOhlc = !!(instrument && startTime);
@@ -921,6 +996,60 @@ export function TaskMetricsTab({
     [data, effectiveReturnPeriod, hasTotalReturnData, timezone]
   );
 
+  const availableTpSlPeriods = useMemo(
+    () =>
+      RETURN_BAR_CHARTS.filter((chart) =>
+        hasPeriodicValues(
+          periodicMetrics?.periods?.[chart.period],
+          TP_SL_PERIOD_SERIES
+        )
+      ),
+    [periodicMetrics]
+  );
+  const availablePositionActivityPeriods = useMemo(
+    () =>
+      RETURN_BAR_CHARTS.filter((chart) =>
+        hasPeriodicValues(
+          periodicMetrics?.periods?.[chart.period],
+          POSITION_ACTIVITY_PERIOD_SERIES
+        )
+      ),
+    [periodicMetrics]
+  );
+
+  const effectiveTpSlPeriod =
+    availableTpSlPeriods.find(
+      (chart) => chart.period === (selectedTpSlPeriod ?? defaultReturnPeriod)
+    )?.period ??
+    availableTpSlPeriods[0]?.period ??
+    selectedTpSlPeriod ??
+    defaultReturnPeriod;
+  const activeTpSlChartData = useMemo(
+    () =>
+      buildPeriodicChartData(
+        periodicMetrics?.periods?.[effectiveTpSlPeriod],
+        TP_SL_PERIOD_SERIES
+      ),
+    [effectiveTpSlPeriod, periodicMetrics]
+  );
+
+  const effectivePositionActivityPeriod =
+    availablePositionActivityPeriods.find(
+      (chart) =>
+        chart.period === (selectedPositionActivityPeriod ?? defaultReturnPeriod)
+    )?.period ??
+    availablePositionActivityPeriods[0]?.period ??
+    selectedPositionActivityPeriod ??
+    defaultReturnPeriod;
+  const activePositionActivityChartData = useMemo(
+    () =>
+      buildPeriodicChartData(
+        periodicMetrics?.periods?.[effectivePositionActivityPeriod],
+        POSITION_ACTIVITY_PERIOD_SERIES
+      ),
+    [effectivePositionActivityPeriod, periodicMetrics]
+  );
+
   const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
     await onRefresh();
@@ -949,9 +1078,19 @@ export function TaskMetricsTab({
     const keys: string[] = [];
     if (hasOhlc) keys.push(OHLC_KEY);
     if (availableReturnCharts.length > 0) keys.push(RETURN_PERIOD_CHART_KEY);
+    if (availableTpSlPeriods.length > 0) keys.push(TP_SL_PERIOD_CHART_KEY);
+    if (availablePositionActivityPeriods.length > 0) {
+      keys.push(POSITION_ACTIVITY_PERIOD_CHART_KEY);
+    }
     for (const chart of availableCharts) keys.push(chart.key);
     return keys;
-  }, [availableCharts, availableReturnCharts, hasOhlc]);
+  }, [
+    availableCharts,
+    availablePositionActivityPeriods,
+    availableReturnCharts,
+    availableTpSlPeriods,
+    hasOhlc,
+  ]);
 
   const { orderedKeys, moveItem, setOrder, resetOrder } =
     useMetricsOrder(allChartKeys);
@@ -1166,6 +1305,26 @@ export function TaskMetricsTab({
         });
         continue;
       }
+      if (key === TP_SL_PERIOD_CHART_KEY) {
+        items.push({
+          key,
+          label: t('metrics.period_tp_sl_pnl', {
+            defaultValue: 'TP/SL PnL',
+          }),
+          color: '#2e7d32',
+        });
+        continue;
+      }
+      if (key === POSITION_ACTIVITY_PERIOD_CHART_KEY) {
+        items.push({
+          key,
+          label: t('metrics.period_position_activity', {
+            defaultValue: 'Position Activity',
+          }),
+          color: '#0288d1',
+        });
+        continue;
+      }
       const chart = chartDefinitionMap.get(key);
       if (!chart) continue;
       items.push({
@@ -1179,7 +1338,12 @@ export function TaskMetricsTab({
     return items;
   }, [chartDefinitionMap, instrument, orderedKeys, t]);
 
-  if (isLoading && data.length === 0) {
+  const hasAnyChart =
+    data.length > 0 ||
+    availableTpSlPeriods.length > 0 ||
+    availablePositionActivityPeriods.length > 0;
+
+  if (isLoading && !hasAnyChart) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
@@ -1195,7 +1359,7 @@ export function TaskMetricsTab({
     );
   }
 
-  if (data.length === 0) {
+  if (!hasAnyChart) {
     return (
       <Box sx={{ p: 3 }}>
         <Typography color="text.secondary">{t('metrics.noData')}</Typography>
@@ -1445,6 +1609,305 @@ export function TaskMetricsTab({
                       bottom: LINE_CHART_BOTTOM_MARGIN,
                     }}
                     hideLegend
+                    slotProps={{
+                      axisTickLabel: {
+                        style: { fontSize: 10 },
+                      },
+                    }}
+                  />
+                </ChartPanel>
+              </Grid>
+            );
+          }
+
+          if (key === TP_SL_PERIOD_CHART_KEY) {
+            const chart =
+              availableTpSlPeriods.find(
+                (candidate) => candidate.period === effectiveTpSlPeriod
+              ) ?? availableTpSlPeriods[0];
+            const cd = chart ? activeTpSlChartData : undefined;
+            if (!chart || !cd || cd.labels.length === 0) return null;
+            const maxChars = cd.yValues.reduce((max, value) => {
+              const label = formatYLabel(value, 'currency');
+              return Math.max(max, label.length);
+            }, 0);
+            const yAxisWidth = Math.max(
+              MIN_Y_AXIS_WIDTH,
+              maxChars * CHAR_WIDTH_PX + Y_AXIS_OVERHEAD
+            );
+            const valueCurrency = periodicMetrics?.currency ?? currency;
+            return (
+              <Grid
+                key={TP_SL_PERIOD_CHART_KEY}
+                size={chartGridSize}
+                draggable
+                onDragStart={(e) => handleDragStart(e, TP_SL_PERIOD_CHART_KEY)}
+                onDragOver={(e) => handleDragOver(e, TP_SL_PERIOD_CHART_KEY)}
+                onDrop={(e) => handleDrop(e, TP_SL_PERIOD_CHART_KEY)}
+                onDragEnd={handleDragEnd}
+                sx={{
+                  opacity: dragKey === TP_SL_PERIOD_CHART_KEY ? 0.4 : 1,
+                  cursor: 'grab',
+                  minWidth: 0,
+                  transition:
+                    'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+                  transform:
+                    dragOverKey === TP_SL_PERIOD_CHART_KEY &&
+                    dragKey !== TP_SL_PERIOD_CHART_KEY
+                      ? 'translateY(-2px)'
+                      : 'none',
+                  outline: '2px solid',
+                  outlineColor:
+                    dragOverKey === TP_SL_PERIOD_CHART_KEY &&
+                    dragKey !== TP_SL_PERIOD_CHART_KEY
+                      ? 'primary.main'
+                      : 'transparent',
+                  outlineOffset: 3,
+                  borderRadius: 1,
+                }}
+              >
+                <ChartPanel
+                  title={t('metrics.period_tp_sl_pnl', {
+                    defaultValue: 'TP/SL PnL',
+                  })}
+                  valueLabel={formatValue(
+                    cd.lastValue,
+                    'currency',
+                    valueCurrency
+                  )}
+                  height={CHART_CARD_HEIGHT}
+                  headerPrefix={
+                    <DragIndicatorIcon
+                      sx={{
+                        fontSize: 16,
+                        color: 'text.disabled',
+                        cursor: 'grab',
+                        mr: spacingTokens.xxs,
+                      }}
+                    />
+                  }
+                  headerActions={
+                    <ToggleButtonGroup
+                      exclusive
+                      size="small"
+                      value={chart.period}
+                      onChange={(_, nextPeriod: ReturnPeriod | null) => {
+                        if (nextPeriod) setSelectedTpSlPeriod(nextPeriod);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={t('metrics.period_tp_sl_pnl', {
+                        defaultValue: 'TP/SL PnL',
+                      })}
+                      sx={{
+                        '& .MuiToggleButton-root': {
+                          px: 0.75,
+                          py: 0.25,
+                          fontSize: '0.6875rem',
+                          lineHeight: 1.2,
+                        },
+                      }}
+                    >
+                      {availableTpSlPeriods.map((option) => (
+                        <ToggleButton
+                          key={option.period}
+                          value={option.period}
+                          aria-label={t(
+                            RETURN_PERIOD_SHORT_LABEL_KEYS[option.period]
+                          )}
+                        >
+                          {t(RETURN_PERIOD_SHORT_LABEL_KEYS[option.period])}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  }
+                >
+                  <FillBarChart
+                    fallbackHeight={LINE_CHART_FALLBACK_HEIGHT}
+                    xAxis={[
+                      {
+                        data: cd.labels,
+                        scaleType: 'band' as const,
+                        tickLabelStyle: { fontSize: 10 },
+                      },
+                    ]}
+                    yAxis={[
+                      {
+                        position: 'right',
+                        width: yAxisWidth,
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatYLabel(v, 'currency') : '',
+                      },
+                    ]}
+                    series={cd.series.map(({ metric, values }) => ({
+                      data: values,
+                      color: metric.color,
+                      label: t(`metrics.${metric.key}`, {
+                        defaultValue: metric.key.replace(/_/g, ' '),
+                      }),
+                      valueFormatter: (v: number | null) =>
+                        v != null
+                          ? formatValue(v, 'currency', valueCurrency)
+                          : '',
+                    }))}
+                    grid={{ horizontal: true }}
+                    margin={{
+                      left: LINE_CHART_LEFT_MARGIN,
+                      right: LINE_CHART_RIGHT_MARGIN,
+                      top: LINE_CHART_TOP_MARGIN,
+                      bottom: LINE_CHART_BOTTOM_MARGIN,
+                    }}
+                    slotProps={{
+                      axisTickLabel: {
+                        style: { fontSize: 10 },
+                      },
+                    }}
+                  />
+                </ChartPanel>
+              </Grid>
+            );
+          }
+
+          if (key === POSITION_ACTIVITY_PERIOD_CHART_KEY) {
+            const chart =
+              availablePositionActivityPeriods.find(
+                (candidate) =>
+                  candidate.period === effectivePositionActivityPeriod
+              ) ?? availablePositionActivityPeriods[0];
+            const cd = chart ? activePositionActivityChartData : undefined;
+            if (!chart || !cd || cd.labels.length === 0) return null;
+            const maxChars = cd.yValues.reduce((max, value) => {
+              const label = formatYLabel(value, 'int');
+              return Math.max(max, label.length);
+            }, 0);
+            const yAxisWidth = Math.max(
+              MIN_Y_AXIS_WIDTH,
+              maxChars * CHAR_WIDTH_PX + Y_AXIS_OVERHEAD
+            );
+            return (
+              <Grid
+                key={POSITION_ACTIVITY_PERIOD_CHART_KEY}
+                size={chartGridSize}
+                draggable
+                onDragStart={(e) =>
+                  handleDragStart(e, POSITION_ACTIVITY_PERIOD_CHART_KEY)
+                }
+                onDragOver={(e) =>
+                  handleDragOver(e, POSITION_ACTIVITY_PERIOD_CHART_KEY)
+                }
+                onDrop={(e) =>
+                  handleDrop(e, POSITION_ACTIVITY_PERIOD_CHART_KEY)
+                }
+                onDragEnd={handleDragEnd}
+                sx={{
+                  opacity:
+                    dragKey === POSITION_ACTIVITY_PERIOD_CHART_KEY ? 0.4 : 1,
+                  cursor: 'grab',
+                  minWidth: 0,
+                  transition:
+                    'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+                  transform:
+                    dragOverKey === POSITION_ACTIVITY_PERIOD_CHART_KEY &&
+                    dragKey !== POSITION_ACTIVITY_PERIOD_CHART_KEY
+                      ? 'translateY(-2px)'
+                      : 'none',
+                  outline: '2px solid',
+                  outlineColor:
+                    dragOverKey === POSITION_ACTIVITY_PERIOD_CHART_KEY &&
+                    dragKey !== POSITION_ACTIVITY_PERIOD_CHART_KEY
+                      ? 'primary.main'
+                      : 'transparent',
+                  outlineOffset: 3,
+                  borderRadius: 1,
+                }}
+              >
+                <ChartPanel
+                  title={t('metrics.period_position_activity', {
+                    defaultValue: 'Position Activity',
+                  })}
+                  valueLabel={formatValue(cd.lastValue, 'int')}
+                  height={CHART_CARD_HEIGHT}
+                  headerPrefix={
+                    <DragIndicatorIcon
+                      sx={{
+                        fontSize: 16,
+                        color: 'text.disabled',
+                        cursor: 'grab',
+                        mr: spacingTokens.xxs,
+                      }}
+                    />
+                  }
+                  headerActions={
+                    <ToggleButtonGroup
+                      exclusive
+                      size="small"
+                      value={chart.period}
+                      onChange={(_, nextPeriod: ReturnPeriod | null) => {
+                        if (nextPeriod) {
+                          setSelectedPositionActivityPeriod(nextPeriod);
+                        }
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={t('metrics.period_position_activity', {
+                        defaultValue: 'Position Activity',
+                      })}
+                      sx={{
+                        '& .MuiToggleButton-root': {
+                          px: 0.75,
+                          py: 0.25,
+                          fontSize: '0.6875rem',
+                          lineHeight: 1.2,
+                        },
+                      }}
+                    >
+                      {availablePositionActivityPeriods.map((option) => (
+                        <ToggleButton
+                          key={option.period}
+                          value={option.period}
+                          aria-label={t(
+                            RETURN_PERIOD_SHORT_LABEL_KEYS[option.period]
+                          )}
+                        >
+                          {t(RETURN_PERIOD_SHORT_LABEL_KEYS[option.period])}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  }
+                >
+                  <FillBarChart
+                    fallbackHeight={LINE_CHART_FALLBACK_HEIGHT}
+                    xAxis={[
+                      {
+                        data: cd.labels,
+                        scaleType: 'band' as const,
+                        tickLabelStyle: { fontSize: 10 },
+                      },
+                    ]}
+                    yAxis={[
+                      {
+                        position: 'right',
+                        width: yAxisWidth,
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatYLabel(v, 'int') : '',
+                      },
+                    ]}
+                    series={cd.series.map(({ metric, values }) => ({
+                      data: values,
+                      color: metric.color,
+                      label: t(`metrics.${metric.key}`, {
+                        defaultValue: metric.key.replace(/_/g, ' '),
+                      }),
+                      valueFormatter: (v: number | null) =>
+                        v != null ? formatValue(v, 'int') : '',
+                    }))}
+                    grid={{ horizontal: true }}
+                    margin={{
+                      left: LINE_CHART_LEFT_MARGIN,
+                      right: LINE_CHART_RIGHT_MARGIN,
+                      top: LINE_CHART_TOP_MARGIN,
+                      bottom: LINE_CHART_BOTTOM_MARGIN,
+                    }}
                     slotProps={{
                       axisTickLabel: {
                         style: { fontSize: 10 },

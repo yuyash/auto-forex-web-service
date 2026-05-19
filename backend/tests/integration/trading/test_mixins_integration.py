@@ -203,6 +203,112 @@ class TestMetrics:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["result"]["metrics"] == {"margin_ratio": "0.10"}
 
+    def test_periodic_metrics_aggregate_tp_sl_and_position_activity(self):
+        task = _make_task(strategy_type="snowball")
+        task.instrument = "USD_JPY"
+        task.save(update_fields=["instrument"])
+        client = _auth_client(task.user)
+        opened_at = datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)
+        closed_at = datetime(2024, 1, 3, 9, 0, tzinfo=timezone.utc)
+
+        tp_position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument=task.instrument,
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150"),
+            entry_time=opened_at,
+            exit_price=Decimal("151"),
+            exit_time=closed_at,
+            is_open=False,
+        )
+        sl_position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument=task.instrument,
+            direction=Direction.SHORT,
+            units=-1000,
+            entry_price=Decimal("150"),
+            entry_time=opened_at + timedelta(hours=1),
+            exit_price=Decimal("151"),
+            exit_time=closed_at,
+            is_open=False,
+        )
+        TradingEvent.objects.bulk_create(
+            [
+                TradingEvent(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task.pk,
+                    execution_id=task.execution_id,
+                    event_type="open_position",
+                    event_timestamp=opened_at,
+                    position_id=tp_position.id,
+                    description="open tp",
+                ),
+                TradingEvent(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task.pk,
+                    execution_id=task.execution_id,
+                    event_type="open_position",
+                    event_timestamp=opened_at + timedelta(hours=1),
+                    position_id=sl_position.id,
+                    description="open sl",
+                ),
+                TradingEvent(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task.pk,
+                    execution_id=task.execution_id,
+                    event_type="rebuild_position",
+                    event_timestamp=opened_at + timedelta(days=1),
+                    position_id=sl_position.id,
+                    description="rebuild",
+                ),
+                TradingEvent(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task.pk,
+                    execution_id=task.execution_id,
+                    event_type="close_position",
+                    close_reason="tp",
+                    event_timestamp=closed_at,
+                    position_id=tp_position.id,
+                    description="tp close",
+                ),
+                TradingEvent(
+                    task_type=TaskType.BACKTEST,
+                    task_id=task.pk,
+                    execution_id=task.execution_id,
+                    event_type="close_position",
+                    close_reason="stop_loss",
+                    event_timestamp=closed_at,
+                    position_id=sl_position.id,
+                    description="sl close",
+                ),
+            ]
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy/metrics/periodic/",
+            {"timezone": "UTC"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["currency"] == "JPY"
+        day_rows = {row["label"]: row for row in response.data["periods"]["day"]}
+        assert day_rows["2024-01-01"]["open_positions"] == 2
+        assert day_rows["2024-01-02"]["rebuild_opens"] == 1
+        assert day_rows["2024-01-03"]["tp_closes"] == 1
+        assert day_rows["2024-01-03"]["sl_closes"] == 1
+        assert day_rows["2024-01-03"]["tp_profit"] == "1000"
+        assert day_rows["2024-01-03"]["sl_loss"] == "-1000"
+        month = response.data["periods"]["month"][0]
+        assert month["open_positions"] == 2
+        assert month["rebuild_opens"] == 1
+        assert month["tp_closes"] == 1
+        assert month["sl_closes"] == 1
+
 
 @pytest.mark.django_db
 class TestStrictQueryValidation:

@@ -6,6 +6,7 @@ import type {
   StrategySnapshotResponse,
   SnowballNetChartResponse,
 } from '../types/strategyVisualization';
+import type { PeriodicTradeMetricsResponse } from '../utils/fetchMetrics';
 import { fetchTaskResourceObject } from '../services/api/taskResources';
 
 export interface StrategyDataParams {
@@ -24,6 +25,7 @@ export interface StrategyDataParams {
   follow?: string;
   merge_markers?: string;
   account_id?: string | number;
+  timezone?: string;
 }
 
 function cleanParams(params?: StrategyDataParams) {
@@ -137,6 +139,44 @@ export function useStrategyMetrics({
         'strategy/metrics',
         queryParams
       ),
+    staleTime: 0,
+    refetchInterval,
+  });
+}
+
+export function usePeriodicTradeMetrics({
+  taskId,
+  taskType,
+  executionRunId,
+  params,
+  enabled = true,
+  refetchInterval = false,
+}: {
+  taskId: string | number;
+  taskType: TaskType;
+  executionRunId?: string;
+  params?: StrategyDataParams;
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}) {
+  const queryParams = cleanParams({ ...params, execution_id: executionRunId });
+  return useQuery({
+    queryKey: [
+      'strategy-data',
+      taskType,
+      String(taskId),
+      'periodic-trade-metrics',
+      queryParams,
+    ],
+    enabled: enabled && Boolean(taskId),
+    queryFn: () =>
+      fetchTaskResourceObject<PeriodicTradeMetricsResponse>(
+        taskType,
+        taskId,
+        'strategy/metrics/periodic',
+        queryParams
+      ),
+    placeholderData: keepPreviousData,
     staleTime: 0,
     refetchInterval,
   });

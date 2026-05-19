@@ -15,6 +15,7 @@ from apps.trading.services.strategy_data_common import (
     normalise_granularity,
     page_rows,
     pagination_envelope,
+    pagination_envelope_from_page,
     parse_datetime,
     positive_int,
     string_or_none,
@@ -69,10 +70,17 @@ class StrategyDataService:
     def metrics(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
         query = _query_from_request(request, default_execution_id=task.execution_id)
         context = _load_context(task=task, task_type_label=task_type_label, query=query)
-        points, total = load_paginated_metric_points(
-            task=task, task_type_label=task_type_label, query=query
+        page = load_paginated_metric_points(task=task, task_type_label=task_type_label, query=query)
+        pagination = (
+            pagination_envelope(request=request, total=page.count, query=query)
+            if page.count_is_exact
+            else pagination_envelope_from_page(
+                request=request,
+                query=query,
+                rows_returned=len(page.rows),
+                has_next=page.has_next,
+            )
         )
-        pagination = pagination_envelope(request=request, total=total, query=query)
         return {
             "execution_id": string_or_none(query.execution_id),
             "strategy_type": context["strategy_type"],
@@ -95,7 +103,7 @@ class StrategyDataService:
                 ordering=query.ordering,
             ),
             **pagination,
-            "results": points,
+            "results": page.rows,
         }
 
     def latest_metric(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
@@ -118,6 +126,19 @@ class StrategyDataService:
                 query=query,
             ),
         }
+
+    def periodic_metrics(
+        self, *, request: Request, task: Any, task_type_label: str
+    ) -> dict[str, Any]:
+        from apps.trading.services.periodic_trade_metrics import build_periodic_trade_metrics
+
+        query = _query_from_request(request, default_execution_id=task.execution_id)
+        return build_periodic_trade_metrics(
+            task=task,
+            task_type_label=task_type_label,
+            query=query,
+            timezone_name=request.query_params.get("timezone"),
+        )
 
     def net_chart(self, *, request: Request, task: Any, task_type_label: str) -> dict[str, Any]:
         query = _query_from_request(request, default_execution_id=task.execution_id)

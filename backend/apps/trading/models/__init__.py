@@ -24,7 +24,7 @@ from apps.trading.models.configs import (
 from apps.trading.models.equities import Equity
 from apps.trading.models.events import StrategyEventRecord, TradingEvent
 from apps.trading.models.logs import RecoveryAttempt, TaskLog
-from apps.trading.models.metrics import ExecutionMetricAggregate, Metrics
+from apps.trading.models.metrics import ExecutionMetricAggregate, Metrics, MetricsRollup
 from apps.trading.models.orders import Order
 from apps.trading.models.positions import Position
 from apps.trading.models.snapshots import TaskExecutionSnapshot
@@ -61,5 +61,6 @@ __all__ = [
     "Equity",
     "Metrics",
     "ExecutionMetricAggregate",
+    "MetricsRollup",
     "TaskExecutionSnapshot",
 ]

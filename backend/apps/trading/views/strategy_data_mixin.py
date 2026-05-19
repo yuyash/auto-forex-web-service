@@ -73,6 +73,7 @@ class TaskStrategyDataMixin:
                     "strategy_type": serializers.CharField(),
                     "instrument": serializers.CharField(allow_null=True),
                     "count": serializers.IntegerField(),
+                    "count_is_exact": serializers.BooleanField(required=False),
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
                     "results": serializers.ListField(child=serializers.JSONField()),
@@ -187,6 +188,49 @@ class TaskStrategyDataMixin:
         task = self.get_object()  # type: ignore[attr-defined]
         return Response(
             StrategyDataService().latest_metric(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("since", str, required=False),
+            OpenApiParameter("until", str, required=False),
+            OpenApiParameter("timezone", str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyPeriodicMetricsResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "currency": serializers.CharField(allow_null=True),
+                    "timezone": serializers.CharField(),
+                    "periods": serializers.JSONField(),
+                },
+            )
+        },
+        description=(
+            "Retrieve day/week/month/year buckets for TP/SL PnL and position activity counts."
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/metrics/periodic",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_periodic_metrics(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().periodic_metrics(
                 request=request,
                 task=task,
                 task_type_label=self.task_type_label,

@@ -14,12 +14,36 @@ export interface MetricPoint {
 
 export interface MetricsPage {
   count: number;
+  count_is_exact?: boolean;
   next: string | null;
   previous: string | null;
   data_source: string;
   resume_cursor_timestamp: string | null;
   consistency_warnings: Array<Record<string, unknown>>;
   results: MetricPoint[];
+}
+
+export type MetricsPeriod = 'day' | 'week' | 'month' | 'year';
+
+export interface PeriodicTradeMetricPoint {
+  t: number;
+  timestamp: string;
+  label: string;
+  tp_profit: string;
+  sl_loss: string;
+  open_positions: number;
+  tp_closes: number;
+  sl_closes: number;
+  rebuild_opens: number;
+}
+
+export interface PeriodicTradeMetricsResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument: string | null;
+  currency: string | null;
+  timezone: string;
+  periods: Record<MetricsPeriod, PeriodicTradeMetricPoint[]>;
 }
 
 export interface LatestMetricsResponse {
@@ -104,6 +128,8 @@ export async function fetchMetrics(opts: {
 
   return {
     count: body.count ?? 0,
+    count_is_exact:
+      typeof body.count_is_exact === 'boolean' ? body.count_is_exact : true,
     next: body.next ?? null,
     previous: body.previous ?? null,
     data_source:
@@ -191,6 +217,7 @@ export async function fetchPaginatedMetrics(opts: {
     if (!response.next) {
       return {
         count: results.length,
+        count_is_exact: true,
         next: null,
         previous: null,
         data_source: dataSource,
@@ -203,6 +230,7 @@ export async function fetchPaginatedMetrics(opts: {
   }
   return {
     count: results.length,
+    count_is_exact: false,
     next: null,
     previous: null,
     data_source: dataSource,
