@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from typing import Any
 
 from apps.trading.strategies.snowball.parsing import (
@@ -114,6 +114,9 @@ class SnowballStrategyConfig:
 
     # Core
     base_units: int
+    base_units_auto_adjust_enabled: bool
+    base_units_balance_ratio: Decimal
+    base_units_step: int
     m_pips: Decimal
     trend_lot_size: int
     r_max: int
@@ -197,6 +200,24 @@ class SnowballStrategyConfig:
             refill_limit_enabled=self.refill_limit_enabled,
             refill_up_to=self.effective_refill_up_to,
         )
+
+    def effective_base_units(self, account_balance: Any | None = None) -> int:
+        """Return the base units used for newly created Snowball layers."""
+        if not self.base_units_auto_adjust_enabled:
+            return self.base_units
+
+        balance = _optional_decimal(account_balance)
+        if balance is None or balance <= 0:
+            return self.base_units
+        if self.base_units_balance_ratio <= 0:
+            return self.base_units
+
+        step = max(1, self.base_units_step)
+        raw_units = balance / self.base_units_balance_ratio
+        stepped_units = (raw_units / Decimal(step)).to_integral_value(
+            rounding=ROUND_FLOOR
+        ) * Decimal(step)
+        return max(step, int(stepped_units))
 
     @property
     def effective_refill_up_to(self) -> int:
@@ -330,6 +351,13 @@ class SnowballStrategyConfig:
 
         return SnowballStrategyConfig(
             base_units=_parse_int(raw.get("base_units", 1000), 1000),
+            base_units_auto_adjust_enabled=_parse_bool(
+                raw.get("base_units_auto_adjust_enabled", False), False
+            ),
+            base_units_balance_ratio=_parse_decimal(
+                raw.get("base_units_balance_ratio", "1000"), "1000"
+            ),
+            base_units_step=_parse_int(raw.get("base_units_step", 100), 100),
             m_pips=_parse_decimal(raw.get("m_pips", "50"), "50"),
             trend_lot_size=_parse_int(raw.get("trend_lot_size", 1), 1),
             r_max=_parse_int(raw.get("r_max", 7), 7),
@@ -407,6 +435,13 @@ class SnowballStrategyConfig:
             raw.get("preserve_highest_retracement_enabled", False), False
         ):
             missing.remove("preserve_highest_r_from")
+        for optional_key in (
+            "base_units_auto_adjust_enabled",
+            "base_units_balance_ratio",
+            "base_units_step",
+        ):
+            if optional_key in missing:
+                missing.remove(optional_key)
         if missing:
             raise ValueError(f"Snowball config is missing required field(s): {', '.join(missing)}")
 
@@ -425,6 +460,9 @@ class SnowballStrategyConfig:
     def to_dict(self) -> dict[str, Any]:
         return {
             "base_units": self.base_units,
+            "base_units_auto_adjust_enabled": self.base_units_auto_adjust_enabled,
+            "base_units_balance_ratio": str(self.base_units_balance_ratio),
+            "base_units_step": self.base_units_step,
             "m_pips": str(self.m_pips),
             "trend_lot_size": self.trend_lot_size,
             "r_max": self.r_max,
@@ -479,6 +517,12 @@ class SnowballStrategyConfig:
 
     def _validate_constraints(self) -> None:
         """Run concrete config consistency checks."""
+        if self.base_units <= 0:
+            raise ValueError("base_units must be greater than 0")
+        if self.base_units_balance_ratio <= 0:
+            raise ValueError("base_units_balance_ratio must be greater than 0")
+        if self.base_units_step <= 0:
+            raise ValueError("base_units_step must be greater than 0")
         if self.stop_loss_enabled and self.shrink_enabled:
             raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
         if self.preserve_highest_retracement_enabled:
@@ -596,3 +640,12 @@ class SnowballConfigValidationPolicy:
 
 
 SNOWBALL_CONFIG_VALIDATION_POLICY = SnowballConfigValidationPolicy()
+
+
+def _optional_decimal(value: Any | None) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None

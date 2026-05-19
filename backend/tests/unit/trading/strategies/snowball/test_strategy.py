@@ -186,6 +186,9 @@ class TestSnowballStrategyClassMethods:
         result = SnowballStrategy.normalize_parameters({"base_units": 2000})
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
+        assert result["base_units_auto_adjust_enabled"] is False
+        assert "base_units_balance_ratio" not in result
+        assert "base_units_step" not in result
         assert result["rebuild_entry_price_mode"] == "original_entry"
         assert result["rebuild_stop_loss_mode"] == "same_pips"
         assert result["rebuild_take_profit_mode"] == "same_pips"
@@ -199,6 +202,9 @@ class TestSnowballStrategyClassMethods:
         defaults = SnowballStrategy.default_parameters()
         assert isinstance(defaults, dict)
         assert "base_units" in defaults
+        assert defaults["base_units_auto_adjust_enabled"] is False
+        assert "base_units_balance_ratio" not in defaults
+        assert "base_units_step" not in defaults
         assert "m_pips" in defaults
         assert defaults["rebuild_entry_price_mode"] == "original_entry"
         assert "rebuild_stop_loss_mode" in defaults
@@ -218,6 +224,19 @@ class TestSnowballStrategyClassMethods:
 
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
+        assert cfg.base_units_auto_adjust_enabled is False
+
+    def test_parse_config_accepts_legacy_parameters_without_auto_base_unit_fields(self):
+        legacy = SnowballStrategy.default_parameters()
+        legacy.pop("base_units_auto_adjust_enabled", None)
+        legacy.pop("base_units_balance_ratio", None)
+        legacy.pop("base_units_step", None)
+
+        cfg = SnowballStrategy.parse_config(SimpleNamespace(config_dict=legacy))
+
+        assert cfg.base_units_auto_adjust_enabled is False
+        assert cfg.base_units_balance_ratio == Decimal("1000")
+        assert cfg.base_units_step == 100
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""

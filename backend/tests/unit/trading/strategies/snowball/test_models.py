@@ -21,6 +21,9 @@ class TestSnowballStrategyConfig:
         assert cfg.m_pips == Decimal("50")
         assert cfg.r_max == 7
         assert cfg.f_max == 3
+        assert cfg.base_units_auto_adjust_enabled is False
+        assert cfg.base_units_balance_ratio == Decimal("1000")
+        assert cfg.base_units_step == 100
         assert cfg.refill_limit_enabled is True
         assert cfg.refill_up_to == 2
         assert cfg.effective_refill_up_to == 2
@@ -153,6 +156,49 @@ class TestSnowballStrategyConfig:
         ]
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
+
+    def test_auto_base_units_floor_to_configured_step(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "base_units": 9999,
+                "base_units_auto_adjust_enabled": True,
+                "base_units_balance_ratio": "1000",
+                "base_units_step": 100,
+            }
+        )
+
+        assert cfg.effective_base_units(Decimal("1000000")) == 1000
+        assert cfg.effective_base_units(Decimal("1099999")) == 1000
+        assert cfg.effective_base_units(Decimal("1100000")) == 1100
+        assert cfg.effective_base_units(Decimal("2000000")) == 2000
+        assert cfg.effective_base_units(Decimal("950000")) == 900
+
+    def test_auto_base_units_disabled_uses_fixed_base_units(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "base_units": 1500,
+                "base_units_auto_adjust_enabled": False,
+            }
+        )
+
+        assert cfg.effective_base_units(Decimal("2000000")) == 1500
+
+    def test_auto_base_units_validate_ratio_and_step(self):
+        with pytest.raises(ValueError, match="base_units_balance_ratio"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "base_units_auto_adjust_enabled": True,
+                    "base_units_balance_ratio": "0",
+                }
+            ).validate()
+
+        with pytest.raises(ValueError, match="base_units_step"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "base_units_auto_adjust_enabled": True,
+                    "base_units_step": 0,
+                }
+            ).validate()
 
     def test_validate_rebuild_entry_price_mode(self):
         with pytest.raises(ValueError, match="rebuild_entry_price_mode"):

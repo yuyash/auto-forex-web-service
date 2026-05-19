@@ -39,7 +39,8 @@ class SnowballCycleFactory:
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
         """Create a new cycle with an initial L1/R0 entry."""
         cfg = strategy.config
-        units = cfg.trend_lot_size * cfg.base_units
+        base_units = cfg.effective_base_units(state.account_balance)
+        units = cfg.trend_lot_size * base_units
         price = tick.ask if direction == Direction.LONG else tick.bid
         if direction == Direction.LONG:
             close_price = price + cfg.m_pips * strategy.pip_size
@@ -75,7 +76,7 @@ class SnowballCycleFactory:
         )
 
         cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
-        layer = Layer.create(1, cfg.r_max, cfg.base_units, cfg.effective_refill_up_to)
+        layer = Layer.create(1, cfg.r_max, base_units, cfg.effective_refill_up_to)
         slot = layer.slot_at(0)
         assert slot is not None  # noqa: S101
         slot.fill(entry)

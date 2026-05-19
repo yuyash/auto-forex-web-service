@@ -102,6 +102,8 @@ export interface ConfigProperty {
   deferDefaultUntilConfigured?: boolean;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
+  /** Disable this field when the condition matches, while keeping it visible. */
+  disabledWhen?: DependsOnCondition;
   /**
    * Numeric cross-field validation rules used by strategy configuration forms.
    * These are UI metadata; backend strategy validation remains authoritative.

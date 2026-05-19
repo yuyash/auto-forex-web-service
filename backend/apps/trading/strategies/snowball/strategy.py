@@ -850,7 +850,9 @@ class SnowballStrategy(Strategy):
         prev_layer = cycle.current_layer
         assert prev_layer is not None
         new_layer_number = prev_layer.layer_number + 1
-        new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+        new_base_units = int(
+            Decimal(str(cfg.effective_base_units(ss.account_balance))) * cfg.post_r_max_base_factor
+        )
         layer = Layer.create(
             new_layer_number,
             cfg.r_max,

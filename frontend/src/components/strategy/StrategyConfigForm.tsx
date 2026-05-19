@@ -486,6 +486,16 @@ const StrategyConfigForm = ({
     const label =
       localized(fieldSchema, 'title') ?? formatFieldLabel(fieldName);
     const labelNode = renderLabel(label, localized(fieldSchema, 'description'));
+    const fieldDisabled =
+      disabled ||
+      Boolean(
+        fieldSchema.disabledWhen &&
+          matchesDependsOn(
+            config,
+            fieldSchema.disabledWhen,
+            configSchema.properties
+          )
+      );
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
@@ -534,7 +544,7 @@ const StrategyConfigForm = ({
           fullWidth
           key={fieldName}
           error={!!error}
-          disabled={disabled}
+          disabled={fieldDisabled}
         >
           <InputLabel required={isRequired}>{labelNode}</InputLabel>
           <Select
@@ -611,7 +621,7 @@ const StrategyConfigForm = ({
             <Checkbox
               checked={normalizeComparableValue(value) === true}
               onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
-              disabled={disabled}
+              disabled={fieldDisabled}
             />
           }
           label={
@@ -651,7 +661,7 @@ const StrategyConfigForm = ({
           helperText={error || localized(fieldSchema, 'description')}
           error={!!error}
           required={isRequired}
-          disabled={disabled}
+          disabled={fieldDisabled}
           inputProps={{
             min: fieldSchema.minimum,
             max: fieldSchema.maximum,
@@ -718,7 +728,7 @@ const StrategyConfigForm = ({
                         }
                         handleFieldChange(fieldName, next.slice(0, stepCount));
                       }}
-                      disabled={disabled}
+                      disabled={fieldDisabled}
                       error={
                         !!error ||
                         (itemMin !== undefined &&
@@ -791,7 +801,7 @@ const StrategyConfigForm = ({
             }
             error={!!error}
             required={isRequired}
-            disabled={disabled}
+            disabled={fieldDisabled}
             multiline
             minRows={4}
           />
@@ -832,7 +842,7 @@ const StrategyConfigForm = ({
           }
           error={!!error}
           required={isRequired}
-          disabled={disabled}
+          disabled={fieldDisabled}
         />
       );
     }
@@ -889,7 +899,7 @@ const StrategyConfigForm = ({
           }
           error={!!error}
           required={isRequired}
-          disabled={disabled}
+          disabled={fieldDisabled}
           multiline
           minRows={4}
         />
@@ -913,7 +923,7 @@ const StrategyConfigForm = ({
         helperText={error || localized(fieldSchema, 'description')}
         error={!!error}
         required={isRequired}
-        disabled={disabled}
+        disabled={fieldDisabled}
       />
     );
   };
