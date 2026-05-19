@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -16,6 +16,8 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Breadcrumbs, PageContainer } from '../components/common';
+import ConfigurationCopyDialog from '../components/configurations/ConfigurationCopyDialog';
+import { getConfigurationCopyErrorMessage } from '../components/configurations/configurationCopyError';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useCopyConfiguration } from '../hooks/useConfigurationMutations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -49,6 +51,7 @@ export default function ConfigurationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const configId = id || '';
   const navigate = useNavigate();
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
 
   const { data: configuration, isLoading, error } = useConfiguration(configId);
   const { strategies } = useStrategies();
@@ -57,6 +60,18 @@ export default function ConfigurationDetailPage() {
       navigate(`/configurations/${copied.id}`);
     },
   });
+
+  const handleCopyClick = () => {
+    copyMutation.reset();
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopyConfirm = (name: string) => {
+    if (!configuration) return;
+    void copyMutation
+      .mutate({ id: configuration.id, name })
+      .catch(() => undefined);
+  };
 
   const configSchema: ConfigSchema | undefined = (() => {
     if (!configuration) return undefined;
@@ -228,7 +243,8 @@ export default function ConfigurationDetailPage() {
               <Button
                 variant="outlined"
                 startIcon={<ContentCopyIcon />}
-                onClick={() => copyMutation.mutate({ id: configuration.id })}
+                onClick={handleCopyClick}
+                disabled={copyMutation.isLoading}
               >
                 {t('common:actions.copy')}
               </Button>
@@ -362,6 +378,16 @@ export default function ConfigurationDetailPage() {
               </Box>
             )}
           </Paper>
+
+          <ConfigurationCopyDialog
+            open={copyDialogOpen}
+            configurationName={configuration.name}
+            isLoading={copyMutation.isLoading}
+            apiError={getConfigurationCopyErrorMessage(copyMutation.error)}
+            onCancel={() => setCopyDialogOpen(false)}
+            onConfirm={handleCopyConfirm}
+            onNameChange={copyMutation.reset}
+          />
         </>
       )}
     </PageContainer>

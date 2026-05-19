@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { StrategyConfig } from '../../types/configuration';
 import ConfigurationCard from './ConfigurationCard';
@@ -21,10 +22,17 @@ vi.mock('../../hooks/useStrategies', () => ({
   getStrategyDisplayName: () => 'Snowball',
 }));
 
-vi.mock('../../hooks/useConfigurationMutations', () => ({
-  useCopyConfiguration: () => ({
+const mocks = vi.hoisted(() => ({
+  copyConfigurationMutation: {
     mutate: vi.fn(),
-  }),
+    reset: vi.fn(),
+    isLoading: false,
+    error: null as Error | null,
+  },
+}));
+
+vi.mock('../../hooks/useConfigurationMutations', () => ({
+  useCopyConfiguration: () => mocks.copyConfigurationMutation,
 }));
 
 const configuration: StrategyConfig = {
@@ -43,6 +51,14 @@ const configuration: StrategyConfig = {
 };
 
 describe('ConfigurationCard', () => {
+  beforeEach(() => {
+    mocks.copyConfigurationMutation.mutate.mockClear();
+    mocks.copyConfigurationMutation.mutate.mockResolvedValue(configuration);
+    mocks.copyConfigurationMutation.reset.mockClear();
+    mocks.copyConfigurationMutation.isLoading = false;
+    mocks.copyConfigurationMutation.error = null;
+  });
+
   it('shows the configuration revision on list cards', () => {
     render(
       <MemoryRouter>
@@ -52,5 +68,70 @@ describe('ConfigurationCard', () => {
 
     expect(screen.getByText('Revision')).toBeInTheDocument();
     expect(screen.getByText('Rev.7')).toBeInTheDocument();
+  });
+
+  it('opens a copy dialog and submits the requested configuration name', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <ConfigurationCard configuration={configuration} />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(
+      screen.getByRole('heading', { name: 'Copy Configuration' })
+    ).toBeInTheDocument();
+    const nameInput = screen.getByRole('textbox', {
+      name: 'New Configuration Name',
+    });
+    expect(nameInput).toHaveValue('Balanced Grid (Copy)');
+
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Balanced Grid Variant');
+    await user.click(
+      screen.getByRole('button', { name: 'Copy Configuration' })
+    );
+
+    expect(mocks.copyConfigurationMutation.reset).toHaveBeenCalled();
+    expect(mocks.copyConfigurationMutation.mutate).toHaveBeenCalledWith({
+      id: 'config-1',
+      name: 'Balanced Grid Variant',
+    });
+  });
+
+  it('opens the same copy dialog from the 3dots menu', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <ConfigurationCard configuration={configuration} />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(
+      screen.getByRole('heading', { name: 'Copy Configuration' })
+    ).toBeInTheDocument();
+
+    const nameInput = screen.getByRole('textbox', {
+      name: 'New Configuration Name',
+    });
+    expect(nameInput).toHaveValue('Balanced Grid (Copy)');
+
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Balanced Grid Menu Copy');
+    await user.click(
+      screen.getByRole('button', { name: 'Copy Configuration' })
+    );
+
+    expect(mocks.copyConfigurationMutation.mutate).toHaveBeenCalledWith({
+      id: 'config-1',
+      name: 'Balanced Grid Menu Copy',
+    });
   });
 });
