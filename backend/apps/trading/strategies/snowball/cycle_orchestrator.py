@@ -31,6 +31,8 @@ class CycleOrchestratorStrategy(Protocol):
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
+        *,
+        max_rebuilds: int | None = None,
     ) -> list[StrategyEvent]: ...
 
     def _process_cycle_counter_closes(
@@ -78,6 +80,7 @@ class CycleProcessingResult:
     events: list[StrategyEvent] = field(default_factory=list)
     stop_reason: str | None = None
     is_error: bool = False
+    rebuild_count: int = 0
 
 
 class SnowballCycleStatusRefresher:
@@ -131,10 +134,13 @@ class SnowballActiveCycleProcessor:
         tick: Tick,
         *,
         allow_new_positions: bool,
+        new_position_limit: int | None = None,
+        rebuild_limit_per_tick: int | None = None,
     ) -> CycleProcessingResult:
         """Process every active Snowball cycle for the current tick."""
         events: list[StrategyEvent] = []
         trace = self.decision_trace_recorder.start_tick(tick=tick)
+        remaining_rebuild_limit = rebuild_limit_per_tick
         for cycle in list(ss.active_cycles()):
             result = self._process_cycle(
                 strategy=strategy,
@@ -142,19 +148,37 @@ class SnowballActiveCycleProcessor:
                 tick=tick,
                 cycle=cycle,
                 allow_new_positions=allow_new_positions,
+                new_position_limit=new_position_limit,
+                rebuild_limit_per_tick=remaining_rebuild_limit,
                 trace=trace,
             )
             events.extend(result.events)
+            remaining_rebuild_limit = self._consume_rebuild_limit(
+                remaining_rebuild_limit,
+                result.rebuild_count,
+            )
             if result.stop_reason:
                 self.decision_trace_recorder.persist(ss=ss, trace=trace)
                 return CycleProcessingResult(
                     events=events,
                     stop_reason=result.stop_reason,
                     is_error=result.is_error,
+                    rebuild_count=(
+                        0
+                        if rebuild_limit_per_tick is None
+                        else rebuild_limit_per_tick - (remaining_rebuild_limit or 0)
+                    ),
                 )
 
         self.decision_trace_recorder.persist(ss=ss, trace=trace)
-        return CycleProcessingResult(events=events)
+        return CycleProcessingResult(
+            events=events,
+            rebuild_count=(
+                0
+                if rebuild_limit_per_tick is None
+                else rebuild_limit_per_tick - (remaining_rebuild_limit or 0)
+            ),
+        )
 
     def _process_cycle(
         self,
@@ -164,13 +188,31 @@ class SnowballActiveCycleProcessor:
         tick: Tick,
         cycle: SnowballCycle,
         allow_new_positions: bool,
+        new_position_limit: int | None,
+        rebuild_limit_per_tick: int | None,
         trace: SnowballDecisionTrace,
     ) -> CycleProcessingResult:
         events: list[StrategyEvent] = []
+        remaining_rebuild_limit = rebuild_limit_per_tick
+        rebuild_count = 0
         if cycle.grid.is_empty() and cycle.grid.has_pending_rebuilds():
             cycle.status = CycleStatus.PENDING
-            if allow_new_positions:
-                rebuild_events = strategy._process_stop_loss_rebuilds(ss, tick, cycle)
+            if allow_new_positions and self._can_open_new_position(ss, new_position_limit):
+                rebuild_events = strategy._process_stop_loss_rebuilds(
+                    ss,
+                    tick,
+                    cycle,
+                    max_rebuilds=self._remaining_rebuild_capacity(
+                        ss,
+                        new_position_limit,
+                        remaining_rebuild_limit,
+                    ),
+                )
+                rebuild_count += len(rebuild_events)
+                remaining_rebuild_limit = self._consume_rebuild_limit(
+                    remaining_rebuild_limit,
+                    len(rebuild_events),
+                )
                 trace.record_events(
                     phase="pending_rebuild",
                     cycle=cycle,
@@ -193,7 +235,7 @@ class SnowballActiveCycleProcessor:
                     reason="pending_rebuilds_remain_without_live_entries",
                     cycle=cycle,
                 )
-                return CycleProcessingResult(events=events)
+                return CycleProcessingResult(events=events, rebuild_count=rebuild_count)
             cycle.status = CycleStatus.ACTIVE
 
         counter_close_events = strategy._process_cycle_counter_closes(ss, tick, cycle)
@@ -209,7 +251,8 @@ class SnowballActiveCycleProcessor:
             ss,
             tick,
             cycle,
-            allow_reentry=allow_new_positions,
+            allow_reentry=allow_new_positions
+            and self._can_open_new_position(ss, new_position_limit),
         )
         trace.record_events(
             phase="cycle_take_profit",
@@ -230,6 +273,7 @@ class SnowballActiveCycleProcessor:
                 events=events,
                 stop_reason=f"Close order violation: {strategy._close_order_violation}",
                 is_error=True,
+                rebuild_count=rebuild_count,
             )
 
         stop_loss_events = strategy._process_stop_loss_closes(ss, tick, cycle)
@@ -241,8 +285,22 @@ class SnowballActiveCycleProcessor:
         )
         events.extend(stop_loss_events)
 
-        if allow_new_positions:
-            rebuild_events = strategy._process_stop_loss_rebuilds(ss, tick, cycle)
+        if allow_new_positions and self._can_open_new_position(ss, new_position_limit):
+            rebuild_events = strategy._process_stop_loss_rebuilds(
+                ss,
+                tick,
+                cycle,
+                max_rebuilds=self._remaining_rebuild_capacity(
+                    ss,
+                    new_position_limit,
+                    remaining_rebuild_limit,
+                ),
+            )
+            rebuild_count += len(rebuild_events)
+            remaining_rebuild_limit = self._consume_rebuild_limit(
+                remaining_rebuild_limit,
+                len(rebuild_events),
+            )
             trace.record_events(
                 phase="stop_loss_rebuild",
                 cycle=cycle,
@@ -259,7 +317,11 @@ class SnowballActiveCycleProcessor:
             )
 
         order_checked_without_new_mutations = False
-        if allow_new_positions and not counter_close_events:
+        if (
+            allow_new_positions
+            and self._can_open_new_position(ss, new_position_limit)
+            and not counter_close_events
+        ):
             strategy._validate_grid_ordering(cycle)
             if strategy._grid_order_violation:
                 self.logger.debug(
@@ -278,6 +340,8 @@ class SnowballActiveCycleProcessor:
                 max_iterations = max(1, strategy.config.f_max * (strategy.config.r_max + 1))
                 opened_new_position = False
                 for _ in range(max_iterations):
+                    if not self._can_open_new_position(ss, new_position_limit):
+                        break
                     add_events = strategy._process_cycle_counter_adds(ss, tick, cycle)
                     if not add_events:
                         break
@@ -311,7 +375,41 @@ class SnowballActiveCycleProcessor:
             strategy._grid_order_violation = None
 
         self.status_refresher.refresh(cycle)
-        return CycleProcessingResult(events=events)
+        return CycleProcessingResult(events=events, rebuild_count=rebuild_count)
+
+    def _can_open_new_position(
+        self,
+        ss: SnowballStrategyState,
+        new_position_limit: int | None,
+    ) -> bool:
+        return new_position_limit is None or len(ss.all_entries()) < new_position_limit
+
+    def _remaining_rebuild_capacity(
+        self,
+        ss: SnowballStrategyState,
+        new_position_limit: int | None,
+        rebuild_limit_per_tick: int | None,
+    ) -> int | None:
+        position_capacity = (
+            None
+            if new_position_limit is None
+            else max(0, new_position_limit - len(ss.all_entries()))
+        )
+        capacities = [
+            value for value in (position_capacity, rebuild_limit_per_tick) if value is not None
+        ]
+        if not capacities:
+            return None
+        return min(capacities)
+
+    def _consume_rebuild_limit(
+        self,
+        rebuild_limit_per_tick: int | None,
+        count: int,
+    ) -> int | None:
+        if rebuild_limit_per_tick is None:
+            return None
+        return max(0, rebuild_limit_per_tick - count)
 
 
 class SnowballCycleReseeder:
@@ -327,12 +425,15 @@ class SnowballCycleReseeder:
         tick: Tick,
         *,
         allow_new_positions: bool,
+        new_position_limit: int | None = None,
     ) -> list[StrategyEvent]:
         """Create fresh cycles for missing, pending-only, or exhausted directions."""
         events: list[StrategyEvent] = []
         active = ss.active_cycles()
         for direction in (Direction.LONG, Direction.SHORT):
             if not allow_new_positions:
+                break
+            if new_position_limit is not None and len(ss.all_entries()) >= new_position_limit:
                 break
             if not strategy._hedging_enabled and direction == Direction.SHORT:
                 continue

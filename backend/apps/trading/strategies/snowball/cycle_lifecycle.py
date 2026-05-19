@@ -22,6 +22,8 @@ class CycleLifecycleStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
 
+    def _effective_base_units(self, state: SnowballStrategyState) -> int: ...
+
     def _assign_configured_stop_loss(self, entry: Entry, slot_number: int) -> None: ...
 
 
@@ -39,7 +41,7 @@ class SnowballCycleFactory:
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
         """Create a new cycle with an initial L1/R0 entry."""
         cfg = strategy.config
-        base_units = cfg.effective_base_units(state.account_balance)
+        base_units = strategy._effective_base_units(state)
         units = cfg.trend_lot_size * base_units
         price = tick.ask if direction == Direction.LONG else tick.bid
         if direction == Direction.LONG:

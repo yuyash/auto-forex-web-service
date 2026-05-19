@@ -49,6 +49,20 @@ def test_snowball_snapshot_includes_current_base_units_metric() -> None:
     assert cards["current_base_units"] == "1200"
 
 
+def test_snowball_snapshot_includes_warmup_status_metric() -> None:
+    state = SnowballStrategyState(
+        initialised=True,
+        account_balance=Decimal("1000000"),
+        account_nav=Decimal("1000000"),
+        metrics={"warmup_status": "warmup"},
+    )
+
+    snapshot = build_strategy_snapshot("snowball", state.to_dict())
+    cards = {card["id"]: card["value"] for card in snapshot["cards"]}
+
+    assert cards["warmup_status"] == "warmup"
+
+
 def test_snowball_snapshot_groups_open_entry_counts_and_units() -> None:
     opened_at = datetime(2026, 1, 1, tzinfo=UTC)
     layer = Layer.create(layer_number=1, r_max=1, base_units=1000)

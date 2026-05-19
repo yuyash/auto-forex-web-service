@@ -244,6 +244,17 @@ class SnowballStrategyState:
 
     metrics: dict[str, str | int | float] = field(default_factory=dict)
 
+    # Warmup / cold-start runtime state.  These fields are intentionally
+    # persisted with the strategy state so backtests, live trading, and resume
+    # paths all make the same transition decisions.
+    warmup_started_at: str | None = None
+    warmup_completed_at: str | None = None
+    warmup_tick_count: int = 0
+    warmup_tp_closes: int = 0
+    warmup_phase: str = "normal"
+    warmup_last_log_state: str = ""
+    warmup_mid_history: list[str] = field(default_factory=list)
+
     def allocate_id(self) -> int:
         eid = self.next_entry_id
         self.next_entry_id += 1
@@ -280,6 +291,13 @@ class SnowballStrategyState:
             "account_balance": str(self.account_balance),
             "account_nav": str(self.account_nav),
             "metrics": dict(self.metrics),
+            "warmup_started_at": self.warmup_started_at,
+            "warmup_completed_at": self.warmup_completed_at,
+            "warmup_tick_count": self.warmup_tick_count,
+            "warmup_tp_closes": self.warmup_tp_closes,
+            "warmup_phase": self.warmup_phase,
+            "warmup_last_log_state": self.warmup_last_log_state,
+            "warmup_mid_history": list(self.warmup_mid_history),
         }
 
     @staticmethod
@@ -292,6 +310,12 @@ class SnowballStrategyState:
         raw_metrics = SNOWBALL_STATE_PARSER.require(data, "metrics")
         if not isinstance(raw_metrics, dict):
             raise ValueError("Snowball state field metrics must be an object")
+        raw_warmup_mid_history = data.get("warmup_mid_history")
+        warmup_mid_history = (
+            [str(value) for value in raw_warmup_mid_history]
+            if isinstance(raw_warmup_mid_history, list)
+            else []
+        )
 
         return SnowballStrategyState(
             protection_level=SnowballStrategyState._parse_protection_level(
@@ -318,6 +342,14 @@ class SnowballStrategyState:
                 SNOWBALL_STATE_PARSER.require(data, "account_nav"), field_name="account_nav"
             ),
             metrics=dict(raw_metrics),
+            warmup_started_at=SNOWBALL_STATE_PARSER.optional_str(data, "warmup_started_at"),
+            warmup_completed_at=SNOWBALL_STATE_PARSER.optional_str(data, "warmup_completed_at"),
+            warmup_tick_count=SNOWBALL_STATE_PARSER.optional_int(data, "warmup_tick_count") or 0,
+            warmup_tp_closes=SNOWBALL_STATE_PARSER.optional_int(data, "warmup_tp_closes") or 0,
+            warmup_phase=SNOWBALL_STATE_PARSER.optional_str(data, "warmup_phase") or "normal",
+            warmup_last_log_state=SNOWBALL_STATE_PARSER.optional_str(data, "warmup_last_log_state")
+            or "",
+            warmup_mid_history=warmup_mid_history,
         )
 
     @classmethod

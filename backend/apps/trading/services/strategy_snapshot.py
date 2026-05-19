@@ -14,6 +14,7 @@ SNOWBALL_SNAPSHOT_CARD_KEYS = (
     "open_entries",
     "open_long_units",
     "open_short_units",
+    "warmup_status",
     "current_base_units",
     "account_balance",
     "account_nav",
@@ -70,6 +71,7 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "open_entries": len(entries),
             "open_long_units": sum(abs(entry.units) for entry in entries if entry.is_long),
             "open_short_units": sum(abs(entry.units) for entry in entries if entry.is_short),
+            "warmup_status": parsed.metrics.get("warmup_status") or "normal",
             "current_base_units": current_base_units,
             "account_balance": str(parsed.account_balance),
             "account_nav": str(parsed.account_nav),
@@ -83,6 +85,7 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "protection_level": state.get("protection_level"),
             "active_cycles": len(state.get("cycles") or []),
             "completed_cycles": _int_state_value(state.get(ARCHIVED_COMPLETED_CYCLES_KEY)),
+            "warmup_status": metrics.get("warmup_status") or "normal",
             "current_base_units": metrics.get("current_base_units")
             or metrics.get("snowball_current_base_units"),
             "account_nav": state.get("account_nav"),

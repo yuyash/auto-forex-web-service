@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import Any
+from typing import Any, cast
 
 from apps.trading.dataclasses import EventExecutionResult, StrategyResult
 from apps.trading.dataclasses.tick import Tick
@@ -55,6 +55,7 @@ from apps.trading.strategies.snowball.grid_policy import SNOWBALL_GRID_POLICY
 from apps.trading.strategies.snowball.invariants import SnowballInvariantValidator
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.cycle_lifecycle import (
+    CycleLifecycleStrategy,
     SnowballCycleFactory,
     SnowballLayerInitialPlanner,
 )
@@ -434,11 +435,19 @@ class SnowballStrategy(Strategy):
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
         """Create a new cycle with an initial entry at L0/R0."""
         return self.cycle_factory.create(
-            strategy=self,
+            strategy=cast(CycleLifecycleStrategy, self),
             state=ss,
             tick=tick,
             direction=direction,
         )
+
+    def _effective_base_units(self, ss: SnowballStrategyState) -> int:
+        """Return the current base units after balance and warmup scaling."""
+        try:
+            ratio = Decimal(str(ss.metrics.get("warmup_unit_ratio_pct", "100") or "100"))
+        except Exception:  # noqa: BLE001
+            ratio = Decimal("100")
+        return self.config.warmup_scaled_base_units(ss.account_balance, ratio_pct=ratio)
 
     def _close_and_reenter(
         self,
@@ -851,7 +860,7 @@ class SnowballStrategy(Strategy):
         assert prev_layer is not None
         new_layer_number = prev_layer.layer_number + 1
         new_base_units = int(
-            Decimal(str(cfg.effective_base_units(ss.account_balance))) * cfg.post_r_max_base_factor
+            Decimal(str(self._effective_base_units(ss))) * cfg.post_r_max_base_factor
         )
         layer = Layer.create(
             new_layer_number,
@@ -1085,8 +1094,16 @@ class SnowballStrategy(Strategy):
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
+        *,
+        max_rebuilds: int | None = None,
     ) -> list[StrategyEvent]:
-        return self.stop_loss_rebuild_processor.process(self, ss, tick, cycle)
+        return self.stop_loss_rebuild_processor.process(
+            self,
+            ss,
+            tick,
+            cycle,
+            max_rebuilds=max_rebuilds,
+        )
 
     # ------------------------------------------------------------------
     # Core tick processing

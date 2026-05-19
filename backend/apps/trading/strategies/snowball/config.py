@@ -13,6 +13,28 @@ from apps.trading.strategies.snowball.parsing import (
     _parse_str,
 )
 
+WARMUP_OPTIONAL_KEYS = (
+    "warmup_enabled",
+    "warmup_initial_unit_ratio_pct",
+    "warmup_unit_ramp_steps",
+    "warmup_start_gate_enabled",
+    "warmup_gate_spread_enabled",
+    "warmup_gate_max_spread_pips",
+    "warmup_gate_volatility_enabled",
+    "warmup_gate_volatility_window_ticks",
+    "warmup_gate_max_volatility_pips",
+    "warmup_gate_trend_enabled",
+    "warmup_gate_trend_window_ticks",
+    "warmup_gate_max_trend_pips",
+    "warmup_position_limit_enabled",
+    "warmup_max_positions",
+    "warmup_rebuild_limit_enabled",
+    "warmup_max_rebuilds_per_tick",
+    "warmup_completion_mode",
+    "warmup_min_elapsed_minutes",
+    "warmup_required_tp_closes",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GridConfig:
@@ -85,6 +107,31 @@ class RebuildPolicyConfig:
     enabled: bool
     entry_price_mode: str
     reseed_on_all_pending: bool
+
+
+@dataclass(frozen=True, slots=True)
+class WarmupConfig:
+    """Cold-start warmup controls for Snowball trading."""
+
+    enabled: bool
+    initial_unit_ratio_pct: Decimal
+    unit_ramp_steps: int
+    start_gate_enabled: bool
+    gate_spread_enabled: bool
+    gate_max_spread_pips: Decimal
+    gate_volatility_enabled: bool
+    gate_volatility_window_ticks: int
+    gate_max_volatility_pips: Decimal
+    gate_trend_enabled: bool
+    gate_trend_window_ticks: int
+    gate_max_trend_pips: Decimal
+    position_limit_enabled: bool
+    max_positions: int
+    rebuild_limit_enabled: bool
+    max_rebuilds_per_tick: int
+    completion_mode: str
+    min_elapsed_minutes: int
+    required_tp_closes: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +235,27 @@ class SnowballStrategyConfig:
     # are pending stop-loss rebuild (no open positions).
     reseed_on_all_pending: bool
 
+    # Warmup / cold-start risk controls.
+    warmup_enabled: bool
+    warmup_initial_unit_ratio_pct: Decimal
+    warmup_unit_ramp_steps: int
+    warmup_start_gate_enabled: bool
+    warmup_gate_spread_enabled: bool
+    warmup_gate_max_spread_pips: Decimal
+    warmup_gate_volatility_enabled: bool
+    warmup_gate_volatility_window_ticks: int
+    warmup_gate_max_volatility_pips: Decimal
+    warmup_gate_trend_enabled: bool
+    warmup_gate_trend_window_ticks: int
+    warmup_gate_max_trend_pips: Decimal
+    warmup_position_limit_enabled: bool
+    warmup_max_positions: int
+    warmup_rebuild_limit_enabled: bool
+    warmup_max_rebuilds_per_tick: int
+    warmup_completion_mode: str
+    warmup_min_elapsed_minutes: int
+    warmup_required_tp_closes: int
+
     @property
     def grid(self) -> GridConfig:
         return GridConfig(
@@ -218,6 +286,20 @@ class SnowballStrategyConfig:
             rounding=ROUND_FLOOR
         ) * Decimal(step)
         return max(step, int(stepped_units))
+
+    def warmup_scaled_base_units(
+        self,
+        account_balance: Any | None = None,
+        *,
+        ratio_pct: Decimal,
+    ) -> int:
+        """Return base units reduced by the current warmup unit ratio."""
+        base_units = self.effective_base_units(account_balance)
+        ratio = max(Decimal("0.01"), min(Decimal("100"), ratio_pct)) / Decimal("100")
+        raw_units = Decimal(base_units) * ratio
+        step = Decimal(max(1, self.base_units_step if self.base_units_auto_adjust_enabled else 1))
+        stepped_units = (raw_units / step).to_integral_value(rounding=ROUND_FLOOR) * step
+        return max(1, int(stepped_units))
 
     @property
     def effective_refill_up_to(self) -> int:
@@ -303,6 +385,30 @@ class SnowballStrategyConfig:
             emergency_enabled=self.emergency_enabled,
             emergency_threshold=self.emergency_threshold,
             stop_loss_enabled=self.stop_loss_enabled,
+        )
+
+    @property
+    def warmup(self) -> WarmupConfig:
+        return WarmupConfig(
+            enabled=self.warmup_enabled,
+            initial_unit_ratio_pct=self.warmup_initial_unit_ratio_pct,
+            unit_ramp_steps=self.warmup_unit_ramp_steps,
+            start_gate_enabled=self.warmup_start_gate_enabled,
+            gate_spread_enabled=self.warmup_gate_spread_enabled,
+            gate_max_spread_pips=self.warmup_gate_max_spread_pips,
+            gate_volatility_enabled=self.warmup_gate_volatility_enabled,
+            gate_volatility_window_ticks=self.warmup_gate_volatility_window_ticks,
+            gate_max_volatility_pips=self.warmup_gate_max_volatility_pips,
+            gate_trend_enabled=self.warmup_gate_trend_enabled,
+            gate_trend_window_ticks=self.warmup_gate_trend_window_ticks,
+            gate_max_trend_pips=self.warmup_gate_max_trend_pips,
+            position_limit_enabled=self.warmup_position_limit_enabled,
+            max_positions=self.warmup_max_positions,
+            rebuild_limit_enabled=self.warmup_rebuild_limit_enabled,
+            max_rebuilds_per_tick=self.warmup_max_rebuilds_per_tick,
+            completion_mode=self.warmup_completion_mode,
+            min_elapsed_minutes=self.warmup_min_elapsed_minutes,
+            required_tp_closes=self.warmup_required_tp_closes,
         )
 
     @staticmethod
@@ -420,6 +526,49 @@ class SnowballStrategyConfig:
             emergency_threshold=_parse_decimal(raw.get("emergency_threshold", "95"), "95"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=_parse_bool(raw.get("reseed_on_all_pending", False), False),
+            warmup_enabled=_parse_bool(raw.get("warmup_enabled", False), False),
+            warmup_initial_unit_ratio_pct=_parse_decimal(
+                raw.get("warmup_initial_unit_ratio_pct", "50"), "50"
+            ),
+            warmup_unit_ramp_steps=_parse_int(raw.get("warmup_unit_ramp_steps", 3), 3),
+            warmup_start_gate_enabled=_parse_bool(raw.get("warmup_start_gate_enabled", True), True),
+            warmup_gate_spread_enabled=_parse_bool(
+                raw.get("warmup_gate_spread_enabled", True), True
+            ),
+            warmup_gate_max_spread_pips=_parse_decimal(
+                raw.get("warmup_gate_max_spread_pips", "3"), "3"
+            ),
+            warmup_gate_volatility_enabled=_parse_bool(
+                raw.get("warmup_gate_volatility_enabled", False), False
+            ),
+            warmup_gate_volatility_window_ticks=_parse_int(
+                raw.get("warmup_gate_volatility_window_ticks", 60), 60
+            ),
+            warmup_gate_max_volatility_pips=_parse_decimal(
+                raw.get("warmup_gate_max_volatility_pips", "80"), "80"
+            ),
+            warmup_gate_trend_enabled=_parse_bool(
+                raw.get("warmup_gate_trend_enabled", False), False
+            ),
+            warmup_gate_trend_window_ticks=_parse_int(
+                raw.get("warmup_gate_trend_window_ticks", 60), 60
+            ),
+            warmup_gate_max_trend_pips=_parse_decimal(
+                raw.get("warmup_gate_max_trend_pips", "60"), "60"
+            ),
+            warmup_position_limit_enabled=_parse_bool(
+                raw.get("warmup_position_limit_enabled", True), True
+            ),
+            warmup_max_positions=_parse_int(raw.get("warmup_max_positions", 4), 4),
+            warmup_rebuild_limit_enabled=_parse_bool(
+                raw.get("warmup_rebuild_limit_enabled", True), True
+            ),
+            warmup_max_rebuilds_per_tick=_parse_int(raw.get("warmup_max_rebuilds_per_tick", 0), 0),
+            warmup_completion_mode=_parse_str(raw.get("warmup_completion_mode"), "duration"),
+            warmup_min_elapsed_minutes=_parse_int(
+                raw.get("warmup_min_elapsed_minutes", 1440), 1440
+            ),
+            warmup_required_tp_closes=_parse_int(raw.get("warmup_required_tp_closes", 3), 3),
         )
 
     @classmethod
@@ -439,6 +588,7 @@ class SnowballStrategyConfig:
             "base_units_auto_adjust_enabled",
             "base_units_balance_ratio",
             "base_units_step",
+            *WARMUP_OPTIONAL_KEYS,
         ):
             if optional_key in missing:
                 missing.remove(optional_key)
@@ -509,6 +659,25 @@ class SnowballStrategyConfig:
             "emergency_threshold": str(self.emergency_threshold),
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
+            "warmup_enabled": self.warmup_enabled,
+            "warmup_initial_unit_ratio_pct": str(self.warmup_initial_unit_ratio_pct),
+            "warmup_unit_ramp_steps": self.warmup_unit_ramp_steps,
+            "warmup_start_gate_enabled": self.warmup_start_gate_enabled,
+            "warmup_gate_spread_enabled": self.warmup_gate_spread_enabled,
+            "warmup_gate_max_spread_pips": str(self.warmup_gate_max_spread_pips),
+            "warmup_gate_volatility_enabled": self.warmup_gate_volatility_enabled,
+            "warmup_gate_volatility_window_ticks": self.warmup_gate_volatility_window_ticks,
+            "warmup_gate_max_volatility_pips": str(self.warmup_gate_max_volatility_pips),
+            "warmup_gate_trend_enabled": self.warmup_gate_trend_enabled,
+            "warmup_gate_trend_window_ticks": self.warmup_gate_trend_window_ticks,
+            "warmup_gate_max_trend_pips": str(self.warmup_gate_max_trend_pips),
+            "warmup_position_limit_enabled": self.warmup_position_limit_enabled,
+            "warmup_max_positions": self.warmup_max_positions,
+            "warmup_rebuild_limit_enabled": self.warmup_rebuild_limit_enabled,
+            "warmup_max_rebuilds_per_tick": self.warmup_max_rebuilds_per_tick,
+            "warmup_completion_mode": self.warmup_completion_mode,
+            "warmup_min_elapsed_minutes": self.warmup_min_elapsed_minutes,
+            "warmup_required_tp_closes": self.warmup_required_tp_closes,
         }
 
     def validate(self) -> None:
@@ -523,6 +692,38 @@ class SnowballStrategyConfig:
             raise ValueError("base_units_balance_ratio must be greater than 0")
         if self.base_units_step <= 0:
             raise ValueError("base_units_step must be greater than 0")
+        if not Decimal("0") < self.warmup_initial_unit_ratio_pct <= Decimal("100"):
+            raise ValueError("warmup_initial_unit_ratio_pct must be between 0 and 100")
+        if self.warmup_unit_ramp_steps <= 0:
+            raise ValueError("warmup_unit_ramp_steps must be greater than 0")
+        if self.warmup_gate_max_spread_pips <= 0:
+            raise ValueError("warmup_gate_max_spread_pips must be greater than 0")
+        if self.warmup_gate_volatility_window_ticks <= 1:
+            raise ValueError("warmup_gate_volatility_window_ticks must be greater than 1")
+        if self.warmup_gate_max_volatility_pips <= 0:
+            raise ValueError("warmup_gate_max_volatility_pips must be greater than 0")
+        if self.warmup_gate_trend_window_ticks <= 1:
+            raise ValueError("warmup_gate_trend_window_ticks must be greater than 1")
+        if self.warmup_gate_max_trend_pips <= 0:
+            raise ValueError("warmup_gate_max_trend_pips must be greater than 0")
+        if self.warmup_max_positions <= 0:
+            raise ValueError("warmup_max_positions must be greater than 0")
+        if self.warmup_max_rebuilds_per_tick < 0:
+            raise ValueError("warmup_max_rebuilds_per_tick must be greater than or equal to 0")
+        if self.warmup_completion_mode not in {
+            "duration",
+            "tp_closes",
+            "duration_and_tp_closes",
+            "duration_or_tp_closes",
+        }:
+            raise ValueError(
+                "warmup_completion_mode must be one of 'duration', 'tp_closes', "
+                "'duration_and_tp_closes', or 'duration_or_tp_closes'"
+            )
+        if self.warmup_min_elapsed_minutes < 0:
+            raise ValueError("warmup_min_elapsed_minutes must be greater than or equal to 0")
+        if self.warmup_required_tp_closes < 0:
+            raise ValueError("warmup_required_tp_closes must be greater than or equal to 0")
         if self.stop_loss_enabled and self.shrink_enabled:
             raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
         if self.preserve_highest_retracement_enabled:
