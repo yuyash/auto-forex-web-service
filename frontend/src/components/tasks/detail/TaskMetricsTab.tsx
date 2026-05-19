@@ -512,7 +512,24 @@ function buildPeriodicChartData(
     metric,
     values: points.map((point) => periodicMetricValue(point, metric.key)),
   }));
-  const yValues = chartSeries.flatMap((item) => item.values);
+  const stackedExtents: number[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    let positiveTotal = 0;
+    let negativeTotal = 0;
+    for (const item of chartSeries) {
+      const value = item.values[index] ?? 0;
+      if (value >= 0) {
+        positiveTotal += value;
+      } else {
+        negativeTotal += value;
+      }
+    }
+    stackedExtents.push(positiveTotal, negativeTotal);
+  }
+  const yValues = [
+    ...chartSeries.flatMap((item) => item.values),
+    ...stackedExtents,
+  ];
   if (yValues.length === 0 || !yValues.some((value) => value !== 0)) {
     return null;
   }
@@ -1781,6 +1798,8 @@ export function TaskMetricsTab({
                     series={cd.series.map(({ metric, values }) => ({
                       data: values,
                       color: metric.color,
+                      stack: TP_SL_PERIOD_CHART_KEY,
+                      stackOffset: 'diverging' as const,
                       label: t(`metrics.${metric.key}`, {
                         defaultValue: metric.key.replace(/_/g, ' '),
                       }),
@@ -1934,6 +1953,8 @@ export function TaskMetricsTab({
                     series={cd.series.map(({ metric, values }) => ({
                       data: values,
                       color: metric.color,
+                      stack: POSITION_ACTIVITY_PERIOD_CHART_KEY,
+                      stackOffset: 'diverging' as const,
                       label: t(`metrics.${metric.key}`, {
                         defaultValue: metric.key.replace(/_/g, ' '),
                       }),
