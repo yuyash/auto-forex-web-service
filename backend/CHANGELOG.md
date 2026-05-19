@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.2.0...backend-v2.3.0) (2026-05-19)
+
+
+### Features
+
+* backtest holiday calendar ([#784](https://github.com/yuyash/auto-forex-web-service/issues/784)) ([60a3bbc](https://github.com/yuyash/auto-forex-web-service/commit/60a3bbc9b7e06d90d1ca9ef98d89ba9064759252))
+
+
+### Bug Fixes
+
+* **snowball:** anchor stop-loss-exit rebuild trigger on SL level and add buffer/cooldown ([#782](https://github.com/yuyash/auto-forex-web-service/issues/782)) ([cae0bc0](https://github.com/yuyash/auto-forex-web-service/commit/cae0bc0058ac0c916489e95fa691306224ab5374))
+
 ## [2.2.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.1.0...backend-v2.2.0) (2026-05-19)
 
 
