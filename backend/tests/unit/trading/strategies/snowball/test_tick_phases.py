@@ -11,6 +11,7 @@ from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.tick_phases import (
     ARCHIVED_COMPLETED_CYCLES_KEY,
@@ -52,6 +53,8 @@ class StrategyDouble:
     def __init__(self) -> None:
         self.instrument = "USD_JPY"
         self.account_currency = "USD"
+        self.config = SnowballStrategyConfig.from_dict({})
+        self.pip_size = Decimal("0.01")
         self._hedging_enabled = False
         self._grid_order_violation: str | None = "previous-grid-error"
         self._close_order_violation: str | None = "previous-close-error"
@@ -68,6 +71,9 @@ class StrategyDouble:
     def _close_entry(self, *args: Any, **kwargs: Any) -> Any:
         _ = (args, kwargs)
         return None
+
+    def _effective_base_units(self, ss: SnowballStrategyState) -> int:
+        return self.config.effective_base_units(ss.account_balance)
 
 
 class RecordingPhase:

@@ -267,6 +267,132 @@ class TestInitialisation:
         assert active_cycles[0].initial_entry.units == 2000
 
 
+class TestSnowballWarmup:
+    def test_start_gate_blocks_initial_entries_until_spread_is_acceptable(self, caplog):
+        caplog.set_level(
+            logging.INFO,
+            logger="apps.trading.strategies.snowball.warmup",
+        )
+        s = _strategy(
+            warmup_enabled=True,
+            warmup_gate_max_spread_pips="1",
+            warmup_position_limit_enabled=False,
+        )
+        state = DummyState()
+
+        blocked = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert _open_events(blocked) == []
+        assert ss.initialised is False
+        assert ss.metrics["warmup_status"] == "warmup"
+        assert ss.metrics["warmup_block_reason"] == "spread"
+        assert ss.metrics["current_base_units"] == "500"
+
+        allowed = s.on_tick(tick=_tick(T0 + timedelta(seconds=1), "150.00", "150.005"), state=state)
+
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert ss.initialised is True
+        assert len(_open_events(allowed)) == 2
+        assert {event.units for event in _open_events(allowed)} == {500}
+        assert "Snowball warmup started" in caplog.text
+        assert "new entries blocked (reason=spread" in caplog.text
+
+    def test_position_limit_caps_initial_hedged_entries(self):
+        s = _strategy(
+            warmup_enabled=True,
+            warmup_start_gate_enabled=False,
+            warmup_position_limit_enabled=True,
+            warmup_max_positions=1,
+        )
+        state = DummyState()
+
+        result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        opens = _open_events(result)
+        assert len(opens) == 1
+        assert ss.initialised is True
+        assert len(ss.all_entries()) == 1
+        assert ss.metrics["warmup_status"] == "warmup"
+
+    def test_duration_transition_restores_normal_base_units(self, caplog):
+        caplog.set_level(
+            logging.INFO,
+            logger="apps.trading.strategies.snowball.warmup",
+        )
+        s = _strategy(
+            warmup_enabled=True,
+            warmup_start_gate_enabled=False,
+            warmup_position_limit_enabled=False,
+            warmup_min_elapsed_minutes=1,
+        )
+        state = DummyState()
+
+        first = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+        assert {event.units for event in _open_events(first)} == {500}
+
+        state.ticks_processed += 1
+        s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "150.00", "150.02"), state=state)
+
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert ss.warmup_completed_at is not None
+        assert ss.metrics["warmup_status"] == "normal"
+        assert ss.metrics["current_base_units"] == "1000"
+        assert "Snowball warmup completed" in caplog.text
+
+    def test_rebuild_limit_reopens_only_configured_count_per_tick(self):
+        s = _strategy(
+            stop_loss_enabled=True,
+            rebuild_enabled=True,
+            warmup_enabled=True,
+            warmup_start_gate_enabled=False,
+            warmup_position_limit_enabled=False,
+            warmup_rebuild_limit_enabled=True,
+            warmup_max_rebuilds_per_tick=1,
+        )
+        snowball_state = SnowballStrategyState(
+            initialised=True,
+            warmup_started_at=T0.isoformat(),
+            warmup_phase="warmup",
+        )
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        for index in (1, 2):
+            layer.slot_at(index).pending_rebuild = StopLossClosedEntry(
+                entry_price=Decimal("149.50"),
+                close_price=Decimal("150.00"),
+                units=1000 * (index + 1),
+                direction=Direction.LONG,
+                role="counter",
+                layer_number=1,
+                retracement_count=index,
+                step=index + 1,
+                cycle_id=1,
+            )
+        cycle.add_layer(layer)
+        snowball_state.cycles.append(cycle)
+        state = DummyState(strategy_state=snowball_state.to_dict())
+
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=1), "149.50", "149.52"), state=state)
+
+        rebuilds = [
+            event
+            for event in result.events
+            if getattr(getattr(event, "event_type", None), "value", "") == "rebuild_position"
+        ]
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        pending_slots = [
+            slot
+            for cycle in persisted.active_cycles()
+            for layer in cycle.layers
+            for slot in layer.slots
+            if slot.pending_rebuild is not None
+        ]
+        assert len(rebuilds) == 1
+        assert len(pending_slots) == 1
+
+
 # ==================================================================
 # 2. Counter adds
 # ==================================================================

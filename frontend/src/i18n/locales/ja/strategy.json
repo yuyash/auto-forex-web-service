@@ -66,6 +66,7 @@
     "open_entries": "オープンエントリー",
     "open_long_units": "オープンLONGサイズ",
     "open_short_units": "オープンSHORTサイズ",
+    "warmup_status": "運転フェーズ",
     "current_base_units": "現在のベースユニット数",
     "account_balance": "口座残高",
     "account_nav": "口座NAV",
@@ -99,6 +100,10 @@
       "long": "買い",
       "short": "売り",
       "auto": "自動"
+    },
+    "warmup_status": {
+      "warmup": "ウォームアップ中",
+      "normal": "通常運転中"
     }
   },
   "snowballNet": {

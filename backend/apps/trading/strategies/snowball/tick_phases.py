@@ -10,6 +10,7 @@ from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
 from apps.trading.events import StrategyEvent
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.accounting import SnowballAccountMetricsUpdater
 from apps.trading.strategies.snowball.cycle_orchestrator import (
     CycleOrchestratorStrategy,
@@ -19,6 +20,10 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION, ProtectionStrategy
+from apps.trading.strategies.snowball.warmup import (
+    SnowballWarmupDecision,
+    SnowballWarmupPolicy,
+)
 
 ARCHIVED_COMPLETED_CYCLES_KEY = "archived_completed_cycles"
 
@@ -28,6 +33,8 @@ class SnowballTickStrategy(CycleOrchestratorStrategy, ProtectionStrategy, Protoc
 
     instrument: str
     account_currency: str
+    config: SnowballStrategyConfig
+    pip_size: Decimal
     _hedging_enabled: bool
     _grid_order_violation: str | None
     _close_order_violation: str | None
@@ -39,6 +46,8 @@ class SnowballTickStrategy(CycleOrchestratorStrategy, ProtectionStrategy, Protoc
         tick: Tick,
         direction: Direction,
     ) -> tuple[list[StrategyEvent], Any]: ...
+
+    def _effective_base_units(self, ss: SnowballStrategyState) -> int: ...
 
     def _close_entry(self, *args: Any, **kwargs: Any) -> Any: ...
 
@@ -97,6 +106,13 @@ class SnowballExecutionStateBoundary:
             "account_balance",
             "account_nav",
             ARCHIVED_COMPLETED_CYCLES_KEY,
+            "warmup_started_at",
+            "warmup_completed_at",
+            "warmup_tick_count",
+            "warmup_tp_closes",
+            "warmup_phase",
+            "warmup_last_log_state",
+            "warmup_mid_history",
         ):
             if key in hot_state:
                 strategy_state[key] = hot_state[key]
@@ -183,6 +199,9 @@ class SnowballTickContext:
     events: list[StrategyEvent] = field(default_factory=list)
     ratio: Decimal = Decimal("0")
     allow_new_positions: bool = True
+    new_position_limit: int | None = None
+    rebuild_limit_per_tick: int | None = None
+    warmup_decision: SnowballWarmupDecision | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +291,33 @@ class SnowballAccountMetricsPhase:
         return SnowballTickPhaseOutcome()
 
 
+class SnowballWarmupPhase:
+    """Apply Snowball cold-start warmup controls."""
+
+    def __init__(self, *, policy: SnowballWarmupPolicy | None = None) -> None:
+        self.policy = policy or SnowballWarmupPolicy()
+
+    def run(self, context: SnowballTickContext) -> SnowballTickPhaseOutcome:
+        """Evaluate warmup gates and runtime limits for this tick."""
+        decision = self.policy.evaluate(
+            config=context.strategy.config,
+            state=context.snowball_state,
+            tick=context.tick,
+            pip_size=context.strategy.pip_size,
+        )
+        context.warmup_decision = decision
+        context.allow_new_positions = decision.allow_new_positions
+        context.new_position_limit = decision.new_position_limit
+        context.rebuild_limit_per_tick = decision.rebuild_limit_per_tick
+        current_base_units = context.strategy.config.warmup_scaled_base_units(
+            context.snowball_state.account_balance,
+            ratio_pct=decision.unit_ratio_pct,
+        )
+        context.snowball_state.metrics["current_base_units"] = str(current_base_units)
+        context.snowball_state.metrics["snowball_current_base_units"] = str(current_base_units)
+        return SnowballTickPhaseOutcome()
+
+
 class SnowballProtectionPhase:
     """Apply emergency and shrink protection."""
 
@@ -343,13 +389,16 @@ class SnowballInitialisationPhase:
         if context.snowball_state.initialised:
             return SnowballTickPhaseOutcome()
 
+        if not _can_open_new_position(context):
+            return SnowballTickPhaseOutcome(result=self.serializer.result(context))
+
         init_events, _ = context.strategy._create_cycle(
             context.snowball_state,
             context.tick,
             Direction.LONG,
         )
         context.events.extend(init_events)
-        if context.strategy._hedging_enabled:
+        if context.strategy._hedging_enabled and _can_open_new_position(context):
             short_events, _ = context.strategy._create_cycle(
                 context.snowball_state,
                 context.tick,
@@ -379,6 +428,8 @@ class SnowballActiveCyclePhase:
             context.snowball_state,
             context.tick,
             allow_new_positions=context.allow_new_positions,
+            new_position_limit=context.new_position_limit,
+            rebuild_limit_per_tick=context.rebuild_limit_per_tick,
         )
         context.events.extend(cycle_result.events)
         if not cycle_result.stop_reason:
@@ -407,8 +458,20 @@ class SnowballReseedPhase:
                 context.snowball_state,
                 context.tick,
                 allow_new_positions=context.allow_new_positions,
+                new_position_limit=context.new_position_limit,
             )
         )
+        return SnowballTickPhaseOutcome()
+
+
+class SnowballWarmupEventAccountingPhase:
+    """Update warmup counters after tick events have been produced."""
+
+    def __init__(self, *, policy: SnowballWarmupPolicy | None = None) -> None:
+        self.policy = policy or SnowballWarmupPolicy()
+
+    def run(self, context: SnowballTickContext) -> SnowballTickPhaseOutcome:
+        self.policy.record_events(context.snowball_state, context.events)
         return SnowballTickPhaseOutcome()
 
 
@@ -444,10 +507,12 @@ class SnowballTickPipeline:
         self.phases = (
             SnowballInitialInvariantPhase(serializer=serializer),
             SnowballAccountMetricsPhase(),
+            SnowballWarmupPhase(),
             SnowballProtectionPhase(serializer=serializer),
             SnowballInitialisationPhase(serializer=serializer),
             SnowballActiveCyclePhase(serializer=serializer),
             SnowballReseedPhase(),
+            SnowballWarmupEventAccountingPhase(),
             SnowballFinalInvariantPhase(serializer=serializer),
         )
 
@@ -487,3 +552,11 @@ class SnowballTickPipeline:
             state_boundary=state_boundary,
             snowball_state=snowball_state,
         )
+
+
+def _can_open_new_position(context: SnowballTickContext) -> bool:
+    if not context.allow_new_positions:
+        return False
+    if context.new_position_limit is None:
+        return True
+    return len(context.snowball_state.all_entries()) < context.new_position_limit

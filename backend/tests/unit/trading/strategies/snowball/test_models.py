@@ -37,6 +37,13 @@ class TestSnowballStrategyConfig:
         assert cfg.rebuild_take_profit_manual_pips == []
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
+        assert cfg.warmup_enabled is False
+        assert cfg.warmup_initial_unit_ratio_pct == Decimal("50")
+        assert cfg.warmup_start_gate_enabled is True
+        assert cfg.warmup_gate_spread_enabled is True
+        assert cfg.warmup_position_limit_enabled is True
+        assert cfg.warmup_rebuild_limit_enabled is True
+        assert cfg.warmup_completion_mode == "duration"
 
     def test_from_dict_custom(self):
         cfg = SnowballStrategyConfig.from_dict(
@@ -183,6 +190,38 @@ class TestSnowballStrategyConfig:
 
         assert cfg.effective_base_units(Decimal("2000000")) == 1500
 
+    def test_warmup_scaled_base_units_applies_ratio_to_current_base_units(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "base_units": 9999,
+                "base_units_auto_adjust_enabled": True,
+                "base_units_balance_ratio": "1000",
+                "base_units_step": 100,
+            }
+        )
+
+        assert (
+            cfg.warmup_scaled_base_units(
+                Decimal("1000000"),
+                ratio_pct=Decimal("50"),
+            )
+            == 500
+        )
+        assert (
+            cfg.warmup_scaled_base_units(
+                Decimal("1100000"),
+                ratio_pct=Decimal("50"),
+            )
+            == 500
+        )
+        assert (
+            cfg.warmup_scaled_base_units(
+                Decimal("1200000"),
+                ratio_pct=Decimal("50"),
+            )
+            == 600
+        )
+
     def test_auto_base_units_validate_ratio_and_step(self):
         with pytest.raises(ValueError, match="base_units_balance_ratio"):
             SnowballStrategyConfig.from_dict(
@@ -199,6 +238,22 @@ class TestSnowballStrategyConfig:
                     "base_units_step": 0,
                 }
             ).validate()
+
+    def test_validate_warmup_controls(self):
+        with pytest.raises(ValueError, match="warmup_initial_unit_ratio_pct"):
+            SnowballStrategyConfig.from_dict({"warmup_initial_unit_ratio_pct": "0"}).validate()
+
+        with pytest.raises(ValueError, match="warmup_completion_mode"):
+            SnowballStrategyConfig.from_dict({"warmup_completion_mode": "unknown"}).validate()
+
+        SnowballStrategyConfig.from_dict(
+            {
+                "warmup_enabled": True,
+                "warmup_completion_mode": "duration_or_tp_closes",
+                "warmup_min_elapsed_minutes": 60,
+                "warmup_required_tp_closes": 2,
+            }
+        ).validate()
 
     def test_validate_rebuild_entry_price_mode(self):
         with pytest.raises(ValueError, match="rebuild_entry_price_mode"):
@@ -336,6 +391,17 @@ class TestSnowballStrategyConfig:
 
         with pytest.raises(ValueError, match="preserve_highest_r_from"):
             SnowballStrategyConfig.strict_from_dict(raw)
+
+    def test_strict_from_dict_accepts_legacy_parameters_without_warmup_fields(self):
+        raw = SnowballStrategyConfig.from_dict({}).to_dict()
+        for key in list(raw):
+            if key.startswith("warmup_"):
+                raw.pop(key)
+
+        cfg = SnowballStrategyConfig.strict_from_dict(raw)
+
+        assert cfg.warmup_enabled is False
+        assert cfg.warmup_completion_mode == "duration"
 
 
 class TestStopLossClosedEntry:

@@ -643,15 +643,21 @@ class StopLossRebuildProcessor:
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
+        *,
+        max_rebuilds: int | None = None,
     ) -> list[StrategyEvent]:
         """Rebuild all pending slots that have reached their trigger price."""
         if not strategy.config.stop_loss_enabled or not strategy.config.rebuild_enabled:
+            return []
+        if max_rebuilds is not None and max_rebuilds <= 0:
             return []
 
         events: list[StrategyEvent] = []
 
         for layer in cycle.grid.layers:
             for slot in layer.slots:
+                if max_rebuilds is not None and len(events) >= max_rebuilds:
+                    break
                 pending = slot.pending_rebuild
                 if pending is None:
                     continue
@@ -682,6 +688,8 @@ class StopLossRebuildProcessor:
                         plan=plan,
                     )
                 )
+            if max_rebuilds is not None and len(events) >= max_rebuilds:
+                break
 
         if events and cycle.is_pending:
             cycle.status = CycleStatus.ACTIVE

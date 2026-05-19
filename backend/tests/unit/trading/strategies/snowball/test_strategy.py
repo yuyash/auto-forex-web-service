@@ -216,6 +216,35 @@ class TestSnowballStrategyClassMethods:
         assert "rebuild_take_profit_recovery_enabled" not in defaults
         assert "rebuild_take_profit_recovery_mode" not in defaults
         assert "preserve_highest_r_from" not in defaults
+        assert defaults["warmup_enabled"] is False
+        assert "warmup_initial_unit_ratio_pct" not in defaults
+        assert "warmup_max_positions" not in defaults
+
+    def test_normalize_parameters_keeps_only_visible_warmup_fields(self):
+        result = SnowballStrategy.normalize_parameters(
+            {
+                "warmup_enabled": True,
+                "warmup_initial_unit_ratio_pct": "40",
+                "warmup_start_gate_enabled": False,
+                "warmup_position_limit_enabled": False,
+                "warmup_rebuild_limit_enabled": False,
+                "warmup_completion_mode": "tp_closes",
+                "warmup_required_tp_closes": 2,
+            }
+        )
+
+        assert result["warmup_enabled"] is True
+        assert result["warmup_initial_unit_ratio_pct"] == "40"
+        assert result["warmup_start_gate_enabled"] is False
+        assert "warmup_gate_spread_enabled" not in result
+        assert "warmup_gate_max_spread_pips" not in result
+        assert result["warmup_position_limit_enabled"] is False
+        assert "warmup_max_positions" not in result
+        assert result["warmup_rebuild_limit_enabled"] is False
+        assert "warmup_max_rebuilds_per_tick" not in result
+        assert result["warmup_completion_mode"] == "tp_closes"
+        assert "warmup_min_elapsed_minutes" not in result
+        assert result["warmup_required_tp_closes"] == 2
 
     def test_parse_config_accepts_persisted_default_parameters(self):
         cfg = SnowballStrategy.parse_config(
@@ -237,6 +266,17 @@ class TestSnowballStrategyClassMethods:
         assert cfg.base_units_auto_adjust_enabled is False
         assert cfg.base_units_balance_ratio == Decimal("1000")
         assert cfg.base_units_step == 100
+
+    def test_parse_config_accepts_legacy_parameters_without_warmup_fields(self):
+        legacy = SnowballStrategy.default_parameters()
+        for key in list(legacy):
+            if key.startswith("warmup_"):
+                legacy.pop(key)
+
+        cfg = SnowballStrategy.parse_config(SimpleNamespace(config_dict=legacy))
+
+        assert cfg.warmup_enabled is False
+        assert cfg.warmup_initial_unit_ratio_pct == Decimal("50")
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""

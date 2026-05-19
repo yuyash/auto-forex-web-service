@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from apps.trading.strategies.base import Strategy
-from apps.trading.strategies.snowball.config import SnowballStrategyConfig
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig, WARMUP_OPTIONAL_KEYS
 
 __all__ = ["SNOWBALL_PARAMETER_SERVICE", "SnowballParameterService"]
 
@@ -27,6 +27,39 @@ class SnowballParameterService:
             parameters.pop("base_units_step", None)
         if not config.preserve_highest_retracement_enabled:
             parameters.pop("preserve_highest_r_from", None)
+        if not config.warmup_enabled:
+            for key in WARMUP_OPTIONAL_KEYS:
+                if key != "warmup_enabled":
+                    parameters.pop(key, None)
+        elif not config.warmup_start_gate_enabled:
+            for key in (
+                "warmup_gate_spread_enabled",
+                "warmup_gate_max_spread_pips",
+                "warmup_gate_volatility_enabled",
+                "warmup_gate_volatility_window_ticks",
+                "warmup_gate_max_volatility_pips",
+                "warmup_gate_trend_enabled",
+                "warmup_gate_trend_window_ticks",
+                "warmup_gate_max_trend_pips",
+            ):
+                parameters.pop(key, None)
+        else:
+            if not config.warmup_gate_spread_enabled:
+                parameters.pop("warmup_gate_max_spread_pips", None)
+            if not config.warmup_gate_volatility_enabled:
+                parameters.pop("warmup_gate_volatility_window_ticks", None)
+                parameters.pop("warmup_gate_max_volatility_pips", None)
+            if not config.warmup_gate_trend_enabled:
+                parameters.pop("warmup_gate_trend_window_ticks", None)
+                parameters.pop("warmup_gate_max_trend_pips", None)
+        if config.warmup_enabled and not config.warmup_position_limit_enabled:
+            parameters.pop("warmup_max_positions", None)
+        if config.warmup_enabled and not config.warmup_rebuild_limit_enabled:
+            parameters.pop("warmup_max_rebuilds_per_tick", None)
+        if config.warmup_enabled and config.warmup_completion_mode == "duration":
+            parameters.pop("warmup_required_tp_closes", None)
+        if config.warmup_enabled and config.warmup_completion_mode == "tp_closes":
+            parameters.pop("warmup_min_elapsed_minutes", None)
         return parameters
 
     def normalize_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
