@@ -325,6 +325,17 @@ export function buildBacktestTaskSettingDefinitions(
       ),
     },
     {
+      key: 'holidays_enabled',
+      label: t('backtest:form.holidaysEnabled', 'Skip major FX holidays'),
+      format: formatBoolean,
+    },
+    {
+      key: 'excluded_dates',
+      label: t('backtest:form.excludedDates', 'Additional excluded dates'),
+      format: (value: unknown) =>
+        Array.isArray(value) && value.length > 0 ? value.join(', ') : '—',
+    },
+    {
       key: 'initial_positions_enabled',
       label: t(
         'backtest:form.initialPositionsEnabled',

@@ -435,6 +435,8 @@ export default function BacktestTaskForm({
       market_open_weekday: 6,
       market_open_hour_utc: 21,
       max_tick_gap_hours: 120,
+      holidays_enabled: false,
+      excluded_dates: [],
     };
 
     return {
@@ -811,6 +813,8 @@ export default function BacktestTaskForm({
         market_open_weekday: completeData.market_open_weekday,
         market_open_hour_utc: completeData.market_open_hour_utc,
         max_tick_gap_hours: completeData.max_tick_gap_hours,
+        holidays_enabled: completeData.holidays_enabled,
+        excluded_dates: completeData.excluded_dates,
         initial_positions_enabled: completeData.initial_positions_enabled,
         initial_position_cycles: completeData.initial_position_cycles,
       },
@@ -1677,6 +1681,81 @@ export default function BacktestTaskForm({
                   </Grid>
                 </>
               )}
+
+              <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+                <Controller
+                  name="holidays_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t(
+                              'backtest:form.holidaysEnabled',
+                              'Skip major FX holidays'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t(
+                              'backtest:form.holidaysEnabledDescription',
+                              'Treat days where two or more major FX centres (US, UK, Germany) observe a public holiday — Christmas, Good Friday, New Year — as market-closed during the backtest.'
+                            )}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="excluded_dates"
+                  control={control}
+                  render={({ field }) => {
+                    const value = Array.isArray(field.value)
+                      ? field.value.join(', ')
+                      : '';
+                    return (
+                      <TextField
+                        fullWidth
+                        label={t(
+                          'backtest:form.excludedDates',
+                          'Additional excluded dates'
+                        )}
+                        value={value}
+                        onChange={(e) => {
+                          const parts = e.target.value
+                            .split(/[\s,]+/)
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          field.onChange(parts);
+                        }}
+                        helperText={
+                          (errors.excluded_dates as { message?: string })
+                            ?.message ||
+                          t(
+                            'backtest:form.excludedDatesHelp',
+                            'Comma-separated YYYY-MM-DD dates to also treat as market-closed (merged with the holiday calendar above).'
+                          )
+                        }
+                        error={!!errors.excluded_dates}
+                      />
+                    );
+                  }}
+                />
+              </Grid>
             </Grid>
           </Box>
         );

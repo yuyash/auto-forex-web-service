@@ -94,6 +94,8 @@ export default function BacktestTaskFormPage() {
         market_open_weekday: task.market_open_weekday,
         market_open_hour_utc: task.market_open_hour_utc,
         max_tick_gap_hours: task.max_tick_gap_hours,
+        holidays_enabled: task.holidays_enabled ?? false,
+        excluded_dates: task.excluded_dates ?? [],
         initial_positions_enabled: task.initial_positions_enabled ?? false,
         initial_position_cycles: normalizeInitialPositionCycles(
           task.initial_position_cycles
