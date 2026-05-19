@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.trading.strategies.snowball.tick_phases import ARCHIVED_COMPLETED_CYCLES_KEY
+
 SNOWBALL_SNAPSHOT_CARD_KEYS = (
     "protection_level",
     "active_cycles",
@@ -54,6 +56,7 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
         active = len(parsed.active_cycles())
         pending = len([cycle for cycle in parsed.cycles if cycle.is_pending])
         completed = len([cycle for cycle in parsed.cycles if cycle.completed])
+        completed += _int_state_value(state.get(ARCHIVED_COMPLETED_CYCLES_KEY))
         entries = parsed.all_entries()
         values = {
             "protection_level": parsed.protection_level.value,
@@ -72,6 +75,7 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
         values = {
             "protection_level": state.get("protection_level"),
             "active_cycles": len(state.get("cycles") or []),
+            "completed_cycles": _int_state_value(state.get(ARCHIVED_COMPLETED_CYCLES_KEY)),
             "account_nav": state.get("account_nav"),
             "last_mid": state.get("last_mid"),
         }
@@ -140,3 +144,10 @@ def _cards_from_state(state: dict[str, Any], keys: Any) -> list[dict[str, Any]]:
         for key in keys
         if state.get(key) not in (None, "")
     ]
+
+
+def _int_state_value(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0

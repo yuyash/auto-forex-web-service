@@ -10,8 +10,10 @@ from typing import Any, cast
 from apps.trading.dataclasses import StrategyResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
+from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.tick_phases import (
+    ARCHIVED_COMPLETED_CYCLES_KEY,
     SnowballExecutionStateBoundary,
     SnowballTickContext,
     SnowballTickPhaseOutcome,
@@ -198,6 +200,39 @@ class TestSnowballExecutionStateBoundary:
         assert state.strategy_state["_idle_entered_at"] == "2026-05-15T00:00:00+00:00"
         assert state.strategy_state["metrics"]["margin_ratio"] == "0.25"
         assert state.strategy_state["metrics"]["current_balance"] == "10000"
+
+    def test_persist_archives_completed_trade_backed_cycles(self) -> None:
+        state = ExecutionStateDouble(strategy_state={ARCHIVED_COMPLETED_CYCLES_KEY: 2})
+        boundary = SnowballExecutionStateBoundary(state=state)
+        active_cycle = SnowballCycle(cycle_id=10, direction=Direction.LONG)
+        completed_cycle = SnowballCycle(
+            cycle_id=1,
+            direction=Direction.SHORT,
+            status=CycleStatus.COMPLETED,
+            trade_cycle_id="trade-cycle-1",
+        )
+        snowball_state = SnowballStrategyState(cycles=[completed_cycle, active_cycle])
+
+        boundary.persist(snowball_state)
+
+        assert [cycle["cycle_id"] for cycle in state.strategy_state["cycles"]] == [10]
+        assert state.strategy_state[ARCHIVED_COMPLETED_CYCLES_KEY] == 3
+        assert [cycle.cycle_id for cycle in snowball_state.cycles] == [10]
+
+    def test_persist_keeps_completed_cycles_without_trade_history(self) -> None:
+        state = ExecutionStateDouble()
+        boundary = SnowballExecutionStateBoundary(state=state)
+        state_only_cycle = SnowballCycle(
+            cycle_id=1,
+            direction=Direction.LONG,
+            status=CycleStatus.COMPLETED,
+        )
+        snowball_state = SnowballStrategyState(cycles=[state_only_cycle])
+
+        boundary.persist(snowball_state)
+
+        assert [cycle["cycle_id"] for cycle in state.strategy_state["cycles"]] == [1]
+        assert ARCHIVED_COMPLETED_CYCLES_KEY not in state.strategy_state
 
     def test_loads_empty_state_when_raw_value_is_malformed(self) -> None:
         state = ExecutionStateDouble(strategy_state="invalid")  # type: ignore[arg-type]
