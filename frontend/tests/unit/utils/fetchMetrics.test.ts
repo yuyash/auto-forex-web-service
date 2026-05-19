@@ -11,6 +11,7 @@ vi.mock('../../../src/api/apiClient', () => ({
 
 import {
   fetchMetrics,
+  fetchPaginatedMetrics,
   intervalToGranularity,
 } from '../../../src/utils/fetchMetrics';
 
@@ -61,6 +62,42 @@ describe('fetchMetrics', () => {
       '/api/trading/tasks/trading/task-1/strategy/metrics/',
       expect.objectContaining({ granularity: 'raw' })
     );
+  });
+
+  it('reports each metrics page as progress before returning the final result', async () => {
+    mockGet
+      .mockResolvedValueOnce({
+        count: 3,
+        next: '/next',
+        previous: null,
+        data_source: 'strategy_metrics',
+        resume_cursor_timestamp: null,
+        consistency_warnings: [],
+        results: [{ t: 1, metrics: { total_pnl: 10 } }],
+      })
+      .mockResolvedValueOnce({
+        count: 3,
+        next: null,
+        previous: '/prev',
+        data_source: 'strategy_metrics',
+        resume_cursor_timestamp: null,
+        consistency_warnings: [],
+        results: [{ t: 2, metrics: { total_pnl: 11 } }],
+      });
+
+    const progress: number[][] = [];
+    const result = await fetchPaginatedMetrics({
+      taskId: 'task-1',
+      taskType: TaskType.BACKTEST,
+      pageSize: 1,
+      onProgress: ({ accumulatedResults }) => {
+        progress.push(accumulatedResults.map((point) => point.t));
+      },
+    });
+
+    expect(progress).toEqual([[1], [1, 2]]);
+    expect(result.results.map((point) => point.t)).toEqual([1, 2]);
+    expect(mockGet).toHaveBeenCalledTimes(2);
   });
 });
 

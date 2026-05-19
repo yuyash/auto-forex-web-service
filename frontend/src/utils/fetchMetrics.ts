@@ -23,6 +23,14 @@ export interface MetricsPage {
   results: MetricPoint[];
 }
 
+export interface MetricsPageProgress {
+  page: number;
+  pageResults: MetricPoint[];
+  accumulatedResults: MetricPoint[];
+  response: MetricsPage;
+  hasMore: boolean;
+}
+
 export type MetricsPeriod = 'day' | 'week' | 'month' | 'year';
 
 export interface PeriodicTradeMetricPoint {
@@ -193,27 +201,45 @@ export async function fetchPaginatedMetrics(opts: {
   maxPages?: number;
   /** Existing points to merge with fetched pages. */
   existingResults?: MetricPoint[];
+  /** Called after each fetched page so charts can render progressively. */
+  onProgress?: (progress: MetricsPageProgress) => void;
 }): Promise<MetricsPage> {
-  const pageSize = opts.pageSize ?? 250;
-  const maxPages = opts.maxPages ?? Infinity;
-  const results: MetricPoint[] = opts.existingResults
-    ? [...opts.existingResults]
-    : [];
+  const {
+    pageSize: requestedPageSize,
+    maxPages: requestedMaxPages,
+    existingResults,
+    onProgress,
+    ...fetchOpts
+  } = opts;
+  const pageSize = requestedPageSize ?? 250;
+  const maxPages = requestedMaxPages ?? Infinity;
+  const results: MetricPoint[] = existingResults ? [...existingResults] : [];
   let page = 1;
   let dataSource = 'unknown';
   let resumeCursorTimestamp: string | null = null;
   let consistencyWarnings: Array<Record<string, unknown>> = [];
+  let lastNext: string | null = null;
+  let lastPrevious: string | null = null;
 
   while (page <= maxPages) {
     const response = await fetchMetrics({
-      ...opts,
+      ...fetchOpts,
       page,
       pageSize,
     });
     dataSource = response.data_source;
     resumeCursorTimestamp = response.resume_cursor_timestamp;
     consistencyWarnings = response.consistency_warnings;
+    lastNext = response.next;
+    lastPrevious = response.previous;
     results.push(...response.results);
+    onProgress?.({
+      page,
+      pageResults: response.results,
+      accumulatedResults: [...results],
+      response,
+      hasMore: Boolean(response.next),
+    });
     if (!response.next) {
       return {
         count: results.length,
@@ -231,8 +257,8 @@ export async function fetchPaginatedMetrics(opts: {
   return {
     count: results.length,
     count_is_exact: false,
-    next: null,
-    previous: null,
+    next: lastNext,
+    previous: lastPrevious,
     data_source: dataSource,
     resume_cursor_timestamp: resumeCursorTimestamp,
     consistency_warnings: consistencyWarnings,

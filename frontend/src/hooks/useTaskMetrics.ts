@@ -11,6 +11,7 @@ import {
   fetchLatestMetrics,
   fetchPaginatedMetrics,
   type MetricPoint,
+  type MetricsPage,
 } from '../utils/fetchMetrics';
 
 export interface UseTaskMetricsOptions {
@@ -84,6 +85,14 @@ const initialMetricsState: MetricsState = {
   error: null,
 };
 
+function mergeMetricPoints(points: MetricPoint[]): MetricPoint[] {
+  const deduped = new Map<number, MetricPoint>();
+  for (const point of points) {
+    deduped.set(point.t, point);
+  }
+  return Array.from(deduped.values()).sort((a, b) => a.t - b.t);
+}
+
 function metricsReducer(
   state: MetricsState,
   action: MetricsAction
@@ -135,6 +144,7 @@ export function useTaskMetrics({
   const latestTimestampRef = useRef<string | undefined>(undefined);
   const inFlightRef = useRef(false);
   const dataRef = useRef<MetricPoint[]>([]);
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     dataRef.current = state.data;
@@ -144,6 +154,7 @@ export function useTaskMetrics({
     async (incremental = false) => {
       if (!taskId || !enabled) return;
       if (inFlightRef.current) return;
+      const requestSeq = ++requestSeqRef.current;
       inFlightRef.current = true;
       dispatch({ type: 'loading' });
       try {
@@ -153,7 +164,7 @@ export function useTaskMetrics({
             taskType,
             executionRunId,
           });
-          if (mountedRef.current) {
+          if (mountedRef.current && requestSeq === requestSeqRef.current) {
             dispatch({
               type: 'latestLoaded',
               latest: latestPage.result,
@@ -167,25 +178,17 @@ export function useTaskMetrics({
 
         const effectiveSince =
           incremental && !since ? latestTimestampRef.current : since;
-        const page = await fetchPaginatedMetrics({
-          taskId,
-          taskType,
-          executionRunId,
-          interval: interval >= 1 ? interval : undefined,
-          since: effectiveSince,
-          until,
-          pageSize: 500,
-          maxPages: incremental ? 2 : 4,
-          existingResults: incremental ? dataRef.current : undefined,
-        });
-        if (mountedRef.current) {
-          const deduped = new Map<number, MetricPoint>();
-          for (const point of page.results) {
-            deduped.set(point.t, point);
+        const publishSeries = (
+          points: MetricPoint[],
+          pageMeta: Pick<
+            MetricsPage,
+            'data_source' | 'resume_cursor_timestamp' | 'consistency_warnings'
+          >
+        ) => {
+          if (!mountedRef.current || requestSeq !== requestSeqRef.current) {
+            return;
           }
-          const nextData = Array.from(deduped.values()).sort(
-            (a, b) => a.t - b.t
-          );
+          const nextData = mergeMetricPoints(points);
           const nextLatest =
             nextData.length > 0 ? nextData[nextData.length - 1] : null;
           dataRef.current = nextData;
@@ -196,20 +199,35 @@ export function useTaskMetrics({
             type: 'seriesLoaded',
             data: nextData,
             latest: nextLatest,
-            dataSource: page.data_source,
-            resumeCursorTimestamp: page.resume_cursor_timestamp,
-            consistencyWarnings: page.consistency_warnings,
+            dataSource: pageMeta.data_source,
+            resumeCursorTimestamp: pageMeta.resume_cursor_timestamp,
+            consistencyWarnings: pageMeta.consistency_warnings,
           });
-        }
+        };
+        const page = await fetchPaginatedMetrics({
+          taskId,
+          taskType,
+          executionRunId,
+          interval: interval >= 1 ? interval : undefined,
+          since: effectiveSince,
+          until,
+          pageSize: 500,
+          maxPages: incremental ? 2 : 4,
+          existingResults: incremental ? dataRef.current : undefined,
+          onProgress: ({ accumulatedResults, response }) => {
+            publishSeries(accumulatedResults, response);
+          },
+        });
+        publishSeries(page.results, page);
       } catch (err) {
-        if (mountedRef.current) {
+        if (mountedRef.current && requestSeq === requestSeqRef.current) {
           dispatch({
             type: 'failed',
             error: err instanceof Error ? err : new Error(String(err)),
           });
         }
       } finally {
-        if (mountedRef.current) {
+        if (mountedRef.current && requestSeq === requestSeqRef.current) {
           dispatch({ type: 'loaded' });
         }
         inFlightRef.current = false;
@@ -231,6 +249,7 @@ export function useTaskMetrics({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      requestSeqRef.current += 1;
     };
   }, []);
 

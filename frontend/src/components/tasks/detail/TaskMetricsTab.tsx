@@ -16,8 +16,8 @@ import {
 import {
   Alert,
   Box,
-  CircularProgress,
   Grid,
+  LinearProgress,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -1343,14 +1343,6 @@ export function TaskMetricsTab({
     availableTpSlPeriods.length > 0 ||
     availablePositionActivityPeriods.length > 0;
 
-  if (isLoading && !hasAnyChart) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   if (error) {
     return (
       <Box sx={{ p: 2 }}>
@@ -1361,8 +1353,55 @@ export function TaskMetricsTab({
 
   if (!hasAnyChart) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Typography color="text.secondary">{t('metrics.noData')}</Typography>
+      <Box
+        data-testid="task-metrics-tab"
+        sx={{
+          px: { xs: 0, sm: 1 },
+          py: { xs: 0.5, sm: 1 },
+          minWidth: 0,
+          width: '100%',
+          maxWidth: '100%',
+        }}
+      >
+        <MetricsToolbar
+          interval={interval}
+          since={since}
+          until={until}
+          onIntervalChange={onIntervalChange}
+          onSinceChange={onSinceChange}
+          onUntilChange={onUntilChange}
+          onRefresh={handleRefresh}
+          onConfigureCharts={() => setOrderDialogOpen(true)}
+          isLoading={isLoading}
+          showLossCutMarkers={showLossCutMarkers}
+          onToggleLossCutMarkers={onToggleLossCutMarkers}
+          lossCutMarkerCount={lossCutEvents?.length}
+          columnCount={columnCount}
+          onColumnCountChange={setColumnCount}
+        />
+        {isLoading ? (
+          <Box sx={{ px: 2, py: 3 }}>
+            <LinearProgress />
+          </Box>
+        ) : (
+          <Box sx={{ p: 3 }}>
+            <Typography color="text.secondary">
+              {t('metrics.noData')}
+            </Typography>
+          </Box>
+        )}
+        <MetricsChartOrderDialog
+          key={
+            orderDialogOpen
+              ? `open-${chartOrderItems.map((item) => item.key).join('|')}`
+              : 'closed'
+          }
+          open={orderDialogOpen}
+          items={chartOrderItems}
+          onClose={() => setOrderDialogOpen(false)}
+          onSave={setOrder}
+          onReset={resetOrder}
+        />
       </Box>
     );
   }

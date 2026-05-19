@@ -16,6 +16,7 @@ import {
   Dialog,
   Grid,
   IconButton,
+  LinearProgress,
   Paper,
   Slide,
   Tab,
@@ -342,8 +343,9 @@ export function ExecutionComparisonDialog({
   // shortExecId is defined at module level
 
   const metricsLoadKey = useMemo(
-    () => `${taskType}:${taskId}:${sorted.map((exec) => exec.id).join('|')}`,
-    [sorted, taskId, taskType]
+    () =>
+      `${taskType}:${taskId}:${interval}:${sorted.map((exec) => exec.id).join('|')}`,
+    [interval, sorted, taskId, taskType]
   );
 
   // Build localized parameter label map from strategy schema.
@@ -365,10 +367,11 @@ export function ExecutionComparisonDialog({
     const requestSeq = ++metricsRequestSeqRef.current;
     setMetricsLoading(true);
     setMetricsError(null);
+    setMetricsData(new Map<string, MetricPoint[]>());
     try {
       const sharedInterval = comparisonMetricsInterval(sorted, interval);
 
-      const entries = await Promise.all(
+      await Promise.all(
         sorted.map(async (exec) => {
           const page = await fetchPaginatedMetrics({
             taskId,
@@ -378,13 +381,32 @@ export function ExecutionComparisonDialog({
             metricKeys: COMPARISON_METRIC_KEYS,
             pageSize: 500,
             maxPages: 10,
+            onProgress: ({ accumulatedResults }) => {
+              if (
+                !mountedRef.current ||
+                requestSeq !== metricsRequestSeqRef.current
+              ) {
+                return;
+              }
+              setMetricsData((current) => {
+                const next = new Map(current);
+                next.set(exec.id, accumulatedResults);
+                return next;
+              });
+            },
           });
-          return [exec.id, page.results] as const;
+          if (
+            mountedRef.current &&
+            requestSeq === metricsRequestSeqRef.current
+          ) {
+            setMetricsData((current) => {
+              const next = new Map(current);
+              next.set(exec.id, page.results);
+              return next;
+            });
+          }
         })
       );
-      if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
-        setMetricsData(new Map(entries));
-      }
     } catch {
       if (mountedRef.current && requestSeq === metricsRequestSeqRef.current) {
         setMetricsError(t('comparison.error'));
@@ -1021,14 +1043,6 @@ function MetricsOverlayPanel({
     return map;
   }, [availableMetrics, executions, metricsData]);
 
-  if (isLoading && metricsData.size === 0) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   if (error) {
     return <Alert severity="error">{error}</Alert>;
   }
@@ -1069,8 +1083,18 @@ function MetricsOverlayPanel({
         </Tooltip>
       </Box>
 
+      {isLoading ? <LinearProgress sx={{ mb: 2 }} /> : null}
+
       {availableMetrics.length === 0 && (
-        <Typography color="text.secondary">{t('metrics.noData')}</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          {isLoading ? (
+            <CircularProgress size={24} />
+          ) : (
+            <Typography color="text.secondary">
+              {t('metrics.noData')}
+            </Typography>
+          )}
+        </Box>
       )}
 
       <Grid container spacing={2}>
