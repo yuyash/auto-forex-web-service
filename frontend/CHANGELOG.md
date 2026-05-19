@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.1.0...frontend-v2.1.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* **configurations:** show copy name dialog ([#775](https://github.com/yuyash/auto-forex-web-service/issues/775)) ([b7211bb](https://github.com/yuyash/auto-forex-web-service/commit/b7211bbf1c9367c256367c540ed86b2f516e4043))
+
 ## [2.1.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.0.9...frontend-v2.1.0) (2026-05-19)
 
 
