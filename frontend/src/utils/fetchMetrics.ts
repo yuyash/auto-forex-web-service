@@ -14,12 +14,44 @@ export interface MetricPoint {
 
 export interface MetricsPage {
   count: number;
+  count_is_exact?: boolean;
   next: string | null;
   previous: string | null;
   data_source: string;
   resume_cursor_timestamp: string | null;
   consistency_warnings: Array<Record<string, unknown>>;
   results: MetricPoint[];
+}
+
+export interface MetricsPageProgress {
+  page: number;
+  pageResults: MetricPoint[];
+  accumulatedResults: MetricPoint[];
+  response: MetricsPage;
+  hasMore: boolean;
+}
+
+export type MetricsPeriod = 'day' | 'week' | 'month' | 'year';
+
+export interface PeriodicTradeMetricPoint {
+  t: number;
+  timestamp: string;
+  label: string;
+  tp_profit: string;
+  sl_loss: string;
+  open_positions: number;
+  tp_closes: number;
+  sl_closes: number;
+  rebuild_opens: number;
+}
+
+export interface PeriodicTradeMetricsResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument: string | null;
+  currency: string | null;
+  timezone: string;
+  periods: Record<MetricsPeriod, PeriodicTradeMetricPoint[]>;
 }
 
 export interface LatestMetricsResponse {
@@ -104,6 +136,8 @@ export async function fetchMetrics(opts: {
 
   return {
     count: body.count ?? 0,
+    count_is_exact:
+      typeof body.count_is_exact === 'boolean' ? body.count_is_exact : true,
     next: body.next ?? null,
     previous: body.previous ?? null,
     data_source:
@@ -167,30 +201,49 @@ export async function fetchPaginatedMetrics(opts: {
   maxPages?: number;
   /** Existing points to merge with fetched pages. */
   existingResults?: MetricPoint[];
+  /** Called after each fetched page so charts can render progressively. */
+  onProgress?: (progress: MetricsPageProgress) => void;
 }): Promise<MetricsPage> {
-  const pageSize = opts.pageSize ?? 250;
-  const maxPages = opts.maxPages ?? Infinity;
-  const results: MetricPoint[] = opts.existingResults
-    ? [...opts.existingResults]
-    : [];
+  const {
+    pageSize: requestedPageSize,
+    maxPages: requestedMaxPages,
+    existingResults,
+    onProgress,
+    ...fetchOpts
+  } = opts;
+  const pageSize = requestedPageSize ?? 250;
+  const maxPages = requestedMaxPages ?? Infinity;
+  const results: MetricPoint[] = existingResults ? [...existingResults] : [];
   let page = 1;
   let dataSource = 'unknown';
   let resumeCursorTimestamp: string | null = null;
   let consistencyWarnings: Array<Record<string, unknown>> = [];
+  let lastNext: string | null = null;
+  let lastPrevious: string | null = null;
 
   while (page <= maxPages) {
     const response = await fetchMetrics({
-      ...opts,
+      ...fetchOpts,
       page,
       pageSize,
     });
     dataSource = response.data_source;
     resumeCursorTimestamp = response.resume_cursor_timestamp;
     consistencyWarnings = response.consistency_warnings;
+    lastNext = response.next;
+    lastPrevious = response.previous;
     results.push(...response.results);
+    onProgress?.({
+      page,
+      pageResults: response.results,
+      accumulatedResults: [...results],
+      response,
+      hasMore: Boolean(response.next),
+    });
     if (!response.next) {
       return {
         count: results.length,
+        count_is_exact: true,
         next: null,
         previous: null,
         data_source: dataSource,
@@ -203,8 +256,9 @@ export async function fetchPaginatedMetrics(opts: {
   }
   return {
     count: results.length,
-    next: null,
-    previous: null,
+    count_is_exact: false,
+    next: lastNext,
+    previous: lastPrevious,
     data_source: dataSource,
     resume_cursor_timestamp: resumeCursorTimestamp,
     consistency_warnings: consistencyWarnings,

@@ -71,6 +71,7 @@ import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import {
   useStrategySnapshot,
   useLossCutEvents,
+  usePeriodicTradeMetrics,
 } from '../../hooks/useStrategyData';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
@@ -200,6 +201,12 @@ export const TradingTaskDetail: React.FC = () => {
   const [metricsSince, setMetricsSince] = useState('');
   const [metricsUntil, setMetricsUntil] = useState('');
   const [metricsNowMs, setMetricsNowMs] = useState(() => Date.now());
+  const metricsSinceIso = metricsSince
+    ? new Date(metricsSince).toISOString()
+    : undefined;
+  const metricsUntilIso = metricsUntil
+    ? new Date(metricsUntil).toISOString()
+    : undefined;
 
   useEffect(() => {
     if (metricsUntil || task?.completed_at) return;
@@ -234,8 +241,8 @@ export const TradingTaskDetail: React.FC = () => {
     taskType: TaskType.TRADING,
     executionRunId: effectiveExecutionId,
     interval: effectiveMetricsInterval,
-    since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
-    until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
+    since: metricsSinceIso,
+    until: metricsUntilIso,
     enabled: !!taskId,
     fetchSeries: activeTabId === 'metrics',
     pollingInterval:
@@ -243,6 +250,23 @@ export const TradingTaskDetail: React.FC = () => {
   });
 
   const [showLossCutMarkers, setShowLossCutMarkers] = useState(false);
+  const periodicMetricsQuery = usePeriodicTradeMetrics({
+    taskId,
+    taskType: TaskType.TRADING,
+    executionRunId: effectiveExecutionId,
+    params: {
+      since: metricsSinceIso,
+      until: metricsUntilIso,
+      timezone,
+    },
+    enabled: !!taskId && activeTabId === 'metrics',
+    refetchInterval:
+      !isViewingHistorical &&
+      activeTabId === 'metrics' &&
+      shouldPollTaskStatus(currentStatus)
+        ? 30000
+        : false,
+  });
   const lossCutEventsQuery = useLossCutEvents({
     taskId,
     taskType: TaskType.TRADING,
@@ -256,6 +280,7 @@ export const TradingTaskDetail: React.FC = () => {
       await Promise.all([
         refreshOverviewSummary(),
         metricsResult.refresh(),
+        periodicMetricsQuery.refetch(),
         overviewStrategySnapshot.refetch(),
       ]);
     } catch (err) {
@@ -268,6 +293,7 @@ export const TradingTaskDetail: React.FC = () => {
   }, [
     metricsResult,
     overviewStrategySnapshot,
+    periodicMetricsQuery,
     refreshOverviewSummary,
     showError,
     t,
@@ -584,6 +610,7 @@ export const TradingTaskDetail: React.FC = () => {
                   'USD'
                 }
                 dataSource={metricsResult.dataSource}
+                periodicMetrics={periodicMetricsQuery.data}
                 resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
                 consistencyWarnings={metricsResult.consistencyWarnings}
                 interval={metricsInterval}
@@ -592,7 +619,12 @@ export const TradingTaskDetail: React.FC = () => {
                 onIntervalChange={setMetricsInterval}
                 onSinceChange={setMetricsSince}
                 onUntilChange={setMetricsUntil}
-                onRefresh={metricsResult.refresh}
+                onRefresh={async () => {
+                  await Promise.all([
+                    metricsResult.refresh(),
+                    periodicMetricsQuery.refetch(),
+                  ]);
+                }}
                 instrument={detailTask.instrument}
                 startTime={detailTask.started_at}
                 endTime={detailTask.completed_at}

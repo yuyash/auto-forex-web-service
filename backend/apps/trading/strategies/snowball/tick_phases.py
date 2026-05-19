@@ -16,9 +16,11 @@ from apps.trading.strategies.snowball.cycle_orchestrator import (
     SnowballActiveCycleProcessor,
     SnowballCycleReseeder,
 )
+from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.enums import ProtectionLevel
-from apps.trading.strategies.snowball.cycle_state import SnowballStrategyState
 from apps.trading.strategies.snowball.protection import SNOWBALL_PROTECTION, ProtectionStrategy
+
+ARCHIVED_COMPLETED_CYCLES_KEY = "archived_completed_cycles"
 
 
 class SnowballTickStrategy(CycleOrchestratorStrategy, ProtectionStrategy, Protocol):
@@ -59,11 +61,12 @@ class SnowballExecutionStateBoundary:
 
     def persist(self, snowball_state: SnowballStrategyState) -> None:
         """Write the Snowball domain model back to the execution state."""
+        strategy_state = self._hot_strategy_state(snowball_state)
         if self._defer_serialization:
             self._set_cached_state(snowball_state)
-            self._merge_runtime_view(snowball_state)
+            self._merge_runtime_view(strategy_state)
             return
-        self.state.strategy_state = snowball_state.to_dict()
+        self.state.strategy_state = strategy_state
 
     def raw_strategy_state(self) -> dict[str, Any]:
         """Return the raw strategy_state dict, tolerating malformed persisted values."""
@@ -80,30 +83,31 @@ class SnowballExecutionStateBoundary:
         setattr(self.state, "_snowball_strategy_state_cache", snowball_state)
         setattr(self.state, "_strategy_state_materializer", self.materialize)
 
-    def _merge_runtime_view(self, snowball_state: SnowballStrategyState) -> None:
+    def _merge_runtime_view(self, hot_state: dict[str, Any]) -> None:
         """Keep cheap scalar/metrics fields visible without serializing grids."""
         strategy_state = dict(self.raw_strategy_state())
         strategy_state.pop("cycles", None)
-        strategy_state["protection_level"] = snowball_state.protection_level.value
-        strategy_state["initialised"] = snowball_state.initialised
-        strategy_state["next_entry_id"] = snowball_state.next_entry_id
-        strategy_state["last_bid"] = (
-            str(snowball_state.last_bid) if snowball_state.last_bid is not None else None
-        )
-        strategy_state["last_ask"] = (
-            str(snowball_state.last_ask) if snowball_state.last_ask is not None else None
-        )
-        strategy_state["last_mid"] = (
-            str(snowball_state.last_mid) if snowball_state.last_mid is not None else None
-        )
-        strategy_state["account_balance"] = str(snowball_state.account_balance)
-        strategy_state["account_nav"] = str(snowball_state.account_nav)
+        for key in (
+            "protection_level",
+            "initialised",
+            "next_entry_id",
+            "last_bid",
+            "last_ask",
+            "last_mid",
+            "account_balance",
+            "account_nav",
+            ARCHIVED_COMPLETED_CYCLES_KEY,
+        ):
+            if key in hot_state:
+                strategy_state[key] = hot_state[key]
         metrics = (
             dict(strategy_state.get("metrics", {}))
             if isinstance(strategy_state.get("metrics"), dict)
             else {}
         )
-        metrics.update(snowball_state.metrics)
+        hot_metrics = hot_state.get("metrics")
+        if isinstance(hot_metrics, dict):
+            metrics.update(hot_metrics)
         strategy_state["metrics"] = metrics
         self.state.strategy_state = strategy_state
 
@@ -118,11 +122,53 @@ class SnowballExecutionStateBoundary:
             merged_metrics = dict(cached.metrics)
             merged_metrics.update(runtime_metrics)
             cached.metrics = merged_metrics
-        strategy_state = cached.to_dict()
+        strategy_state = self._hot_strategy_state(cached)
         for key, value in runtime_state.items():
             if key not in strategy_state:
                 strategy_state[key] = value
         self.state.strategy_state = strategy_state
+
+    def _hot_strategy_state(self, snowball_state: SnowballStrategyState) -> dict[str, Any]:
+        """Return the persistence payload without completed trade-backed cycles.
+
+        Completed cycles are already represented by Trade/Position/Event rows,
+        which power the strategy tab history and PnL views.  Keeping every
+        completed grid in the hot ExecutionState JSON makes each tick and state
+        save progressively more expensive, so we retain only cycles that can
+        still affect future decisions.
+        """
+        retained, archived_delta = _split_hot_cycles(snowball_state.cycles)
+        if archived_delta:
+            snowball_state.cycles = retained
+
+        strategy_state = snowball_state.to_dict()
+        archived_total = _archived_completed_cycles(self.raw_strategy_state()) + archived_delta
+        if archived_total:
+            strategy_state[ARCHIVED_COMPLETED_CYCLES_KEY] = archived_total
+        return strategy_state
+
+
+def _split_hot_cycles(cycles: list[SnowballCycle]) -> tuple[list[SnowballCycle], int]:
+    retained: list[SnowballCycle] = []
+    archived = 0
+    for cycle in cycles:
+        if cycle.completed and not _must_keep_completed_cycle_in_state(cycle):
+            archived += 1
+            continue
+        retained.append(cycle)
+    return retained, archived
+
+
+def _must_keep_completed_cycle_in_state(cycle: SnowballCycle) -> bool:
+    """Preserve completed cycles that cannot be rebuilt from the Trade ledger."""
+    return not cycle.trade_cycle_id
+
+
+def _archived_completed_cycles(strategy_state: dict[str, Any]) -> int:
+    try:
+        return max(0, int(strategy_state.get(ARCHIVED_COMPLETED_CYCLES_KEY, 0) or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 @dataclass

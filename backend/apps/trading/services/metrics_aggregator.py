@@ -8,11 +8,22 @@ observed value for every key is kept (snapshot semantics).
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
+from django.db import connection
+from django.utils import timezone
+
 logger = logging.getLogger(__name__)
+
+ROLLUP_GRANULARITIES_SECONDS = {
+    "M5": 5 * 60,
+    "M15": 15 * 60,
+    "H1": 60 * 60,
+    "H4": 4 * 60 * 60,
+    "D": 24 * 60 * 60,
+}
 
 NON_TIMESERIES_METRIC_KEYS = frozenset(
     {
@@ -33,6 +44,17 @@ def _serialise_value(v: Any) -> Any:
     if isinstance(v, Decimal):
         return float(v)
     return v
+
+
+def _bucket_start(dt: datetime, seconds: int) -> datetime:
+    """Return the UTC bucket start for a rollup granularity."""
+    if timezone.is_naive(dt):
+        aware = timezone.make_aware(dt, timezone=UTC)
+    else:
+        aware = dt.astimezone(UTC)
+    epoch = int(aware.timestamp())
+    bucket_epoch = epoch // seconds * seconds
+    return datetime.fromtimestamp(bucket_epoch, tz=UTC)
 
 
 def _decimal_metric(snapshot: dict[str, Any], key: str) -> Decimal | None:
@@ -109,6 +131,7 @@ class MetricsAggregator:
 
         from apps.trading.models.metrics import Metrics
         from apps.trading.models.metrics import ExecutionMetricAggregate
+        from apps.trading.models.metrics import MetricsRollup
 
         sorted_keys = sorted(self._buckets)
 
@@ -192,6 +215,25 @@ class MetricsAggregator:
                 ]
             )
 
+            rollups = (
+                self._build_rollup_rows(MetricsRollup, keys_to_flush)
+                if connection.vendor == "postgresql"
+                else []
+            )
+            if rollups:
+                MetricsRollup.objects.bulk_create(
+                    rollups,
+                    update_conflicts=True,
+                    update_fields=["source_timestamp", "metrics", "updated_at"],
+                    unique_fields=[
+                        "task_type",
+                        "task_id",
+                        "execution_id",
+                        "granularity",
+                        "bucket",
+                    ],
+                )
+
         logger.debug(
             "MetricsAggregator flushed %d/%d buckets (final=%s) for task %s",
             count,
@@ -204,3 +246,34 @@ class MetricsAggregator:
             del self._buckets[k]
 
         return count
+
+    def _build_rollup_rows(
+        self, metrics_rollup_model: type[Any], keys: list[datetime]
+    ) -> list[Any]:
+        """Build latest-per-bucket rollup rows for the flushed minute snapshots."""
+
+        now = timezone.now()
+        latest_by_bucket: dict[tuple[str, datetime], tuple[datetime, dict[str, Any]]] = {}
+        for source_timestamp in keys:
+            snapshot = self._buckets[source_timestamp]
+            for granularity, seconds in ROLLUP_GRANULARITIES_SECONDS.items():
+                bucket = _bucket_start(source_timestamp, seconds)
+                key = (granularity, bucket)
+                existing = latest_by_bucket.get(key)
+                if existing is None or source_timestamp >= existing[0]:
+                    latest_by_bucket[key] = (source_timestamp, snapshot)
+
+        return [
+            metrics_rollup_model(
+                task_type=self.task_type,
+                task_id=self.task_id,
+                execution_id=self.execution_id,
+                granularity=granularity,
+                bucket=bucket,
+                source_timestamp=source_timestamp,
+                metrics=snapshot,
+                created_at=now,
+                updated_at=now,
+            )
+            for (granularity, bucket), (source_timestamp, snapshot) in latest_by_bucket.items()
+        ]

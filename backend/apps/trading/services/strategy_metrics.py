@@ -11,13 +11,17 @@ sites that still iterate over complete result sets.
 
 from __future__ import annotations
 
+import logging
+import time
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.db import connection
-from django.db.models import QuerySet
-from django.db.models.expressions import RawSQL
+from django.db.models import Max, Min, QuerySet
 
-from apps.trading.models.metrics import ExecutionMetricAggregate, Metrics
+from apps.trading.models.metrics import ExecutionMetricAggregate, Metrics, MetricsRollup
 from apps.trading.services.metric_money import MetricMoneyEnricher
 from apps.trading.services.strategy_data_common import (
     DEFAULT_PAGE_SIZE,
@@ -29,10 +33,29 @@ from apps.trading.services.task_metrics import (
     filter_metrics,
 )
 
+logger = logging.getLogger(__name__)
+
+ROLLUP_GRANULARITY_BY_SECONDS = {
+    5 * 60: "M5",
+    15 * 60: "M15",
+    60 * 60: "H1",
+    4 * 60 * 60: "H4",
+    24 * 60 * 60: "D",
+}
+
+
+@dataclass(frozen=True)
+class MetricPageResult:
+    rows: list[dict[str, Any]]
+    count: int
+    count_is_exact: bool = True
+    has_next: bool = False
+    elapsed_seconds: float = 0.0
+
 
 def load_paginated_metric_points(
     *, task: Any, task_type_label: str, query: StrategyDataQuery
-) -> tuple[list[dict[str, Any]], int]:
+) -> MetricPageResult:
     """Load one page of metric points along with the total row count.
 
     * ``raw`` granularity: a plain ``ORDER BY ... LIMIT/OFFSET`` over the
@@ -50,9 +73,10 @@ def load_paginated_metric_points(
     qs = _base_queryset(task=task, task_type_label=task_type_label, query=query)
 
     enricher = MetricMoneyEnricher.for_task(task=task, task_type_label=task_type_label)
+    started_at = time.monotonic()
 
     if seconds is None:
-        return _load_raw_page(
+        result = _load_raw_page(
             qs=qs,
             query=query,
             enricher=enricher,
@@ -60,10 +84,49 @@ def load_paginated_metric_points(
             limit=limit,
             offset=offset,
         )
+        result = _with_elapsed(result, started_at)
+        _log_metric_query(
+            result=result,
+            task=task,
+            task_type_label=task_type_label,
+            query=query,
+            source="raw",
+        )
+        return result
 
     if connection.vendor == "postgresql":
-        return _load_bucketed_page_postgres(
+        rollup_granularity = ROLLUP_GRANULARITY_BY_SECONDS.get(seconds)
+        if rollup_granularity and _rollup_covers_query(
+            task=task,
+            task_type_label=task_type_label,
+            query=query,
+            seconds=seconds,
+            granularity=rollup_granularity,
+        ):
+            result = _load_rollup_page(
+                task=task,
+                task_type_label=task_type_label,
+                query=query,
+                enricher=enricher,
+                granularity=rollup_granularity,
+                descending=descending,
+                limit=limit,
+                offset=offset,
+            )
+            result = _with_elapsed(result, started_at)
+            _log_metric_query(
+                result=result,
+                task=task,
+                task_type_label=task_type_label,
+                query=query,
+                source="rollup",
+            )
+            return result
+
+        result = _load_bucketed_page_postgres(
             qs=qs,
+            task=task,
+            task_type_label=task_type_label,
             query=query,
             enricher=enricher,
             seconds=seconds,
@@ -71,8 +134,17 @@ def load_paginated_metric_points(
             limit=limit,
             offset=offset,
         )
+        result = _with_elapsed(result, started_at)
+        _log_metric_query(
+            result=result,
+            task=task,
+            task_type_label=task_type_label,
+            query=query,
+            source="bucketed_sql",
+        )
+        return result
 
-    return _load_bucketed_page_in_memory(
+    result = _load_bucketed_page_in_memory(
         qs=qs,
         query=query,
         enricher=enricher,
@@ -81,6 +153,15 @@ def load_paginated_metric_points(
         limit=limit,
         offset=offset,
     )
+    result = _with_elapsed(result, started_at)
+    _log_metric_query(
+        result=result,
+        task=task,
+        task_type_label=task_type_label,
+        query=query,
+        source="bucketed_memory",
+    )
+    return result
 
 
 def load_latest_metric_point(
@@ -241,60 +322,93 @@ def _load_raw_page(
     descending: bool,
     limit: int,
     offset: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> MetricPageResult:
     total = qs.count()
     order = "-timestamp" if descending else "timestamp"
     window = qs.order_by(order).values_list("timestamp", "metrics")[offset : offset + limit]
     rows = [
         _serialize_row(ts, metrics, query.metric_keys, enricher=enricher) for ts, metrics in window
     ]
-    return rows, total
+    return MetricPageResult(
+        rows=rows,
+        count=total,
+        count_is_exact=True,
+        has_next=offset + len(rows) < total,
+    )
 
 
 def _load_bucketed_page_postgres(
     *,
     qs: QuerySet[Metrics],
+    task: Any,
+    task_type_label: str,
     query: StrategyDataQuery,
     enricher: MetricMoneyEnricher,
     seconds: int,
     descending: bool,
     limit: int,
     offset: int,
-) -> tuple[list[dict[str, Any]], int]:
-    """Aggregate rows to one entry per bucket using PostgreSQL window functions."""
+) -> MetricPageResult:
+    """Aggregate rows to one entry per bucket without sorting JSON payloads."""
 
-    bucket_expr = RawSQL(
-        "(FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) * %s)::bigint",
-        (seconds, seconds),
-    )
-    # DISTINCT ON + ORDER BY bucket, timestamp DESC keeps the last tick in each bucket.
-    collapsed_sql, collapsed_params = (
-        qs.annotate(bucket=bucket_expr)
-        .order_by("bucket", "-timestamp")
-        .distinct("bucket")
-        .values_list("timestamp", "metrics", "bucket")
-        .query.sql_with_params()
+    base_sql, base_params = (
+        qs.order_by().values_list("timestamp", flat=True).query.sql_with_params()
     )
 
     order = "DESC" if descending else "ASC"
-    # ``collapsed_sql`` comes from Django's QuerySet compiler (parameters are
-    # supplied separately) and ``order`` is constrained to ``ASC``/``DESC``,
-    # so the f-string composition below is safe.
-    count_sql = f"SELECT COUNT(*) FROM ({collapsed_sql}) AS collapsed"  # nosec B608
-    page_sql = (
-        f"SELECT timestamp, metrics FROM ({collapsed_sql}) AS collapsed "  # nosec B608
-        f"ORDER BY bucket {order} LIMIT %s OFFSET %s"
-    )
+    page_sql = f"""
+        WITH source_rows AS (
+            SELECT source_timestamp
+            FROM ({base_sql}) AS raw_metrics(source_timestamp)
+        ),
+        bucketed AS (
+            SELECT
+                (FLOOR(EXTRACT(EPOCH FROM source_timestamp) / %s) * %s)::bigint AS bucket,
+                MAX(source_timestamp) AS source_timestamp
+            FROM source_rows
+            GROUP BY bucket
+            ORDER BY bucket {order}
+            LIMIT %s OFFSET %s
+        )
+        SELECT metrics.timestamp, metrics.metrics
+        FROM bucketed
+        JOIN metrics
+          ON metrics.task_type = %s
+         AND metrics.task_id = %s
+         AND (
+              (metrics.execution_id = %s)
+              OR (metrics.execution_id IS NULL AND %s IS NULL)
+         )
+         AND metrics.timestamp = bucketed.source_timestamp
+        ORDER BY bucketed.bucket {order}
+    """  # nosec B608
+    page_params = list(base_params) + [
+        seconds,
+        seconds,
+        limit + 1,
+        offset,
+        task_type_label,
+        task.pk,
+        query.execution_id,
+        query.execution_id,
+    ]
 
     with connection.cursor() as cursor:
-        cursor.execute(count_sql, collapsed_params)
-        total = int(cursor.fetchone()[0])
-        cursor.execute(page_sql, [*collapsed_params, limit, offset])
-        rows = cursor.fetchall()
+        cursor.execute(page_sql, page_params)
+        raw_rows = cursor.fetchall()
 
-    return [
-        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher) for ts, metrics in rows
-    ], total
+    has_next = len(raw_rows) > limit
+    raw_rows = raw_rows[:limit]
+    rows = [
+        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher)
+        for ts, metrics in raw_rows
+    ]
+    return MetricPageResult(
+        rows=rows,
+        count=offset + len(rows) + (1 if has_next else 0),
+        count_is_exact=False,
+        has_next=has_next,
+    )
 
 
 def _load_bucketed_page_in_memory(
@@ -306,7 +420,7 @@ def _load_bucketed_page_in_memory(
     descending: bool,
     limit: int,
     offset: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> MetricPageResult:
     """Fallback aggregation for non-PostgreSQL backends (primarily SQLite tests)."""
 
     bucketed: dict[int, tuple[Any, Any]] = {}
@@ -319,4 +433,143 @@ def _load_bucketed_page_in_memory(
         _serialize_row(ts, metrics, query.metric_keys, enricher=enricher)
         for _, (ts, metrics) in page
     ]
-    return rows, len(ordered)
+    total = len(ordered)
+    return MetricPageResult(
+        rows=rows,
+        count=total,
+        count_is_exact=True,
+        has_next=offset + len(rows) < total,
+    )
+
+
+def _load_rollup_page(
+    *,
+    task: Any,
+    task_type_label: str,
+    query: StrategyDataQuery,
+    enricher: MetricMoneyEnricher,
+    granularity: str,
+    descending: bool,
+    limit: int,
+    offset: int,
+) -> MetricPageResult:
+    qs = MetricsRollup.objects.filter(
+        task_type=task_type_label,
+        task_id=task.pk,
+        execution_id=query.execution_id,
+        granularity=granularity,
+    )
+    if query.since is not None:
+        qs = qs.filter(bucket__gte=query.since)
+    if query.until is not None:
+        qs = qs.filter(bucket__lte=query.until)
+    order = "-bucket" if descending else "bucket"
+    raw_rows = list(
+        qs.order_by(order).values_list("source_timestamp", "metrics")[offset : offset + limit + 1]
+    )
+    has_next = len(raw_rows) > limit
+    raw_rows = raw_rows[:limit]
+    rows = [
+        _serialize_row(ts, metrics, query.metric_keys, enricher=enricher)
+        for ts, metrics in raw_rows
+    ]
+    return MetricPageResult(
+        rows=rows,
+        count=offset + len(rows) + (1 if has_next else 0),
+        count_is_exact=False,
+        has_next=has_next,
+    )
+
+
+def _rollup_covers_query(
+    *,
+    task: Any,
+    task_type_label: str,
+    query: StrategyDataQuery,
+    seconds: int,
+    granularity: str,
+) -> bool:
+    if query.since is not None or query.until is not None:
+        return False
+
+    rollup_qs = MetricsRollup.objects.filter(
+        task_type=task_type_label,
+        task_id=task.pk,
+        execution_id=query.execution_id,
+        granularity=granularity,
+    )
+    rollup_bounds = rollup_qs.aggregate(
+        first=Min("bucket"),
+        last_source=Max("source_timestamp"),
+    )
+    if rollup_bounds["first"] is None or rollup_bounds["last_source"] is None:
+        return False
+
+    metric_bounds_qs = Metrics.objects.filter(
+        task_type=task_type_label,
+        task_id=task.pk,
+        execution_id=query.execution_id,
+    )
+    if query.since is not None:
+        metric_bounds_qs = metric_bounds_qs.filter(timestamp__gte=query.since)
+    if query.until is not None:
+        metric_bounds_qs = metric_bounds_qs.filter(timestamp__lte=query.until)
+    metric_bounds = metric_bounds_qs.aggregate(first=Min("timestamp"), last=Max("timestamp"))
+    first_metric = metric_bounds["first"]
+    last_metric = metric_bounds["last"]
+    if first_metric is None or last_metric is None:
+        return False
+
+    return bool(
+        rollup_bounds["first"] <= _datetime_bucket(first_metric, seconds)
+        and rollup_bounds["last_source"] is not None
+        and rollup_bounds["last_source"] >= last_metric
+    )
+
+
+def _datetime_bucket(value: Any, seconds: int) -> Any:
+    epoch = int(value.timestamp())
+    return datetime_from_epoch(epoch // seconds * seconds, value)
+
+
+def datetime_from_epoch(epoch: int, sample: Any) -> Any:
+    tzinfo = getattr(sample, "tzinfo", None)
+    return datetime.fromtimestamp(epoch, tz=tzinfo)
+
+
+def _with_elapsed(result: MetricPageResult, started_at: float) -> MetricPageResult:
+    return MetricPageResult(
+        rows=result.rows,
+        count=result.count,
+        count_is_exact=result.count_is_exact,
+        has_next=result.has_next,
+        elapsed_seconds=time.monotonic() - started_at,
+    )
+
+
+def _log_metric_query(
+    *,
+    result: MetricPageResult,
+    task: Any,
+    task_type_label: str,
+    query: StrategyDataQuery,
+    source: str,
+) -> None:
+    threshold = float(getattr(settings, "STRATEGY_METRICS_QUERY_LOG_THRESHOLD_SECONDS", 0.5))
+    elapsed = result.elapsed_seconds
+    if elapsed < threshold:
+        return
+    logger.info(
+        "strategy metrics query source=%s task_type=%s task_id=%s execution_id=%s "
+        "granularity=%s page=%s page_size=%s rows=%s count_exact=%s elapsed=%.3fs",
+        source,
+        task_type_label,
+        task.pk,
+        query.execution_id,
+        query.granularity,
+        query.page,
+        query.page_size,
+        len(result.rows),
+        result.count_is_exact,
+        elapsed,
+    )

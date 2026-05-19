@@ -123,3 +123,55 @@ class ExecutionMetricAggregate(models.Model):
             "ExecutionMetricAggregate("
             f"{self.task_type}:{self.task_id}:exec={self.execution_id}, samples={self.sample_count})"
         )
+
+
+class MetricsRollup(models.Model):
+    """Pre-aggregated latest metric snapshot for one chart bucket."""
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    task_type = models.CharField(max_length=32)
+    task_id = models.UUIDField()
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="Execution run UUID (shared with Celery task_id)",
+    )
+    granularity = models.CharField(
+        max_length=8,
+        help_text="Bucket granularity token such as M5, M15, H1, H4, or D.",
+    )
+    bucket = models.DateTimeField(help_text="Start timestamp of the rollup bucket")
+    source_timestamp = models.DateTimeField(
+        help_text="Timestamp of the source metrics row represented by this bucket"
+    )
+    metrics = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Latest strategy metrics snapshot for this bucket",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "metrics_rollups"
+        ordering = ["bucket"]
+        indexes = [
+            models.Index(
+                fields=["task_type", "task_id", "execution_id", "granularity", "bucket"],
+                name="metrics_roll_scope_bucket_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["task_type", "task_id", "execution_id", "granularity", "bucket"],
+                name="uniq_metrics_rollup_bucket",
+                nulls_distinct=False,
+            )
+        ]
+
+    def __str__(self) -> str:
+        return (
+            "MetricsRollup("
+            f"{self.task_type}:{self.task_id}:exec={self.execution_id}, "
+            f"{self.granularity}@{self.bucket})"
+        )

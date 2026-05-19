@@ -22,6 +22,9 @@ class SnowballParameterService:
     def config_to_parameters(self, config: SnowballStrategyConfig) -> dict[str, Any]:
         """Return the persisted parameter payload for a config object."""
         parameters = config.to_dict()
+        if not config.base_units_auto_adjust_enabled:
+            parameters.pop("base_units_balance_ratio", None)
+            parameters.pop("base_units_step", None)
         if not config.preserve_highest_retracement_enabled:
             parameters.pop("preserve_highest_r_from", None)
         return parameters

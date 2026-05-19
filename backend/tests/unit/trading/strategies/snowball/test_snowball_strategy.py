@@ -205,6 +205,63 @@ class TestInitialisation:
         opens = _open_events(result)
         assert len(opens) == 0
 
+    def test_auto_base_units_uses_balance_for_new_initial_cycles(self):
+        s = _strategy(
+            base_units=9999,
+            base_units_auto_adjust_enabled=True,
+            base_units_balance_ratio="1000",
+            base_units_step=100,
+        )
+        state = DummyState(current_balance=Decimal("1000000"))
+
+        result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        opens = _open_events(result)
+        assert {event.units for event in opens} == {1000}
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert {cycle.current_layer.base_units for cycle in ss.active_cycles()} == {1000}
+
+    def test_auto_base_units_preserves_existing_layer_units_after_balance_changes(self):
+        s = _strategy(
+            base_units=9999,
+            base_units_auto_adjust_enabled=True,
+            base_units_balance_ratio="1000",
+            base_units_step=100,
+            n_pips_head="30",
+        )
+        state = DummyState(current_balance=Decimal("1000000"))
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        state.current_balance = Decimal("2000000")
+        state.ticks_processed += 1
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "150.32", "150.34"), state=state)
+
+        counter_opens = [event for event in _open_events(result) if event.retracement_count == 1]
+        assert counter_opens
+        assert {event.units for event in counter_opens} == {2000}
+
+    def test_auto_base_units_scales_future_reentry_cycles_after_balance_changes(self):
+        s = _strategy(
+            base_units=9999,
+            base_units_auto_adjust_enabled=True,
+            base_units_balance_ratio="1000",
+            base_units_step=100,
+        )
+        s.configure_runtime(account_currency="JPY", hedging_enabled=False)
+        state = DummyState(current_balance=Decimal("1000000"))
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        state.current_balance = Decimal("2000000")
+        state.ticks_processed += 1
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "150.60", "150.62"), state=state)
+
+        opens = _open_events(result)
+        assert [event.units for event in opens] == [2000]
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        active_cycles = ss.active_cycles()
+        assert len(active_cycles) == 1
+        assert active_cycles[0].initial_entry.units == 2000
+
 
 # ==================================================================
 # 2. Counter adds

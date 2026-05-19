@@ -400,6 +400,9 @@ AUTH_USER_MODEL = "accounts.User"
 
 globals().update(build_logging_settings(BASE_DIR))
 TASK_LOG_BUFFER_SIZE = int(os.getenv("TASK_LOG_BUFFER_SIZE", "100"))
+STRATEGY_METRICS_QUERY_LOG_THRESHOLD_SECONDS = float(
+    os.getenv("STRATEGY_METRICS_QUERY_LOG_THRESHOLD_SECONDS", "0.5")
+)
 
 
 # =============================================================================

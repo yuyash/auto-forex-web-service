@@ -435,7 +435,9 @@ class BacktestInitialPositionService:
                     cycle=cycle,
                     layer_number=position_spec.layer_number,
                     r_max=engine.strategy.config.r_max,  # type: ignore[attr-defined]
-                    base_units=engine.strategy.config.base_units,  # type: ignore[attr-defined]
+                    base_units=engine.strategy.config.effective_base_units(  # type: ignore[attr-defined]
+                        snowball_state.account_balance
+                    ),
                     refill_up_to=(
                         engine.strategy.config.effective_refill_up_to  # type: ignore[attr-defined]
                     ),

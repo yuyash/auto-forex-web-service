@@ -58,6 +58,29 @@ def pagination_envelope(
     }
 
 
+def pagination_envelope_from_page(
+    *,
+    request: Request,
+    query: StrategyDataQuery,
+    rows_returned: int,
+    has_next: bool,
+) -> dict[str, Any]:
+    """Build a pagination envelope when the exact total is intentionally skipped."""
+
+    visible_count = (query.page - 1) * query.page_size + rows_returned
+    count = visible_count + (1 if has_next else 0)
+    return {
+        "count": count,
+        "next": _page_url_unbounded(request, query.page + 1, query) if has_next else None,
+        "previous": _page_url_unbounded(request, query.page - 1, query) if query.page > 1 else None,
+        "page": query.page,
+        "page_size": query.page_size,
+        "ordering": query.ordering,
+        "granularity": query.granularity,
+        "count_is_exact": False,
+    }
+
+
 def parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -149,4 +172,13 @@ def _page_url(request: Request, page: int, total: int, page_size: int) -> str | 
     params = request.query_params.copy()
     params["page"] = str(page)
     params["page_size"] = str(page_size)
+    return f"{request.build_absolute_uri(request.path)}?{urlencode(params, doseq=True)}"
+
+
+def _page_url_unbounded(request: Request, page: int, query: StrategyDataQuery) -> str | None:
+    if page < 1:
+        return None
+    params = request.query_params.copy()
+    params["page"] = str(page)
+    params["page_size"] = str(query.page_size)
     return f"{request.build_absolute_uri(request.path)}?{urlencode(params, doseq=True)}"

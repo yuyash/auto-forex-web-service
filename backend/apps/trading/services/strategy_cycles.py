@@ -1074,7 +1074,7 @@ def _merge_grid_state_with_trade_history(
     serialising the trade ledger.  Rebuilt is not a permanent historical mark:
     once the rebuilt position closes, the cell returns to empty.
     """
-    if not isinstance(grid_state, dict) or not trades:
+    if not trades:
         return grid_state
 
     slot_by_position_id: dict[str, tuple[int, int]] = {}
@@ -1125,7 +1125,8 @@ def _merge_grid_state_with_trade_history(
             update_historical_state(layer, slot, "empty", None)
 
     current_slots: dict[str, dict[str, Any]] = {}
-    for raw_layer in grid_state.get("layers") or []:
+    base_grid_state = grid_state if isinstance(grid_state, dict) else {}
+    for raw_layer in base_grid_state.get("layers") or []:
         if not isinstance(raw_layer, dict):
             continue
         try:

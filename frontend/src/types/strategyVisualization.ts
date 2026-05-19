@@ -147,6 +147,7 @@ export interface StrategyHistoryResponse {
   strategy_type: string;
   instrument?: string | null;
   count: number;
+  count_is_exact?: boolean;
   next: string | null;
   previous: string | null;
   page: number;

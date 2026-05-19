@@ -7,7 +7,9 @@ from apps.trading.enums import Direction
 from apps.trading.services.strategy_snapshot import build_strategy_snapshot
 from apps.trading.strategies.snowball.cycle_state import SnowballCycle, SnowballStrategyState
 from apps.trading.strategies.snowball.entries import Entry
+from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid
+from apps.trading.strategies.snowball.tick_phases import ARCHIVED_COMPLETED_CYCLES_KEY
 from apps.trading.strategies.snowball_net.state import SnowballNetState
 
 
@@ -82,6 +84,28 @@ def test_snowball_snapshot_groups_open_entry_counts_and_units() -> None:
     assert cards["open_short_units"] == 2000
     assert card_ids.index("open_entries") < card_ids.index("open_long_units")
     assert card_ids.index("open_long_units") < card_ids.index("open_short_units")
+
+
+def test_snowball_snapshot_counts_archived_completed_cycles() -> None:
+    state = SnowballStrategyState(
+        initialised=True,
+        cycles=[
+            SnowballCycle(
+                cycle_id=1,
+                direction=Direction.LONG,
+                status=CycleStatus.COMPLETED,
+                trade_cycle_id="trade-cycle-1",
+            ),
+            SnowballCycle(cycle_id=2, direction=Direction.SHORT),
+        ],
+    ).to_dict()
+    state[ARCHIVED_COMPLETED_CYCLES_KEY] = 7
+
+    snapshot = build_strategy_snapshot("snowball", state)
+    cards = {card["id"]: card["value"] for card in snapshot["cards"]}
+
+    assert cards["active_cycles"] == 1
+    assert cards["completed_cycles"] == 8
 
 
 def test_snowball_net_snapshot_includes_risk_extreme_cards() -> None:

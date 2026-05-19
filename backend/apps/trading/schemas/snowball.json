@@ -11,6 +11,50 @@
       "description_ja": "基本ロットサイズ（通貨単位）。例: 1000 = 1ロット。",
       "default": 1000,
       "minimum": 1,
+      "disabledWhen": {
+        "field": "base_units_auto_adjust_enabled",
+        "values": [true]
+      },
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "base_units_auto_adjust_enabled": {
+      "type": "boolean",
+      "title": "Auto Adjust Base Units",
+      "title_ja": "基本ユニット数の自動調整",
+      "description": "When enabled, newly created Snowball layers calculate Base Units from account balance instead of the fixed Base Units value.",
+      "description_ja": "有効時、新しく作成されるSnowballレイヤーの基本ユニット数は固定値ではなく口座残高から計算されます。",
+      "default": false,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "base_units_balance_ratio": {
+      "type": "number",
+      "title": "Balance Per Unit",
+      "title_ja": "1ユニットあたりの残高",
+      "description": "Account balance amount represented by 1 base unit. The default 1000 means a balance of 1,000,000 produces 1,000 base units.",
+      "description_ja": "基本ユニット1あたりの口座残高。デフォルトの1000では、残高1,000,000に対して基本ユニット数は1,000になります。",
+      "default": 1000,
+      "minimum": 0.0001,
+      "dependsOn": {
+        "field": "base_units_auto_adjust_enabled",
+        "values": [true]
+      },
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "base_units_step": {
+      "type": "integer",
+      "title": "Base Unit Step",
+      "title_ja": "基本ユニット変化量",
+      "description": "Round the calculated Base Units down to this unit step. The default 100 produces 1000, 1100, 1200, ... as balance changes.",
+      "description_ja": "計算された基本ユニット数をこの単位で切り下げます。デフォルトの100では、残高の変化に応じて1000, 1100, 1200, ... のように変化します。",
+      "default": 100,
+      "minimum": 1,
+      "dependsOn": {
+        "field": "base_units_auto_adjust_enabled",
+        "values": [true]
+      },
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },

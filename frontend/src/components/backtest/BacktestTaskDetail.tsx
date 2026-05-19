@@ -79,6 +79,7 @@ import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import {
   useStrategySnapshot,
   useLossCutEvents,
+  usePeriodicTradeMetrics,
 } from '../../hooks/useStrategyData';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
@@ -219,6 +220,12 @@ export const BacktestTaskDetail: React.FC = () => {
   const [metricsInterval, setMetricsInterval] = useState(0);
   const [metricsSince, setMetricsSince] = useState('');
   const [metricsUntil, setMetricsUntil] = useState('');
+  const metricsSinceIso = metricsSince
+    ? new Date(metricsSince).toISOString()
+    : undefined;
+  const metricsUntilIso = metricsUntil
+    ? new Date(metricsUntil).toISOString()
+    : undefined;
 
   const effectiveMetricsInterval = useMemo(() => {
     if (metricsInterval !== 0) return metricsInterval;
@@ -244,8 +251,8 @@ export const BacktestTaskDetail: React.FC = () => {
     taskType: TaskType.BACKTEST,
     executionRunId: effectiveExecutionId,
     interval: effectiveMetricsInterval,
-    since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
-    until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
+    since: metricsSinceIso,
+    until: metricsUntilIso,
     enabled: !!taskId,
     fetchSeries: activeTabId === 'metrics',
     pollingInterval:
@@ -253,6 +260,23 @@ export const BacktestTaskDetail: React.FC = () => {
   });
 
   const [showLossCutMarkers, setShowLossCutMarkers] = useState(false);
+  const periodicMetricsQuery = usePeriodicTradeMetrics({
+    taskId,
+    taskType: TaskType.BACKTEST,
+    executionRunId: effectiveExecutionId,
+    params: {
+      since: metricsSinceIso,
+      until: metricsUntilIso,
+      timezone,
+    },
+    enabled: !!taskId && activeTabId === 'metrics',
+    refetchInterval:
+      !isViewingHistorical &&
+      activeTabId === 'metrics' &&
+      shouldPollTaskStatus(currentStatus)
+        ? 30000
+        : false,
+  });
   const lossCutEventsQuery = useLossCutEvents({
     taskId,
     taskType: TaskType.BACKTEST,
@@ -266,6 +290,7 @@ export const BacktestTaskDetail: React.FC = () => {
       await Promise.all([
         refreshOverviewSummary(),
         metricsResult.refresh(),
+        periodicMetricsQuery.refetch(),
         overviewStrategySnapshot.refetch(),
       ]);
     } catch (err) {
@@ -278,6 +303,7 @@ export const BacktestTaskDetail: React.FC = () => {
   }, [
     metricsResult,
     overviewStrategySnapshot,
+    periodicMetricsQuery,
     refreshOverviewSummary,
     showError,
     t,
@@ -712,6 +738,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   'USD'
                 }
                 dataSource={metricsResult.dataSource}
+                periodicMetrics={periodicMetricsQuery.data}
                 resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
                 consistencyWarnings={metricsResult.consistencyWarnings}
                 interval={metricsInterval}
@@ -720,7 +747,12 @@ export const BacktestTaskDetail: React.FC = () => {
                 onIntervalChange={setMetricsInterval}
                 onSinceChange={setMetricsSince}
                 onUntilChange={setMetricsUntil}
-                onRefresh={metricsResult.refresh}
+                onRefresh={async () => {
+                  await Promise.all([
+                    metricsResult.refresh(),
+                    periodicMetricsQuery.refetch(),
+                  ]);
+                }}
                 instrument={detailTask.instrument}
                 startTime={task?.start_time}
                 endTime={task?.end_time}

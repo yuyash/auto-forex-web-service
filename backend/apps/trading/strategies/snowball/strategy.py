@@ -70,7 +70,10 @@ from apps.trading.strategies.snowball.stop_loss_flow import (
     StopLossRebuildPricePlanner,
     StopLossRebuildProcessor,
 )
-from apps.trading.strategies.snowball.tick_phases import SnowballTickPipeline
+from apps.trading.strategies.snowball.tick_phases import (
+    SnowballExecutionStateBoundary,
+    SnowballTickPipeline,
+)
 
 logger: Logger = getLogger(__name__)
 __all__ = ["SNOWBALL_PROTECTION", "SnowballStrategy"]
@@ -289,11 +292,20 @@ class SnowballStrategy(Strategy):
 
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
         result = super().on_start(state=state)
-        state.strategy_state = SnowballStrategyState.from_strategy_state(
-            state.strategy_state
-        ).to_dict()
+        self._persist_loaded_strategy_state(state)
         result.state = state
         return result
+
+    def on_resume(self, *, state: ExecutionState) -> StrategyResult:
+        result = super().on_resume(state=state)
+        self._persist_loaded_strategy_state(state)
+        result.state = state
+        return result
+
+    @staticmethod
+    def _persist_loaded_strategy_state(state: ExecutionState) -> None:
+        snowball_state = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        SnowballExecutionStateBoundary(state=state).persist(snowball_state)
 
     @classmethod
     def supports_stateful_broker_reconciliation(cls) -> bool:
@@ -838,7 +850,9 @@ class SnowballStrategy(Strategy):
         prev_layer = cycle.current_layer
         assert prev_layer is not None
         new_layer_number = prev_layer.layer_number + 1
-        new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+        new_base_units = int(
+            Decimal(str(cfg.effective_base_units(ss.account_balance))) * cfg.post_r_max_base_factor
+        )
         layer = Layer.create(
             new_layer_number,
             cfg.r_max,
