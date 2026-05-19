@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.1.2...frontend-v2.2.0) (2026-05-19)
+
+
+### Features
+
+* **strategy:** add snowball warmup controls ([#779](https://github.com/yuyash/auto-forex-web-service/issues/779)) ([3aac6bd](https://github.com/yuyash/auto-forex-web-service/commit/3aac6bdd46e4c57bf7e4eba6942e4d050e72658b))
+
 ## [2.1.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.1.1...frontend-v2.1.2) (2026-05-19)
 
 
