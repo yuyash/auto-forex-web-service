@@ -220,6 +220,8 @@ class TestInitialisation:
         assert {event.units for event in opens} == {1000}
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         assert {cycle.current_layer.base_units for cycle in ss.active_cycles()} == {1000}
+        assert ss.metrics["current_base_units"] == "1000"
+        assert ss.metrics["snowball_current_base_units"] == "1000"
 
     def test_auto_base_units_preserves_existing_layer_units_after_balance_changes(self):
         s = _strategy(
@@ -239,6 +241,8 @@ class TestInitialisation:
         counter_opens = [event for event in _open_events(result) if event.retracement_count == 1]
         assert counter_opens
         assert {event.units for event in counter_opens} == {2000}
+        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert ss.metrics["current_base_units"] == "2000"
 
     def test_auto_base_units_scales_future_reentry_cycles_after_balance_changes(self):
         s = _strategy(
