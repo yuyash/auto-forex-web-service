@@ -214,13 +214,24 @@ class TestOandaRetryClassification:
 
         assert classifier.is_retryable(OandaAPIError("Failed to fetch trades: status 401"))
 
-    def test_rejects_explicit_authorization_failure(self):
+    def test_retries_oanda_insufficient_authorization_401(self):
         from apps.market.services.oanda import OandaAPIError
 
         classifier = OandaRetryClassifier()
         error = OandaAPIError(
             "Failed to fetch trades: status 401",
             internal_detail="Insufficient authorization to perform request.",
+        )
+
+        assert classifier.is_retryable(error)
+
+    def test_rejects_invalid_token_failure(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        classifier = OandaRetryClassifier()
+        error = OandaAPIError(
+            "Failed to fetch trades: status 401",
+            internal_detail="Invalid token.",
         )
 
         assert not classifier.is_retryable(error)

@@ -47,8 +47,15 @@ class InMemoryCache:
 class OandaRetryCallable:
     """Callable test double for retry scenarios."""
 
-    def __init__(self, *, error_message: str, succeed_on_call: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        error_message: str,
+        internal_detail: str = "",
+        succeed_on_call: int | None = None,
+    ) -> None:
         self.error_message = error_message
+        self.internal_detail = internal_detail
         self.succeed_on_call = succeed_on_call
         self.calls = 0
 
@@ -56,7 +63,7 @@ class OandaRetryCallable:
         self.calls += 1
         if self.succeed_on_call is not None and self.calls >= self.succeed_on_call:
             return "orders"
-        raise OandaAPIError(self.error_message)
+        raise OandaAPIError(self.error_message, internal_detail=self.internal_detail)
 
 
 @pytest.mark.django_db
@@ -104,11 +111,28 @@ class TestOandaRetryService:
         assert scenario.calls == 3
         assert sleeps == [1, 2]
 
-    def test_classifier_rejects_explicit_authorization_failure(self) -> None:
+    def test_retries_oanda_insufficient_authorization_401(self) -> None:
+        scenario = OandaRetryCallable(
+            error_message="Failed to fetch pending orders: status 401",
+            internal_detail="Insufficient authorization to perform request.",
+            succeed_on_call=2,
+        )
+
+        result = OandaRetryService(
+            policy=OandaRetryPolicy(max_attempts=3, backoff_base_seconds=0, jitter_ratio=0),
+        ).call(
+            scenario,
+            label="Fetch pending orders",
+        )
+
+        assert result == "orders"
+        assert scenario.calls == 2
+
+    def test_classifier_rejects_invalid_token_failure(self) -> None:
         classifier = OandaRetryClassifier()
         error = OandaAPIError(
             "Failed to fetch pending orders: status 401",
-            internal_detail="Insufficient authorization to perform request.",
+            internal_detail="Invalid token.",
         )
 
         assert classifier.is_retryable(error) is False

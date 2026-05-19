@@ -135,6 +135,7 @@ class OandaRetryClassifier:
     """Classify OANDA errors as retryable or terminal."""
 
     retryable_markers: tuple[str, ...] = (
+        # OANDA can transiently return 401 even when stored credentials remain valid.
         "status 401",
         "status code 401",
         "401 unauthorized",
@@ -183,7 +184,6 @@ class OandaRetryClassifier:
         "market order rejected",
         "account required",
         "api client not initialized",
-        "insufficient authorization",
         "invalid account",
         "invalid token",
         "invalid authorization",
