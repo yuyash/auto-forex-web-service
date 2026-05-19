@@ -22,8 +22,8 @@ historical hard-coded behaviour.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, timedelta
 
 # Forex week: closed from Friday 21:00 UTC to Sunday 21:00 UTC.
 _CLOSE_WEEKDAY = 4  # Friday
@@ -41,6 +41,12 @@ class MarketSessionConfig:
     a closed window.  ``close_weekday`` and ``open_weekday`` follow
     ``datetime.weekday()`` semantics (0 = Monday … 6 = Sunday) and the
     hours are integers in the 0–23 UTC range.
+
+    ``holiday_dates`` is an optional set of UTC calendar dates on which
+    the market should be treated as closed for the entire 24-hour
+    window.  Holidays are honoured even when ``enabled`` is False so
+    that callers can opt out of the weekly close while still suppressing
+    trading on illiquid major-market holidays such as Christmas.
     """
 
     enabled: bool = True
@@ -48,6 +54,17 @@ class MarketSessionConfig:
     close_hour_utc: int = _CLOSE_HOUR_UTC
     open_weekday: int = _OPEN_WEEKDAY
     open_hour_utc: int = _OPEN_HOUR_UTC
+    holiday_dates: frozenset[date] = field(default_factory=frozenset)
+
+    @property
+    def has_weekly_close(self) -> bool:
+        """Whether the weekly Friday→Sunday close is active."""
+        return self.enabled
+
+    @property
+    def has_holiday_calendar(self) -> bool:
+        """Whether at least one explicit holiday date is configured."""
+        return bool(self.holiday_dates)
 
 
 DEFAULT_SESSION_CONFIG = MarketSessionConfig()
@@ -75,12 +92,15 @@ def is_forex_market_closed(
 
     With the default config this returns True for Friday-21:00-UTC
     through Sunday-21:00-UTC.  When ``config.enabled`` is False the
-    market is treated as always open.
+    weekly close is ignored but configured ``holiday_dates`` still
+    cause the market to be reported as closed for the whole UTC day.
     """
     cfg = config or DEFAULT_SESSION_CONFIG
+    now = _ensure_utc(now)
+    if cfg.holiday_dates and now.date() in cfg.holiday_dates:
+        return True
     if not cfg.enabled:
         return False
-    now = _ensure_utc(now)
     close_dt = _previous_close(now, cfg)
     open_dt = _next_open_on_or_after(close_dt, cfg)
     # Closed window is [close_dt, open_dt).  If now falls inside, the
@@ -127,10 +147,12 @@ def current_schedule(
 ) -> MarketSchedule:
     """Return a combined snapshot of market state at ``now``."""
     cfg = config or DEFAULT_SESSION_CONFIG
-    if not cfg.enabled:
-        return MarketSchedule(is_open=True, next_close=None, next_open=None)
     now = _ensure_utc(now)
     closed = is_forex_market_closed(now, config=cfg)
+    if not cfg.enabled:
+        # Weekly close disabled — no next_close/next_open to surface.
+        # Holidays may still be flipping ``closed`` for the current day.
+        return MarketSchedule(is_open=not closed, next_close=None, next_open=None)
     return MarketSchedule(
         is_open=not closed,
         next_close=None if closed else next_market_close(now, config=cfg),
@@ -148,7 +170,8 @@ def should_enter_pre_close_idle(
 
     Only meaningful while the market is open.  Returns False when
     ``pre_close_minutes`` is 0 (feature disabled) or when the configured
-    schedule has ``enabled=False``.
+    schedule has ``enabled=False`` (no upcoming weekly close to anchor
+    the pre-close window on).
     """
     cfg = config or DEFAULT_SESSION_CONFIG
     if not cfg.enabled or pre_close_minutes <= 0:
@@ -177,10 +200,12 @@ def should_resume_from_idle(
     """
     cfg = config or DEFAULT_SESSION_CONFIG
     now = _ensure_utc(now)
-    if not cfg.enabled:
-        return True
     if is_forex_market_closed(now, config=cfg):
         return False
+    if not cfg.enabled:
+        # No weekly close — only holiday-based idle is possible, and the
+        # day-by-day flip is handled by ``is_forex_market_closed`` above.
+        return True
     if resume_delay_minutes <= 0 or idle_entered_at is None:
         return True
 

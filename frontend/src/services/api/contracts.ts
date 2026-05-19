@@ -125,6 +125,8 @@ export interface BackendBacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   created_at: string;

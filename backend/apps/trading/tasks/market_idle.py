@@ -37,12 +37,38 @@ class MarketIdleCoordinator:
             return DEFAULT_SESSION_CONFIG
 
         task = self.task
+        holidays_enabled_raw = getattr(task, "holidays_enabled", False)
+        holidays_enabled = (
+            bool(holidays_enabled_raw) if isinstance(holidays_enabled_raw, bool) else False
+        )
+        excluded_dates_raw = getattr(task, "excluded_dates", None)
+        excluded_dates: list = (
+            list(excluded_dates_raw) if isinstance(excluded_dates_raw, list) else []
+        )
+
+        if holidays_enabled or excluded_dates:
+            from apps.trading.services.market_holidays import resolve_holiday_dates
+
+            start_dt = getattr(task, "start_time", None)
+            end_dt = getattr(task, "end_time", None)
+            start_date = start_dt.date() if isinstance(start_dt, datetime) else None
+            end_date = end_dt.date() if isinstance(end_dt, datetime) else None
+            holiday_dates = resolve_holiday_dates(
+                enabled=holidays_enabled,
+                start=start_date,
+                end=end_date,
+                excluded_dates=excluded_dates,
+            )
+        else:
+            holiday_dates = frozenset()
+
         return MarketSessionConfig(
             enabled=bool(getattr(task, "market_close_enabled", True)),
             close_weekday=int(getattr(task, "market_close_weekday", 4) or 0),
             close_hour_utc=int(getattr(task, "market_close_hour_utc", 21) or 0),
             open_weekday=int(getattr(task, "market_open_weekday", 6) or 0),
             open_hour_utc=int(getattr(task, "market_open_hour_utc", 21) or 0),
+            holiday_dates=holiday_dates,
         )
 
     def evaluate(self, loop: Any) -> None:
@@ -57,7 +83,7 @@ class MarketIdleCoordinator:
         session_config = self.session_config()
 
         if self.task_type == TaskType.BACKTEST:
-            if not session_config.enabled:
+            if not session_config.enabled and not session_config.has_holiday_calendar:
                 return
             if (
                 pre_close_minutes == 0

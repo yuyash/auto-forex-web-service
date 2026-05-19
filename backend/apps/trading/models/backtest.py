@@ -184,6 +184,23 @@ class BacktestTask(ExecutableTaskModel):
             "is failed as suspicious. Default: 120 (5 days)."
         ),
     )
+    holidays_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Treat days where two or more major FX centres (US, UK, Germany) are "
+            "observing a public holiday as market-closed during the backtest. "
+            "Useful for suppressing trading on Christmas, Good Friday, New Year's Day, etc."
+        ),
+    )
+    excluded_dates = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Additional UTC calendar dates (ISO-8601 'YYYY-MM-DD') on which the backtest "
+            "should treat the market as closed. Merged with the auto-detected holiday set "
+            "when ``holidays_enabled`` is True; honoured on its own when it is False."
+        ),
+    )
     initial_positions_enabled = models.BooleanField(
         default=False,
         help_text="Create Snowball initial cycles/positions before starting the backtest.",

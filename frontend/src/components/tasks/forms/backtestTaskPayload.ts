@@ -30,6 +30,8 @@ export interface BacktestTaskPayloadFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
 }
@@ -61,6 +63,8 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     market_open_weekday: data.market_open_weekday,
     market_open_hour_utc: data.market_open_hour_utc,
     max_tick_gap_hours: data.max_tick_gap_hours,
+    holidays_enabled: data.holidays_enabled,
+    excluded_dates: data.excluded_dates,
     initial_positions_enabled: data.initial_positions_enabled ?? false,
     initial_position_cycles: data.initial_positions_enabled
       ? (data.initial_position_cycles ?? [])

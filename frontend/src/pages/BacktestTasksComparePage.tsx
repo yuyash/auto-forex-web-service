@@ -72,6 +72,8 @@ function backtestTaskSettings(
   setIfPresent(settings, 'market_open_weekday', task.market_open_weekday);
   setIfPresent(settings, 'market_open_hour_utc', task.market_open_hour_utc);
   setIfPresent(settings, 'max_tick_gap_hours', task.max_tick_gap_hours);
+  setIfPresent(settings, 'holidays_enabled', task.holidays_enabled);
+  setIfPresent(settings, 'excluded_dates', task.excluded_dates);
   setIfPresent(
     settings,
     'initial_positions_enabled',
@@ -193,6 +195,18 @@ export default function BacktestTasksComparePage() {
           }),
         ],
         [
+          'holidays_enabled',
+          t('backtest:form.holidaysEnabled', {
+            defaultValue: 'Skip major FX holidays',
+          }),
+        ],
+        [
+          'excluded_dates',
+          t('backtest:form.excludedDates', {
+            defaultValue: 'Additional excluded dates',
+          }),
+        ],
+        [
           'initial_positions_enabled',
           t('backtest:form.initialPositionsEnabled'),
         ],
@@ -301,6 +315,8 @@ export default function BacktestTasksComparePage() {
             'market_open_weekday',
             'market_open_hour_utc',
             'max_tick_gap_hours',
+            'holidays_enabled',
+            'excluded_dates',
             'initial_positions_enabled',
             'initial_position_cycles',
             'debug_options',

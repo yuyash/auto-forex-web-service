@@ -70,6 +70,8 @@ export interface BacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   latest_execution?: ExecutionSummary;
@@ -111,6 +113,8 @@ export interface BacktestTaskCreateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   debug_options?: Record<string, unknown>;
@@ -143,6 +147,8 @@ export interface BacktestTaskFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
 }
@@ -173,6 +179,8 @@ export interface BacktestTaskUpdateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   debug_options?: Record<string, unknown>;

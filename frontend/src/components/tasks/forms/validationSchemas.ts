@@ -316,6 +316,18 @@ export const backtestTaskSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    holidays_enabled: z.boolean().optional().default(false),
+    excluded_dates: z
+      .array(
+        z
+          .string()
+          .regex(
+            /^\d{4}-\d{2}-\d{2}$/,
+            'Each excluded date must be ISO-8601 (YYYY-MM-DD)'
+          )
+      )
+      .optional()
+      .default([]),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
       .array(initialPositionCycleSchema)
@@ -452,6 +464,8 @@ export type BacktestTaskSchemaOutput = {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  holidays_enabled?: boolean;
+  excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: z.infer<typeof initialPositionCycleSchema>[];
 };

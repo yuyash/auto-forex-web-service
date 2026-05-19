@@ -90,6 +90,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "holidays_enabled",
+            "excluded_dates",
             "initial_positions_enabled",
             "initial_position_cycles",
             "sell_on_stop",
@@ -258,6 +260,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "holidays_enabled",
+            "excluded_dates",
             "initial_positions_enabled",
             "initial_position_cycles",
             "sell_on_stop",
@@ -303,6 +307,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 "max_value": 23,
             },
             "max_tick_gap_hours": {"required": False, "min_value": 1},
+            "holidays_enabled": {"required": False},
+            "excluded_dates": {"required": False},
             "initial_positions_enabled": {"required": False},
             "initial_position_cycles": {"required": False},
             "sell_on_stop": {"required": False},
@@ -343,6 +349,36 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         if value is not None and value <= 0:
             raise serializers.ValidationError("Pip size must be positive")
         return value
+
+    def validate_excluded_dates(self, value: list | None) -> list[str]:
+        """Validate excluded_dates is a list of unique ISO-8601 date strings."""
+        from datetime import date
+
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("excluded_dates must be a list of date strings.")
+
+        seen: set[date] = set()
+        normalized: list[str] = []
+        for raw in value:
+            if isinstance(raw, date):
+                parsed = raw
+            else:
+                text = str(raw or "").strip()
+                if not text:
+                    continue
+                try:
+                    parsed = date.fromisoformat(text)
+                except ValueError as exc:
+                    raise serializers.ValidationError(
+                        f"Invalid date '{raw}'. Expected YYYY-MM-DD."
+                    ) from exc
+            if parsed in seen:
+                continue
+            seen.add(parsed)
+            normalized.append(parsed.isoformat())
+        return normalized
 
     def validate_name(self, value: str) -> str:
         """Validate task name uniqueness per user."""
