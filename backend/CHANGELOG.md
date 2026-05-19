@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.1.0...backend-v2.2.0) (2026-05-19)
+
+
+### Features
+
+* **strategy:** add snowball warmup controls ([#779](https://github.com/yuyash/auto-forex-web-service/issues/779)) ([3aac6bd](https://github.com/yuyash/auto-forex-web-service/commit/3aac6bdd46e4c57bf7e4eba6942e4d050e72658b))
+
+
+### Bug Fixes
+
+* **trading:** retry transient OANDA auth reads ([#780](https://github.com/yuyash/auto-forex-web-service/issues/780)) ([a3c16b0](https://github.com/yuyash/auto-forex-web-service/commit/a3c16b0aade83b2de951959944795cf093582e74))
+
 ## [2.1.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.0.7...backend-v2.1.0) (2026-05-19)
 
 
