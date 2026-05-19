@@ -382,8 +382,21 @@ class StopLossRebuildPricePlanner:
         """Return a rebuild plan when the trigger price has been reached."""
         if pending.closed_at is not None and tick.timestamp <= pending.closed_at:
             return None
+        if not self.cooldown_elapsed(
+            pending=pending,
+            tick=tick,
+            cooldown_seconds=strategy.config.rebuild_cooldown_seconds,
+        ):
+            return None
 
         trigger_price = self.trigger_price(pending, strategy.config.rebuild_entry_price_mode)
+        trigger_price = self.apply_entry_buffer(
+            pending=pending,
+            trigger_price=trigger_price,
+            entry_price_mode=strategy.config.rebuild_entry_price_mode,
+            buffer_pips=strategy.config.rebuild_entry_buffer_pips,
+            pip_size=strategy.pip_size,
+        )
         trigger_price = self.clamp_entry_price(cycle, layer, slot, pending, trigger_price)
         if not self.trigger_hit(pending, tick, trigger_price):
             return None
@@ -401,15 +414,65 @@ class StopLossRebuildPricePlanner:
             close_price=close_price,
         )
 
+    def cooldown_elapsed(
+        self,
+        *,
+        pending: StopLossClosedEntry,
+        tick: Tick,
+        cooldown_seconds: Decimal,
+    ) -> bool:
+        """Return True when the post-stop-loss cooldown has elapsed."""
+        if cooldown_seconds <= 0:
+            return True
+        if pending.closed_at is None:
+            return True
+        elapsed = tick.timestamp - pending.closed_at
+        return elapsed.total_seconds() >= float(cooldown_seconds)
+
     def trigger_price(
         self,
         pending: StopLossClosedEntry,
         entry_price_mode: str,
     ) -> Decimal:
-        """Return the price that must be reached to rebuild the entry."""
+        """Return the price that must be reached to rebuild the entry.
+
+        In ``stop_loss_exit`` mode the trigger is anchored on the previous
+        stop-loss price level, NOT the actual fill price.  Anchoring on the
+        fill price made every rebuild round drift the trigger by one
+        slippage step in the adverse direction, which combined with
+        ``rebuild_stop_loss_mode='same'`` placed the rebuilt SL on the
+        profit side of the new entry and produced spurious "stop-loss"
+        closes that booked profits.  Anchoring on the SL level keeps the
+        trigger stationary across rounds.
+        """
         if entry_price_mode == "stop_loss_exit":
-            return pending.stop_loss_exit_price or pending.stop_loss_price or pending.entry_price
+            return pending.stop_loss_price or pending.stop_loss_exit_price or pending.entry_price
         return pending.entry_price
+
+    def apply_entry_buffer(
+        self,
+        *,
+        pending: StopLossClosedEntry,
+        trigger_price: Decimal,
+        entry_price_mode: str,
+        buffer_pips: Decimal,
+        pip_size: Decimal,
+    ) -> Decimal:
+        """Push the trigger further into the favorable direction by ``buffer_pips``.
+
+        Only meaningful in ``stop_loss_exit`` mode: in ``original_entry``
+        mode the rebuild always lands on the original entry price, so an
+        additional buffer would push the rebuild past the original
+        position, which is not the intended behaviour.
+        """
+        if entry_price_mode != "stop_loss_exit":
+            return trigger_price
+        if buffer_pips <= 0 or pip_size <= 0:
+            return trigger_price
+        offset = buffer_pips * pip_size
+        if pending.direction == Direction.LONG:
+            return trigger_price + offset
+        return trigger_price - offset
 
     def clamp_entry_price(
         self,

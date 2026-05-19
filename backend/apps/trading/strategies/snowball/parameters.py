@@ -27,6 +27,21 @@ class SnowballParameterService:
             parameters.pop("base_units_step", None)
         if not config.preserve_highest_retracement_enabled:
             parameters.pop("preserve_highest_r_from", None)
+        # rebuild_entry_buffer_pips is only meaningful when the rebuild
+        # entry is anchored on the stop-loss exit price.  For the
+        # ``original_entry`` mode the rebuild always lands at the original
+        # entry, so a buffer would have no effect and we drop the field
+        # from the persisted payload to keep configs minimal.
+        if (
+            not config.stop_loss_enabled
+            or not config.rebuild_enabled
+            or config.rebuild_entry_price_mode != "stop_loss_exit"
+        ):
+            parameters.pop("rebuild_entry_buffer_pips", None)
+        # rebuild_cooldown_seconds only matters when rebuilds can fire,
+        # i.e. when both stop-loss and rebuild are enabled.
+        if not config.stop_loss_enabled or not config.rebuild_enabled:
+            parameters.pop("rebuild_cooldown_seconds", None)
         if not config.warmup_enabled:
             for key in WARMUP_OPTIONAL_KEYS:
                 if key != "warmup_enabled":
