@@ -71,10 +71,12 @@ const METRIC_KEYS: Array<{
     | 'winning_trades'
     | 'losing_trades'
     | 'total_return'
+    | 'current_base_units'
     | 'ticks_per_second';
   format: 'pct' | 'int' | 'rate';
 }> = [
   { key: 'ticks_per_second', format: 'rate' },
+  { key: 'current_base_units', format: 'int' },
   { key: 'win_rate', format: 'pct' },
   { key: 'winning_trades', format: 'int' },
   { key: 'losing_trades', format: 'int' },

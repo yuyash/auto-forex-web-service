@@ -66,6 +66,7 @@
     "open_entries": "オープンエントリー",
     "open_long_units": "オープンLONGサイズ",
     "open_short_units": "オープンSHORTサイズ",
+    "current_base_units": "現在のベースユニット数",
     "account_balance": "口座残高",
     "account_nav": "口座NAV",
     "status": "状態",

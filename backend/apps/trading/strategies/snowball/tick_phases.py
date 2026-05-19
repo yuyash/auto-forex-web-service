@@ -264,6 +264,11 @@ class SnowballAccountMetricsPhase:
             instrument=context.strategy.instrument,
             account_currency=context.strategy.account_currency,
         )
+        current_base_units = context.strategy.config.effective_base_units(
+            context.snowball_state.account_balance
+        )
+        context.snowball_state.metrics["current_base_units"] = str(current_base_units)
+        context.snowball_state.metrics["snowball_current_base_units"] = str(current_base_units)
         return SnowballTickPhaseOutcome()
 
 

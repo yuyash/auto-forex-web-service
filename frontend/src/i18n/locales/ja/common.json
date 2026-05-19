@@ -819,6 +819,7 @@
     "rebuild_opens": "再建オープン数",
     "period_open_positions": "オープン数",
     "margin_ratio": "証拠金精算割合",
+    "current_base_units": "現在のベースユニット数",
     "live_tick_latency_seconds": "Live Tickレイテンシー",
     "oanda_tick_publish_latency_seconds": "OANDA配信レイテンシー",
     "trading_tick_receive_latency_seconds": "Task受信レイテンシー",

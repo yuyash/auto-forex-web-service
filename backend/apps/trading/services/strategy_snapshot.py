@@ -14,6 +14,7 @@ SNOWBALL_SNAPSHOT_CARD_KEYS = (
     "open_entries",
     "open_long_units",
     "open_short_units",
+    "current_base_units",
     "account_balance",
     "account_nav",
 )
@@ -58,6 +59,9 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
         completed = len([cycle for cycle in parsed.cycles if cycle.completed])
         completed += _int_state_value(state.get(ARCHIVED_COMPLETED_CYCLES_KEY))
         entries = parsed.all_entries()
+        current_base_units = parsed.metrics.get("current_base_units") or parsed.metrics.get(
+            "snowball_current_base_units"
+        )
         values = {
             "protection_level": parsed.protection_level.value,
             "active_cycles": active,
@@ -66,16 +70,21 @@ def _snowball_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "open_entries": len(entries),
             "open_long_units": sum(abs(entry.units) for entry in entries if entry.is_long),
             "open_short_units": sum(abs(entry.units) for entry in entries if entry.is_short),
+            "current_base_units": current_base_units,
             "account_balance": str(parsed.account_balance),
             "account_nav": str(parsed.account_nav),
             "last_mid": str(parsed.last_mid) if parsed.last_mid is not None else None,
             "margin_ratio": parsed.metrics.get("margin_ratio"),
         }
     except Exception:  # noqa: BLE001
+        raw_metrics = state.get("metrics")
+        metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
         values = {
             "protection_level": state.get("protection_level"),
             "active_cycles": len(state.get("cycles") or []),
             "completed_cycles": _int_state_value(state.get(ARCHIVED_COMPLETED_CYCLES_KEY)),
+            "current_base_units": metrics.get("current_base_units")
+            or metrics.get("snowball_current_base_units"),
             "account_nav": state.get("account_nav"),
             "last_mid": state.get("last_mid"),
         }
