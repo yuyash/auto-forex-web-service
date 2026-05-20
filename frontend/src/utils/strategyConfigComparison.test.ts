@@ -42,7 +42,7 @@ describe('strategyConfigComparison', () => {
       base_units_balance_ratio: {
         type: 'number',
         title: 'Balance Per Unit',
-        title_ja: '1ユニットあたりの残高',
+        title_ja: '1ユニットあたりの残高比率',
         default: 1000,
         dependsOn: {
           field: 'base_units_auto_adjust_enabled',

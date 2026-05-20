@@ -31,7 +31,7 @@
     "base_units_balance_ratio": {
       "type": "number",
       "title": "Balance Per Unit",
-      "title_ja": "1ユニットあたりの残高",
+      "title_ja": "1ユニットあたりの残高比率",
       "description": "Account balance amount represented by 1 base unit. The default 1000 means a balance of 1,000,000 produces 1,000 base units.",
       "description_ja": "基本ユニット1あたりの口座残高。デフォルトの1000では、残高1,000,000に対して基本ユニット数は1,000になります。",
       "default": 1000,
@@ -341,7 +341,11 @@
         "and": [
           {
             "field": "warmup_completion_mode",
-            "values": ["duration", "duration_and_tp_closes", "duration_or_tp_closes"]
+            "values": [
+              "duration",
+              "duration_and_tp_closes",
+              "duration_or_tp_closes"
+            ]
           }
         ]
       },
@@ -362,7 +366,11 @@
         "and": [
           {
             "field": "warmup_completion_mode",
-            "values": ["tp_closes", "duration_and_tp_closes", "duration_or_tp_closes"]
+            "values": [
+              "tp_closes",
+              "duration_and_tp_closes",
+              "duration_or_tp_closes"
+            ]
           }
         ]
       },
