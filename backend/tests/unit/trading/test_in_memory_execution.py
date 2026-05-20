@@ -115,7 +115,62 @@ def test_pending_rebuild_cycles_are_not_pruned() -> None:
     assert handler._position_id_to_cycle_id[position_id] == "cycle"
     assert handler._cycle_id_to_position_ids["cycle"] == {position_id}
     assert handler._entry_id_to_cycle_id[2] == "cycle"
-    assert "cycle" in handler._pending_rebuild_cycle_ids
+    assert handler._pending_rebuild_position_ids[position_id] == "cycle"
+
+
+def test_multiple_pending_rebuilds_in_same_cycle_survive_partial_rebuild() -> None:
+    first_position = _position()
+    second_position = _position()
+    order_service = MagicMock(task_type=TaskType.BACKTEST)
+    order_service.get_open_positions.return_value = []
+    handler = InMemoryEventHandler(order_service, "USD_JPY")
+
+    handler._bind_position_to_cycle(
+        position=first_position,
+        cycle_id="cycle",
+        event=OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
+            entry_id=27,
+            root_entry_id=27,
+        ),
+    )
+    handler._bind_position_to_cycle(
+        position=second_position,
+        cycle_id="cycle",
+        event=OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
+            entry_id=30,
+            root_entry_id=27,
+            parent_entry_id=27,
+        ),
+    )
+    handler._track_pending_rebuild_cycle(
+        ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
+            entry_id=27,
+            root_entry_id=27,
+            position_id=str(first_position.id),
+        )
+    )
+    handler._track_pending_rebuild_cycle(
+        ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
+            entry_id=30,
+            root_entry_id=27,
+            parent_entry_id=27,
+            position_id=str(second_position.id),
+        )
+    )
+
+    handler._pending_rebuild_position_ids.pop(str(first_position.id), None)
+    handler._prune_completed_cycles()
+
+    second_position_id = str(second_position.id)
+    assert str(first_position.id) not in handler._position_id_to_cycle_id
+    assert handler._pending_rebuild_position_ids == {second_position_id: "cycle"}
+    assert handler._position_id_to_cycle_id[second_position_id] == "cycle"
+    assert handler._entry_id_to_cycle_id[27] == "cycle"
+    assert handler._entry_id_to_cycle_id[30] == "cycle"
 
 
 @pytest.mark.django_db

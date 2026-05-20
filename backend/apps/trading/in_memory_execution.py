@@ -298,7 +298,7 @@ class InMemoryEventHandler(EventHandler):
         self._position_id_to_cycle_id: dict[str, str] = {}
         self._cycle_id_to_position_ids: dict[str, set[str]] = defaultdict(set)
         self._cycle_id_to_entry_ids: dict[str, set[int]] = defaultdict(set)
-        self._pending_rebuild_cycle_ids: set[str] = set()
+        self._pending_rebuild_position_ids: dict[str, str] = {}
         self._last_recorded_trade: Trade | None = None
 
     def _resolve_cycle_id_from_db(
@@ -389,7 +389,8 @@ class InMemoryEventHandler(EventHandler):
 
         self._last_open_cycle_id = cycle_id
         self._bind_position_to_cycle(position=position, cycle_id=cycle_id, event=event)
-        self._pending_rebuild_cycle_ids.discard(cycle_id)
+        if event.original_position_id:
+            self._pending_rebuild_position_ids.pop(str(event.original_position_id), None)
         return position
 
     def handle_close_position(self, event: ClosePositionEvent) -> tuple[Decimal, Decimal]:
@@ -418,7 +419,7 @@ class InMemoryEventHandler(EventHandler):
         self._position_id_to_cycle_id.clear()
         self._cycle_id_to_position_ids.clear()
         self._cycle_id_to_entry_ids.clear()
-        self._pending_rebuild_cycle_ids.clear()
+        self._pending_rebuild_position_ids.clear()
         self._last_recorded_trade = None
 
     def _resolve_rebuild_cycle_id(self, event: RebuildPositionEvent) -> str | None:
@@ -426,7 +427,10 @@ class InMemoryEventHandler(EventHandler):
         if cycle_id is not None:
             return cycle_id
         if event.original_position_id:
-            return self._position_id_to_cycle_id.get(str(event.original_position_id))
+            position_id = str(event.original_position_id)
+            return self._pending_rebuild_position_ids.get(
+                position_id
+            ) or self._position_id_to_cycle_id.get(position_id)
         return None
 
     def _bind_position_to_cycle(
@@ -461,8 +465,9 @@ class InMemoryEventHandler(EventHandler):
 
     def _track_pending_rebuild_cycle(self, event: ClosePositionEvent) -> None:
         cycle_id = self._resolve_cycle_id_for_closed_event(event)
-        if cycle_id is not None:
-            self._pending_rebuild_cycle_ids.add(cycle_id)
+        position_id = getattr(event, "position_id", None)
+        if cycle_id is not None and position_id:
+            self._pending_rebuild_position_ids[str(position_id)] = cycle_id
 
     def _resolve_cycle_id_for_closed_event(self, event: ClosePositionEvent) -> str | None:
         for entry_id in (
@@ -484,17 +489,18 @@ class InMemoryEventHandler(EventHandler):
         }
         for position_id in list(self._position_id_to_cycle_id):
             cycle_id = self._position_id_to_cycle_id[position_id]
-            if cycle_id in self._pending_rebuild_cycle_ids:
+            if position_id in self._pending_rebuild_position_ids:
                 continue
             if position_id not in open_position_ids:
                 self._position_id_to_cycle_id.pop(position_id, None)
 
+        pending_cycle_ids = set(self._pending_rebuild_position_ids.values())
         for cycle_id, position_ids in list(self._cycle_id_to_position_ids.items()):
             live_position_ids = position_ids & open_position_ids
             if live_position_ids:
                 self._cycle_id_to_position_ids[cycle_id] = live_position_ids
                 continue
-            if cycle_id in self._pending_rebuild_cycle_ids:
+            if cycle_id in pending_cycle_ids:
                 continue
             self._cycle_id_to_position_ids.pop(cycle_id, None)
             for entry_id in self._cycle_id_to_entry_ids.pop(cycle_id, set()):
