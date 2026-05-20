@@ -40,6 +40,7 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     pip_size: task.pip_size ?? undefined,
     initial_positions_enabled: task.initial_positions_enabled ?? false,
     initial_position_cycles: task.initial_position_cycles ?? [],
+    in_memory_mode: task.in_memory_mode ?? false,
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,

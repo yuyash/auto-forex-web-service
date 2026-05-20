@@ -206,6 +206,14 @@ class TestBacktestTaskModel:
         is_valid, error = task.validate_configuration()
         assert is_valid is True
 
+    def test_can_resume_false_in_in_memory_mode(self):
+        task = BacktestTaskFactory(
+            status=TaskStatus.PAUSED,
+            execution_id=uuid4(),
+            in_memory_mode=True,
+        )
+        assert task.can_resume() is False
+
 
 @pytest.mark.django_db
 class TestCeleryTaskStatus:

@@ -213,6 +213,14 @@ class BacktestTask(ExecutableTaskModel):
             "Positions, trades, orders, and strategy state are generated from this data."
         ),
     )
+    in_memory_mode = models.BooleanField(
+        default=False,
+        help_text=(
+            "Run the backtest with in-memory execution records. "
+            "Orders, positions, trades, and strategy events are not persisted; "
+            "only task state, metrics, and terminal snapshots are stored."
+        ),
+    )
 
     class Meta:
         db_table = "backtest_tasks"
@@ -269,6 +277,8 @@ class BacktestTask(ExecutableTaskModel):
 
     def can_resume(self) -> bool:
         """Whether the current execution can resume from persisted state."""
+        if self.in_memory_mode:
+            return False
         return (
             self.status in (TaskStatus.PAUSED, TaskStatus.STOPPED) and self.execution_id is not None
         )

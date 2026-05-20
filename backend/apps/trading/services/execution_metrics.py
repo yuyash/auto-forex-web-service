@@ -448,11 +448,18 @@ class ExecutionMetricsBuilder:
         fallback_mid_rate: Decimal | None = None,
     ) -> dict[str, Any]:
         """Build aggregate execution metrics from a summary snapshot."""
-        counts = self.trade_counts.collect(
-            task_type=task_type,
-            task_id=task_id,
-            execution_id=execution_id,
-        )
+        if task_type == "backtest" and getattr(task, "in_memory_mode", False) is True:
+            counts = ExecutionTradeCounts(
+                total_trades=summary.counts.total_trades,
+                winning_trades=summary.counts.winning_trades,
+                losing_trades=summary.counts.losing_trades,
+            )
+        else:
+            counts = self.trade_counts.collect(
+                task_type=task_type,
+                task_id=task_id,
+                execution_id=execution_id,
+            )
         pnl = self.pnl_converter.build(
             task=task,
             summary=summary,

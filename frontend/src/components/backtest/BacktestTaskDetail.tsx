@@ -161,10 +161,19 @@ export const BacktestTaskDetail: React.FC = () => {
   const { strategies } = useStrategies();
   const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
-  const effectiveVisibleTabs = useMemo(
-    () => visibleTabsForStrategy(visibleTabs, task?.strategy_type),
-    [task?.strategy_type, visibleTabs]
-  );
+  const isInMemoryMode = task?.in_memory_mode === true;
+  const effectiveVisibleTabs = useMemo(() => {
+    const strategyTabs = visibleTabsForStrategy(
+      visibleTabs,
+      task?.strategy_type
+    );
+    if (!isInMemoryMode) {
+      return strategyTabs;
+    }
+    return strategyTabs.filter((tab) =>
+      ['overview', 'metrics'].includes(tab.id)
+    );
+  }, [isInMemoryMode, task?.strategy_type, visibleTabs]);
   const visibleTabIds = effectiveVisibleTabs.map((tab) => tab.id);
   const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
@@ -269,10 +278,11 @@ export const BacktestTaskDetail: React.FC = () => {
       until: metricsUntilIso,
       timezone,
     },
-    enabled: !!taskId && activeTabId === 'metrics',
+    enabled: !!taskId && activeTabId === 'metrics' && !isInMemoryMode,
     refetchInterval:
       !isViewingHistorical &&
       activeTabId === 'metrics' &&
+      !isInMemoryMode &&
       shouldPollTaskStatus(currentStatus)
         ? 30000
         : false,
@@ -281,18 +291,21 @@ export const BacktestTaskDetail: React.FC = () => {
     taskId,
     taskType: TaskType.BACKTEST,
     executionRunId: effectiveExecutionId,
-    enabled: !!taskId && showLossCutMarkers,
+    enabled: !!taskId && showLossCutMarkers && !isInMemoryMode,
   });
 
   const handleRefreshExecutionStatus = useCallback(async () => {
     setIsRefreshingExecutionStatus(true);
     try {
-      await Promise.all([
+      const refreshes: Array<Promise<unknown>> = [
         refreshOverviewSummary(),
         metricsResult.refresh(),
-        periodicMetricsQuery.refetch(),
         overviewStrategySnapshot.refetch(),
-      ]);
+      ];
+      if (!isInMemoryMode) {
+        refreshes.push(periodicMetricsQuery.refetch());
+      }
+      await Promise.all(refreshes);
     } catch (err) {
       showError(
         err instanceof Error ? err.message : t('common:errors.refreshFailed')
@@ -301,6 +314,7 @@ export const BacktestTaskDetail: React.FC = () => {
       setIsRefreshingExecutionStatus(false);
     }
   }, [
+    isInMemoryMode,
     metricsResult,
     overviewStrategySnapshot,
     periodicMetricsQuery,
@@ -748,10 +762,13 @@ export const BacktestTaskDetail: React.FC = () => {
                 onSinceChange={setMetricsSince}
                 onUntilChange={setMetricsUntil}
                 onRefresh={async () => {
-                  await Promise.all([
+                  const refreshes: Array<Promise<unknown>> = [
                     metricsResult.refresh(),
-                    periodicMetricsQuery.refetch(),
-                  ]);
+                  ];
+                  if (!isInMemoryMode) {
+                    refreshes.push(periodicMetricsQuery.refetch());
+                  }
+                  await Promise.all(refreshes);
                 }}
                 instrument={detailTask.instrument}
                 startTime={task?.start_time}
@@ -802,6 +819,7 @@ export const BacktestTaskDetail: React.FC = () => {
         open={stopDialogOpen}
         taskName={task.name}
         taskType="backtest"
+        drainAvailable={!detailTask.in_memory_mode}
         isLoading={isStopping}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}

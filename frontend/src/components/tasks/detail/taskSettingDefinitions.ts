@@ -268,6 +268,11 @@ export function buildBacktestTaskSettingDefinitions(
       label: t('backtest:form.closePositionsAtCompletion'),
       format: formatBoolean,
     },
+    {
+      key: 'in_memory_mode',
+      label: t('backtest:form.inMemoryMode', 'In-memory mode'),
+      format: formatBoolean,
+    },
     { key: 'tick_granularity', label: t('backtest:detail.tickGranularity') },
     {
       key: 'tick_window_value_mode',

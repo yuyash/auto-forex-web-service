@@ -257,6 +257,14 @@ class TaskExecutor:
             return TaskType.BACKTEST
         return TaskType.TRADING
 
+    @property
+    def uses_in_memory_mode(self) -> bool:
+        """Return whether this executor should skip execution-row persistence."""
+        return bool(
+            self.task_type == TaskType.BACKTEST
+            and getattr(self.task, "in_memory_mode", False) is True
+        )
+
     def _create_runtime_metrics_tracker(self) -> RuntimeMetricsTracker:
         """Create a tracker for strategy-agnostic runtime metrics."""
         task_config = getattr(self.task, "config", None)
@@ -992,10 +1000,20 @@ class TaskExecutor:
 
     @staticmethod
     def _mark_event_processed(trading_event: TradingEvent) -> None:
+        if getattr(trading_event, "_in_memory", False):
+            from django.utils import timezone as dj_timezone
+
+            trading_event.is_processed = True
+            trading_event.processed_at = dj_timezone.now()
+            trading_event.processing_error = ""
+            return
         mark_event_processed(trading_event)
 
     @staticmethod
     def _mark_event_processing_error(trading_event: TradingEvent, message: str) -> None:
+        if getattr(trading_event, "_in_memory", False):
+            trading_event.processing_error = str(message)[:4000]
+            return
         mark_event_processing_error(trading_event, message)
 
     def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
@@ -1040,6 +1058,8 @@ class TaskExecutor:
 
     def _update_unrealized_pnl(self, state: ExecutionState) -> None:
         """Recalculate unrealized pnl for open positions from latest tick."""
+        if self.uses_in_memory_mode:
+            return
         if state.last_tick_bid is None or state.last_tick_ask is None:
             return
 
@@ -1218,6 +1238,11 @@ class TaskExecutor:
 
     def _cleanup_execution(self) -> None:
         """Release runtime resources."""
+        if self.uses_in_memory_mode:
+            try:
+                self.event_handler.clear_positions()
+            except Exception:
+                logger.debug("Failed to clear in-memory event handler state", exc_info=True)
         try:
             self.data_source.close()
         except Exception as e:
@@ -1252,13 +1277,22 @@ class BacktestExecutor(TaskExecutor):
             task_type=TaskType.BACKTEST,
         )
 
-        # Create OrderService with dry_run=True for simulation
-        # No OANDA account needed for backtests - they run in pure simulation mode
-        order_service = OrderService(
-            account=None,  # Backtests don't need a real OANDA account
-            task=task,
-            dry_run=True,  # Backtest mode - simulate orders
-        )
+        # Create OrderService with dry_run=True for simulation.
+        # In-memory mode swaps ORM repositories for transient execution state.
+        if task.in_memory_mode is True:
+            from apps.trading.in_memory_execution import InMemoryOrderService
+
+            order_service = InMemoryOrderService(
+                account=None,
+                task=task,
+                dry_run=True,
+            )
+        else:
+            order_service = OrderService(
+                account=None,  # Backtests don't need a real OANDA account
+                task=task,
+                dry_run=True,  # Backtest mode - simulate orders
+            )
 
         # Create state manager
         state_manager = StateManager(
@@ -1275,6 +1309,13 @@ class BacktestExecutor(TaskExecutor):
             order_service=order_service,
             state_manager=state_manager,
         )
+        if task.in_memory_mode is True:
+            from apps.trading.in_memory_execution import InMemoryEventHandler
+
+            self.event_handler = InMemoryEventHandler(
+                order_service=order_service,
+                instrument=self.instrument,
+            )
 
     def prepare_state_for_execution(
         self,

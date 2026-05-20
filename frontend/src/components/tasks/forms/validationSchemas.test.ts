@@ -39,4 +39,15 @@ describe('backtestTaskSchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('allows in-memory mode without initial-position cycles', () => {
+    const result = backtestTaskSchema.safeParse({
+      ...baseBacktestTask,
+      in_memory_mode: true,
+      initial_positions_enabled: true,
+      initial_position_cycles: [],
+    });
+
+    expect(result.success).toBe(true);
+  });
 });

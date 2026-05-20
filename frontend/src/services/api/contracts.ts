@@ -129,6 +129,7 @@ export interface BackendBacktestTask {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

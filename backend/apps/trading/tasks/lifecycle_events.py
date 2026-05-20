@@ -308,6 +308,8 @@ class TaskLogLifecycleSink:
         self.logger = logger
 
     def publish(self, event: TaskLifecycleEvent) -> None:
+        if event.task_type == "backtest" and getattr(event.task, "in_memory_mode", False) is True:
+            return
         if event.log_level is None or not event.log_message or not event.log_component:
             return
         try:
@@ -335,6 +337,8 @@ class TradingEventLifecycleSink:
         self.logger = logger
 
     def publish(self, event: TaskLifecycleEvent) -> None:
+        if event.task_type == "backtest" and getattr(event.task, "in_memory_mode", False) is True:
+            return
         try:
             TradingEvent.objects.create(
                 event_type="status_changed",

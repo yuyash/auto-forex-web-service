@@ -92,12 +92,14 @@ def _make_lifecycle_task(
     task_id: object | None = None,
     execution_id: object | None = None,
     celery_task_id: object | None = None,
+    in_memory_mode: bool = False,
 ) -> MagicMock:
     return MagicMock(
         pk=task_id or uuid4(),
         status=status,
         execution_id=execution_id or uuid4(),
         celery_task_id=celery_task_id or uuid4(),
+        in_memory_mode=in_memory_mode,
     )
 
 
@@ -429,6 +431,66 @@ def test_pause_rejects_trading_tasks() -> None:
         commands.pause(task_id)
 
     adapters.signal_pause.assert_not_called()
+
+
+def test_stop_rejects_drain_for_in_memory_backtests() -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(
+        status=TaskStatus.RUNNING,
+        task_id=task_id,
+        in_memory_mode=True,
+    )
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+
+    commands, adapters = _make_commands(service)
+
+    with pytest.raises(ValueError, match="Drain stop is not supported"):
+        commands.stop(task_id, "drain")
+
+    service.writer.persist_state_if_current.assert_not_called()
+    adapters.signal_stop.assert_not_called()
+    adapters.dispatch_stop.assert_not_called()
+
+
+def test_pause_rejects_in_memory_backtests() -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(
+        status=TaskStatus.RUNNING,
+        task_id=task_id,
+        in_memory_mode=True,
+    )
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+
+    commands, adapters = _make_commands(service)
+
+    with pytest.raises(ValueError, match="Pause is not supported for in-memory backtests"):
+        commands.pause(task_id)
+
+    service.writer.persist_state_if_current.assert_not_called()
+    adapters.signal_pause.assert_not_called()
+
+
+def test_resume_rejects_in_memory_backtests() -> None:
+    task_id = uuid4()
+    task = _make_lifecycle_task(
+        status=TaskStatus.PAUSED,
+        task_id=task_id,
+        in_memory_mode=True,
+    )
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+    service._get_task_model = MagicMock()
+
+    commands, adapters = _make_commands(service)
+
+    with pytest.raises(ValueError, match="Resume is not supported for in-memory backtests"):
+        commands.resume(task_id)
+
+    service._get_task_model.assert_not_called()
+    service._dispatch_task.assert_not_called()
+    adapters.revoke_execution.assert_not_called()
 
 
 def test_pause_uses_injected_adapter_for_backtest() -> None:

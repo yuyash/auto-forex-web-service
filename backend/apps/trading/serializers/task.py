@@ -113,6 +113,7 @@ class BacktestTaskSerializer(TaskSerializer):
             "commission_per_trade",
             "pip_size",
             "instrument",
+            "in_memory_mode",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user"]
 
