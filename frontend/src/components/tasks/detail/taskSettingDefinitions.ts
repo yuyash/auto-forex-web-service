@@ -331,7 +331,7 @@ export function buildBacktestTaskSettingDefinitions(
     },
     {
       key: 'excluded_dates',
-      label: t('backtest:form.excludedDates', 'Additional excluded dates'),
+      label: t('backtest:form.excludedDates', 'Additional closed dates'),
       format: (value: unknown) =>
         Array.isArray(value) && value.length > 0 ? value.join(', ') : '—',
     },

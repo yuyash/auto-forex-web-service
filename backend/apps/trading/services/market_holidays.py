@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date
 from functools import lru_cache
+import re
 
 import holidays
 
@@ -32,6 +33,7 @@ DEFAULT_FX_COUNTRIES: tuple[str, ...] = ("US", "GB", "DE")
 # this many of the configured countries.  With three countries and a
 # threshold of two, single-country observances are ignored.
 DEFAULT_HOLIDAY_THRESHOLD: int = 2
+_MONTH_DAY_RE = re.compile(r"^(?P<month>\d{2})-(?P<day>\d{2})$")
 
 
 @lru_cache(maxsize=64)
@@ -86,8 +88,19 @@ def major_fx_holidays_between(
     return frozenset(d for d in candidates if start <= d <= end)
 
 
-def parse_excluded_dates(values: Iterable[object] | None) -> frozenset[date]:
-    """Parse a sequence of ISO-8601 date strings into a date set.
+def parse_excluded_dates(
+    values: Iterable[object] | None,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> frozenset[date]:
+    """Parse custom market-closed dates into a concrete date set.
+
+    Supported string formats:
+
+    * ``YYYY-MM-DD`` for one specific UTC calendar date.
+    * ``MM-DD`` for a recurring annual date, expanded across the inclusive
+      ``start``–``end`` window when both bounds are supplied.
 
     Invalid or empty entries are silently skipped — validation of the
     user-supplied list happens in the serializer; this helper is meant to
@@ -106,9 +119,35 @@ def parse_excluded_dates(values: Iterable[object] | None) -> frozenset[date]:
             continue
         try:
             out.add(date.fromisoformat(text))
-        except ValueError:
             continue
+        except ValueError:
+            pass
+
+        month_day = _parse_month_day(text)
+        if month_day is None or start is None or end is None or end < start:
+            continue
+        month, day = month_day
+        for year in range(start.year, end.year + 1):
+            try:
+                candidate = date(year, month, day)
+            except ValueError:
+                continue
+            if start <= candidate <= end:
+                out.add(candidate)
     return frozenset(out)
+
+
+def _parse_month_day(value: str) -> tuple[int, int] | None:
+    match = _MONTH_DAY_RE.fullmatch(value)
+    if match is None:
+        return None
+    month = int(match.group("month"))
+    day = int(match.group("day"))
+    try:
+        date(2000, month, day)
+    except ValueError:
+        return None
+    return month, day
 
 
 def resolve_holiday_dates(
@@ -126,7 +165,7 @@ def resolve_holiday_dates(
     user-supplied ``excluded_dates`` are always merged in so that ad-hoc
     exclusions work even when the auto-calendar is off.
     """
-    custom = parse_excluded_dates(excluded_dates)
+    custom = parse_excluded_dates(excluded_dates, start=start, end=end)
     if not enabled:
         return custom
     if start is None or end is None:

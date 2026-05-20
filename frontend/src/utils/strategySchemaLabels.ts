@@ -28,16 +28,35 @@ export function buildParameterLabelMap(
   };
   if (!schema.properties) return map;
 
-  const langKey = `title_${language}` as keyof ConfigProperty;
-
   for (const [key, prop] of Object.entries(schema.properties)) {
-    const localized = (prop[langKey] as string | undefined) ?? prop.title;
+    const localized = localizedPropertyString(prop, 'title', language);
     if (localized) {
       map.set(key, localized);
     }
   }
 
   return map;
+}
+
+function languageCandidates(language: string): string[] {
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) return [];
+  const base = normalized.split('-')[0];
+  return [...new Set([normalized, base])];
+}
+
+function localizedPropertyString(
+  prop: ConfigProperty,
+  prefix: 'title',
+  language: string
+): string | undefined {
+  for (const candidate of languageCandidates(language)) {
+    const value = prop[`${prefix}_${candidate}` as keyof ConfigProperty] as
+      | string
+      | undefined;
+    if (value) return value;
+  }
+  return prop.title;
 }
 
 /**
