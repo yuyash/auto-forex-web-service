@@ -323,6 +323,10 @@
     "marketOpenWeekday": "Open weekday (UTC)",
     "marketOpenHourUtc": "Open hour (UTC)",
     "marketOpenHourUtcHelp": "Hour of day at which the market reopens (0–23 UTC).",
+    "holidaysEnabled": "Skip major FX holidays",
+    "holidaysEnabledDescription": "Treat days where two or more major FX centres (US, UK, Germany) observe a public holiday, such as Christmas, Good Friday, or New Year's Day, as market-closed during the backtest.",
+    "excludedDates": "Additional closed dates",
+    "excludedDatesHelp": "Comma-separated MM-DD dates for annual closures, or YYYY-MM-DD for a single year. These are treated as market-closed and are merged with the holiday calendar above.",
     "weekdays": {
       "monday": "Monday",
       "tuesday": "Tuesday",

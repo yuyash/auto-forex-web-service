@@ -82,19 +82,22 @@ class MarketIdleCoordinator:
         resume_delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
         session_config = self.session_config()
 
+        task.refresh_from_db(fields=["status"])
+        if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
+            return
+
         if self.task_type == TaskType.BACKTEST:
             if not session_config.enabled and not session_config.has_holiday_calendar:
+                if task.status == TaskStatus.IDLE:
+                    self.exit(loop)
                 return
             if (
-                pre_close_minutes == 0
+                task.status == TaskStatus.RUNNING
+                and pre_close_minutes == 0
                 and resume_delay_minutes == 0
                 and not is_forex_market_closed(now, config=session_config)
             ):
                 return
-
-        task.refresh_from_db(fields=["status"])
-        if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
-            return
 
         market_closed = is_forex_market_closed(now, config=session_config)
         should_idle = market_closed or should_enter_pre_close_idle(

@@ -351,33 +351,45 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_excluded_dates(self, value: list | None) -> list[str]:
-        """Validate excluded_dates is a list of unique ISO-8601 date strings."""
+        """Validate excluded_dates as unique YYYY-MM-DD or recurring MM-DD strings."""
         from datetime import date
+        import re
 
         if value in (None, ""):
             return []
         if not isinstance(value, list):
             raise serializers.ValidationError("excluded_dates must be a list of date strings.")
 
-        seen: set[date] = set()
+        month_day_pattern = re.compile(r"^\d{2}-\d{2}$")
+        seen: set[str] = set()
         normalized: list[str] = []
         for raw in value:
+            normalized_value: str
             if isinstance(raw, date):
-                parsed = raw
+                normalized_value = raw.isoformat()
             else:
                 text = str(raw or "").strip()
                 if not text:
                     continue
                 try:
-                    parsed = date.fromisoformat(text)
-                except ValueError as exc:
-                    raise serializers.ValidationError(
-                        f"Invalid date '{raw}'. Expected YYYY-MM-DD."
-                    ) from exc
-            if parsed in seen:
+                    normalized_value = date.fromisoformat(text).isoformat()
+                except ValueError:
+                    if not month_day_pattern.fullmatch(text):
+                        raise serializers.ValidationError(
+                            f"Invalid date '{raw}'. Expected YYYY-MM-DD or MM-DD."
+                        ) from None
+                    month, day = (int(part) for part in text.split("-", 1))
+                    try:
+                        date(2000, month, day)
+                    except ValueError:
+                        raise serializers.ValidationError(
+                            f"Invalid date '{raw}'. Expected YYYY-MM-DD or MM-DD."
+                        ) from None
+                    normalized_value = f"{month:02d}-{day:02d}"
+            if normalized_value in seen:
                 continue
-            seen.add(parsed)
-            normalized.append(parsed.isoformat())
+            seen.add(normalized_value)
+            normalized.append(normalized_value)
         return normalized
 
     def validate_name(self, value: str) -> str:

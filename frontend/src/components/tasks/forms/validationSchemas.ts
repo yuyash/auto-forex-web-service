@@ -46,6 +46,12 @@ const optionalPositiveIntegerInputSchema = z
       (Number.isInteger(Number(value)) && Number(value) > 0),
     'Must be a positive integer'
   );
+const excludedDateSchema = z
+  .string()
+  .regex(
+    /^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/,
+    'Each excluded date must be YYYY-MM-DD or MM-DD'
+  );
 
 const initialPositionSchema = z
   .object({
@@ -317,17 +323,7 @@ export const backtestTaskSchema = z
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
     holidays_enabled: z.boolean().optional().default(false),
-    excluded_dates: z
-      .array(
-        z
-          .string()
-          .regex(
-            /^\d{4}-\d{2}-\d{2}$/,
-            'Each excluded date must be ISO-8601 (YYYY-MM-DD)'
-          )
-      )
-      .optional()
-      .default([]),
+    excluded_dates: z.array(excludedDateSchema).optional().default([]),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
       .array(initialPositionCycleSchema)

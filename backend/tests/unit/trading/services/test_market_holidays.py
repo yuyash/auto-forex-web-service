@@ -105,6 +105,18 @@ class TestParseExcludedDates:
         assert parse_excluded_dates(None) == frozenset()
         assert parse_excluded_dates([]) == frozenset()
 
+    def test_expands_month_day_rules_across_window(self) -> None:
+        result = parse_excluded_dates(
+            ["12-25"],
+            start=date(2024, 12, 1),
+            end=date(2025, 12, 31),
+        )
+
+        assert result == frozenset({date(2024, 12, 25), date(2025, 12, 25)})
+
+    def test_skips_month_day_rules_without_window(self) -> None:
+        assert parse_excluded_dates(["12-25"]) == frozenset()
+
 
 class TestResolveHolidayDates:
     """Tests for resolve_holiday_dates."""
@@ -160,6 +172,16 @@ class TestResolveHolidayDates:
         )
 
         assert result == frozenset({date(2024, 12, 25)})
+
+    def test_resolve_expands_month_day_user_excludes(self) -> None:
+        result = resolve_holiday_dates(
+            enabled=False,
+            start=date(2024, 12, 1),
+            end=date(2025, 1, 31),
+            excluded_dates=["12-25", "01-01"],
+        )
+
+        assert result == frozenset({date(2024, 12, 25), date(2025, 1, 1)})
 
 
 @pytest.mark.parametrize(

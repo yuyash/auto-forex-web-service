@@ -1709,7 +1709,7 @@ export default function BacktestTaskForm({
                           >
                             {t(
                               'backtest:form.holidaysEnabledDescription',
-                              'Treat days where two or more major FX centres (US, UK, Germany) observe a public holiday — Christmas, Good Friday, New Year — as market-closed during the backtest.'
+                              "Treat days where two or more major FX centres (US, UK, Germany) observe a public holiday, such as Christmas, Good Friday, or New Year's Day, as market-closed during the backtest."
                             )}
                           </Typography>
                         </Box>
@@ -1732,7 +1732,7 @@ export default function BacktestTaskForm({
                         fullWidth
                         label={t(
                           'backtest:form.excludedDates',
-                          'Additional excluded dates'
+                          'Additional closed dates'
                         )}
                         value={value}
                         onChange={(e) => {
@@ -1747,7 +1747,7 @@ export default function BacktestTaskForm({
                             ?.message ||
                           t(
                             'backtest:form.excludedDatesHelp',
-                            'Comma-separated YYYY-MM-DD dates to also treat as market-closed (merged with the holiday calendar above).'
+                            'Comma-separated MM-DD dates for annual closures, or YYYY-MM-DD for a single year. These are treated as market-closed and are merged with the holiday calendar above.'
                           )
                         }
                         error={!!errors.excluded_dates}

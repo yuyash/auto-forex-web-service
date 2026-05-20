@@ -323,6 +323,10 @@
     "marketOpenWeekday": "オープン曜日（UTC）",
     "marketOpenHourUtc": "オープン時刻（UTC）",
     "marketOpenHourUtcHelp": "マーケットが再開する時刻（0〜23, UTC）。",
+    "holidaysEnabled": "主要FX祝日をスキップ",
+    "holidaysEnabledDescription": "米国、英国、ドイツのうち2つ以上の主要FX市場が祝日の場合（クリスマス、グッドフライデー、元日など）、バックテスト中はマーケットクローズとして扱います。",
+    "excludedDates": "追加のクローズ日",
+    "excludedDatesHelp": "毎年クローズする日は MM-DD、特定年だけの日付は YYYY-MM-DD でカンマ区切り入力できます。上の祝日カレンダーと統合してマーケットクローズとして扱います。",
     "weekdays": {
       "monday": "月曜日",
       "tuesday": "火曜日",
