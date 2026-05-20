@@ -7,7 +7,10 @@ from typing import TYPE_CHECKING
 from apps.trading.events import StrategyEvent
 from apps.trading.models import BacktestTask, TradingEvent
 from apps.trading.models.state import ExecutionState
-from apps.trading.tasks.event_persistence import persist_strategy_events
+from apps.trading.tasks.event_persistence import (
+    materialize_execution_events,
+    persist_strategy_events,
+)
 
 if TYPE_CHECKING:
     from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
@@ -34,6 +37,13 @@ class ExecutionEventDispatcher:
         """Persist strategy events to database rows."""
         executor = self.executor
         strategy_type = str(getattr(executor.task.config, "strategy_type", "") or "")
+        if executor.uses_in_memory_mode:
+            return materialize_execution_events(
+                events=events,
+                context=executor.event_context,
+                execution_id=executor.task.execution_id,
+                strategy_type=strategy_type,
+            )
         return persist_strategy_events(
             events=events,
             context=executor.event_context,

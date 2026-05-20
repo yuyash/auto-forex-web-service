@@ -293,6 +293,7 @@ const backtestTaskUpdateSchema = z
       )
       .optional()
       .default([]),
+    in_memory_mode: z.boolean().optional().default(false),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
       .array(initialPositionCycleSchema)
@@ -300,7 +301,7 @@ const backtestTaskUpdateSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
-    if (!data.initial_positions_enabled) {
+    if (data.in_memory_mode || !data.initial_positions_enabled) {
       return;
     }
     if (!data.initial_position_cycles.length) {
@@ -441,12 +442,26 @@ export default function BacktestTaskUpdateForm({
   const initialTickWindowValueMode = initialData.tick_window_value_mode;
   const selectedTickGranularity = watch('tick_granularity');
   const selectedTickWindowValueMode = watch('tick_window_value_mode');
+  const watchedInMemoryMode = watch('in_memory_mode');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
   const watchedAccountCurrency =
     watch('account_currency') || DEFAULT_ACCOUNT_CURRENCY;
   const watchedDisplayCurrency = watch('display_currency') || '';
   const watchedInstrument = watch('instrument');
+  useEffect(() => {
+    if (!watchedInMemoryMode || !watchedInitialPositionsEnabled) {
+      return;
+    }
+    setValue('initial_positions_enabled', false, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue('initial_position_cycles', [], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [setValue, watchedInMemoryMode, watchedInitialPositionsEnabled]);
   const currencyOptions = useMemo(
     () => currencyOptionsForInstrument(watchedInstrument || 'USD_JPY'),
     [watchedInstrument]
@@ -485,7 +500,7 @@ export default function BacktestTaskUpdateForm({
     error: firstTickError,
     isLoading: firstTickLoading,
   } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
-    enabled: watchedInitialPositionsEnabled === true,
+    enabled: watchedInitialPositionsEnabled === true && !watchedInMemoryMode,
   });
   const { instruments: availableInstruments, metadata: instrumentMetadata } =
     useSupportedInstruments();
@@ -960,16 +975,70 @@ export default function BacktestTaskUpdateForm({
 
         <Grid size={{ xs: 12 }}>
           <Controller
+            name="in_memory_mode"
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={field.value ?? false}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      {t('backtest:form.inMemoryMode', {
+                        defaultValue: 'In-memory mode',
+                      })}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {t('backtest:form.inMemoryModeDescription', {
+                        defaultValue:
+                          'Skip persisting orders, positions, trades, logs, and strategy events. Overview and metrics remain available.',
+                      })}
+                    </Typography>
+                  </Box>
+                }
+              />
+            )}
+          />
+        </Grid>
+
+        {watchedInMemoryMode ? (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info">
+              {t('backtest:form.inMemoryModeNotice', {
+                defaultValue:
+                  'In-memory backtests only keep overview and metrics data. Positions, trades, orders, logs, strategy history, pause/resume, drain stop, and initial positions are unavailable.',
+              })}
+            </Alert>
+          </Grid>
+        ) : null}
+
+        <Grid size={{ xs: 12 }}>
+          <Controller
             name="initial_position_cycles"
             control={control}
             render={({ field }) => (
               <BacktestInitialPositionsEditor
-                enabled={watchedInitialPositionsEnabled ?? false}
+                enabled={
+                  !watchedInMemoryMode &&
+                  (watchedInitialPositionsEnabled ?? false)
+                }
                 onEnabledChange={(enabled) =>
-                  setValue('initial_positions_enabled', enabled, {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  })
+                  setValue(
+                    'initial_positions_enabled',
+                    watchedInMemoryMode ? false : enabled,
+                    {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    }
+                  )
                 }
                 value={field.value ?? []}
                 onChange={field.onChange}

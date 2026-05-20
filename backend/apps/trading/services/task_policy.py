@@ -50,6 +50,7 @@ EXECUTION_SETTING_FIELDS = frozenset(
         "tick_granularity",
         "tick_window_value_mode",
         "hedging_enabled",
+        "in_memory_mode",
         "trading_mode",
         "oanda_account",
         "account_id",
@@ -89,7 +90,12 @@ def action_policy_for_task(task: Any, *, task_type: str) -> TaskActionPolicy:
     """Compute action permissions for a task object."""
     status = _normalize_status(getattr(task, "status", None))
     is_trading = task_type == "trading"
-    can_resume = bool(getattr(task, "can_resume", lambda: False)())
+    is_in_memory_backtest = (
+        task_type == "backtest" and getattr(task, "in_memory_mode", False) is True
+    )
+    can_resume = (
+        False if is_in_memory_backtest else bool(getattr(task, "can_resume", lambda: False)())
+    )
 
     return TaskActionPolicy(
         can_start=status == TaskStatus.CREATED,
@@ -101,7 +107,7 @@ def action_policy_for_task(task: Any, *, task_type: str) -> TaskActionPolicy:
             TaskStatus.DRAINING,
             *(() if is_trading else (TaskStatus.PAUSED,)),
         },
-        can_pause=(not is_trading and status == TaskStatus.RUNNING),
+        can_pause=(not is_trading and not is_in_memory_backtest and status == TaskStatus.RUNNING),
         can_resume=can_resume,
         can_restart=status in TERMINAL_STATUSES,
         can_delete=status

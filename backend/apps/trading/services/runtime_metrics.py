@@ -147,6 +147,16 @@ class RuntimeMetricsTracker:
                 unrealized_pnl_quote += (bid - entry_price) * units
             else:
                 unrealized_pnl_quote += (entry_price - ask) * units
+        open_long_units = sum(
+            abs(position.units)
+            for position in self._open_positions.values()
+            if position.direction == "long"
+        )
+        open_short_units = sum(
+            abs(position.units)
+            for position in self._open_positions.values()
+            if position.direction == "short"
+        )
 
         # Convert to account currency using current mid rate (same as overview tab)
         realized_pnl = (
@@ -205,6 +215,8 @@ class RuntimeMetricsTracker:
             "total_pnl_quote_money": Money.coerce(total_pnl_quote, quote_currency).as_dict(),
             "total_return": str(total_return),
             "open_positions": str(len(self._open_positions)),
+            "open_long_units": str(open_long_units),
+            "open_short_units": str(open_short_units),
             "closed_positions": str(self._closed_positions),
             "total_trades": str(self._total_trades),
             "winning_trades": str(self._winning_trades),

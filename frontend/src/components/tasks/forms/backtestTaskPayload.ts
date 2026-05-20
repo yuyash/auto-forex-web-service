@@ -34,6 +34,7 @@ export interface BacktestTaskPayloadFormData {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
 }
 
 function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
@@ -65,10 +66,14 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     max_tick_gap_hours: data.max_tick_gap_hours,
     holidays_enabled: data.holidays_enabled,
     excluded_dates: data.excluded_dates,
-    initial_positions_enabled: data.initial_positions_enabled ?? false,
-    initial_position_cycles: data.initial_positions_enabled
-      ? (data.initial_position_cycles ?? [])
-      : [],
+    in_memory_mode: data.in_memory_mode ?? false,
+    initial_positions_enabled: data.in_memory_mode
+      ? false
+      : (data.initial_positions_enabled ?? false),
+    initial_position_cycles:
+      !data.in_memory_mode && data.initial_positions_enabled
+        ? (data.initial_position_cycles ?? [])
+        : [],
   };
 }
 

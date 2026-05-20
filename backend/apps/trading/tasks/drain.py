@@ -260,6 +260,8 @@ class TaskDrainCoordinator:
         downstream markers (loss-cut overlay, history export, etc.).
         """
         executor = self.executor
+        if getattr(executor, "uses_in_memory_mode", False) is True:
+            return
         direction_value = str(getattr(position, "direction", "") or "").lower()
         try:
             direction_enum: Direction | None = Direction(direction_value)

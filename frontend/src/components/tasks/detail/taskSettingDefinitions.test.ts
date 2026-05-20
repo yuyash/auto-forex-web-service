@@ -29,6 +29,7 @@ describe('task setting definition contracts', () => {
     expect(keys.has('start_time')).toBe(true);
     expect(keys.has('end_time')).toBe(true);
     expect(keys.has('sell_at_completion')).toBe(true);
+    expect(keys.has('in_memory_mode')).toBe(true);
     expect(keys.has('sell_on_stop')).toBe(false);
     expect(keys.has('execution_id')).toBe(true);
     expect(keys.has('celery_task_id')).toBe(false);

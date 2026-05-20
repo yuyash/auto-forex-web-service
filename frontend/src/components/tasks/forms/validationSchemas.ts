@@ -324,6 +324,7 @@ export const backtestTaskSchema = z
       .optional(),
     holidays_enabled: z.boolean().optional().default(false),
     excluded_dates: z.array(excludedDateSchema).optional().default([]),
+    in_memory_mode: z.boolean().optional().default(false),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
       .array(initialPositionCycleSchema)
@@ -331,7 +332,7 @@ export const backtestTaskSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
-    if (!data.initial_positions_enabled) {
+    if (data.in_memory_mode || !data.initial_positions_enabled) {
       return;
     }
     if (!data.initial_position_cycles.length) {
@@ -464,6 +465,7 @@ export type BacktestTaskSchemaOutput = {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: z.infer<typeof initialPositionCycleSchema>[];
+  in_memory_mode?: boolean;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

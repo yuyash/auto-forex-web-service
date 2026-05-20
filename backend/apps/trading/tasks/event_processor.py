@@ -134,5 +134,19 @@ class TaskEventProcessor:
                 execution_result.realized_pnl_delta,
                 realized_pnl_quote=execution_result.realized_pnl_delta_quote,
             )
-        if execution_result.entry_binding is not None:
+        uses_in_memory_mode = getattr(executor, "uses_in_memory_mode", False) is True
+        if (
+            execution_result.realized_pnl_delta == Decimal("0")
+            and uses_in_memory_mode
+            and execution_result.entry_binding is None
+            and execution_result.executed_units
+        ):
+            executor._runtime_metrics.record_position_closed(
+                Decimal("0"),
+                realized_pnl_quote=Decimal("0"),
+            )
+        if uses_in_memory_mode and execution_result.trade_ids:
+            for _ in execution_result.trade_ids:
+                executor._runtime_metrics.record_trade()
+        elif execution_result.entry_binding is not None:
             executor._runtime_metrics.record_trade()

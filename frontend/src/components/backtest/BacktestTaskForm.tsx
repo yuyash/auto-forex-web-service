@@ -163,6 +163,7 @@ interface ReviewContentProps {
     tick_window_value_mode: string;
     sell_at_completion?: boolean;
     hedging_enabled?: boolean;
+    in_memory_mode?: boolean;
     initial_positions_enabled?: boolean;
     initial_position_cycles?: BacktestTaskSchemaOutput['initial_position_cycles'];
   };
@@ -327,6 +328,19 @@ function ReviewContent({
 
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.inMemoryMode', {
+            defaultValue: 'In-memory mode',
+          })}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.in_memory_mode
+            ? t('common:labels.yes')
+            : t('common:labels.no')}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
           {t('backtest:form.initialPositionsEnabled', {
             defaultValue: 'Create initial positions',
           })}
@@ -424,6 +438,7 @@ export default function BacktestTaskForm({
       tick_window_value_mode: 'first',
       sell_at_completion: false,
       hedging_enabled: true,
+      in_memory_mode: false,
       initial_positions_enabled: false,
       initial_position_cycles: [],
       drain_duration_hours: 0,
@@ -505,6 +520,7 @@ export default function BacktestTaskForm({
   const showTickWindowValueMode = watchedTickGranularity !== 'tick';
 
   const watchedMarketCloseEnabled = watch('market_close_enabled');
+  const watchedInMemoryMode = watch('in_memory_mode');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
   const watchedAccountCurrency =
@@ -525,6 +541,20 @@ export default function BacktestTaskForm({
       });
     }
   }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
+
+  useEffect(() => {
+    if (!watchedInMemoryMode || !watchedInitialPositionsEnabled) {
+      return;
+    }
+    setValue('initial_positions_enabled', false, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue('initial_position_cycles', [], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [setValue, watchedInMemoryMode, watchedInitialPositionsEnabled]);
 
   // Fetch all configurations and strategies
   const { strategies } = useStrategies();
@@ -627,7 +657,7 @@ export default function BacktestTaskForm({
     error: firstTickError,
     isLoading: firstTickLoading,
   } = useFirstTick(watchedInstrument, watchedStartTime, watchedEndTime, {
-    enabled: watchedInitialPositionsEnabled === true,
+    enabled: watchedInitialPositionsEnabled === true && !watchedInMemoryMode,
   });
 
   // When tick data range is loaded for a new task (no initialData dates),
@@ -735,6 +765,7 @@ export default function BacktestTaskForm({
           'pip_size',
           'tick_granularity',
           'tick_window_value_mode',
+          'in_memory_mode',
           'initial_positions_enabled',
           'initial_position_cycles',
         ];
@@ -817,6 +848,7 @@ export default function BacktestTaskForm({
         excluded_dates: completeData.excluded_dates,
         initial_positions_enabled: completeData.initial_positions_enabled,
         initial_position_cycles: completeData.initial_position_cycles,
+        in_memory_mode: completeData.in_memory_mode,
       },
       isSuperuser ? { tracemalloc } : undefined
     );
@@ -1311,16 +1343,70 @@ export default function BacktestTaskForm({
 
               <Grid size={{ xs: 12 }}>
                 <Controller
+                  name="in_memory_mode"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t('backtest:form.inMemoryMode', {
+                              defaultValue: 'In-memory mode',
+                            })}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t('backtest:form.inMemoryModeDescription', {
+                              defaultValue:
+                                'Skip persisting orders, positions, trades, logs, and strategy events. Overview and metrics remain available.',
+                            })}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              {watchedInMemoryMode ? (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="info">
+                    {t('backtest:form.inMemoryModeNotice', {
+                      defaultValue:
+                        'In-memory backtests only keep overview and metrics data. Positions, trades, orders, logs, strategy history, pause/resume, drain stop, and initial positions are unavailable.',
+                    })}
+                  </Alert>
+                </Grid>
+              ) : null}
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
                   name="initial_position_cycles"
                   control={control}
                   render={({ field }) => (
                     <BacktestInitialPositionsEditor
-                      enabled={watchedInitialPositionsEnabled ?? false}
+                      enabled={
+                        !watchedInMemoryMode &&
+                        (watchedInitialPositionsEnabled ?? false)
+                      }
                       onEnabledChange={(enabled) =>
-                        setValue('initial_positions_enabled', enabled, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        })
+                        setValue(
+                          'initial_positions_enabled',
+                          watchedInMemoryMode ? false : enabled,
+                          {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          }
+                        )
                       }
                       value={field.value ?? []}
                       onChange={field.onChange}
@@ -1787,6 +1873,7 @@ export default function BacktestTaskForm({
           initial_position_cycles: formData.initial_position_cycles as
             | BacktestTaskSchemaOutput['initial_position_cycles']
             | undefined,
+          in_memory_mode: formData.in_memory_mode as boolean | undefined,
         };
 
         const fieldNameMapping: Record<string, string> = {
@@ -1808,6 +1895,9 @@ export default function BacktestTaskForm({
           instrument: t('common:labels.instrument'),
           tick_granularity: t('backtest:form.tickGranularity'),
           tick_window_value_mode: t('backtest:form.tickWindowValueMode'),
+          in_memory_mode: t('backtest:form.inMemoryMode', {
+            defaultValue: 'In-memory mode',
+          }),
           initial_positions_enabled: t(
             'backtest:form.initialPositionsEnabled',
             {

@@ -130,6 +130,7 @@ export interface BacktestTaskRequest {
   instrument?: string;
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
+  in_memory_mode?: boolean;
 }
 
 export interface PatchedBacktestTaskCreateRequest {
@@ -146,6 +147,7 @@ export interface PatchedBacktestTaskCreateRequest {
   instrument?: string;
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
+  in_memory_mode?: boolean;
 }
 
 // --- Strategy Config types ---

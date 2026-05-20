@@ -427,6 +427,8 @@ def compute_task_summary(
     )
     unrealized_pnl = open_agg["unrealized_pnl"] or Decimal("0")
     open_position_count = int(open_agg["open_position_count"] or 0)
+    open_long_units = int(open_agg["open_long_units"] or 0)
+    open_short_units = int(open_agg["open_short_units"] or 0)
 
     # Total trade count
     trade_filter: dict = {"task_type": task_type, "task_id": task_id}
@@ -542,12 +544,14 @@ def compute_task_summary(
         task=task_obj,
     )
 
-    if _uses_runtime_pnl_metrics(task_obj):
+    if _uses_runtime_summary_metrics(task_obj):
         # SnowballNet keeps one netted position and uses partial closes to
         # realize profit.  Those partial closes change current_balance and
         # runtime PnL counters, but they do not create separate closed
         # Position rows, so the DB closed-position aggregation above can
-        # understate realized PnL.
+        # understate realized PnL.  In-memory backtests do not persist
+        # execution rows at all, so their overview must come from runtime
+        # metrics as well.
         runtime_realized_quote = _metric_decimal(metrics_dict, "realized_pnl_quote")
         runtime_realized_account = _metric_decimal(metrics_dict, "realized_pnl")
         if runtime_realized_quote is not None and (
@@ -559,6 +563,15 @@ def compute_task_summary(
         runtime_unrealized_quote = _metric_decimal(metrics_dict, "unrealized_pnl_quote")
         if runtime_unrealized_quote is not None:
             unrealized_pnl = runtime_unrealized_quote
+
+        if _uses_in_memory_mode(task_obj):
+            total_trades = _metric_int(metrics_dict, "total_trades") or 0
+            open_position_count = _metric_int(metrics_dict, "open_positions") or 0
+            closed_position_count = _metric_int(metrics_dict, "closed_positions") or 0
+            winning_trades = _metric_int(metrics_dict, "winning_trades") or 0
+            losing_trades = _metric_int(metrics_dict, "losing_trades") or 0
+            open_long_units = _metric_int(metrics_dict, "open_long_units") or 0
+            open_short_units = _metric_int(metrics_dict, "open_short_units") or 0
 
     # Currency conversion for display
     fx_conversion = FX_CONVERSION.with_cache()
@@ -640,8 +653,8 @@ def compute_task_summary(
             total_trades=total_trades,
             open_positions=open_position_count,
             closed_positions=closed_position_count,
-            open_long_units=int(open_agg["open_long_units"] or 0),
-            open_short_units=int(open_agg["open_short_units"] or 0),
+            open_long_units=open_long_units,
+            open_short_units=open_short_units,
             winning_trades=winning_trades,
             losing_trades=losing_trades,
         ),
@@ -728,12 +741,30 @@ def _uses_runtime_pnl_metrics(task_obj) -> bool:
     return strategy_type == "snowball_net"
 
 
+def _uses_runtime_summary_metrics(task_obj) -> bool:
+    return _uses_runtime_pnl_metrics(task_obj) or _uses_in_memory_mode(task_obj)
+
+
+def _uses_in_memory_mode(task_obj) -> bool:
+    return getattr(task_obj, "in_memory_mode", False) is True
+
+
 def _metric_decimal(metrics: dict[str, object], key: str) -> Decimal | None:
     value = metrics.get(key)
     if value in (None, ""):
         return None
     try:
         return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _metric_int(metrics: dict[str, object], key: str) -> int | None:
+    value = metrics.get(key)
+    if value in (None, ""):
+        return None
+    try:
+        return int(Decimal(str(value)))
     except (InvalidOperation, TypeError, ValueError):
         return None
 

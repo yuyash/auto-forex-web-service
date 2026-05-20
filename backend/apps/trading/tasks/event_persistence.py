@@ -74,6 +74,44 @@ def persist_strategy_events(
     return trading_records
 
 
+def materialize_execution_events(
+    *,
+    events: list[StrategyEvent],
+    context: EventContext,
+    execution_id: Any,
+    strategy_type: str,
+) -> list["TradingEvent"]:
+    """Build transient execution events without writing event rows.
+
+    In-memory backtests still reuse the event-processing pipeline, but their
+    strategy and trading events must not be stored.  Only events that require
+    execution are materialized; purely informational/visualization events are
+    intentionally discarded.
+    """
+    if not events:
+        return []
+
+    trading_records: list[Any] = []
+    for seq, event in enumerate(events):
+        event.sequence_number = seq
+        event_type = str(getattr(getattr(event, "event_type", None), "value", event.event_type))
+        if not EventType.requires_execution(event_type):
+            continue
+        execution_event_type = EventType.execution_event_type_for(event_type)
+        record = _trading_record_for_execution_event(
+            event=event,
+            context=context,
+            execution_id=execution_id,
+            strategy_type=strategy_type,
+            event_type=event_type,
+            execution_event_type=execution_event_type,
+        )
+        record.pk = -(seq + 1)
+        setattr(record, "_in_memory", True)
+        trading_records.append(record)
+    return trading_records
+
+
 def _trading_record_for_execution_event(
     *,
     event: StrategyEvent,

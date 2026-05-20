@@ -76,7 +76,10 @@ class TaskLifecycleCommands:
         task_type = "backtest" if is_backtest_task else "trading"
 
         try:
-            if getattr(task, "initial_positions_enabled", False) is True:
+            if (
+                getattr(task, "initial_positions_enabled", False) is True
+                and getattr(task, "in_memory_mode", False) is not True
+            ):
                 from apps.trading.services.backtest_initial_positions import (
                     BacktestInitialPositionService,
                 )
@@ -149,6 +152,12 @@ class TaskLifecycleCommands:
         except ValueError as exc:
             raise ValueError(f"Invalid stop mode: {mode}") from exc
         task, task_type = self.service._get_task_and_type(task_id, user=user)
+        if (
+            task_type == "backtest"
+            and getattr(task, "in_memory_mode", False) is True
+            and stop_mode == StopMode.DRAIN
+        ):
+            raise ValueError("Drain stop is not supported for in-memory backtests.")
         is_backtest = task_type == "backtest"
         task_name = (
             "trading.tasks.run_backtest_task" if is_backtest else "trading.tasks.run_trading_task"
@@ -254,6 +263,8 @@ class TaskLifecycleCommands:
                 "Pause is not supported for trading tasks. "
                 "Use stop instead — stopped trading tasks can be resumed."
             )
+        if getattr(task, "in_memory_mode", False) is True:
+            raise ValueError("Pause is not supported for in-memory backtests.")
 
         self._assert_transition_allowed(
             command="pause",
@@ -393,6 +404,8 @@ class TaskLifecycleCommands:
         user: Any | None = None,
     ) -> BacktestTask | TradingTask:
         task, task_type = self.service._get_task_and_type(task_id, user=user)
+        if task_type == "backtest" and getattr(task, "in_memory_mode", False) is True:
+            raise ValueError("Resume is not supported for in-memory backtests.")
         model_class = self.service._get_task_model(task_type)
         is_trading = task_type == "trading"
 

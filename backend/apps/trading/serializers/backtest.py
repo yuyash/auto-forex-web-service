@@ -94,6 +94,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "excluded_dates",
             "initial_positions_enabled",
             "initial_position_cycles",
+            "in_memory_mode",
             "sell_on_stop",
             "status",
             "execution_id",
@@ -264,6 +265,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "excluded_dates",
             "initial_positions_enabled",
             "initial_position_cycles",
+            "in_memory_mode",
             "sell_on_stop",
             "debug_options",
         ]
@@ -311,6 +313,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "excluded_dates": {"required": False},
             "initial_positions_enabled": {"required": False},
             "initial_position_cycles": {"required": False},
+            "in_memory_mode": {"required": False},
             "sell_on_stop": {"required": False},
             "debug_options": {"required": False},
         }
@@ -479,6 +482,18 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "initial_position_cycles",
             getattr(self.instance, "initial_position_cycles", []),
         )
+        in_memory_mode = attrs.get(
+            "in_memory_mode",
+            getattr(self.instance, "in_memory_mode", False),
+        )
+        if in_memory_mode is True and initial_positions_enabled:
+            raise serializers.ValidationError(
+                {
+                    "initial_positions_enabled": (
+                        "Initial positions are not supported in in-memory mode."
+                    )
+                }
+            )
         if initial_positions_enabled:
             from apps.trading.services.backtest_initial_positions import (
                 InitialPositionValidationError,
@@ -622,11 +637,12 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             validated_data["pip_size"] = pip_size_for_instrument(instrument)
 
         task = BacktestTask.objects.create(**validated_data)
-        from apps.trading.services.backtest_initial_positions import (
-            BacktestInitialPositionService,
-        )
+        if not task.in_memory_mode:
+            from apps.trading.services.backtest_initial_positions import (
+                BacktestInitialPositionService,
+            )
 
-        BacktestInitialPositionService().sync_for_task(task)
+            BacktestInitialPositionService().sync_for_task(task)
         return task
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
@@ -675,8 +691,15 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "initial_balance",
             "account_currency",
             "hedging_enabled",
+            "in_memory_mode",
         }
-        if preview_seed_fields & set(validated_data):
+        if instance.in_memory_mode:
+            from apps.trading.services.backtest_initial_positions import (
+                BacktestInitialPositionService,
+            )
+
+            BacktestInitialPositionService().clear_preview(instance)
+        elif preview_seed_fields & set(validated_data):
             from apps.trading.services.backtest_initial_positions import (
                 BacktestInitialPositionService,
             )

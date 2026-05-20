@@ -55,6 +55,7 @@ function backtestTaskSettings(
   setIfPresent(settings, 'sell_at_completion', task.sell_at_completion);
   setIfPresent(settings, 'sell_on_stop', task.sell_on_stop);
   setIfPresent(settings, 'hedging_enabled', task.hedging_enabled);
+  setIfPresent(settings, 'in_memory_mode', task.in_memory_mode);
   setIfPresent(settings, 'drain_duration_hours', task.drain_duration_hours);
   setIfPresent(
     settings,
@@ -140,6 +141,10 @@ export default function BacktestTasksComparePage() {
         ['sell_at_completion', t('backtest:form.closePositionsAtCompletion')],
         ['sell_on_stop', t('labels.sellOnStop')],
         ['hedging_enabled', t('labels.hedgingEnabled')],
+        [
+          'in_memory_mode',
+          t('backtest:form.inMemoryMode', { defaultValue: 'In-memory mode' }),
+        ],
         [
           'drain_duration_hours',
           t('backtest:form.drainDurationHours', {
@@ -306,6 +311,7 @@ export default function BacktestTasksComparePage() {
             'sell_at_completion',
             'sell_on_stop',
             'hedging_enabled',
+            'in_memory_mode',
             'drain_duration_hours',
             'market_idle_pre_close_minutes',
             'market_idle_resume_delay_minutes',

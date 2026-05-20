@@ -52,6 +52,7 @@ describe('backtest task payload builders', () => {
       pip_size: 0.01,
       sell_on_stop: true,
       hedging_enabled: false,
+      in_memory_mode: false,
       market_close_enabled: true,
       max_tick_gap_hours: 120,
     });
@@ -114,6 +115,36 @@ describe('backtest task payload builders', () => {
     ).toMatchObject({
       initial_positions_enabled: true,
       initial_position_cycles,
+    });
+  });
+
+  it('clears initial positions when in-memory mode is enabled', () => {
+    const initial_position_cycles = [
+      {
+        direction: 'long' as const,
+        positions: [
+          {
+            layer_number: 1,
+            retracement_count: 0,
+            units: 1000,
+            entry_price: '150.1',
+            status: 'open' as const,
+          },
+        ],
+      },
+    ];
+
+    expect(
+      buildBacktestTaskCreatePayload({
+        ...baseFormData,
+        in_memory_mode: true,
+        initial_positions_enabled: true,
+        initial_position_cycles,
+      })
+    ).toMatchObject({
+      in_memory_mode: true,
+      initial_positions_enabled: false,
+      initial_position_cycles: [],
     });
   });
 

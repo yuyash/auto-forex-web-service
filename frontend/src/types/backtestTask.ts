@@ -74,6 +74,7 @@ export interface BacktestTask {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
   latest_execution?: ExecutionSummary;
   can_resume?: boolean;
   action_policy?: TaskActionPolicy;
@@ -117,6 +118,7 @@ export interface BacktestTaskCreateData {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
   debug_options?: Record<string, unknown>;
 }
 
@@ -151,6 +153,7 @@ export interface BacktestTaskFormData {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
 }
 
 export interface BacktestTaskUpdateData {
@@ -183,6 +186,7 @@ export interface BacktestTaskUpdateData {
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
+  in_memory_mode?: boolean;
   debug_options?: Record<string, unknown>;
 }
 

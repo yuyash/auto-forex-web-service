@@ -11,6 +11,7 @@ const EXECUTION_SETTING_FIELDS = new Set([
   'tick_granularity',
   'tick_window_value_mode',
   'hedging_enabled',
+  'in_memory_mode',
   'account_id',
   'live_tick_stale_guard_enabled',
   'live_tick_max_age_seconds',

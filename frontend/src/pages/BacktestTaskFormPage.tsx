@@ -100,6 +100,7 @@ export default function BacktestTaskFormPage() {
         initial_position_cycles: normalizeInitialPositionCycles(
           task.initial_position_cycles
         ),
+        in_memory_mode: task.in_memory_mode ?? false,
       }
     : null;
 

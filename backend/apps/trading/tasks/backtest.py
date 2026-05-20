@@ -154,8 +154,9 @@ def run_backtest_task(
             self.request.hostname,
         )
         task = BacktestTask.objects.get(pk=task_id)
-        logging_session = TaskLoggingSession(task)
-        logging_session.start()
+        if not task.in_memory_mode:
+            logging_session = TaskLoggingSession(task)
+            logging_session.start()
 
         if dispatch_idempotency_key and str(task.dispatch_idempotency_key) != str(
             dispatch_idempotency_key

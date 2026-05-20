@@ -7607,6 +7607,10 @@
                     "initial_position_cycles": {
                         "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
+                    "in_memory_mode": {
+                        "type": "boolean",
+                        "description": "Run the backtest with in-memory execution records. Orders, positions, trades, and strategy events are not persisted; only task state, metrics, and terminal snapshots are stored."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when the task is stopped"
@@ -7869,6 +7873,10 @@
                     "initial_position_cycles": {
                         "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
+                    "in_memory_mode": {
+                        "type": "boolean",
+                        "description": "Run the backtest with in-memory execution records. Orders, positions, trades, and strategy events are not persisted; only task state, metrics, and terminal snapshots are stored."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when the task is stopped"
@@ -8087,6 +8095,11 @@
                         "readOnly": true,
                         "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
                     },
+                    "in_memory_mode": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Run the backtest with in-memory execution records. Orders, positions, trades, and strategy events are not persisted; only task state, metrics, and terminal snapshots are stored."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "readOnly": true,
@@ -8179,6 +8192,7 @@
                     "hedging_enabled",
                     "holidays_enabled",
                     "id",
+                    "in_memory_mode",
                     "initial_balance",
                     "initial_balance_money",
                     "initial_position_cycles",
@@ -8355,6 +8369,10 @@
                     },
                     "initial_position_cycles": {
                         "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
+                    "in_memory_mode": {
+                        "type": "boolean",
+                        "description": "Run the backtest with in-memory execution records. Orders, positions, trades, and strategy events are not persisted; only task state, metrics, and terminal snapshots are stored."
                     },
                     "sell_on_stop": {
                         "type": "boolean",
@@ -10988,6 +11006,10 @@
                     },
                     "initial_position_cycles": {
                         "description": "Requested Snowball initial cycle/position structure. Positions, trades, orders, and strategy state are generated from this data."
+                    },
+                    "in_memory_mode": {
+                        "type": "boolean",
+                        "description": "Run the backtest with in-memory execution records. Orders, positions, trades, and strategy events are not persisted; only task state, metrics, and terminal snapshots are stored."
                     },
                     "sell_on_stop": {
                         "type": "boolean",
