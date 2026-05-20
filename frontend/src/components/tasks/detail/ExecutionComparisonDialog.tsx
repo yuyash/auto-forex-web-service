@@ -39,6 +39,7 @@ import React from 'react';
 import type { TaskExecution } from '../../../types/execution';
 import type { TaskType } from '../../../types/common';
 import type { MoneyAmountLike } from '../../../types/money';
+import type { ConfigProperty } from '../../../types/strategy';
 import {
   fetchPaginatedMetrics,
   type MetricPoint,
@@ -48,7 +49,10 @@ import {
   buildParameterLabelMap,
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
-import { isObsoleteStrategyParameterKey } from '../../../utils/strategySchemaDependsOn';
+import {
+  buildStrategyComparisonData,
+  resolveStrategyComparisonSnapshot,
+} from '../../../utils/strategyConfigComparison';
 import { computeAutoInterval } from '../../../utils/autoGranularity';
 import {
   formatAppNumber,
@@ -164,18 +168,40 @@ function formatTickLabel(
 /** Flatten a nested object into dot-separated key-value pairs. */
 function flattenObject(
   obj: Record<string, unknown>,
+  labels: { yes: string; no: string },
   prefix = ''
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj)) {
     const key = prefix ? `${prefix}.${k}` : k;
     if (v != null && typeof v === 'object' && !Array.isArray(v)) {
-      Object.assign(result, flattenObject(v as Record<string, unknown>, key));
+      Object.assign(
+        result,
+        flattenObject(v as Record<string, unknown>, labels, key)
+      );
     } else {
-      result[key] = v == null ? '-' : String(v);
+      result[key] = formatGenericComparisonValue(v, labels);
     }
   }
   return result;
+}
+
+function formatGenericComparisonValue(
+  value: unknown,
+  labels: { yes: string; no: string }
+): string {
+  if (value == null || value === '') return '-';
+  if (typeof value === 'boolean') return value ? labels.yes : labels.no;
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value);
+}
+
+function titleCaseConfigKey(key: string): string {
+  return key
+    .replace(/^parameters\./, '')
+    .replace(/\./g, ' ')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Result metric keys to display in the results comparison. */
@@ -348,13 +374,41 @@ export function ExecutionComparisonDialog({
     [interval, sorted, taskId, taskType]
   );
 
-  // Build localized parameter label map from strategy schema.
-  // Derive strategy_type from the first execution's strategy_config snapshot.
-  const strategyParamLabelMap = useMemo(() => {
-    const strategyType = sorted.find((e) => e.strategy_config?.strategy_type)
-      ?.strategy_config?.strategy_type;
-    if (!strategyType) return new Map<string, string>();
-    return buildParameterLabelMap(strategies, strategyType, i18n.language);
+  const strategyComparisonContext = useMemo(() => {
+    const labelMap = new Map<string, string>();
+    const schemaPropertiesByType = new Map<
+      string,
+      Record<string, ConfigProperty>
+    >();
+    const strategyTypes = new Set(
+      sorted
+        .map(
+          (exec) =>
+            resolveStrategyComparisonSnapshot(exec.strategy_config).strategyType
+        )
+        .filter(Boolean)
+    );
+
+    for (const strategyType of strategyTypes) {
+      const parameterLabels = buildParameterLabelMap(
+        strategies,
+        strategyType,
+        i18n.language
+      );
+      for (const [key, label] of parameterLabels) {
+        labelMap.set(key, label);
+      }
+
+      const strategy = strategies.find((item) => item.id === strategyType);
+      const schema = strategy?.config_schema as
+        | { properties?: Record<string, ConfigProperty> }
+        | undefined;
+      if (schema?.properties) {
+        schemaPropertiesByType.set(strategyType, schema.properties);
+      }
+    }
+
+    return { labelMap, schemaPropertiesByType };
   }, [sorted, strategies, i18n.language]);
 
   // Fetch metrics for all executions.
@@ -563,7 +617,10 @@ export function ExecutionComparisonDialog({
           <ConfigComparisonPanel
             executions={sorted}
             type="strategy"
-            paramLabelMap={strategyParamLabelMap}
+            paramLabelMap={strategyComparisonContext.labelMap}
+            schemaPropertiesByType={
+              strategyComparisonContext.schemaPropertiesByType
+            }
           />
         )}
         {tabIndex === 2 && <ResultsComparisonPanel executions={sorted} />}
@@ -591,34 +648,49 @@ function ConfigComparisonPanel({
   executions,
   type,
   paramLabelMap,
+  schemaPropertiesByType,
 }: {
   executions: TaskExecution[];
   type: 'task' | 'strategy';
   paramLabelMap?: Map<string, string>;
+  schemaPropertiesByType?: Map<string, Record<string, ConfigProperty>>;
 }) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
+  const booleanLabels = useMemo(
+    () => ({
+      yes: t('labels.yes'),
+      no: t('labels.no'),
+    }),
+    [t]
+  );
 
-  const configs = useMemo(() => {
-    return executions.map((exec) => {
+  const { configs, allKeys } = useMemo(() => {
+    if (type === 'strategy') {
+      const strategyData = buildStrategyComparisonData({
+        configs: executions.map((exec) => exec.strategy_config),
+        schemaPropertiesByType,
+        language: i18n.language,
+        labels: booleanLabels,
+      });
+      return { configs: strategyData.configs, allKeys: strategyData.keys };
+    }
+
+    const taskConfigs = executions.map((exec) => {
       const raw =
         type === 'task'
           ? (exec.task_config ?? {})
           : (exec.strategy_config ?? {});
-      return flattenObject(raw as Record<string, unknown>);
+      return flattenObject(raw as Record<string, unknown>, booleanLabels);
     });
-  }, [executions, type]);
 
-  // Collect all unique keys across all configs
-  const allKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const cfg of configs) {
+    for (const cfg of taskConfigs) {
       for (const k of Object.keys(cfg)) {
-        if (type === 'strategy' && isObsoleteStrategyParameterKey(k)) continue;
         keys.add(k);
       }
     }
-    return [...keys].sort();
-  }, [configs, type]);
+    return { configs: taskConfigs, allKeys: [...keys].sort() };
+  }, [booleanLabels, executions, i18n.language, schemaPropertiesByType, type]);
 
   // Determine which keys differ
   const diffKeys = useMemo(() => {
@@ -651,7 +723,11 @@ function ConfigComparisonPanel({
           {showAll ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
         <Typography variant="caption" color="text.secondary">
-          {showAll ? 'Show diff only' : 'Show all'}
+          {showAll
+            ? t('comparison.showDifferencesOnly', {
+                defaultValue: 'Show differences only',
+              })
+            : t('comparison.showAll', { defaultValue: 'Show all' })}
         </Typography>
       </Box>
 
@@ -684,7 +760,9 @@ function ConfigComparisonPanel({
         >
           <thead>
             <tr>
-              <th style={{ minWidth: 180 }}>Key</th>
+              <th style={{ minWidth: 180 }}>
+                {t('comparison.setting', { defaultValue: 'Setting' })}
+              </th>
               {executions.map((exec, i) => (
                 <th key={exec.id} style={{ minWidth: 160 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -714,17 +792,11 @@ function ConfigComparisonPanel({
                     <Typography
                       variant="body2"
                       fontWeight={isDiff ? 600 : 400}
-                      sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                      sx={{ fontSize: '0.75rem' }}
                     >
                       {type === 'strategy' && paramLabelMap
-                        ? resolveParameterLabel(
-                            paramLabelMap,
-                            key.replace(/^parameters\./, '')
-                          )
-                        : key
-                            .replace(/^parameters\./, '')
-                            .replace(/_/g, ' ')
-                            .replace(/\b\w/g, (c) => c.toUpperCase())}
+                        ? resolveParameterLabel(paramLabelMap, key)
+                        : titleCaseConfigKey(key)}
                     </Typography>
                   </td>
                   {configs.map((cfg, i) => (
