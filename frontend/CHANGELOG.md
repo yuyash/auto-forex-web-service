@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.3.0...frontend-v2.4.0) (2026-05-20)
+
+
+### Features
+
+* **backtest:** add in-memory execution mode ([#788](https://github.com/yuyash/auto-forex-web-service/issues/788)) ([0663d61](https://github.com/yuyash/auto-forex-web-service/commit/0663d6198ba5f4dc3eeee71d6356962a51557779))
+
+
+### Bug Fixes
+
+* execution comparison labels ([#786](https://github.com/yuyash/auto-forex-web-service/issues/786)) ([ac1b843](https://github.com/yuyash/auto-forex-web-service/commit/ac1b84349fa83b0b0a2aa7d13717d67be7698794))
+
 ## [2.3.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.2.0...frontend-v2.3.0) (2026-05-19)
 
 
