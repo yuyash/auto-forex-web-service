@@ -30,6 +30,12 @@ const baseFormData = {
   market_open_weekday: 6,
   market_open_hour_utc: 21,
   max_tick_gap_hours: 120,
+  spread_filter_enabled: true,
+  max_spread_pips: 12.5,
+  oanda_candle_filter_enabled: true,
+  oanda_candle_filter_account: 7,
+  oanda_candle_filter_granularity: 'M1',
+  oanda_candle_filter_tolerance_pips: 5,
 };
 
 function omitSellAtCompletion(data: typeof baseFormData) {
@@ -55,6 +61,12 @@ describe('backtest task payload builders', () => {
       in_memory_mode: false,
       market_close_enabled: true,
       max_tick_gap_hours: 120,
+      spread_filter_enabled: true,
+      max_spread_pips: 12.5,
+      oanda_candle_filter_enabled: true,
+      oanda_candle_filter_account: 7,
+      oanda_candle_filter_granularity: 'M1',
+      oanda_candle_filter_tolerance_pips: 5,
     });
   });
 
@@ -159,8 +171,23 @@ describe('backtest task payload builders', () => {
       display_currency: 'USD',
       commission_per_trade: '1.25',
       pip_size: '0.01',
+      max_spread_pips: '12.5',
+      oanda_candle_filter_tolerance_pips: '5',
       sell_on_stop: true,
       debug_options: { tracemalloc: true },
+    });
+  });
+
+  it('clears the candle account when OANDA candle validation is disabled', () => {
+    expect(
+      buildBacktestTaskCreatePayload({
+        ...baseFormData,
+        oanda_candle_filter_enabled: false,
+        oanda_candle_filter_account: 7,
+      })
+    ).toMatchObject({
+      oanda_candle_filter_enabled: false,
+      oanda_candle_filter_account: null,
     });
   });
 });

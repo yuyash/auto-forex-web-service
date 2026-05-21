@@ -12,6 +12,25 @@ const dataSourceValues = [
   DataSource.S3,
 ] as const;
 
+const oandaCandleGranularityValues = [
+  'S5',
+  'S10',
+  'S15',
+  'S30',
+  'M1',
+  'M5',
+  'M15',
+  'M30',
+  'H1',
+  'H4',
+  'D',
+] as const;
+
+const optionalAccountIdSchema = z.preprocess(
+  (value) => (value === '' || value === undefined ? null : value),
+  z.coerce.number().int().positive().nullable()
+);
+
 const requiredPositiveIntegerInputSchema = z
   .union([z.number(), z.string()])
   .refine(
@@ -322,6 +341,21 @@ export const backtestTaskSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    spread_filter_enabled: z.boolean().optional().default(false),
+    max_spread_pips: z.coerce
+      .number({ message: 'Max spread must be a number' })
+      .positive('Max spread must be greater than zero')
+      .optional(),
+    oanda_candle_filter_enabled: z.boolean().optional().default(false),
+    oanda_candle_filter_account: optionalAccountIdSchema.optional(),
+    oanda_candle_filter_granularity: z
+      .enum(oandaCandleGranularityValues)
+      .optional()
+      .default('M1'),
+    oanda_candle_filter_tolerance_pips: z.coerce
+      .number({ message: 'Candle tolerance must be a number' })
+      .positive('Candle tolerance must be greater than zero')
+      .optional(),
     holidays_enabled: z.boolean().optional().default(false),
     excluded_dates: z.array(excludedDateSchema).optional().default([]),
     in_memory_mode: z.boolean().optional().default(false),
@@ -332,6 +366,31 @@ export const backtestTaskSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
+    if (data.spread_filter_enabled && !data.max_spread_pips) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['max_spread_pips'],
+        message: 'Max spread is required when the spread filter is enabled',
+      });
+    }
+    if (data.oanda_candle_filter_enabled) {
+      if (!data.oanda_candle_filter_account) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['oanda_candle_filter_account'],
+          message:
+            'OANDA account is required when candle validation is enabled',
+        });
+      }
+      if (!data.oanda_candle_filter_tolerance_pips) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['oanda_candle_filter_tolerance_pips'],
+          message:
+            'Candle tolerance is required when candle validation is enabled',
+        });
+      }
+    }
     if (data.in_memory_mode || !data.initial_positions_enabled) {
       return;
     }
@@ -461,6 +520,12 @@ export type BacktestTaskSchemaOutput = {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  spread_filter_enabled?: boolean;
+  max_spread_pips?: number;
+  oanda_candle_filter_enabled?: boolean;
+  oanda_candle_filter_account?: number | null;
+  oanda_candle_filter_granularity?: string;
+  oanda_candle_filter_tolerance_pips?: number;
   holidays_enabled?: boolean;
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;

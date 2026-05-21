@@ -455,6 +455,8 @@ def trigger_backtest_publisher(
     execution_id = getattr(task, "execution_id", None)
     resolved_pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
     bar_range_warning = float(getattr(settings, "MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS", 0) or 0)
+    spread_filter_enabled = getattr(task, "spread_filter_enabled", False) is True
+    oanda_candle_filter_enabled = getattr(task, "oanda_candle_filter_enabled", False) is True
     result = publish_ticks_for_backtest.apply_async(
         kwargs={
             "instrument": task.instrument,
@@ -466,6 +468,24 @@ def trigger_backtest_publisher(
             "execution_id": str(execution_id) if execution_id else None,
             "pip_size": str(resolved_pip_size) if resolved_pip_size else None,
             "bar_range_warning_pips": (str(bar_range_warning) if bar_range_warning > 0 else None),
+            "spread_filter_enabled": spread_filter_enabled,
+            "max_spread_pips": str(task.max_spread_pips) if spread_filter_enabled else None,
+            "oanda_candle_filter_enabled": oanda_candle_filter_enabled,
+            "oanda_candle_filter_account_id": (
+                getattr(task, "oanda_candle_filter_account_id", None)
+                if oanda_candle_filter_enabled
+                else None
+            ),
+            "oanda_candle_filter_granularity": getattr(
+                task, "oanda_candle_filter_granularity", "M1"
+            )
+            if oanda_candle_filter_enabled
+            else "M1",
+            "oanda_candle_filter_tolerance_pips": (
+                str(task.oanda_candle_filter_tolerance_pips)
+                if oanda_candle_filter_enabled
+                else None
+            ),
         },
         queue="backtest_publisher",
     )

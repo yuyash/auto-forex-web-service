@@ -59,6 +59,14 @@ class TestBacktestTaskSerializer:
         assert data["instrument"] == task.instrument
         assert data["status"] == task.status
         assert data["max_tick_gap_hours"] == task.max_tick_gap_hours
+        assert data["spread_filter_enabled"] == task.spread_filter_enabled
+        assert Decimal(data["max_spread_pips"]) == task.max_spread_pips
+        assert data["oanda_candle_filter_enabled"] == task.oanda_candle_filter_enabled
+        assert data["oanda_candle_filter_granularity"] == task.oanda_candle_filter_granularity
+        assert (
+            Decimal(data["oanda_candle_filter_tolerance_pips"])
+            == task.oanda_candle_filter_tolerance_pips
+        )
         assert "initial_balance" in data
         assert (
             data["initial_balance_money"]
@@ -132,6 +140,8 @@ class TestBacktestTaskCreateSerializer:
         assert task.account_currency == "USD"
         assert task.display_currency == "USD"
         assert task.max_tick_gap_hours == 120
+        assert task.spread_filter_enabled is False
+        assert task.oanda_candle_filter_enabled is False
 
     def test_create_persists_max_tick_gap_hours(self):
         user = UserFactory()
@@ -174,6 +184,59 @@ class TestBacktestTaskCreateSerializer:
         task = serializer.save()
 
         assert task.max_tick_gap_hours == 168
+
+    def test_create_persists_tick_quality_filters(self):
+        user = UserFactory()
+        config = StrategyConfigurationFactory(user=user)
+        account = OandaAccountFactory(user=user)
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=30)
+        end = now - timedelta(days=1)
+
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=start - timedelta(hours=1),
+            bid=Decimal("150.000"),
+            ask=Decimal("150.005"),
+            mid=Decimal("150.0025"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=end + timedelta(hours=1),
+            bid=Decimal("151.000"),
+            ask=Decimal("151.005"),
+            mid=Decimal("151.0025"),
+        )
+
+        request = _fake_request(user)
+        serializer = BacktestTaskCreateSerializer(
+            data={
+                "config": str(config.pk),
+                "name": "Quality Filter Backtest",
+                "data_source": "postgresql",
+                "start_time": start.isoformat(),
+                "end_time": end.isoformat(),
+                "initial_balance": "50000.00",
+                "instrument": "USD_JPY",
+                "spread_filter_enabled": True,
+                "max_spread_pips": "12.5",
+                "oanda_candle_filter_enabled": True,
+                "oanda_candle_filter_account": account.pk,
+                "oanda_candle_filter_granularity": "M1",
+                "oanda_candle_filter_tolerance_pips": "5",
+            },
+            context={"request": request},
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        task = serializer.save()
+
+        assert task.spread_filter_enabled is True
+        assert task.max_spread_pips == Decimal("12.5")
+        assert task.oanda_candle_filter_enabled is True
+        assert task.oanda_candle_filter_account == account
+        assert task.oanda_candle_filter_granularity == "M1"
+        assert task.oanda_candle_filter_tolerance_pips == Decimal("5")
 
     def test_validation_error_wrong_user_config(self):
         user1 = UserFactory()

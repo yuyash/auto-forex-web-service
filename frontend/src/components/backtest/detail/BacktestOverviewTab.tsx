@@ -36,6 +36,12 @@ const BACKTEST_PERIOD_SETTING_KEYS = new Set([
   'tick_granularity',
   'tick_window_value_mode',
   'max_tick_gap_hours',
+  'spread_filter_enabled',
+  'max_spread_pips',
+  'oanda_candle_filter_enabled',
+  'oanda_candle_filter_account_name',
+  'oanda_candle_filter_granularity',
+  'oanda_candle_filter_tolerance_pips',
 ]);
 
 interface BacktestOverviewTabProps {

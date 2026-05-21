@@ -351,6 +351,20 @@ def _snapshot_task_config(task: Any) -> dict[str, Any]:
                 "data_source": getattr(task, "data_source", None),
                 "tick_granularity": getattr(task, "tick_granularity", None),
                 "tick_window_value_mode": getattr(task, "tick_window_value_mode", None),
+                "spread_filter_enabled": getattr(task, "spread_filter_enabled", None),
+                "max_spread_pips": str(getattr(task, "max_spread_pips", "") or ""),
+                "oanda_candle_filter_enabled": getattr(task, "oanda_candle_filter_enabled", None),
+                "oanda_candle_filter_account_name": getattr(
+                    getattr(task, "oanda_candle_filter_account", None),
+                    "account_id",
+                    None,
+                ),
+                "oanda_candle_filter_granularity": getattr(
+                    task, "oanda_candle_filter_granularity", None
+                ),
+                "oanda_candle_filter_tolerance_pips": str(
+                    getattr(task, "oanda_candle_filter_tolerance_pips", "") or ""
+                ),
             }
         )
     else:

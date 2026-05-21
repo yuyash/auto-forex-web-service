@@ -94,6 +94,19 @@ export default function BacktestTaskFormPage() {
         market_open_weekday: task.market_open_weekday,
         market_open_hour_utc: task.market_open_hour_utc,
         max_tick_gap_hours: task.max_tick_gap_hours,
+        spread_filter_enabled: task.spread_filter_enabled ?? false,
+        max_spread_pips: task.max_spread_pips
+          ? parseFloat(task.max_spread_pips)
+          : undefined,
+        oanda_candle_filter_enabled: task.oanda_candle_filter_enabled ?? false,
+        oanda_candle_filter_account: task.oanda_candle_filter_account ?? null,
+        oanda_candle_filter_granularity:
+          (task.oanda_candle_filter_granularity ??
+            'M1') as BacktestTaskUpdateInitialData['oanda_candle_filter_granularity'],
+        oanda_candle_filter_tolerance_pips:
+          task.oanda_candle_filter_tolerance_pips
+            ? parseFloat(task.oanda_candle_filter_tolerance_pips)
+            : undefined,
         holidays_enabled: task.holidays_enabled ?? false,
         excluded_dates: task.excluded_dates ?? [],
         initial_positions_enabled: task.initial_positions_enabled ?? false,

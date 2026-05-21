@@ -24,6 +24,12 @@ class TestBacktestTaskSerializer:
         assert "tick_granularity" in fields
         assert "tick_window_value_mode" in fields
         assert "max_tick_gap_hours" in fields
+        assert "spread_filter_enabled" in fields
+        assert "max_spread_pips" in fields
+        assert "oanda_candle_filter_enabled" in fields
+        assert "oanda_candle_filter_account" in fields
+        assert "oanda_candle_filter_granularity" in fields
+        assert "oanda_candle_filter_tolerance_pips" in fields
         assert "start_time" in fields
         assert "end_time" in fields
         assert "initial_balance" in fields
@@ -48,6 +54,12 @@ class TestBacktestTaskListSerializer:
         assert "tick_granularity" in fields
         assert "tick_window_value_mode" in fields
         assert "max_tick_gap_hours" in fields
+        assert "spread_filter_enabled" in fields
+        assert "max_spread_pips" in fields
+        assert "oanda_candle_filter_enabled" in fields
+        assert "oanda_candle_filter_account" in fields
+        assert "oanda_candle_filter_granularity" in fields
+        assert "oanda_candle_filter_tolerance_pips" in fields
         assert "progress" not in fields
         assert "account_currency" in fields
         assert "display_currency" in fields
@@ -69,6 +81,12 @@ class TestBacktestTaskCreateSerializer:
         assert "tick_granularity" in fields
         assert "tick_window_value_mode" in fields
         assert "max_tick_gap_hours" in fields
+        assert "spread_filter_enabled" in fields
+        assert "max_spread_pips" in fields
+        assert "oanda_candle_filter_enabled" in fields
+        assert "oanda_candle_filter_account" in fields
+        assert "oanda_candle_filter_granularity" in fields
+        assert "oanda_candle_filter_tolerance_pips" in fields
         assert "start_time" in fields
         assert "end_time" in fields
 

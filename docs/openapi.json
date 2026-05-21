@@ -7593,6 +7593,43 @@
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "spread_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
+                    },
+                    "max_spread_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. Ticks above this threshold are skipped and logged."
+                    },
+                    "oanda_candle_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Compare replayed backtest ticks with OANDA candles and skip outliers."
+                    },
+                    "oanda_candle_filter_account": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "OANDA account used to fetch candle data for backtest tick validation."
+                    },
+                    "oanda_candle_filter_account_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "oanda_candle_filter_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OandaCandleFilterGranularityEnum"
+                            }
+                        ],
+                        "description": "OANDA candle granularity used for backtest tick validation.\n\n* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+                    },
+                    "oanda_candle_filter_tolerance_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Allowed distance beyond the OANDA candle high/low in pips before a replayed tick is treated as an outlier and skipped."
+                    },
                     "holidays_enabled": {
                         "type": "boolean",
                         "description": "Treat days where two or more major FX centres (US, UK, Germany) are observing a public holiday as market-closed during the backtest. Useful for suppressing trading on Christmas, Good Friday, New Year's Day, etc."
@@ -7706,6 +7743,7 @@
                     "instrument_context",
                     "money_context",
                     "name",
+                    "oanda_candle_filter_account_name",
                     "start_time",
                     "started_at",
                     "status",
@@ -7858,6 +7896,38 @@
                         "maximum": 2147483647,
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "spread_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
+                    },
+                    "max_spread_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. Ticks above this threshold are skipped and logged."
+                    },
+                    "oanda_candle_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Compare replayed backtest ticks with OANDA candles and skip outliers."
+                    },
+                    "oanda_candle_filter_account": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "oanda_candle_filter_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OandaCandleFilterGranularityEnum"
+                            }
+                        ],
+                        "description": "OANDA candle granularity used for backtest tick validation.\n\n* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+                    },
+                    "oanda_candle_filter_tolerance_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Allowed distance beyond the OANDA candle high/low in pips before a replayed tick is treated as an outlier and skipped."
                     },
                     "holidays_enabled": {
                         "type": "boolean",
@@ -8077,6 +8147,49 @@
                         "readOnly": true,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "spread_filter_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
+                    },
+                    "max_spread_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "readOnly": true,
+                        "description": "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. Ticks above this threshold are skipped and logged."
+                    },
+                    "oanda_candle_filter_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Compare replayed backtest ticks with OANDA candles and skip outliers."
+                    },
+                    "oanda_candle_filter_account": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "OANDA account used to fetch candle data for backtest tick validation."
+                    },
+                    "oanda_candle_filter_account_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "oanda_candle_filter_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OandaCandleFilterGranularityEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "OANDA candle granularity used for backtest tick validation.\n\n* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+                    },
+                    "oanda_candle_filter_tolerance_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "readOnly": true,
+                        "description": "Allowed distance beyond the OANDA candle high/low in pips before a replayed tick is treated as an outlier and skipped."
+                    },
                     "holidays_enabled": {
                         "type": "boolean",
                         "readOnly": true,
@@ -8206,11 +8319,18 @@
                     "market_idle_resume_delay_minutes",
                     "market_open_hour_utc",
                     "market_open_weekday",
+                    "max_spread_pips",
                     "max_tick_gap_hours",
                     "money_context",
                     "name",
+                    "oanda_candle_filter_account",
+                    "oanda_candle_filter_account_name",
+                    "oanda_candle_filter_enabled",
+                    "oanda_candle_filter_granularity",
+                    "oanda_candle_filter_tolerance_pips",
                     "pip_size",
                     "sell_on_stop",
+                    "spread_filter_enabled",
                     "start_time",
                     "started_at",
                     "status",
@@ -8355,6 +8475,39 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "spread_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
+                    },
+                    "max_spread_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. Ticks above this threshold are skipped and logged."
+                    },
+                    "oanda_candle_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Compare replayed backtest ticks with OANDA candles and skip outliers."
+                    },
+                    "oanda_candle_filter_account": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "OANDA account used to fetch candle data for backtest tick validation."
+                    },
+                    "oanda_candle_filter_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OandaCandleFilterGranularityEnum"
+                            }
+                        ],
+                        "description": "OANDA candle granularity used for backtest tick validation.\n\n* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+                    },
+                    "oanda_candle_filter_tolerance_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Allowed distance beyond the OANDA candle high/low in pips before a replayed tick is treated as an outlier and skipped."
                     },
                     "holidays_enabled": {
                         "type": "boolean",
@@ -10352,6 +10505,23 @@
                     "oanda_account_id"
                 ]
             },
+            "OandaCandleFilterGranularityEnum": {
+                "enum": [
+                    "S5",
+                    "S10",
+                    "S15",
+                    "S30",
+                    "M1",
+                    "M5",
+                    "M15",
+                    "M30",
+                    "H1",
+                    "H4",
+                    "D"
+                ],
+                "type": "string",
+                "description": "* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+            },
             "OandaHealthAccount": {
                 "type": "object",
                 "description": "Schema serializer for selected OANDA account metadata.",
@@ -10992,6 +11162,38 @@
                         "maximum": 2147483647,
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "spread_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
+                    },
+                    "max_spread_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. Ticks above this threshold are skipped and logged."
+                    },
+                    "oanda_candle_filter_enabled": {
+                        "type": "boolean",
+                        "description": "Compare replayed backtest ticks with OANDA candles and skip outliers."
+                    },
+                    "oanda_candle_filter_account": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "oanda_candle_filter_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OandaCandleFilterGranularityEnum"
+                            }
+                        ],
+                        "description": "OANDA candle granularity used for backtest tick validation.\n\n* `S5` - 5 Seconds\n* `S10` - 10 Seconds\n* `S15` - 15 Seconds\n* `S30` - 30 Seconds\n* `M1` - 1 Minute\n* `M5` - 5 Minutes\n* `M15` - 15 Minutes\n* `M30` - 30 Minutes\n* `H1` - 1 Hour\n* `H4` - 4 Hours\n* `D` - 1 Day"
+                    },
+                    "oanda_candle_filter_tolerance_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,7}(?:\\.\\d{0,3})?$",
+                        "description": "Allowed distance beyond the OANDA candle high/low in pips before a replayed tick is treated as an outlier and skipped."
                     },
                     "holidays_enabled": {
                         "type": "boolean",

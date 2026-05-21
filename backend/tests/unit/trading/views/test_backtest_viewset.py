@@ -127,7 +127,7 @@ class TestGetQueryset:
 
         vs.get_queryset()
         MockModel.objects.filter.assert_called_once_with(user=1)
-        qs.select_related.assert_called_once_with("config", "user")
+        qs.select_related.assert_called_once_with("config", "user", "oanda_candle_filter_account")
 
     @patch("apps.trading.views.backtest.BacktestTask")
     def test_filters_by_status_param(self, MockModel):
@@ -142,7 +142,7 @@ class TestGetQueryset:
         qs.order_by.return_value = qs
 
         vs.get_queryset()
-        qs.select_related.assert_called_once_with("config", "user")
+        qs.select_related.assert_called_once_with("config", "user", "oanda_candle_filter_account")
         qs.filter.assert_any_call(status="running")
 
 

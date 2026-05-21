@@ -282,6 +282,12 @@ class TestTriggerBacktestPublisher:
         task.tick_granularity = "tick"
         task.tick_window_value_mode = "last"
         task.pip_size = "0.0001"
+        task.spread_filter_enabled = True
+        task.max_spread_pips = "12.5"
+        task.oanda_candle_filter_enabled = True
+        task.oanda_candle_filter_account_id = 42
+        task.oanda_candle_filter_granularity = "M1"
+        task.oanda_candle_filter_tolerance_pips = "5"
         mock_app.control.inspect.return_value.active_queues.return_value = {
             "worker1": [{"name": "backtest"}],
         }
@@ -290,6 +296,12 @@ class TestTriggerBacktestPublisher:
 
         kwargs = mock_publish.apply_async.call_args.kwargs["kwargs"]
         assert kwargs["start"] == "2024-01-01T12:00:00.000001+00:00"
+        assert kwargs["spread_filter_enabled"] is True
+        assert kwargs["max_spread_pips"] == "12.5"
+        assert kwargs["oanda_candle_filter_enabled"] is True
+        assert kwargs["oanda_candle_filter_account_id"] == 42
+        assert kwargs["oanda_candle_filter_granularity"] == "M1"
+        assert kwargs["oanda_candle_filter_tolerance_pips"] == "5"
 
     @patch("apps.trading.tasks.backtest.ExecutionState")
     @patch("apps.market.tasks.publish_ticks_for_backtest")

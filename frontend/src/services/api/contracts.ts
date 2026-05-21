@@ -125,6 +125,13 @@ export interface BackendBacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  spread_filter_enabled?: boolean;
+  max_spread_pips?: string;
+  oanda_candle_filter_enabled?: boolean;
+  oanda_candle_filter_account?: number | null;
+  oanda_candle_filter_account_name?: string | null;
+  oanda_candle_filter_granularity?: string;
+  oanda_candle_filter_tolerance_pips?: string;
   holidays_enabled?: boolean;
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;

@@ -128,6 +128,12 @@ export interface BacktestTaskRequest {
   display_currency?: string;
   commission_per_trade?: string;
   instrument?: string;
+  spread_filter_enabled?: boolean;
+  max_spread_pips?: string;
+  oanda_candle_filter_enabled?: boolean;
+  oanda_candle_filter_account?: number | null;
+  oanda_candle_filter_granularity?: string;
+  oanda_candle_filter_tolerance_pips?: string;
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
   in_memory_mode?: boolean;
@@ -145,6 +151,12 @@ export interface PatchedBacktestTaskCreateRequest {
   display_currency?: string;
   commission_per_trade?: string;
   instrument?: string;
+  spread_filter_enabled?: boolean;
+  max_spread_pips?: string;
+  oanda_candle_filter_enabled?: boolean;
+  oanda_candle_filter_account?: number | null;
+  oanda_candle_filter_granularity?: string;
+  oanda_candle_filter_tolerance_pips?: string;
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
   in_memory_mode?: boolean;

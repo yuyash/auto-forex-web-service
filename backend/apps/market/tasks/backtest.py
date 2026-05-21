@@ -13,6 +13,7 @@ from django.conf import settings
 
 from apps.market.models import CeleryTaskStatus, TickData
 from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
+from apps.market.services.backtest_tick_quality import BacktestTickQualityFilter
 from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.base import (
     backtest_stream_key_for_request,
@@ -38,6 +39,12 @@ def publish_ticks_for_backtest(
     execution_id: str | None = None,
     pip_size: str | None = None,
     bar_range_warning_pips: str | None = None,
+    spread_filter_enabled: bool = False,
+    max_spread_pips: str | None = None,
+    oanda_candle_filter_enabled: bool = False,
+    oanda_candle_filter_account_id: int | str | None = None,
+    oanda_candle_filter_granularity: str = "M1",
+    oanda_candle_filter_tolerance_pips: str | None = None,
 ) -> None:
     """Publish historical ticks from DB to Redis for a backtest run.
 
@@ -80,6 +87,12 @@ def publish_ticks_for_backtest(
         execution_id=execution_id,
         pip_size=pip_size,
         bar_range_warning_pips=bar_range_warning_pips,
+        spread_filter_enabled=spread_filter_enabled,
+        max_spread_pips=max_spread_pips,
+        oanda_candle_filter_enabled=oanda_candle_filter_enabled,
+        oanda_candle_filter_account_id=oanda_candle_filter_account_id,
+        oanda_candle_filter_granularity=oanda_candle_filter_granularity,
+        oanda_candle_filter_tolerance_pips=oanda_candle_filter_tolerance_pips,
     )
     logger.info(
         f"[CELERY:PUBLISHER] Task completed - request_id={request_id}, "
@@ -108,6 +121,12 @@ class BacktestTickPublisherRunner:
         execution_id: str | None = None,
         pip_size: str | None = None,
         bar_range_warning_pips: str | None = None,
+        spread_filter_enabled: bool = False,
+        max_spread_pips: str | None = None,
+        oanda_candle_filter_enabled: bool = False,
+        oanda_candle_filter_account_id: int | str | None = None,
+        oanda_candle_filter_granularity: str = "M1",
+        oanda_candle_filter_tolerance_pips: str | None = None,
     ) -> None:
         """Execute the backtest tick publishing task.
 
@@ -224,7 +243,7 @@ class BacktestTickPublisherRunner:
 
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
-            published, last_tick_ts, stopped_early = self._publish_ticks(
+            published, source_count, last_tick_ts, stopped_early = self._publish_ticks(
                 client,
                 channel,
                 instrument,
@@ -242,25 +261,31 @@ class BacktestTickPublisherRunner:
                 consumer_group=consumer_group,
                 pip_size=pip_size,
                 bar_range_warning_pips=bar_range_warning_pips,
+                spread_filter_enabled=spread_filter_enabled,
+                max_spread_pips=max_spread_pips,
+                oanda_candle_filter_enabled=oanda_candle_filter_enabled,
+                oanda_candle_filter_account_id=oanda_candle_filter_account_id,
+                oanda_candle_filter_granularity=oanda_candle_filter_granularity,
+                oanda_candle_filter_tolerance_pips=oanda_candle_filter_tolerance_pips,
             )
 
             if stopped_early:
                 logger.info(
                     f"[PUBLISHER:RUN] Publishing stopped before completion - request_id={request_id}, "
-                    f"published={published}, last_tick_ts={last_tick_ts}"
+                    f"published={published}, source_count={source_count}, last_tick_ts={last_tick_ts}"
                 )
                 return
 
             # Check for insufficient data coverage
             data_gap = self._check_data_coverage(
-                instrument, start_dt, end_dt, published, last_tick_ts, request_id
+                instrument, start_dt, end_dt, source_count, last_tick_ts, request_id
             )
 
             if data_gap:
                 # Data does not cover the requested range — mark as failed
                 logger.error(
                     f"[PUBLISHER:RUN] INSUFFICIENT_DATA - request_id={request_id}, "
-                    f"published={published}, last_tick_ts={last_tick_ts}, "
+                    f"published={published}, source_count={source_count}, last_tick_ts={last_tick_ts}, "
                     f"end_dt={end_dt}, gap={data_gap}"
                 )
                 self._send_error(
@@ -341,7 +366,13 @@ class BacktestTickPublisherRunner:
         consumer_group: str = "backtest",
         pip_size: str | None = None,
         bar_range_warning_pips: str | None = None,
-    ) -> tuple[int, datetime | None, bool]:
+        spread_filter_enabled: bool = False,
+        max_spread_pips: str | None = None,
+        oanda_candle_filter_enabled: bool = False,
+        oanda_candle_filter_account_id: int | str | None = None,
+        oanda_candle_filter_granularity: str = "M1",
+        oanda_candle_filter_tolerance_pips: str | None = None,
+    ) -> tuple[int, int, datetime | None, bool]:
         """Publish ticks to the per-request Redis Stream.
 
         Uses ``XADD`` with ``MAXLEN`` trimming for a bounded stream and
@@ -357,7 +388,7 @@ class BacktestTickPublisherRunner:
         ``XPENDING`` reflects real consumer lag.
 
         Returns:
-            Tuple of (published_count, last_tick_timestamp, stopped_early).
+            Tuple of (published_count, source_count, last_source_timestamp, stopped_early).
         """
         assert self.task_service is not None
 
@@ -369,7 +400,9 @@ class BacktestTickPublisherRunner:
         )
 
         published = 0
+        source_count = 0
         last_ts: datetime | None = None
+        last_published_ts: datetime | None = None
         backpressure_waiting = False
 
         # Window-level tracking so we can emit an INFO log for every
@@ -385,6 +418,20 @@ class BacktestTickPublisherRunner:
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Query created, starting iteration - request_id={request_id}"
+        )
+
+        tick_filter = BacktestTickQualityFilter(
+            request_id=request_id,
+            instrument=instrument,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            pip_size=pip_size,
+            spread_filter_enabled=spread_filter_enabled,
+            max_spread_pips=max_spread_pips,
+            candle_filter_enabled=oanda_candle_filter_enabled,
+            candle_filter_account_id=oanda_candle_filter_account_id,
+            candle_filter_granularity=oanda_candle_filter_granularity,
+            candle_filter_tolerance_pips=oanda_candle_filter_tolerance_pips,
         )
 
         if tick_granularity == "tick":
@@ -421,10 +468,16 @@ class BacktestTickPublisherRunner:
                     status=CeleryTaskStatus.Status.STOPPED,
                     status_message=f"published={published}",
                 )
-                return published, last_ts, True
+                tick_filter.log_summary(published=published, source_count=source_count)
+                return published, source_count, last_ts, True
 
             ts = row["timestamp"]
             if not isinstance(ts, datetime):
+                continue
+            source_count += 1
+            last_ts = ts
+
+            if not tick_filter.should_publish(row):
                 continue
 
             # Backpressure: pause when the consumer is falling behind.
@@ -460,7 +513,8 @@ class BacktestTickPublisherRunner:
                         status=CeleryTaskStatus.Status.STOPPED,
                         status_message=f"published={published}",
                     )
-                    return published, last_ts, True
+                    tick_filter.log_summary(published=published, source_count=source_count)
+                    return published, source_count, last_ts, True
 
             try:
                 client.xadd(
@@ -485,7 +539,7 @@ class BacktestTickPublisherRunner:
                 raise
 
             published += 1
-            last_ts = ts
+            last_published_ts = ts
             if window_first_ts is None:
                 window_first_ts = ts
             window_count += 1
@@ -506,19 +560,21 @@ class BacktestTickPublisherRunner:
 
         # Flush the tail window that did not reach ``progress_every``
         # so the final simulated-time coverage is always logged.
-        if window_count > 0 and window_first_ts is not None and last_ts is not None:
+        if window_count > 0 and window_first_ts is not None and last_published_ts is not None:
             logger.info(
                 f"[PUBLISHER:BATCH] Published batch (tail) - request_id={request_id}, "
                 f"published={published}, window_count={window_count}, "
                 f"window_first_ts={window_first_ts.isoformat()}, "
-                f"window_last_ts={last_ts.isoformat()}"
+                f"window_last_ts={last_published_ts.isoformat()}"
             )
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Iteration complete - request_id={request_id}, "
-            f"total_published={published}, last_ts={last_ts}"
+            f"source_count={source_count}, total_published={published}, "
+            f"last_source_ts={last_ts}, last_published_ts={last_published_ts}"
         )
-        return published, last_ts, False
+        tick_filter.log_summary(published=published, source_count=source_count)
+        return published, source_count, last_ts, False
 
     @staticmethod
     def _backpressure_check_interval(
@@ -822,7 +878,7 @@ class BacktestTickPublisherRunner:
         instrument: str,
         start_dt: datetime,
         end_dt: datetime,
-        published: int,
+        source_count: int,
         last_tick_ts: datetime | None,
         request_id: str,
     ) -> str | None:
@@ -831,14 +887,14 @@ class BacktestTickPublisherRunner:
         Returns a human-readable gap description if coverage is insufficient,
         or ``None`` when the data looks fine.
         """
-        if published == 0:
+        if source_count == 0:
             return (
                 f"No tick data found for {instrument} "
                 f"between {start_dt.isoformat()} and {end_dt.isoformat()}"
             )
 
         if last_tick_ts is None:
-            return None  # shouldn't happen when published > 0
+            return None  # shouldn't happen when source_count > 0
 
         # Allow a tolerance of 2 hours for the gap between the last tick and
         # end_dt.  Forex market close (Fri 21:00 → Sun 21:00 UTC) creates a

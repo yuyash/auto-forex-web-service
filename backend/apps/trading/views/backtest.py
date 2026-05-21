@@ -133,7 +133,7 @@ class BacktestTaskViewSet(TaskViewSetBase):
     task_model_name = "BacktestTask"
     lookup_field = "pk"
     task_type_label = "backtest"
-    select_related_fields = ("config", "user")
+    select_related_fields = ("config", "user", "oanda_candle_filter_account")
     filter_field_map = {
         "status": "status",
         "config_id": "config_id",

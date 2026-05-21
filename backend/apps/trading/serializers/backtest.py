@@ -6,6 +6,7 @@ from decimal import Decimal
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus
 from apps.trading.money import Money
 from apps.trading.models import BacktestTask, StrategyConfiguration
@@ -52,6 +53,10 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     commission_per_trade_money = serializers.SerializerMethodField()
     instrument_context = serializers.SerializerMethodField()
     money_context = serializers.SerializerMethodField()
+    oanda_candle_filter_account_name = serializers.CharField(
+        source="oanda_candle_filter_account.account_id",
+        read_only=True,
+    )
 
     class Meta:
         model = BacktestTask
@@ -90,6 +95,13 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "spread_filter_enabled",
+            "max_spread_pips",
+            "oanda_candle_filter_enabled",
+            "oanda_candle_filter_account",
+            "oanda_candle_filter_account_name",
+            "oanda_candle_filter_granularity",
+            "oanda_candle_filter_tolerance_pips",
             "holidays_enabled",
             "excluded_dates",
             "initial_positions_enabled",
@@ -128,6 +140,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "commission_per_trade_money",
             "instrument_context",
             "money_context",
+            "oanda_candle_filter_account_name",
             "can_resume",
             "action_policy",
         ]
@@ -234,6 +247,12 @@ class BacktestBalanceAdjustmentResponseSerializer(serializers.Serializer):
 class BacktestTaskCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating BacktestTask."""
 
+    oanda_candle_filter_account = serializers.PrimaryKeyRelatedField(
+        queryset=OandaAccounts.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = BacktestTask
         fields = [
@@ -261,6 +280,12 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "market_open_weekday",
             "market_open_hour_utc",
             "max_tick_gap_hours",
+            "spread_filter_enabled",
+            "max_spread_pips",
+            "oanda_candle_filter_enabled",
+            "oanda_candle_filter_account",
+            "oanda_candle_filter_granularity",
+            "oanda_candle_filter_tolerance_pips",
             "holidays_enabled",
             "excluded_dates",
             "initial_positions_enabled",
@@ -309,6 +334,14 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 "max_value": 23,
             },
             "max_tick_gap_hours": {"required": False, "min_value": 1},
+            "spread_filter_enabled": {"required": False},
+            "max_spread_pips": {"required": False, "min_value": Decimal("0")},
+            "oanda_candle_filter_enabled": {"required": False},
+            "oanda_candle_filter_granularity": {"required": False},
+            "oanda_candle_filter_tolerance_pips": {
+                "required": False,
+                "min_value": Decimal("0"),
+            },
             "holidays_enabled": {"required": False},
             "excluded_dates": {"required": False},
             "initial_positions_enabled": {"required": False},
@@ -351,6 +384,19 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         """Validate pip size is positive if provided."""
         if value is not None and value <= 0:
             raise serializers.ValidationError("Pip size must be positive")
+        return value
+
+    def validate_oanda_candle_filter_account(
+        self, value: OandaAccounts | None
+    ) -> OandaAccounts | None:
+        """Validate that the candle-validation account belongs to the user."""
+        if value is None:
+            return None
+        user = self.context["request"].user
+        if value.user != user:
+            raise serializers.ValidationError("Account does not belong to the current user")
+        if not value.is_active:
+            raise serializers.ValidationError("Account is not active")
         return value
 
     def validate_excluded_dates(self, value: list | None) -> list[str]:
@@ -463,6 +509,67 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 {
                     "tick_window_value_mode": (
                         f"Unsupported tick window value mode: {tick_window_value_mode}"
+                    )
+                }
+            )
+
+        spread_filter_enabled = attrs.get(
+            "spread_filter_enabled",
+            getattr(self.instance, "spread_filter_enabled", False),
+        )
+        max_spread_pips = attrs.get(
+            "max_spread_pips",
+            getattr(self.instance, "max_spread_pips", Decimal("0")),
+        )
+        if spread_filter_enabled and max_spread_pips <= 0:
+            raise serializers.ValidationError(
+                {"max_spread_pips": "Max spread pips must be greater than zero when enabled."}
+            )
+
+        candle_filter_enabled = attrs.get(
+            "oanda_candle_filter_enabled",
+            getattr(self.instance, "oanda_candle_filter_enabled", False),
+        )
+        candle_filter_account = attrs.get(
+            "oanda_candle_filter_account",
+            getattr(self.instance, "oanda_candle_filter_account", None),
+        )
+        candle_granularity = attrs.get(
+            "oanda_candle_filter_granularity",
+            getattr(
+                self.instance,
+                "oanda_candle_filter_granularity",
+                BacktestTask.OandaCandleGranularity.MINUTE_1,
+            ),
+        )
+        candle_tolerance_pips = attrs.get(
+            "oanda_candle_filter_tolerance_pips",
+            getattr(self.instance, "oanda_candle_filter_tolerance_pips", Decimal("5")),
+        )
+        valid_candle_granularities = {
+            choice for choice, _ in BacktestTask.OandaCandleGranularity.choices
+        }
+        if candle_granularity not in valid_candle_granularities:
+            raise serializers.ValidationError(
+                {
+                    "oanda_candle_filter_granularity": (
+                        f"Unsupported OANDA candle granularity: {candle_granularity}"
+                    )
+                }
+            )
+        if candle_filter_enabled and candle_filter_account is None:
+            raise serializers.ValidationError(
+                {
+                    "oanda_candle_filter_account": (
+                        "OANDA account is required when candle validation is enabled."
+                    )
+                }
+            )
+        if candle_filter_enabled and candle_tolerance_pips <= 0:
+            raise serializers.ValidationError(
+                {
+                    "oanda_candle_filter_tolerance_pips": (
+                        "Candle tolerance pips must be greater than zero when enabled."
                     )
                 }
             )
@@ -668,7 +775,16 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             )
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
-            for field in ("tick_granularity", "tick_window_value_mode")
+            for field in (
+                "tick_granularity",
+                "tick_window_value_mode",
+                "spread_filter_enabled",
+                "max_spread_pips",
+                "oanda_candle_filter_enabled",
+                "oanda_candle_filter_account",
+                "oanda_candle_filter_granularity",
+                "oanda_candle_filter_tolerance_pips",
+            )
         )
 
         for attr, value in validated_data.items():
