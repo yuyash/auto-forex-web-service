@@ -24,6 +24,7 @@ class TestSnowballStrategyConfig:
         assert cfg.base_units_auto_adjust_enabled is False
         assert cfg.base_units_balance_ratio == Decimal("1000")
         assert cfg.base_units_step == 100
+        assert cfg.base_units_auto_adjust_floor_enabled is False
         assert cfg.refill_limit_enabled is True
         assert cfg.refill_up_to == 2
         assert cfg.effective_refill_up_to == 2
@@ -179,6 +180,21 @@ class TestSnowballStrategyConfig:
         assert cfg.effective_base_units(Decimal("1100000")) == 1100
         assert cfg.effective_base_units(Decimal("2000000")) == 2000
         assert cfg.effective_base_units(Decimal("950000")) == 900
+
+    def test_auto_base_units_can_floor_to_configured_base_units(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "base_units": 1000,
+                "base_units_auto_adjust_enabled": True,
+                "base_units_balance_ratio": "1000",
+                "base_units_step": 100,
+                "base_units_auto_adjust_floor_enabled": True,
+            }
+        )
+
+        assert cfg.effective_base_units(Decimal("950000")) == 1000
+        assert cfg.effective_base_units(Decimal("1000000")) == 1000
+        assert cfg.effective_base_units(Decimal("1100000")) == 1100
 
     def test_auto_base_units_disabled_uses_fixed_base_units(self):
         cfg = SnowballStrategyConfig.from_dict(

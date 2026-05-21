@@ -42,9 +42,11 @@ class _FakeBacktestTask:
         self.market_open_hour_utc = 21
         self.holidays_enabled = False
         self.excluded_dates = []
+        self.refresh_count = 0
         type(self).objects.task = self
 
     def refresh_from_db(self, **_kwargs) -> None:
+        self.refresh_count += 1
         return None
 
 
@@ -73,6 +75,22 @@ def test_backtest_zero_delay_resumes_after_weekend_close() -> None:
     coordinator.evaluate(loop)
 
     assert task.status == TaskStatus.RUNNING
+
+
+def test_backtest_evaluate_uses_cached_session_config_without_status_refresh() -> None:
+    task = _FakeBacktestTask()
+    loop = SimpleNamespace(
+        last_delivered_tick_timestamp=datetime(2024, 6, 12, 12, 0, tzinfo=UTC),
+        state=_FakeState(),
+    )
+    coordinator = MarketIdleCoordinator(task=task, task_type=TaskType.BACKTEST)
+
+    first = coordinator.session_config()
+    second = coordinator.session_config()
+    coordinator.evaluate(loop)
+
+    assert first is second
+    assert task.refresh_count == 0
     assert "_idle_entered_at" not in loop.state.strategy_state
 
 

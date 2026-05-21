@@ -318,6 +318,8 @@
     "marketIdleResumeDelayMinutesHelp": "マーケット再開後、再生中の時刻でこの分数だけ待機してからトレーディングを再開します。",
     "maxTickGapHours": "失敗判定する最大ティックギャップ（時間）",
     "maxTickGapHoursHelp": "再生中のティックがこの時間数を超えて前方に飛んだ場合、バックテストを失敗にします。デフォルトは 120 時間（5日）です。",
+    "backtestTickBatchSize": "Tick バッチサイズ",
+    "backtestTickBatchSizeHelp": "executor が一度に処理する Tick 数です。デフォルトは 1000。1000〜5000 程度にするとスループットが改善しやすい一方、停止反応は少し遅くなります。",
     "spreadFilterEnabled": "Spread が広すぎる Tick をスキップ",
     "spreadFilterDescription": "Bid/Ask Spread が指定した pips 閾値を超える Tick をスキップします。スキップはログに記録され、タスクは継続します。",
     "maxSpreadPips": "最大 Spread（pips）",

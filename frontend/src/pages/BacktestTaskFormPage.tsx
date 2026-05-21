@@ -94,6 +94,7 @@ export default function BacktestTaskFormPage() {
         market_open_weekday: task.market_open_weekday,
         market_open_hour_utc: task.market_open_hour_utc,
         max_tick_gap_hours: task.max_tick_gap_hours,
+        backtest_tick_batch_size: task.backtest_tick_batch_size ?? 1000,
         spread_filter_enabled: task.spread_filter_enabled ?? false,
         max_spread_pips: task.max_spread_pips
           ? parseFloat(task.max_spread_pips)

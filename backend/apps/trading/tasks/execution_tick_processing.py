@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from time import monotonic
@@ -18,6 +19,18 @@ if TYPE_CHECKING:
     from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
 
 logger: Logger = getLogger(name=__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeMetricTickSnapshot:
+    """Minimal tick snapshot retained until metrics are materialized."""
+
+    timestamp: datetime
+    bid: Decimal
+    ask: Decimal
+    mid: Decimal
+    current_balance: Decimal
+    ticks_processed: int
 
 
 class ExecutionTickProcessor:
@@ -51,6 +64,10 @@ class ExecutionTickProcessor:
         if executor._backtest_gap_guard.stop_for_gap(loop=loop, tick_ts=tick_ts):
             return True
 
+        executor._runtime_metric_recorder.materialize_if_tick_enters_new_bucket(
+            loop.state,
+            tick_ts,
+        )
         if executor._backtest_idle_policy.handle_if_idle(loop=loop, tick=tick, tick_ts=tick_ts):
             return False
 
@@ -355,8 +372,15 @@ class BacktestIdleTickPolicy:
         loop.state.last_tick_price = tick.mid
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
-        executor._update_common_metrics(loop.state, tick)
-        executor._buffer_tick_metrics(loop.state, tick)
+        if executor.uses_in_memory_mode:
+            executor._runtime_metric_recorder.record_sparse_backtest_metrics(
+                loop.state,
+                tick,
+                tick_ts,
+            )
+        else:
+            executor._update_common_metrics(loop.state, tick)
+            executor._buffer_tick_metrics(loop.state, tick)
         return True
 
 
@@ -504,6 +528,7 @@ class RuntimeMetricsRecorder:
         """Bind the recorder to one executor instance."""
         self.executor = executor
         self._execution_started_at = monotonic()
+        self._latest_metric_snapshot: RuntimeMetricTickSnapshot | None = None
         self.live_tick_latency_metric_keys = frozenset(
             {
                 "oanda_tick_publish_latency_seconds",
@@ -571,8 +596,15 @@ class RuntimeMetricsRecorder:
         )
         return latency_metrics
 
-    def update_common_metrics(self, state: "ExecutionState", tick) -> None:
+    def update_common_metrics(
+        self,
+        state: "ExecutionState",
+        tick,
+        *,
+        record_tick: bool = True,
+    ) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
+        timestamp = self.executor._coerce_tick_timestamp(tick.timestamp)
         strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
         existing_metrics = (
             dict(strategy_state.get("metrics", {}))
@@ -584,13 +616,14 @@ class RuntimeMetricsRecorder:
         except (InvalidOperation, TypeError, ValueError):
             current_balance = Decimal("0")
         common_metrics = self.executor._runtime_metrics.build_metrics(
-            timestamp=self.executor._coerce_tick_timestamp(tick.timestamp),
+            timestamp=timestamp,
             bid=Decimal(str(tick.bid)),
             ask=Decimal(str(tick.ask)),
             mid=Decimal(str(tick.mid)),
             current_balance=current_balance,
             ticks_processed=state.ticks_processed,
             execution_elapsed_seconds=self._execution_elapsed_seconds(),
+            record_tick=record_tick,
         )
         existing_metrics.update(common_metrics)
         strategy_state["metrics"] = existing_metrics
@@ -637,6 +670,10 @@ class RuntimeMetricsRecorder:
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
         loop.last_delivered_tick_timestamp = tick_timestamp
+        if getattr(self.executor, "uses_in_memory_mode", False) is True:
+            self.record_sparse_backtest_metrics(loop.state, tick, tick_timestamp)
+            return
+
         self.update_common_metrics(loop.state, tick)
         observed_at = datetime.now(UTC)
         latency_metrics = self.maybe_update_live_tick_latency_metrics(
@@ -651,3 +688,104 @@ class RuntimeMetricsRecorder:
                 observed_at=observed_at,
                 latency_metrics=latency_metrics,
             )
+
+    def record_sparse_backtest_metrics(
+        self,
+        state: "ExecutionState",
+        tick,
+        tick_timestamp: datetime,
+    ) -> None:
+        """Observe every tick but materialize common metrics sparsely."""
+        previous = self._latest_metric_snapshot
+        current = self._snapshot_for(state=state, tick=tick, tick_timestamp=tick_timestamp)
+
+        self.executor._runtime_metrics.observe_tick(timestamp=current.timestamp, mid=current.mid)
+        self._latest_metric_snapshot = current
+
+        if previous is None:
+            self._materialize_snapshot(state, current)
+            self._buffer_state_metrics_at(current.timestamp, state)
+
+    def materialize_if_tick_enters_new_bucket(
+        self,
+        state: "ExecutionState",
+        tick_timestamp: datetime,
+    ) -> None:
+        """Finalize the previous minute before a newer tick mutates state."""
+        if getattr(self.executor, "uses_in_memory_mode", False) is not True:
+            return
+        snapshot = self._latest_metric_snapshot
+        if snapshot is None:
+            return
+        if self._bucket(snapshot.timestamp) == self._bucket(tick_timestamp):
+            return
+        self._materialize_snapshot(state, snapshot)
+        self._buffer_state_metrics_at(snapshot.timestamp, state)
+
+    def materialize_latest(self, state: "ExecutionState") -> None:
+        """Materialize the latest sparse metrics before state/metric flushes."""
+        if getattr(self.executor, "uses_in_memory_mode", False) is not True:
+            return
+        snapshot = self._latest_metric_snapshot
+        if snapshot is None:
+            return
+        self._materialize_snapshot(state, snapshot)
+        self._buffer_state_metrics_at(snapshot.timestamp, state)
+
+    def _snapshot_for(
+        self,
+        *,
+        state: "ExecutionState",
+        tick,
+        tick_timestamp: datetime,
+    ) -> RuntimeMetricTickSnapshot:
+        try:
+            current_balance = Decimal(str(state.current_balance))
+        except (InvalidOperation, TypeError, ValueError):
+            current_balance = Decimal("0")
+        return RuntimeMetricTickSnapshot(
+            timestamp=tick_timestamp,
+            bid=Decimal(str(tick.bid)),
+            ask=Decimal(str(tick.ask)),
+            mid=Decimal(str(tick.mid)),
+            current_balance=current_balance,
+            ticks_processed=state.ticks_processed,
+        )
+
+    def _materialize_snapshot(
+        self,
+        state: "ExecutionState",
+        snapshot: RuntimeMetricTickSnapshot,
+    ) -> None:
+        materializer = getattr(state, "_strategy_state_materializer", None)
+        if callable(materializer):
+            materializer()
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+        existing_metrics = (
+            dict(strategy_state.get("metrics", {}))
+            if isinstance(strategy_state.get("metrics"), dict)
+            else {}
+        )
+        common_metrics = self.executor._runtime_metrics.build_metrics(
+            timestamp=snapshot.timestamp,
+            bid=snapshot.bid,
+            ask=snapshot.ask,
+            mid=snapshot.mid,
+            current_balance=snapshot.current_balance,
+            ticks_processed=snapshot.ticks_processed,
+            execution_elapsed_seconds=self._execution_elapsed_seconds(),
+            record_tick=False,
+        )
+        existing_metrics.update(common_metrics)
+        strategy_state["metrics"] = existing_metrics
+        state.strategy_state = strategy_state
+
+    def _buffer_state_metrics_at(self, timestamp: datetime, state: "ExecutionState") -> None:
+        metrics = (state.strategy_state or {}).get("metrics", {})
+        if not metrics:
+            return
+        self.executor._metrics_aggregator.record(timestamp, metrics)
+
+    @staticmethod
+    def _bucket(timestamp: datetime) -> datetime:
+        return timestamp.replace(second=0, microsecond=0)

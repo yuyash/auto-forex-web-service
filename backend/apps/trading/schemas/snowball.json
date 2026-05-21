@@ -58,6 +58,20 @@
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
+    "base_units_auto_adjust_floor_enabled": {
+      "type": "boolean",
+      "title": "Do Not Go Below Base Units",
+      "title_ja": "基本ユニット数を下限にする",
+      "description": "When enabled, automatic Base Units adjustment never returns a value below the configured Base Units.",
+      "description_ja": "有効時、基本ユニット数の自動調整結果が設定済みの基本ユニット数を下回らないようにします。",
+      "default": false,
+      "dependsOn": {
+        "field": "base_units_auto_adjust_enabled",
+        "values": [true]
+      },
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
     "warmup_enabled": {
       "type": "boolean",
       "title": "Enable Warmup",

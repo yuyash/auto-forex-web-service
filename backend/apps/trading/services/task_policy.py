@@ -49,6 +49,7 @@ EXECUTION_SETTING_FIELDS = frozenset(
         "account_currency",
         "tick_granularity",
         "tick_window_value_mode",
+        "backtest_tick_batch_size",
         "spread_filter_enabled",
         "max_spread_pips",
         "oanda_candle_filter_enabled",

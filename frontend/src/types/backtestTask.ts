@@ -78,6 +78,7 @@ export interface BacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: string;
   oanda_candle_filter_enabled?: boolean;
@@ -129,6 +130,7 @@ export interface BacktestTaskCreateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number | string;
   oanda_candle_filter_enabled?: boolean;
@@ -170,6 +172,7 @@ export interface BacktestTaskFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number;
   oanda_candle_filter_enabled?: boolean;
@@ -209,6 +212,7 @@ export interface BacktestTaskUpdateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number | string;
   oanda_candle_filter_enabled?: boolean;

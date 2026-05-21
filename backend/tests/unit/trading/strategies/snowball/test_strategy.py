@@ -189,6 +189,7 @@ class TestSnowballStrategyClassMethods:
         assert result["base_units_auto_adjust_enabled"] is False
         assert "base_units_balance_ratio" not in result
         assert "base_units_step" not in result
+        assert "base_units_auto_adjust_floor_enabled" not in result
         assert result["rebuild_entry_price_mode"] == "original_entry"
         assert result["rebuild_stop_loss_mode"] == "same_pips"
         assert result["rebuild_take_profit_mode"] == "same_pips"
@@ -205,6 +206,7 @@ class TestSnowballStrategyClassMethods:
         assert defaults["base_units_auto_adjust_enabled"] is False
         assert "base_units_balance_ratio" not in defaults
         assert "base_units_step" not in defaults
+        assert "base_units_auto_adjust_floor_enabled" not in defaults
         assert "m_pips" in defaults
         assert defaults["rebuild_entry_price_mode"] == "original_entry"
         assert "rebuild_stop_loss_mode" in defaults
@@ -260,12 +262,14 @@ class TestSnowballStrategyClassMethods:
         legacy.pop("base_units_auto_adjust_enabled", None)
         legacy.pop("base_units_balance_ratio", None)
         legacy.pop("base_units_step", None)
+        legacy.pop("base_units_auto_adjust_floor_enabled", None)
 
         cfg = SnowballStrategy.parse_config(SimpleNamespace(config_dict=legacy))
 
         assert cfg.base_units_auto_adjust_enabled is False
         assert cfg.base_units_balance_ratio == Decimal("1000")
         assert cfg.base_units_step == 100
+        assert cfg.base_units_auto_adjust_floor_enabled is False
 
     def test_parse_config_accepts_legacy_parameters_without_warmup_fields(self):
         legacy = SnowballStrategy.default_parameters()

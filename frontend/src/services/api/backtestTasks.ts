@@ -41,6 +41,7 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     initial_positions_enabled: task.initial_positions_enabled ?? false,
     initial_position_cycles: task.initial_position_cycles ?? [],
     in_memory_mode: task.in_memory_mode ?? false,
+    backtest_tick_batch_size: task.backtest_tick_batch_size ?? 1000,
     spread_filter_enabled: task.spread_filter_enabled ?? false,
     oanda_candle_filter_enabled: task.oanda_candle_filter_enabled ?? false,
     oanda_candle_filter_account: task.oanda_candle_filter_account ?? null,

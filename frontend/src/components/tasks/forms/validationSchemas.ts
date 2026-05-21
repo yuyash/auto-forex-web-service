@@ -397,6 +397,12 @@ export const backtestTaskSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    backtest_tick_batch_size: z.coerce
+      .number({ message: 'Batch size must be a number' })
+      .int('Batch size must be an integer')
+      .min(1, 'Batch size must be at least 1')
+      .max(50000, 'Batch size must not exceed 50000')
+      .optional(),
     spread_filter_enabled: z.boolean().optional().default(false),
     max_spread_pips: z.coerce
       .number({ message: 'Max spread must be a number' })
@@ -576,6 +582,7 @@ export type BacktestTaskSchemaOutput = {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number;
   oanda_candle_filter_enabled?: boolean;

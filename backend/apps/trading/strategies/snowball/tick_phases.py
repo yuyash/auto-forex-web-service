@@ -73,7 +73,8 @@ class SnowballExecutionStateBoundary:
         strategy_state = self._hot_strategy_state(snowball_state)
         if self._defer_serialization:
             self._set_cached_state(snowball_state)
-            self._merge_runtime_view(strategy_state)
+            if not self._defer_runtime_view_updates:
+                self._merge_runtime_view(strategy_state)
             return
         self.state.strategy_state = strategy_state
 
@@ -87,6 +88,10 @@ class SnowballExecutionStateBoundary:
     @property
     def _defer_serialization(self) -> bool:
         return bool(getattr(self.state, "_defer_snowball_state_serialization", False))
+
+    @property
+    def _defer_runtime_view_updates(self) -> bool:
+        return bool(getattr(self.state, "_defer_snowball_runtime_view_updates", False))
 
     def _set_cached_state(self, snowball_state: SnowballStrategyState) -> None:
         setattr(self.state, "_snowball_strategy_state_cache", snowball_state)

@@ -10,6 +10,7 @@ from apps.trading.tasks.backtest import run_backtest_task, stop_backtest_task
 from apps.trading.tasks.executor import BacktestExecutor, TaskExecutor, TradingExecutor
 from apps.trading.tasks.recovery import recover_orphaned_tasks_beat, recover_orphaned_tasks_startup
 from apps.trading.tasks.source import (
+    DirectBacktestTickDataSource,
     LiveTickDataSource,
     RedisStreamTickDataSource,
     RedisTickDataSource,
@@ -30,5 +31,6 @@ __all__: List[str] = [
     "TickDataSource",
     "RedisTickDataSource",
     "RedisStreamTickDataSource",
+    "DirectBacktestTickDataSource",
     "LiveTickDataSource",
 ]

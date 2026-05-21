@@ -164,6 +164,7 @@ class SnowballStrategyConfig:
     base_units_auto_adjust_enabled: bool
     base_units_balance_ratio: Decimal
     base_units_step: int
+    base_units_auto_adjust_floor_enabled: bool
     m_pips: Decimal
     trend_lot_size: int
     r_max: int
@@ -287,7 +288,8 @@ class SnowballStrategyConfig:
         stepped_units = (raw_units / Decimal(step)).to_integral_value(
             rounding=ROUND_FLOOR
         ) * Decimal(step)
-        return max(step, int(stepped_units))
+        floor = self.base_units if self.base_units_auto_adjust_floor_enabled else step
+        return max(floor, int(stepped_units))
 
     def warmup_scaled_base_units(
         self,
@@ -466,6 +468,9 @@ class SnowballStrategyConfig:
                 raw.get("base_units_balance_ratio", "1000"), "1000"
             ),
             base_units_step=_parse_int(raw.get("base_units_step", 100), 100),
+            base_units_auto_adjust_floor_enabled=_parse_bool(
+                raw.get("base_units_auto_adjust_floor_enabled", False), False
+            ),
             m_pips=_parse_decimal(raw.get("m_pips", "50"), "50"),
             trend_lot_size=_parse_int(raw.get("trend_lot_size", 1), 1),
             r_max=_parse_int(raw.get("r_max", 7), 7),
@@ -598,6 +603,7 @@ class SnowballStrategyConfig:
             "base_units_auto_adjust_enabled",
             "base_units_balance_ratio",
             "base_units_step",
+            "base_units_auto_adjust_floor_enabled",
             *WARMUP_OPTIONAL_KEYS,
         ):
             if optional_key in missing:
@@ -623,6 +629,7 @@ class SnowballStrategyConfig:
             "base_units_auto_adjust_enabled": self.base_units_auto_adjust_enabled,
             "base_units_balance_ratio": str(self.base_units_balance_ratio),
             "base_units_step": self.base_units_step,
+            "base_units_auto_adjust_floor_enabled": self.base_units_auto_adjust_floor_enabled,
             "m_pips": str(self.m_pips),
             "trend_lot_size": self.trend_lot_size,
             "r_max": self.r_max,

@@ -305,6 +305,12 @@ const backtestTaskUpdateSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    backtest_tick_batch_size: z.coerce
+      .number({ message: 'Batch size must be a number' })
+      .int('Batch size must be an integer')
+      .min(1, 'Batch size must be at least 1')
+      .max(50000, 'Batch size must not exceed 50000')
+      .optional(),
     spread_filter_enabled: z.boolean().optional().default(false),
     max_spread_pips: z.coerce
       .number({ message: 'Max spread must be a number' })
@@ -437,6 +443,7 @@ export default function BacktestTaskUpdateForm({
         initialData.oanda_candle_filter_enabled ?? false,
       oanda_candle_filter_account:
         initialData.oanda_candle_filter_account ?? null,
+      backtest_tick_batch_size: initialData.backtest_tick_batch_size ?? 1000,
       oanda_candle_filter_granularity:
         initialData.oanda_candle_filter_granularity ?? 'M1',
       oanda_candle_filter_tolerance_pips:
@@ -984,6 +991,32 @@ export default function BacktestTaskUpdateForm({
                   ))}
                 </Select>
               </FormControl>
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="backtest_tick_batch_size"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? 1000}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                label={t('backtest:form.backtestTickBatchSize')}
+                type="number"
+                inputProps={{ min: 1, max: 50000, step: 1 }}
+                error={!!errors.backtest_tick_batch_size}
+                helperText={
+                  errors.backtest_tick_batch_size?.message ||
+                  t('backtest:form.backtestTickBatchSizeHelp')
+                }
+              />
             )}
           />
         </Grid>

@@ -25,6 +25,7 @@ class SnowballParameterService:
         if not config.base_units_auto_adjust_enabled:
             parameters.pop("base_units_balance_ratio", None)
             parameters.pop("base_units_step", None)
+            parameters.pop("base_units_auto_adjust_floor_enabled", None)
         if not config.preserve_highest_retracement_enabled:
             parameters.pop("preserve_highest_r_from", None)
         # rebuild_entry_buffer_pips is only meaningful when the rebuild

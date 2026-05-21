@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from logging import Logger, getLogger
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
 
 import redis
 from django.conf import settings
@@ -24,6 +25,35 @@ logger: Logger = getLogger(name=__name__)
 _MAX_BACKTEST_SPREAD_PIPS = Decimal(
     str(getattr(settings, "TRADING_MAX_BACKTEST_SPREAD_PIPS", "50"))
 )
+
+
+def _optional_decimal(value: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (ValueError, InvalidOperation):
+        return None
+
+
+def _backtest_bar_range_warning_pips() -> str | None:
+    try:
+        value = Decimal(str(getattr(settings, "MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS", 0) or 0))
+    except (ValueError, InvalidOperation):
+        return None
+    return str(value) if value > 0 else None
+
+
+def _gap_spans_only_market_close(last_tick: datetime, end_dt: datetime) -> bool:
+    """Return True if a coverage gap is explained by the regular weekend close."""
+    lt_weekday = last_tick.weekday()
+    et_weekday = end_dt.weekday()
+    if lt_weekday == 4 and last_tick.hour >= 20:
+        if et_weekday == 5 or et_weekday == 6 or et_weekday in (0, 1, 2, 3, 4):
+            return (end_dt - last_tick) < timedelta(days=3, hours=6)
+    return False
 
 
 class TickDataSource(ABC):
@@ -358,6 +388,316 @@ class RedisTickDataSource(TickDataSource):
             return False
 
         return True
+
+
+class DirectBacktestTickDataSource(TickDataSource):
+    """In-process backtest tick source for high-throughput in-memory runs."""
+
+    def __init__(
+        self,
+        *,
+        request_id: str,
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        batch_size: int = 1000,
+        tick_granularity: str = "tick",
+        tick_window_value_mode: str = "last",
+        pip_size: str | Decimal | None = None,
+        bar_range_warning_pips: str | Decimal | None = None,
+        spread_filter_enabled: bool = False,
+        max_spread_pips: str | Decimal | None = None,
+        oanda_candle_filter_enabled: bool = False,
+        oanda_candle_filter_account_id: int | str | None = None,
+        oanda_candle_filter_granularity: str = "M1",
+        oanda_candle_filter_tolerance_pips: str | Decimal | None = None,
+    ) -> None:
+        self.request_id = str(request_id)
+        self.instrument = str(instrument)
+        self.start_dt = start_dt
+        self.end_dt = end_dt
+        self.batch_size = max(int(batch_size), 1)
+        self.tick_granularity = str(tick_granularity or "tick")
+        self.tick_window_value_mode = str(tick_window_value_mode or "last")
+        self.pip_size = pip_size
+        self.bar_range_warning_pips = bar_range_warning_pips
+        self.spread_filter_enabled = bool(spread_filter_enabled)
+        self.max_spread_pips = max_spread_pips
+        self.oanda_candle_filter_enabled = bool(oanda_candle_filter_enabled)
+        self.oanda_candle_filter_account_id = oanda_candle_filter_account_id
+        self.oanda_candle_filter_granularity = str(oanda_candle_filter_granularity or "M1")
+        self.oanda_candle_filter_tolerance_pips = oanda_candle_filter_tolerance_pips
+
+    @classmethod
+    def from_task(
+        cls,
+        task: Any,
+        *,
+        batch_size: int,
+        start_dt: datetime | None = None,
+    ) -> "DirectBacktestTickDataSource":
+        """Create a direct source from a BacktestTask-like object."""
+        return cls(
+            request_id=str(task.pk),
+            instrument=str(task.instrument),
+            start_dt=start_dt or task.start_time,
+            end_dt=task.end_time,
+            batch_size=batch_size,
+            tick_granularity=getattr(task, "tick_granularity", "tick"),
+            tick_window_value_mode=getattr(task, "tick_window_value_mode", "last"),
+            pip_size=str(getattr(task, "pip_size", "") or ""),
+            bar_range_warning_pips=_backtest_bar_range_warning_pips(),
+            spread_filter_enabled=getattr(task, "spread_filter_enabled", False) is True,
+            max_spread_pips=(
+                getattr(task, "max_spread_pips", None)
+                if getattr(task, "spread_filter_enabled", False) is True
+                else None
+            ),
+            oanda_candle_filter_enabled=(
+                getattr(task, "oanda_candle_filter_enabled", False) is True
+            ),
+            oanda_candle_filter_account_id=(
+                getattr(task, "oanda_candle_filter_account_id", None)
+                if getattr(task, "oanda_candle_filter_enabled", False) is True
+                else None
+            ),
+            oanda_candle_filter_granularity=(
+                getattr(task, "oanda_candle_filter_granularity", "M1")
+                if getattr(task, "oanda_candle_filter_enabled", False) is True
+                else "M1"
+            ),
+            oanda_candle_filter_tolerance_pips=(
+                getattr(task, "oanda_candle_filter_tolerance_pips", None)
+                if getattr(task, "oanda_candle_filter_enabled", False) is True
+                else None
+            ),
+        )
+
+    def __iter__(self) -> Iterator[list[Tick]]:
+        logger.info(
+            "DirectBacktestTickDataSource opened request_id=%s instrument=%s "
+            "start=%s end=%s batch_size=%s tick_granularity=%s tick_window_value_mode=%s",
+            self.request_id,
+            self.instrument,
+            self.start_dt,
+            self.end_dt,
+            self.batch_size,
+            self.tick_granularity,
+            self.tick_window_value_mode,
+        )
+
+        tick_filter = self._tick_filter()
+        rows_iter = (
+            self._iter_raw_ticks(
+                instrument=self.instrument,
+                start_dt=self.start_dt,
+                end_dt=self.end_dt,
+                batch_size=self.batch_size,
+            )
+            if self.tick_granularity == "tick"
+            else self._iter_aggregated_ticks(
+                instrument=self.instrument,
+                start_dt=self.start_dt,
+                end_dt=self.end_dt,
+                granularity=self.tick_granularity,
+                mode=self.tick_window_value_mode,
+                batch_size=self.batch_size,
+                pip_size=self.pip_size,
+                range_warning_pips=self.bar_range_warning_pips,
+                request_id=self.request_id,
+            )
+        )
+
+        batch: list[Tick] = []
+        published = 0
+        source_count = 0
+        last_ts: datetime | None = None
+
+        for row in rows_iter:
+            ts = row.get("timestamp")
+            if not isinstance(ts, datetime):
+                continue
+            source_count += 1
+            last_ts = ts
+
+            if not tick_filter.should_publish(row):
+                continue
+
+            tick = self._build_tick_from_row(row)
+            if tick is None or not RedisTickDataSource._is_valid_backtest_tick(tick):
+                continue
+
+            batch.append(tick)
+            published += 1
+            if len(batch) >= self.batch_size:
+                yield batch
+                batch = []
+
+        if batch:
+            yield batch
+
+        tick_filter.log_summary(published=published, source_count=source_count)
+        data_gap = self._check_data_coverage(source_count=source_count, last_tick_ts=last_ts)
+        if data_gap:
+            self._mark_backtest_task_failed(data_gap)
+
+        logger.info(
+            "DirectBacktestTickDataSource completed request_id=%s source_count=%s "
+            "published=%s last_source_ts=%s",
+            self.request_id,
+            source_count,
+            published,
+            last_ts,
+        )
+
+    def close(self) -> None:
+        """Direct DB iteration does not hold long-lived resources."""
+        return None
+
+    def _tick_filter(self):
+        from apps.market.services.backtest_tick_quality import BacktestTickQualityFilter
+
+        return BacktestTickQualityFilter(
+            request_id=self.request_id,
+            instrument=self.instrument,
+            start_dt=self.start_dt,
+            end_dt=self.end_dt,
+            pip_size=self.pip_size,
+            spread_filter_enabled=self.spread_filter_enabled,
+            max_spread_pips=self.max_spread_pips,
+            candle_filter_enabled=self.oanda_candle_filter_enabled,
+            candle_filter_account_id=self.oanda_candle_filter_account_id,
+            candle_filter_granularity=self.oanda_candle_filter_granularity,
+            candle_filter_tolerance_pips=self.oanda_candle_filter_tolerance_pips,
+        )
+
+    @staticmethod
+    def _iter_raw_ticks(
+        *,
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        batch_size: int,
+    ) -> Any:
+        from apps.market.models import TickData
+
+        qs = (
+            TickData.objects.filter(
+                instrument=str(instrument),
+                timestamp__gte=start_dt,
+                timestamp__lte=end_dt,
+            )
+            .order_by("timestamp")
+            .values("timestamp", "bid", "ask", "mid")
+        )
+        return qs.iterator(chunk_size=batch_size)
+
+    @staticmethod
+    def _iter_aggregated_ticks(
+        *,
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        granularity: str,
+        mode: str,
+        batch_size: int,
+        pip_size: str | Decimal | None = None,
+        range_warning_pips: str | Decimal | None = None,
+        request_id: str | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
+
+        pip_size_dec = _optional_decimal(pip_size)
+        range_warning_dec = _optional_decimal(range_warning_pips)
+        for row in iter_aggregated_backtest_ticks(
+            instrument=instrument,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            granularity=granularity,
+            mode=mode,
+            batch_size=batch_size,
+            range_warning_pips=range_warning_dec,
+            pip_size=pip_size_dec,
+            request_id=request_id,
+        ):
+            yield {
+                "timestamp": row.timestamp,
+                "bid": row.bid,
+                "ask": row.ask,
+                "mid": row.mid,
+            }
+
+    def _build_tick_from_row(self, row: dict[str, Any]) -> Tick | None:
+        ts = row.get("timestamp")
+        if not isinstance(ts, datetime):
+            return None
+        bid = _optional_decimal(row.get("bid"))
+        ask = _optional_decimal(row.get("ask"))
+        mid = _optional_decimal(row.get("mid"))
+        if bid is None or ask is None:
+            return None
+        return Tick.create(
+            instrument=self.instrument,
+            timestamp=ts,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+        )
+
+    def _check_data_coverage(
+        self,
+        *,
+        source_count: int,
+        last_tick_ts: datetime | None,
+    ) -> str | None:
+        if source_count == 0:
+            return (
+                f"No tick data found for {self.instrument} "
+                f"between {self.start_dt.isoformat()} and {self.end_dt.isoformat()}"
+            )
+        if last_tick_ts is None:
+            return None
+
+        gap = self.end_dt - last_tick_ts
+        if gap <= timedelta(hours=2):
+            return None
+        if _gap_spans_only_market_close(last_tick_ts, self.end_dt):
+            return None
+
+        logger.warning(
+            "[DIRECT_BACKTEST:COVERAGE] Data gap detected - request_id=%s, "
+            "last_tick_ts=%s, end_dt=%s, gap=%s",
+            self.request_id,
+            last_tick_ts,
+            self.end_dt,
+            gap,
+        )
+        return (
+            f"Tick data for {self.instrument} ends at {last_tick_ts.isoformat()} "
+            f"but the requested end_time is {self.end_dt.isoformat()} "
+            f"(gap: {gap})"
+        )
+
+    def _mark_backtest_task_failed(self, reason: str) -> None:
+        try:
+            from django.utils import timezone as dj_timezone
+
+            from apps.trading.enums import TaskStatus
+            from apps.trading.models import BacktestTask
+
+            BacktestTask.objects.filter(
+                pk=self.request_id,
+                status=TaskStatus.RUNNING,
+            ).update(
+                status=TaskStatus.FAILED,
+                completed_at=dj_timezone.now(),
+                error_message=f"Insufficient tick data: {reason}",
+            )
+        except Exception:
+            logger.debug(
+                "DirectBacktestTickDataSource failed to mark insufficient data",
+                exc_info=True,
+            )
 
 
 class RedisStreamTickDataSource(TickDataSource):

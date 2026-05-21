@@ -306,6 +306,10 @@ export function buildBacktestTaskSettingDefinitions(
       label: t('backtest:detail.tickWindowValueMode'),
     },
     {
+      key: 'backtest_tick_batch_size',
+      label: t('backtest:form.backtestTickBatchSize', 'Tick batch size'),
+    },
+    {
       key: 'drain_duration_hours',
       label: t('backtest:form.drainDurationHours', 'Drain duration (hours)'),
     },

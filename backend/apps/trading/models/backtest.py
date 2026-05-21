@@ -199,6 +199,14 @@ class BacktestTask(ExecutableTaskModel):
             "is failed as suspicious. Default: 120 (5 days)."
         ),
     )
+    backtest_tick_batch_size = models.PositiveIntegerField(
+        default=1000,
+        help_text=(
+            "Number of replayed ticks delivered to the backtest executor per batch. "
+            "Larger values reduce coordination overhead but make stop responsiveness "
+            "slightly coarser. Default: 1000."
+        ),
+    )
     spread_filter_enabled = models.BooleanField(
         default=False,
         help_text="Skip backtest ticks whose bid/ask spread exceeds max_spread_pips.",

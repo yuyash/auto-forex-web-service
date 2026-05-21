@@ -7593,6 +7593,12 @@
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "backtest_tick_batch_size": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Number of replayed ticks delivered to the backtest executor per batch. Larger values reduce coordination overhead but make stop responsiveness slightly coarser. Default: 1000."
+                    },
                     "spread_filter_enabled": {
                         "type": "boolean",
                         "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
@@ -7897,6 +7903,12 @@
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "backtest_tick_batch_size": {
+                        "type": "integer",
+                        "maximum": 50000,
+                        "minimum": 1,
+                        "description": "Number of replayed ticks delivered to the backtest executor per batch. Larger values reduce coordination overhead but make stop responsiveness slightly coarser. Default: 1000."
+                    },
                     "spread_filter_enabled": {
                         "type": "boolean",
                         "description": "Skip backtest ticks whose bid/ask spread exceeds max_spread_pips."
@@ -8147,6 +8159,11 @@
                         "readOnly": true,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
+                    "backtest_tick_batch_size": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Number of replayed ticks delivered to the backtest executor per batch. Larger values reduce coordination overhead but make stop responsiveness slightly coarser. Default: 1000."
+                    },
                     "spread_filter_enabled": {
                         "type": "boolean",
                         "readOnly": true,
@@ -8286,6 +8303,7 @@
                 "required": [
                     "account_currency",
                     "action_policy",
+                    "backtest_tick_batch_size",
                     "can_resume",
                     "completed_at",
                     "config_hash",
@@ -8475,6 +8493,12 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "backtest_tick_batch_size": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Number of replayed ticks delivered to the backtest executor per batch. Larger values reduce coordination overhead but make stop responsiveness slightly coarser. Default: 1000."
                     },
                     "spread_filter_enabled": {
                         "type": "boolean",
@@ -11162,6 +11186,12 @@
                         "maximum": 2147483647,
                         "minimum": 1,
                         "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
+                    "backtest_tick_batch_size": {
+                        "type": "integer",
+                        "maximum": 50000,
+                        "minimum": 1,
+                        "description": "Number of replayed ticks delivered to the backtest executor per batch. Larger values reduce coordination overhead but make stop responsiveness slightly coarser. Default: 1000."
                     },
                     "spread_filter_enabled": {
                         "type": "boolean",
