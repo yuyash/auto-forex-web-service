@@ -26,7 +26,7 @@ from apps.trading.tasks.lifecycle_events import (
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
 )
-from apps.trading.tasks.source import RedisStreamTickDataSource
+from apps.trading.tasks.source import DirectBacktestTickDataSource, RedisStreamTickDataSource
 from apps.trading.tasks.task_runner import handle_task_exception
 from apps.trading.utils import pip_size_for_instrument
 
@@ -304,33 +304,38 @@ def execute_backtest(task: BacktestTask) -> None:
         task.save(update_fields=["pip_size", "updated_at"])
 
     request_id = str(task.pk)
-    # Backtest ticks are delivered over a Redis Stream (not Pub/Sub) so that
-    # slow-consumer situations translate into backpressure on the publisher
-    # rather than silent message loss.  The stream key is scoped to the
-    # current execution id so a restarted task never inherits leftover
-    # entries from an older execution — one of the failure modes we've seen
-    # in production is a new run reading stale ticks from the previous run
-    # and jumping forward in simulated time.
-    from apps.market.tasks.base import backtest_stream_key_for_request
-
-    execution_id_for_stream = (
-        str(task.execution_id) if getattr(task, "execution_id", None) else None
-    )
-    stream_key = backtest_stream_key_for_request(request_id, execution_id_for_stream)
-
-    # Stop any previous publisher and wipe any leftover Redis state from a
-    # prior execution of this task.  Backtest restarts always begin from
-    # ``task.start_time`` so there is nothing to preserve; carrying
-    # leftover entries over is how we previously saw simulated time jump
-    # across a 237-day gap in production.
+    batch_size = _backtest_tick_batch_size(task)
+    # In-memory backtests run inside a single worker and read historical ticks
+    # directly from the database. Persistent-mode backtests still use a Redis
+    # Stream so slow consumers create publisher backpressure instead of silent
+    # message loss.
     _stop_previous_publisher(request_id)
-    _purge_stale_task_streams(request_id, keep_execution_id=execution_id_for_stream)
+    if getattr(task, "in_memory_mode", False) is True:
+        data_source = DirectBacktestTickDataSource.from_task(
+            task,
+            batch_size=batch_size,
+            start_dt=_backtest_resume_start_time(task),
+        )
+    else:
+        from apps.market.tasks.base import backtest_stream_key_for_request
 
-    data_source = RedisStreamTickDataSource(
-        stream_key=stream_key,
-        batch_size=100,
-        trigger_publisher=lambda: trigger_backtest_publisher(task),
-    )
+        execution_id_for_stream = (
+            str(task.execution_id) if getattr(task, "execution_id", None) else None
+        )
+        stream_key = backtest_stream_key_for_request(request_id, execution_id_for_stream)
+
+        # Wipe leftover Redis state from a prior execution of this task.
+        # Backtest restarts always begin from ``task.start_time`` so there is
+        # nothing to preserve; carrying leftover entries over is how we
+        # previously saw simulated time jump across a 237-day gap in production.
+        _purge_stale_task_streams(request_id, keep_execution_id=execution_id_for_stream)
+
+        data_source = RedisStreamTickDataSource(
+            stream_key=stream_key,
+            batch_size=batch_size,
+            read_count=batch_size,
+            trigger_publisher=lambda: trigger_backtest_publisher(task),
+        )
 
     executor = BacktestExecutor(
         task=task,
@@ -338,6 +343,17 @@ def execute_backtest(task: BacktestTask) -> None:
         data_source=data_source,
     )
     executor.execute()
+
+
+def _backtest_tick_batch_size(task: BacktestTask | None = None) -> int:
+    default = int(getattr(settings, "TRADING_BACKTEST_TICK_BATCH_SIZE", 1000))
+    raw_value = getattr(task, "backtest_tick_batch_size", None) if task is not None else None
+    if not isinstance(raw_value, (int, str)):
+        raw_value = default
+    try:
+        return max(int(raw_value), 1)
+    except (TypeError, ValueError):
+        return max(default, 1)
 
 
 def _backtest_resume_start_time(task: BacktestTask):

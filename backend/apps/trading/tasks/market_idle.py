@@ -26,6 +26,7 @@ class MarketIdleCoordinator:
     def __init__(self, *, task: Any, task_type: TaskType) -> None:
         self.task = task
         self.task_type = task_type
+        self._session_config_cache: MarketSessionConfig | None = None
 
     def clock(self, loop: Any) -> datetime | None:
         if self.task_type == TaskType.TRADING:
@@ -35,6 +36,8 @@ class MarketIdleCoordinator:
     def session_config(self) -> MarketSessionConfig:
         if self.task_type != TaskType.BACKTEST:
             return DEFAULT_SESSION_CONFIG
+        if self._session_config_cache is not None:
+            return self._session_config_cache
 
         task = self.task
         holidays_enabled_raw = getattr(task, "holidays_enabled", False)
@@ -47,7 +50,10 @@ class MarketIdleCoordinator:
         )
 
         if holidays_enabled or excluded_dates:
-            from apps.trading.services.market_holidays import resolve_holiday_dates
+            from apps.trading.services.market_holidays import (
+                parse_excluded_windows,
+                resolve_holiday_dates,
+            )
 
             start_dt = getattr(task, "start_time", None)
             end_dt = getattr(task, "end_time", None)
@@ -59,17 +65,21 @@ class MarketIdleCoordinator:
                 end=end_date,
                 excluded_dates=excluded_dates,
             )
+            holiday_windows = parse_excluded_windows(excluded_dates)
         else:
             holiday_dates = frozenset()
+            holiday_windows = ()
 
-        return MarketSessionConfig(
+        self._session_config_cache = MarketSessionConfig(
             enabled=bool(getattr(task, "market_close_enabled", True)),
             close_weekday=int(getattr(task, "market_close_weekday", 4) or 0),
             close_hour_utc=int(getattr(task, "market_close_hour_utc", 21) or 0),
             open_weekday=int(getattr(task, "market_open_weekday", 6) or 0),
             open_hour_utc=int(getattr(task, "market_open_hour_utc", 21) or 0),
             holiday_dates=holiday_dates,
+            holiday_windows=holiday_windows,
         )
+        return self._session_config_cache
 
     def evaluate(self, loop: Any) -> None:
         """Apply the task's market-idle policy for the current task clock."""
@@ -82,7 +92,8 @@ class MarketIdleCoordinator:
         resume_delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
         session_config = self.session_config()
 
-        task.refresh_from_db(fields=["status"])
+        if self.task_type != TaskType.BACKTEST:
+            task.refresh_from_db(fields=["status"])
         if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
             return
 

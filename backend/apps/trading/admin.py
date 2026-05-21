@@ -34,6 +34,7 @@ class BacktestTaskAdmin(admin.ModelAdmin):
         "status",
         "data_source",
         "in_memory_mode",
+        "backtest_tick_batch_size",
         "spread_filter_enabled",
         "oanda_candle_filter_enabled",
         "start_time",

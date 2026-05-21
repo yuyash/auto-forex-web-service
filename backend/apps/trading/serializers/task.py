@@ -114,6 +114,7 @@ class BacktestTaskSerializer(TaskSerializer):
             "pip_size",
             "instrument",
             "in_memory_mode",
+            "backtest_tick_batch_size",
         ]
         read_only_fields = TaskSerializer.Meta.read_only_fields + ["user"]
 

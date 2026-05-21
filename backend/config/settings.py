@@ -295,6 +295,11 @@ MARKET_BACKTEST_STREAM_BLOCK_MS = int(os.getenv("MARKET_BACKTEST_STREAM_BLOCK_MS
 # How many entries the subscriber requests per ``XREAD`` call.
 MARKET_BACKTEST_STREAM_READ_COUNT = int(os.getenv("MARKET_BACKTEST_STREAM_READ_COUNT", "500"))
 
+# Number of ticks delivered from the backtest data source to the executor per
+# batch.  Larger batches reduce Redis ACKs, heartbeat checks, and progress
+# flush decisions.  The executor still checks stop signals inside each batch.
+TRADING_BACKTEST_TICK_BATCH_SIZE = int(os.getenv("TRADING_BACKTEST_TICK_BATCH_SIZE", "1000"))
+
 # Subscriber gives up after this many consecutive empty reads *while* it is
 # caught up with the publisher (comparing its ``last_seen_id`` against the
 # stream's ``last-generated-id``).  Empty reads that happen while the

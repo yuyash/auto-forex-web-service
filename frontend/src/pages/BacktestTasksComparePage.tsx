@@ -73,6 +73,11 @@ function backtestTaskSettings(
   setIfPresent(settings, 'market_open_weekday', task.market_open_weekday);
   setIfPresent(settings, 'market_open_hour_utc', task.market_open_hour_utc);
   setIfPresent(settings, 'max_tick_gap_hours', task.max_tick_gap_hours);
+  setIfPresent(
+    settings,
+    'backtest_tick_batch_size',
+    task.backtest_tick_batch_size
+  );
   setIfPresent(settings, 'spread_filter_enabled', task.spread_filter_enabled);
   setIfPresent(settings, 'max_spread_pips', task.max_spread_pips);
   setIfPresent(
@@ -222,6 +227,12 @@ export default function BacktestTasksComparePage() {
           }),
         ],
         [
+          'backtest_tick_batch_size',
+          t('backtest:form.backtestTickBatchSize', {
+            defaultValue: 'Tick batch size',
+          }),
+        ],
+        [
           'spread_filter_enabled',
           t('backtest:form.spreadFilterEnabled', {
             defaultValue: 'Skip wide-spread ticks',
@@ -266,7 +277,7 @@ export default function BacktestTasksComparePage() {
         [
           'excluded_dates',
           t('backtest:form.excludedDates', {
-            defaultValue: 'Additional closed dates',
+            defaultValue: 'Additional closed windows',
           }),
         ],
         [
@@ -379,6 +390,7 @@ export default function BacktestTasksComparePage() {
             'market_open_weekday',
             'market_open_hour_utc',
             'max_tick_gap_hours',
+            'backtest_tick_batch_size',
             'spread_filter_enabled',
             'max_spread_pips',
             'oanda_candle_filter_enabled',

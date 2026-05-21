@@ -32,6 +32,14 @@ export interface BacktestInitialPositionCycle {
   positions: BacktestInitialPosition[];
 }
 
+export interface BacktestClosedWindow {
+  start: string;
+  end: string;
+  timezone: string;
+}
+
+export type BacktestMarketClosure = string | BacktestClosedWindow;
+
 export interface BacktestTask {
   id: string;
   user_id: number;
@@ -70,6 +78,7 @@ export interface BacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: string;
   oanda_candle_filter_enabled?: boolean;
@@ -78,7 +87,7 @@ export interface BacktestTask {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;
@@ -121,6 +130,7 @@ export interface BacktestTaskCreateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number | string;
   oanda_candle_filter_enabled?: boolean;
@@ -128,7 +138,7 @@ export interface BacktestTaskCreateData {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number | string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;
@@ -162,6 +172,7 @@ export interface BacktestTaskFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number;
   oanda_candle_filter_enabled?: boolean;
@@ -169,7 +180,7 @@ export interface BacktestTaskFormData {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;
@@ -201,6 +212,7 @@ export interface BacktestTaskUpdateData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number | string;
   oanda_candle_filter_enabled?: boolean;
@@ -208,7 +220,7 @@ export interface BacktestTaskUpdateData {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number | string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;

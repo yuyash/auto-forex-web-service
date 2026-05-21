@@ -1221,6 +1221,136 @@ class TestCommonRuntimeMetrics:
         assert "current_atr" in metrics
 
     @patch("apps.trading.tasks.executor.EventHandler")
+    def test_in_memory_backtest_materializes_common_metrics_sparsely(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "JPY"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+        task.in_memory_mode = True
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+        build_metrics = MagicMock(wraps=executor._runtime_metrics.build_metrics)
+        executor._runtime_metrics.build_metrics = build_metrics
+
+        state = MagicMock()
+        state.ticks_processed = 0
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        engine.on_tick.return_value = StrategyResult.from_state(state)
+        loop = ExecutionLoopState(state=state)
+
+        ticks = [
+            SimpleNamespace(
+                timestamp=datetime(2026, 3, 22, 10, 0, tzinfo=UTC),
+                mid=Decimal("150.10"),
+                bid=Decimal("150.09"),
+                ask=Decimal("150.11"),
+            ),
+            SimpleNamespace(
+                timestamp=datetime(2026, 3, 22, 10, 0, 30, tzinfo=UTC),
+                mid=Decimal("150.12"),
+                bid=Decimal("150.11"),
+                ask=Decimal("150.13"),
+            ),
+        ]
+
+        with patch.object(executor, "save_events", return_value=[]):
+            for tick in ticks:
+                assert executor._process_single_tick(loop, tick) is False
+
+        assert build_metrics.call_count == 1
+
+        executor._runtime_metric_recorder.materialize_latest(state)
+
+        assert build_metrics.call_count == 2
+        assert state.strategy_state["metrics"]["ticks_processed"] == "2"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_in_memory_backtest_materializes_previous_minute_on_bucket_change(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "JPY"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+        task.in_memory_mode = True
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+        build_metrics = MagicMock(wraps=executor._runtime_metrics.build_metrics)
+        executor._runtime_metrics.build_metrics = build_metrics
+
+        state = MagicMock()
+        state.ticks_processed = 0
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+        engine.on_tick.return_value = StrategyResult.from_state(state)
+        loop = ExecutionLoopState(state=state)
+
+        ticks = [
+            SimpleNamespace(
+                timestamp=datetime(2026, 3, 22, 10, 0, tzinfo=UTC),
+                mid=Decimal("150.10"),
+                bid=Decimal("150.09"),
+                ask=Decimal("150.11"),
+            ),
+            SimpleNamespace(
+                timestamp=datetime(2026, 3, 22, 10, 0, 30, tzinfo=UTC),
+                mid=Decimal("150.12"),
+                bid=Decimal("150.11"),
+                ask=Decimal("150.13"),
+            ),
+            SimpleNamespace(
+                timestamp=datetime(2026, 3, 22, 10, 1, tzinfo=UTC),
+                mid=Decimal("150.14"),
+                bid=Decimal("150.13"),
+                ask=Decimal("150.15"),
+            ),
+        ]
+
+        with patch.object(executor, "save_events", return_value=[]):
+            for tick in ticks:
+                assert executor._process_single_tick(loop, tick) is False
+
+        minute_bucket = datetime(2026, 3, 22, 10, 0, tzinfo=UTC)
+        assert build_metrics.call_count == 2
+        assert executor._metrics_aggregator._buckets[minute_bucket]["ticks_processed"] == "2"
+
+        executor._runtime_metric_recorder.materialize_latest(state)
+
+        assert build_metrics.call_count == 3
+        assert state.strategy_state["metrics"]["ticks_processed"] == "3"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
     def test_process_single_tick_records_stop_tick_metrics(self, mock_handler):
         from apps.trading.dataclasses.result import StrategyResult
         from apps.trading.models import BacktestTask

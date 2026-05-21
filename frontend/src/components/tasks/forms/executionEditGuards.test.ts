@@ -11,6 +11,9 @@ describe('hasDirtyExecutionSettings', () => {
   it('returns true for execution-shaping edits', () => {
     expect(hasDirtyExecutionSettings({ config_id: true })).toBe(true);
     expect(hasDirtyExecutionSettings({ tick_granularity: true })).toBe(true);
+    expect(hasDirtyExecutionSettings({ backtest_tick_batch_size: true })).toBe(
+      true
+    );
     expect(hasDirtyExecutionSettings({ spread_filter_enabled: true })).toBe(
       true
     );

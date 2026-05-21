@@ -6,7 +6,10 @@ import type {
   TaskMoneyContext,
 } from '../../types/money';
 import type { StrategyCapabilities } from '../../types/strategy';
-import type { BacktestInitialPositionCycle } from '../../types/backtestTask';
+import type {
+  BacktestInitialPositionCycle,
+  BacktestMarketClosure,
+} from '../../types/backtestTask';
 import type { TaskInstrumentContext } from '../../types/instrument';
 
 export type BackendMoneyAmount = MoneyAmount;
@@ -125,6 +128,7 @@ export interface BackendBacktestTask {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: string;
   oanda_candle_filter_enabled?: boolean;
@@ -133,7 +137,7 @@ export interface BackendBacktestTask {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;

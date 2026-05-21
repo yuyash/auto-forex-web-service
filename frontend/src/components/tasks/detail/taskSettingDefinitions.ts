@@ -193,6 +193,33 @@ function formatInitialPositionCycles(t: TFunction) {
   };
 }
 
+function formatMarketClosures(
+  t: TFunction,
+  timezone: string,
+  language?: string
+) {
+  return (value: TaskSettingValue): string => {
+    if (!Array.isArray(value) || value.length === 0) return '-';
+    return value
+      .map((item) => {
+        if (!item || typeof item !== 'object') return String(item);
+        const window = item as {
+          start?: string;
+          end?: string;
+          timezone?: string;
+        };
+        const windowTimezone = window.timezone || timezone;
+        return t('backtest:form.closedWindowSummary', {
+          defaultValue: '{{start}} to {{end}} ({{timezone}})',
+          start: formatDateTimeSetting(window.start, windowTimezone, language),
+          end: formatDateTimeSetting(window.end, windowTimezone, language),
+          timezone: windowTimezone,
+        });
+      })
+      .join(', ');
+  };
+}
+
 export function buildBacktestTaskSettingDefinitions(
   t: TFunction,
   timezone: string,
@@ -277,6 +304,10 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'tick_window_value_mode',
       label: t('backtest:detail.tickWindowValueMode'),
+    },
+    {
+      key: 'backtest_tick_batch_size',
+      label: t('backtest:form.backtestTickBatchSize', 'Tick batch size'),
     },
     {
       key: 'drain_duration_hours',
@@ -371,9 +402,8 @@ export function buildBacktestTaskSettingDefinitions(
     },
     {
       key: 'excluded_dates',
-      label: t('backtest:form.excludedDates', 'Additional closed dates'),
-      format: (value: unknown) =>
-        Array.isArray(value) && value.length > 0 ? value.join(', ') : '—',
+      label: t('backtest:form.excludedDates', 'Additional closed windows'),
+      format: formatMarketClosures(t, timezone, language),
     },
     {
       key: 'initial_positions_enabled',

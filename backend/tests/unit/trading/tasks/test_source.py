@@ -4,9 +4,66 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from apps.trading.dataclasses.tick import Tick
+
+
+class TestDirectBacktestTickDataSource:
+    """Tests for in-process backtest tick data source."""
+
+    def test_iter_batches_raw_ticks_without_redis(self):
+        from apps.trading.tasks.source import DirectBacktestTickDataSource
+
+        start = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC)
+        rows = iter(
+            [
+                {
+                    "timestamp": start,
+                    "bid": Decimal("157.240"),
+                    "ask": Decimal("157.250"),
+                    "mid": Decimal("157.245"),
+                },
+                {
+                    "timestamp": end,
+                    "bid": Decimal("157.260"),
+                    "ask": Decimal("157.270"),
+                    "mid": Decimal("157.265"),
+                },
+            ]
+        )
+        source = DirectBacktestTickDataSource(
+            request_id="task-1",
+            instrument="USD_JPY",
+            start_dt=start,
+            end_dt=end,
+            batch_size=2,
+            pip_size="0.01",
+        )
+
+        with (
+            patch.object(DirectBacktestTickDataSource, "_iter_raw_ticks", return_value=rows),
+            patch.object(source, "_mark_backtest_task_failed") as mark_failed,
+        ):
+            batches = list(source)
+
+        assert len(batches) == 1
+        assert [tick.mid for tick in batches[0]] == [Decimal("157.245"), Decimal("157.265")]
+        mark_failed.assert_not_called()
+
+    def test_close_is_noop(self):
+        from apps.trading.tasks.source import DirectBacktestTickDataSource
+
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        source = DirectBacktestTickDataSource(
+            request_id="task-1",
+            instrument="USD_JPY",
+            start_dt=now,
+            end_dt=now,
+        )
+
+        source.close()
 
 
 class TestRedisTickDataSourceInit:

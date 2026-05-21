@@ -59,6 +59,7 @@ class TestBacktestTaskSerializer:
         assert data["instrument"] == task.instrument
         assert data["status"] == task.status
         assert data["max_tick_gap_hours"] == task.max_tick_gap_hours
+        assert data["backtest_tick_batch_size"] == task.backtest_tick_batch_size
         assert data["spread_filter_enabled"] == task.spread_filter_enabled
         assert Decimal(data["max_spread_pips"]) == task.max_spread_pips
         assert data["oanda_candle_filter_enabled"] == task.oanda_candle_filter_enabled
@@ -140,10 +141,11 @@ class TestBacktestTaskCreateSerializer:
         assert task.account_currency == "USD"
         assert task.display_currency == "USD"
         assert task.max_tick_gap_hours == 120
+        assert task.backtest_tick_batch_size == 1000
         assert task.spread_filter_enabled is False
         assert task.oanda_candle_filter_enabled is False
 
-    def test_create_persists_max_tick_gap_hours(self):
+    def test_create_persists_execution_replay_controls(self):
         user = UserFactory()
         config = StrategyConfigurationFactory(user=user)
         now = datetime.now(timezone.utc)
@@ -169,13 +171,14 @@ class TestBacktestTaskCreateSerializer:
         serializer = BacktestTaskCreateSerializer(
             data={
                 "config": str(config.pk),
-                "name": "Custom Gap Threshold",
+                "name": "Custom Replay Controls",
                 "data_source": "postgresql",
                 "start_time": start.isoformat(),
                 "end_time": end.isoformat(),
                 "initial_balance": "50000.00",
                 "instrument": "USD_JPY",
                 "max_tick_gap_hours": 168,
+                "backtest_tick_batch_size": 5000,
             },
             context={"request": request},
         )
@@ -184,6 +187,7 @@ class TestBacktestTaskCreateSerializer:
         task = serializer.save()
 
         assert task.max_tick_gap_hours == 168
+        assert task.backtest_tick_batch_size == 5000
 
     def test_create_persists_tick_quality_filters(self):
         user = UserFactory()

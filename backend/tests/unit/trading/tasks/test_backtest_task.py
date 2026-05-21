@@ -112,12 +112,14 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
     @patch("apps.trading.tasks.backtest.RedisStreamTickDataSource")
+    @patch("apps.trading.tasks.backtest.DirectBacktestTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_normal_flow(
         self,
         mock_pip,
         mock_engine,
+        mock_direct_source,
         mock_source,
         mock_executor,
         mock_trigger,
@@ -133,11 +135,62 @@ class TestExecuteBacktest:
             config={},
             account_currency="USD",
             execution_id=uuid4(),
+            in_memory_mode=False,
+            backtest_tick_batch_size=2500,
         )
         mock_pip.return_value = 0.0001
         execute_backtest(task)
         mock_stop_pub.assert_called_once_with(str(task.pk))
         mock_purge.assert_called_once()
+        mock_direct_source.from_task.assert_not_called()
+        assert mock_source.call_args.kwargs["batch_size"] == 2500
+        assert mock_source.call_args.kwargs["read_count"] == 2500
+        mock_executor.return_value.execute.assert_called_once()
+
+    @patch("apps.trading.tasks.backtest._purge_stale_task_streams")
+    @patch("apps.trading.tasks.backtest._stop_previous_publisher")
+    @patch("apps.trading.tasks.backtest.BacktestExecutor")
+    @patch("apps.trading.tasks.backtest.RedisStreamTickDataSource")
+    @patch("apps.trading.tasks.backtest.DirectBacktestTickDataSource")
+    @patch("apps.trading.tasks.backtest.TradingEngine")
+    @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
+    @patch("apps.trading.tasks.backtest._backtest_resume_start_time")
+    def test_in_memory_flow_uses_direct_data_source(
+        self,
+        mock_resume_start,
+        mock_pip,
+        mock_engine,
+        mock_direct_source,
+        mock_redis_source,
+        mock_executor,
+        mock_stop_pub,
+        mock_purge,
+    ):
+        from apps.trading.tasks.backtest import execute_backtest
+
+        resume_start = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
+        mock_resume_start.return_value = resume_start
+        task = MagicMock(
+            pk=uuid4(),
+            instrument="EUR_USD",
+            pip_size=0.0001,
+            config={},
+            account_currency="USD",
+            execution_id=uuid4(),
+            in_memory_mode=True,
+            backtest_tick_batch_size=3000,
+        )
+
+        execute_backtest(task)
+
+        mock_stop_pub.assert_called_once_with(str(task.pk))
+        mock_purge.assert_not_called()
+        mock_redis_source.assert_not_called()
+        mock_direct_source.from_task.assert_called_once_with(
+            task,
+            batch_size=3000,
+            start_dt=resume_start,
+        )
         mock_executor.return_value.execute.assert_called_once()
 
     @patch("apps.trading.tasks.backtest._purge_stale_task_streams")
@@ -145,12 +198,14 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
     @patch("apps.trading.tasks.backtest.RedisStreamTickDataSource")
+    @patch("apps.trading.tasks.backtest.DirectBacktestTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_executor_exception(
         self,
         mock_pip,
         mock_engine,
+        mock_direct_source,
         mock_source,
         mock_executor,
         mock_trigger,
@@ -166,6 +221,7 @@ class TestExecuteBacktest:
             config={},
             account_currency="USD",
             execution_id=uuid4(),
+            in_memory_mode=False,
         )
         mock_executor.return_value.execute.side_effect = RuntimeError("exec fail")
         with pytest.raises(RuntimeError, match="exec fail"):

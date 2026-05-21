@@ -199,6 +199,14 @@ class BacktestTask(ExecutableTaskModel):
             "is failed as suspicious. Default: 120 (5 days)."
         ),
     )
+    backtest_tick_batch_size = models.PositiveIntegerField(
+        default=1000,
+        help_text=(
+            "Number of replayed ticks delivered to the backtest executor per batch. "
+            "Larger values reduce coordination overhead but make stop responsiveness "
+            "slightly coarser. Default: 1000."
+        ),
+    )
     spread_filter_enabled = models.BooleanField(
         default=False,
         help_text="Skip backtest ticks whose bid/ask spread exceeds max_spread_pips.",
@@ -251,9 +259,10 @@ class BacktestTask(ExecutableTaskModel):
         default=list,
         blank=True,
         help_text=(
-            "Additional UTC calendar dates (ISO-8601 'YYYY-MM-DD') on which the backtest "
-            "should treat the market as closed. Merged with the auto-detected holiday set "
-            "when ``holidays_enabled`` is True; honoured on its own when it is False."
+            "Additional market-closed windows for the backtest. New entries are stored as "
+            "{start, end, timezone} objects; legacy YYYY-MM-DD/MM-DD strings remain supported. "
+            "Merged with the auto-detected holiday set when ``holidays_enabled`` is True; "
+            "honoured on its own when it is False."
         ),
     )
     initial_positions_enabled = models.BooleanField(

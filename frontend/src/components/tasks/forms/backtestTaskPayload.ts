@@ -1,6 +1,7 @@
 import { DataSource } from '../../../types/common';
 import type {
   BacktestInitialPositionCycle,
+  BacktestMarketClosure,
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../../../types/backtestTask';
@@ -30,6 +31,7 @@ export interface BacktestTaskPayloadFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  backtest_tick_batch_size?: number;
   spread_filter_enabled?: boolean;
   max_spread_pips?: number | string;
   oanda_candle_filter_enabled?: boolean;
@@ -37,7 +39,7 @@ export interface BacktestTaskPayloadFormData {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number | string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;
@@ -70,6 +72,7 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     market_open_weekday: data.market_open_weekday,
     market_open_hour_utc: data.market_open_hour_utc,
     max_tick_gap_hours: data.max_tick_gap_hours,
+    backtest_tick_batch_size: data.backtest_tick_batch_size,
     spread_filter_enabled: data.spread_filter_enabled ?? false,
     max_spread_pips: data.max_spread_pips,
     oanda_candle_filter_enabled: data.oanda_candle_filter_enabled ?? false,

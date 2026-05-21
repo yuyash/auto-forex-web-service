@@ -45,8 +45,12 @@ import {
   currencyCodeSchema,
   optionalCurrencyCodeSchema,
 } from '../tasks/forms/currencyValidation';
-import { addInitialPositionSlotStructureIssues } from '../tasks/forms/validationSchemas';
+import {
+  addInitialPositionSlotStructureIssues,
+  excludedMarketClosureSchema,
+} from '../tasks/forms/validationSchemas';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
+import { MarketClosedWindowsEditor } from './MarketClosedWindowsEditor';
 import {
   useFirstTick,
   useSupportedInstruments,
@@ -301,6 +305,12 @@ const backtestTaskUpdateSchema = z
       .int('Tick gap threshold must be an integer')
       .min(1, 'Tick gap threshold must be at least 1 hour')
       .optional(),
+    backtest_tick_batch_size: z.coerce
+      .number({ message: 'Batch size must be a number' })
+      .int('Batch size must be an integer')
+      .min(1, 'Batch size must be at least 1')
+      .max(50000, 'Batch size must not exceed 50000')
+      .optional(),
     spread_filter_enabled: z.boolean().optional().default(false),
     max_spread_pips: z.coerce
       .number({ message: 'Max spread must be a number' })
@@ -317,17 +327,7 @@ const backtestTaskUpdateSchema = z
       .positive('Candle tolerance must be greater than zero')
       .optional(),
     holidays_enabled: z.boolean().optional().default(false),
-    excluded_dates: z
-      .array(
-        z
-          .string()
-          .regex(
-            /^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/,
-            'Each excluded date must be YYYY-MM-DD or MM-DD'
-          )
-      )
-      .optional()
-      .default([]),
+    excluded_dates: z.array(excludedMarketClosureSchema).optional().default([]),
     in_memory_mode: z.boolean().optional().default(false),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
@@ -443,6 +443,7 @@ export default function BacktestTaskUpdateForm({
         initialData.oanda_candle_filter_enabled ?? false,
       oanda_candle_filter_account:
         initialData.oanda_candle_filter_account ?? null,
+      backtest_tick_batch_size: initialData.backtest_tick_batch_size ?? 1000,
       oanda_candle_filter_granularity:
         initialData.oanda_candle_filter_granularity ?? 'M1',
       oanda_candle_filter_tolerance_pips:
@@ -990,6 +991,32 @@ export default function BacktestTaskUpdateForm({
                   ))}
                 </Select>
               </FormControl>
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="backtest_tick_batch_size"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? 1000}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                label={t('backtest:form.backtestTickBatchSize')}
+                type="number"
+                inputProps={{ min: 1, max: 50000, step: 1 }}
+                error={!!errors.backtest_tick_batch_size}
+                helperText={
+                  errors.backtest_tick_batch_size?.message ||
+                  t('backtest:form.backtestTickBatchSizeHelp')
+                }
+              />
             )}
           />
         </Grid>
@@ -1714,36 +1741,18 @@ export default function BacktestTaskUpdateForm({
           <Controller
             name="excluded_dates"
             control={control}
-            render={({ field }) => {
-              const value = Array.isArray(field.value)
-                ? field.value.join(', ')
-                : '';
-              return (
-                <TextField
-                  fullWidth
-                  label={t(
-                    'backtest:form.excludedDates',
-                    'Additional closed dates'
-                  )}
-                  value={value}
-                  onChange={(e) => {
-                    const parts = e.target.value
-                      .split(/[\s,]+/)
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    field.onChange(parts);
-                  }}
-                  helperText={
-                    (errors.excluded_dates as { message?: string })?.message ||
-                    t(
-                      'backtest:form.excludedDatesHelp',
-                      'Comma-separated MM-DD dates for annual closures, or YYYY-MM-DD for a single year. These are treated as market-closed and are merged with the holiday calendar above.'
-                    )
-                  }
-                  error={!!errors.excluded_dates}
-                />
-              );
-            }}
+            render={({ field }) => (
+              <MarketClosedWindowsEditor
+                value={field.value}
+                onChange={field.onChange}
+                defaultTimezone={timezone}
+                helperText={
+                  (errors.excluded_dates as { message?: string })?.message ||
+                  t('backtest:form.excludedDatesHelp')
+                }
+                error={!!errors.excluded_dates}
+              />
+            )}
           />
         </Grid>
 

@@ -30,6 +30,7 @@ import { CurrencyCodeField } from '../tasks/forms/CurrencyCodeField';
 import { TaskReviewErrors } from '../tasks/forms/TaskReviewErrors';
 import { DebugOptionsSection } from '../tasks/forms/DebugOptionsSection';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
+import { MarketClosedWindowsEditor } from './MarketClosedWindowsEditor';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -176,6 +177,7 @@ interface ReviewContentProps {
     instrument: string;
     tick_granularity: string;
     tick_window_value_mode: string;
+    backtest_tick_batch_size?: number;
     spread_filter_enabled?: boolean;
     max_spread_pips?: number;
     oanda_candle_filter_enabled?: boolean;
@@ -397,6 +399,15 @@ function ReviewContent({
         </Typography>
       </Grid>
 
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.backtestTickBatchSize')}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.backtest_tick_batch_size ?? 1000}
+        </Typography>
+      </Grid>
+
       {formValues.tick_granularity !== 'tick' && (
         <Grid size={{ xs: 12, md: 6 }}>
           <Typography variant="subtitle2" color="text.secondary">
@@ -512,6 +523,7 @@ export default function BacktestTaskForm({
       market_open_weekday: 6,
       market_open_hour_utc: 21,
       max_tick_gap_hours: 120,
+      backtest_tick_batch_size: 1000,
       spread_filter_enabled: false,
       max_spread_pips: 10,
       oanda_candle_filter_enabled: false,
@@ -841,6 +853,7 @@ export default function BacktestTaskForm({
           'pip_size',
           'tick_granularity',
           'tick_window_value_mode',
+          'backtest_tick_batch_size',
           'spread_filter_enabled',
           'max_spread_pips',
           'oanda_candle_filter_enabled',
@@ -926,6 +939,7 @@ export default function BacktestTaskForm({
         market_open_weekday: completeData.market_open_weekday,
         market_open_hour_utc: completeData.market_open_hour_utc,
         max_tick_gap_hours: completeData.max_tick_gap_hours,
+        backtest_tick_batch_size: completeData.backtest_tick_batch_size,
         spread_filter_enabled: completeData.spread_filter_enabled,
         max_spread_pips: completeData.max_spread_pips,
         oanda_candle_filter_enabled: completeData.oanda_candle_filter_enabled,
@@ -1370,6 +1384,32 @@ export default function BacktestTaskForm({
                         ))}
                       </Select>
                     </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="backtest_tick_batch_size"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? 1000}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      label={t('backtest:form.backtestTickBatchSize')}
+                      type="number"
+                      inputProps={{ min: 1, max: 50000, step: 1 }}
+                      error={!!errors.backtest_tick_batch_size}
+                      helperText={
+                        errors.backtest_tick_batch_size?.message ||
+                        t('backtest:form.backtestTickBatchSizeHelp')
+                      }
+                    />
                   )}
                 />
               </Grid>
@@ -2117,37 +2157,18 @@ export default function BacktestTaskForm({
                 <Controller
                   name="excluded_dates"
                   control={control}
-                  render={({ field }) => {
-                    const value = Array.isArray(field.value)
-                      ? field.value.join(', ')
-                      : '';
-                    return (
-                      <TextField
-                        fullWidth
-                        label={t(
-                          'backtest:form.excludedDates',
-                          'Additional closed dates'
-                        )}
-                        value={value}
-                        onChange={(e) => {
-                          const parts = e.target.value
-                            .split(/[\s,]+/)
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          field.onChange(parts);
-                        }}
-                        helperText={
-                          (errors.excluded_dates as { message?: string })
-                            ?.message ||
-                          t(
-                            'backtest:form.excludedDatesHelp',
-                            'Comma-separated MM-DD dates for annual closures, or YYYY-MM-DD for a single year. These are treated as market-closed and are merged with the holiday calendar above.'
-                          )
-                        }
-                        error={!!errors.excluded_dates}
-                      />
-                    );
-                  }}
+                  render={({ field }) => (
+                    <MarketClosedWindowsEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      defaultTimezone={timezone}
+                      helperText={
+                        (errors.excluded_dates as { message?: string })
+                          ?.message || t('backtest:form.excludedDatesHelp')
+                      }
+                      error={!!errors.excluded_dates}
+                    />
+                  )}
                 />
               </Grid>
             </Grid>
@@ -2173,6 +2194,9 @@ export default function BacktestTaskForm({
           instrument: formData.instrument as string,
           tick_granularity: formData.tick_granularity as string,
           tick_window_value_mode: formData.tick_window_value_mode as string,
+          backtest_tick_batch_size: formData.backtest_tick_batch_size as
+            | number
+            | undefined,
           spread_filter_enabled: formData.spread_filter_enabled as
             | boolean
             | undefined,
@@ -2218,6 +2242,7 @@ export default function BacktestTaskForm({
           instrument: t('common:labels.instrument'),
           tick_granularity: t('backtest:form.tickGranularity'),
           tick_window_value_mode: t('backtest:form.tickWindowValueMode'),
+          backtest_tick_batch_size: t('backtest:form.backtestTickBatchSize'),
           spread_filter_enabled: t('backtest:form.spreadFilterEnabled'),
           max_spread_pips: t('backtest:form.maxSpreadPips'),
           oanda_candle_filter_enabled: t(

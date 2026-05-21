@@ -36,6 +36,7 @@ const BACKTEST_PERIOD_SETTING_KEYS = new Set([
   'tick_granularity',
   'tick_window_value_mode',
   'max_tick_gap_hours',
+  'backtest_tick_batch_size',
   'spread_filter_enabled',
   'max_spread_pips',
   'oanda_candle_filter_enabled',
@@ -340,6 +341,14 @@ export function BacktestOverviewTab({
               </Typography>
               <Typography variant="body1">
                 {task.max_tick_gap_hours ?? 120}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('backtest:form.backtestTickBatchSize', 'Tick batch size')}
+              </Typography>
+              <Typography variant="body1">
+                {task.backtest_tick_batch_size ?? 1000}
               </Typography>
             </Box>
           </Box>

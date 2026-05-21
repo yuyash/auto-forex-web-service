@@ -130,9 +130,11 @@ class RuntimeMetricsTracker:
         current_balance: Decimal,
         ticks_processed: int = 0,
         execution_elapsed_seconds: float | int | Decimal | None = None,
+        record_tick: bool = True,
     ) -> dict[str, Any]:
         """Update rolling state for a tick and return common metrics."""
-        self._record_tick(timestamp=timestamp, mid=mid)
+        if record_tick:
+            self._record_tick(timestamp=timestamp, mid=mid)
 
         instrument = Instrument(self.instrument)
         conv = instrument.quote_to_account_rate(mid, AccountCurrency(self.account_currency))
@@ -265,6 +267,10 @@ class RuntimeMetricsTracker:
             metrics[f"{name}_baseline_atr"] = str(atr_for(period))
 
         return metrics
+
+    def observe_tick(self, *, timestamp: datetime, mid: Decimal) -> None:
+        """Update lightweight rolling price state without building metrics."""
+        self._record_tick(timestamp=timestamp, mid=mid)
 
     def _record_tick(self, *, timestamp: datetime, mid: Decimal) -> None:
         if not isinstance(timestamp, datetime):

@@ -1043,6 +1043,7 @@ class TaskExecutor:
             if self._tracemalloc_enabled:
                 self._check_memory(loop)
             return
+        self._runtime_metric_recorder.materialize_latest(loop.state)
         logger.debug(
             "Saving state after batch - task_id=%s, batch_count=%d, ticks_processed=%d",
             self.task.pk,
@@ -1126,6 +1127,7 @@ class TaskExecutor:
         result = self.engine.on_stop(state=loop.state)
         loop.state = result.state
         self.save_events(result.events)
+        self._runtime_metric_recorder.materialize_latest(loop.state)
         self.save_state(loop.state)
         # Flush any remaining metrics (including the last partial minute)
         self._metrics_aggregator.flush(final=True)
@@ -1327,6 +1329,8 @@ class BacktestExecutor(TaskExecutor):
         _ = resumed
         if str(getattr(self.task.config, "strategy_type", "")) == "snowball":
             setattr(state, "_defer_snowball_state_serialization", True)
+            if getattr(self.task, "in_memory_mode", False) is True:
+                setattr(state, "_defer_snowball_runtime_view_updates", True)
         return state
 
 
