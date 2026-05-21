@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.4.0...frontend-v2.5.0) (2026-05-21)
+
+
+### Features
+
+* **backtest:** add tick quality filters ([#791](https://github.com/yuyash/auto-forex-web-service/issues/791)) ([a7e2c90](https://github.com/yuyash/auto-forex-web-service/commit/a7e2c90c52d9afc33dcacdff48b740969a02905f))
+
 ## [2.4.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v2.3.0...frontend-v2.4.0) (2026-05-20)
 
 
