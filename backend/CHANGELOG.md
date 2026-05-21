@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.5.0...backend-v2.6.0) (2026-05-21)
+
+
+### Features
+
+* backtest closed datetime windows ([#792](https://github.com/yuyash/auto-forex-web-service/issues/792)) ([3df6cad](https://github.com/yuyash/auto-forex-web-service/commit/3df6cadf5e9ff0db57146768acdd4b35d7869e1c))
+
 ## [2.5.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.4.0...backend-v2.5.0) (2026-05-21)
 
 
