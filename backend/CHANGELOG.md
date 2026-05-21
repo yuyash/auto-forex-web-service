@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.5.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.4.0...backend-v2.5.0) (2026-05-21)
+
+
+### Features
+
+* **backtest:** add tick quality filters ([#791](https://github.com/yuyash/auto-forex-web-service/issues/791)) ([a7e2c90](https://github.com/yuyash/auto-forex-web-service/commit/a7e2c90c52d9afc33dcacdff48b740969a02905f))
+
+
+### Bug Fixes
+
+* **backtest:** preserve pending in-memory rebuild cycles ([#789](https://github.com/yuyash/auto-forex-web-service/issues/789)) ([f1421ca](https://github.com/yuyash/auto-forex-web-service/commit/f1421ca3b36527acddff6f24048c6c72890c17d0))
+
 ## [2.4.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v2.3.0...backend-v2.4.0) (2026-05-20)
 
 
