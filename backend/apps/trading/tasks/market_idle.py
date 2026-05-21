@@ -47,7 +47,10 @@ class MarketIdleCoordinator:
         )
 
         if holidays_enabled or excluded_dates:
-            from apps.trading.services.market_holidays import resolve_holiday_dates
+            from apps.trading.services.market_holidays import (
+                parse_excluded_windows,
+                resolve_holiday_dates,
+            )
 
             start_dt = getattr(task, "start_time", None)
             end_dt = getattr(task, "end_time", None)
@@ -59,8 +62,10 @@ class MarketIdleCoordinator:
                 end=end_date,
                 excluded_dates=excluded_dates,
             )
+            holiday_windows = parse_excluded_windows(excluded_dates)
         else:
             holiday_dates = frozenset()
+            holiday_windows = ()
 
         return MarketSessionConfig(
             enabled=bool(getattr(task, "market_close_enabled", True)),
@@ -69,6 +74,7 @@ class MarketIdleCoordinator:
             open_weekday=int(getattr(task, "market_open_weekday", 6) or 0),
             open_hour_utc=int(getattr(task, "market_open_hour_utc", 21) or 0),
             holiday_dates=holiday_dates,
+            holiday_windows=holiday_windows,
         )
 
     def evaluate(self, loop: Any) -> None:

@@ -17,12 +17,16 @@ list with ``BacktestTask.excluded_dates``.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from datetime import date
+from collections.abc import Iterable, Mapping
+from datetime import UTC, date, datetime
 from functools import lru_cache
 import re
+from typing import cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import holidays
+
+from apps.trading.services.market_schedule import MarketClosedWindow
 
 # Default major FX centres.  We keep the list intentionally small — the
 # goal is to catch days where liquidity disappears across the board, not
@@ -111,6 +115,8 @@ def parse_excluded_dates(
 
     out: set[date] = set()
     for raw in values:
+        if isinstance(raw, dict):
+            continue
         if isinstance(raw, date):
             out.add(raw)
             continue
@@ -135,6 +141,69 @@ def parse_excluded_dates(
             if start <= candidate <= end:
                 out.add(candidate)
     return frozenset(out)
+
+
+def parse_excluded_windows(values: Iterable[object] | None) -> tuple[MarketClosedWindow, ...]:
+    """Parse custom market-closed datetime windows.
+
+    Newer backtest tasks store additional market closures as dictionaries:
+
+    ``{"start": "...", "end": "...", "timezone": "America/New_York"}``
+
+    ``start`` and ``end`` may be offset-aware ISO-8601 datetimes.  If a
+    datetime has no offset, it is interpreted in the supplied IANA
+    timezone.  Invalid entries are skipped here because serializer
+    validation is responsible for rejecting malformed user input.
+    """
+    if not values:
+        return ()
+
+    windows: list[MarketClosedWindow] = []
+    for raw in values:
+        if not isinstance(raw, Mapping):
+            continue
+        raw_mapping = cast("Mapping[str, object]", raw)
+        timezone = str(raw_mapping.get("timezone") or "UTC").strip() or "UTC"
+        try:
+            start = parse_closed_window_datetime(
+                raw_mapping.get("start"),
+                timezone=timezone,
+            )
+            end = parse_closed_window_datetime(
+                raw_mapping.get("end"),
+                timezone=timezone,
+            )
+        except (TypeError, ValueError, ZoneInfoNotFoundError):
+            continue
+        if start >= end:
+            continue
+        windows.append(MarketClosedWindow(start=start, end=end))
+
+    return tuple(sorted(windows, key=lambda window: window.start))
+
+
+def parse_closed_window_datetime(value: object, *, timezone: str) -> datetime:
+    """Parse a datetime value and return it normalized to UTC."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError("datetime is required")
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo(timezone))
+    else:
+        # Validate the configured timezone even when the timestamp carries
+        # an offset; the timezone is kept for editing/display in the UI.
+        ZoneInfo(timezone)
+    return parsed.astimezone(UTC)
+
+
+def serialize_closed_window_datetime(value: datetime) -> str:
+    """Serialize a UTC datetime for JSON API responses."""
+    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _parse_month_day(value: str) -> tuple[int, int] | None:

@@ -1,6 +1,7 @@
 import { DataSource } from '../../../types/common';
 import type {
   BacktestInitialPositionCycle,
+  BacktestMarketClosure,
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../../../types/backtestTask';
@@ -37,7 +38,7 @@ export interface BacktestTaskPayloadFormData {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number | string;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycle[];
   in_memory_mode?: boolean;

@@ -33,6 +33,23 @@ _OPEN_HOUR_UTC = 21
 
 
 @dataclass(frozen=True, slots=True)
+class MarketClosedWindow:
+    """Explicit market-closed datetime interval in UTC.
+
+    ``start`` is inclusive and ``end`` is exclusive.  Callers should
+    normalize both values to UTC before constructing the window.
+    """
+
+    start: datetime
+    end: datetime
+
+    def contains(self, value: datetime) -> bool:
+        """Return True when ``value`` falls inside the closed interval."""
+        now = _ensure_utc(value)
+        return self.start <= now < self.end
+
+
+@dataclass(frozen=True, slots=True)
 class MarketSessionConfig:
     """Weekly market session definition.
 
@@ -44,8 +61,10 @@ class MarketSessionConfig:
 
     ``holiday_dates`` is an optional set of UTC calendar dates on which
     the market should be treated as closed for the entire 24-hour
-    window.  Holidays are honoured even when ``enabled`` is False so
-    that callers can opt out of the weekly close while still suppressing
+    window.  ``holiday_windows`` is an optional set of exact UTC
+    datetime intervals for ad-hoc closures such as early Christmas
+    closes.  Both are honoured even when ``enabled`` is False so that
+    callers can opt out of the weekly close while still suppressing
     trading on illiquid major-market holidays such as Christmas.
     """
 
@@ -55,6 +74,7 @@ class MarketSessionConfig:
     open_weekday: int = _OPEN_WEEKDAY
     open_hour_utc: int = _OPEN_HOUR_UTC
     holiday_dates: frozenset[date] = field(default_factory=frozenset)
+    holiday_windows: tuple[MarketClosedWindow, ...] = field(default_factory=tuple)
 
     @property
     def has_weekly_close(self) -> bool:
@@ -63,8 +83,8 @@ class MarketSessionConfig:
 
     @property
     def has_holiday_calendar(self) -> bool:
-        """Whether at least one explicit holiday date is configured."""
-        return bool(self.holiday_dates)
+        """Whether at least one explicit holiday date/window is configured."""
+        return bool(self.holiday_dates or self.holiday_windows)
 
 
 DEFAULT_SESSION_CONFIG = MarketSessionConfig()
@@ -92,11 +112,13 @@ def is_forex_market_closed(
 
     With the default config this returns True for Friday-21:00-UTC
     through Sunday-21:00-UTC.  When ``config.enabled`` is False the
-    weekly close is ignored but configured ``holiday_dates`` still
-    cause the market to be reported as closed for the whole UTC day.
+    weekly close is ignored but configured ``holiday_dates`` and
+    ``holiday_windows`` still cause the market to be reported as closed.
     """
     cfg = config or DEFAULT_SESSION_CONFIG
     now = _ensure_utc(now)
+    if cfg.holiday_windows and any(window.contains(now) for window in cfg.holiday_windows):
+        return True
     if cfg.holiday_dates and now.date() in cfg.holiday_dates:
         return True
     if not cfg.enabled:

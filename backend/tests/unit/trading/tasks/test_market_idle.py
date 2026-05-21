@@ -74,3 +74,29 @@ def test_backtest_zero_delay_resumes_after_weekend_close() -> None:
 
     assert task.status == TaskStatus.RUNNING
     assert "_idle_entered_at" not in loop.state.strategy_state
+
+
+def test_backtest_idles_during_custom_closed_window() -> None:
+    task = _FakeBacktestTask()
+    task.market_close_enabled = False
+    task.excluded_dates = [
+        {
+            "start": "2024-12-24T16:59:00-05:00",
+            "end": "2024-12-25T17:05:00-05:00",
+            "timezone": "America/New_York",
+        }
+    ]
+    loop = SimpleNamespace(
+        last_delivered_tick_timestamp=datetime(2024, 12, 25, 12, 0, tzinfo=UTC),
+        state=_FakeState(),
+    )
+    coordinator = MarketIdleCoordinator(task=task, task_type=TaskType.BACKTEST)
+
+    coordinator.evaluate(loop)
+
+    assert task.status == TaskStatus.IDLE
+
+    loop.last_delivered_tick_timestamp = datetime(2024, 12, 25, 22, 6, tzinfo=UTC)
+    coordinator.evaluate(loop)
+
+    assert task.status == TaskStatus.RUNNING

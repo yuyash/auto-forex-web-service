@@ -45,8 +45,12 @@ import {
   currencyCodeSchema,
   optionalCurrencyCodeSchema,
 } from '../tasks/forms/currencyValidation';
-import { addInitialPositionSlotStructureIssues } from '../tasks/forms/validationSchemas';
+import {
+  addInitialPositionSlotStructureIssues,
+  excludedMarketClosureSchema,
+} from '../tasks/forms/validationSchemas';
 import { BacktestInitialPositionsEditor } from './BacktestInitialPositionsEditor';
+import { MarketClosedWindowsEditor } from './MarketClosedWindowsEditor';
 import {
   useFirstTick,
   useSupportedInstruments,
@@ -317,17 +321,7 @@ const backtestTaskUpdateSchema = z
       .positive('Candle tolerance must be greater than zero')
       .optional(),
     holidays_enabled: z.boolean().optional().default(false),
-    excluded_dates: z
-      .array(
-        z
-          .string()
-          .regex(
-            /^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/,
-            'Each excluded date must be YYYY-MM-DD or MM-DD'
-          )
-      )
-      .optional()
-      .default([]),
+    excluded_dates: z.array(excludedMarketClosureSchema).optional().default([]),
     in_memory_mode: z.boolean().optional().default(false),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
@@ -1714,36 +1708,18 @@ export default function BacktestTaskUpdateForm({
           <Controller
             name="excluded_dates"
             control={control}
-            render={({ field }) => {
-              const value = Array.isArray(field.value)
-                ? field.value.join(', ')
-                : '';
-              return (
-                <TextField
-                  fullWidth
-                  label={t(
-                    'backtest:form.excludedDates',
-                    'Additional closed dates'
-                  )}
-                  value={value}
-                  onChange={(e) => {
-                    const parts = e.target.value
-                      .split(/[\s,]+/)
-                      .map((s) => s.trim())
-                      .filter(Boolean);
-                    field.onChange(parts);
-                  }}
-                  helperText={
-                    (errors.excluded_dates as { message?: string })?.message ||
-                    t(
-                      'backtest:form.excludedDatesHelp',
-                      'Comma-separated MM-DD dates for annual closures, or YYYY-MM-DD for a single year. These are treated as market-closed and are merged with the holiday calendar above.'
-                    )
-                  }
-                  error={!!errors.excluded_dates}
-                />
-              );
-            }}
+            render={({ field }) => (
+              <MarketClosedWindowsEditor
+                value={field.value}
+                onChange={field.onChange}
+                defaultTimezone={timezone}
+                helperText={
+                  (errors.excluded_dates as { message?: string })?.message ||
+                  t('backtest:form.excludedDatesHelp')
+                }
+                error={!!errors.excluded_dates}
+              />
+            )}
           />
         </Grid>
 

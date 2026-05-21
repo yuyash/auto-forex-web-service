@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from apps.trading.services.market_schedule import (
+    MarketClosedWindow,
     MarketSessionConfig,
     current_schedule,
     is_forex_market_closed,
@@ -69,7 +70,35 @@ class TestHolidayClosure:
         cfg = MarketSessionConfig()
 
         assert cfg.holiday_dates == frozenset()
+        assert cfg.holiday_windows == ()
         assert cfg.has_holiday_calendar is False
+
+    def test_explicit_closed_window_closes_market(self) -> None:
+        cfg = MarketSessionConfig(
+            enabled=False,
+            holiday_windows=(
+                MarketClosedWindow(
+                    start=datetime(2024, 12, 24, 21, 59, tzinfo=timezone.utc),
+                    end=datetime(2024, 12, 25, 22, 5, tzinfo=timezone.utc),
+                ),
+            ),
+        )
+
+        assert (
+            is_forex_market_closed(
+                datetime(2024, 12, 25, 12, 0, tzinfo=timezone.utc),
+                config=cfg,
+            )
+            is True
+        )
+        assert (
+            is_forex_market_closed(
+                datetime(2024, 12, 25, 22, 5, tzinfo=timezone.utc),
+                config=cfg,
+            )
+            is False
+        )
+        assert cfg.has_holiday_calendar is True
 
 
 class TestHolidayCurrentSchedule:

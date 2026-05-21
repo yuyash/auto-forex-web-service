@@ -40,6 +40,43 @@ describe('backtestTaskSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts closed datetime windows with timezone', () => {
+    const result = backtestTaskSchema.safeParse({
+      ...baseBacktestTask,
+      excluded_dates: [
+        {
+          start: '2024-12-24T21:59:00.000Z',
+          end: '2024-12-25T22:05:00.000Z',
+          timezone: 'America/New_York',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.excluded_dates).toEqual([
+      {
+        start: '2024-12-24T21:59:00.000Z',
+        end: '2024-12-25T22:05:00.000Z',
+        timezone: 'America/New_York',
+      },
+    ]);
+  });
+
+  it('rejects closed datetime windows with end before start', () => {
+    const result = backtestTaskSchema.safeParse({
+      ...baseBacktestTask,
+      excluded_dates: [
+        {
+          start: '2024-12-25T22:05:00.000Z',
+          end: '2024-12-24T21:59:00.000Z',
+          timezone: 'America/New_York',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('allows in-memory mode without initial-position cycles', () => {
     const result = backtestTaskSchema.safeParse({
       ...baseBacktestTask,

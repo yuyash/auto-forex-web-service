@@ -266,7 +266,7 @@ export default function BacktestTasksComparePage() {
         [
           'excluded_dates',
           t('backtest:form.excludedDates', {
-            defaultValue: 'Additional closed dates',
+            defaultValue: 'Additional closed windows',
           }),
         ],
         [

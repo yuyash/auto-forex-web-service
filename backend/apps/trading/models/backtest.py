@@ -251,9 +251,10 @@ class BacktestTask(ExecutableTaskModel):
         default=list,
         blank=True,
         help_text=(
-            "Additional UTC calendar dates (ISO-8601 'YYYY-MM-DD') on which the backtest "
-            "should treat the market as closed. Merged with the auto-detected holiday set "
-            "when ``holidays_enabled`` is True; honoured on its own when it is False."
+            "Additional market-closed windows for the backtest. New entries are stored as "
+            "{start, end, timezone} objects; legacy YYYY-MM-DD/MM-DD strings remain supported. "
+            "Merged with the auto-detected holiday set when ``holidays_enabled`` is True; "
+            "honoured on its own when it is False."
         ),
     )
     initial_positions_enabled = models.BooleanField(

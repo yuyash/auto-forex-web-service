@@ -56,6 +56,14 @@ export interface BacktestInitialPositionCycleRequest {
   positions: BacktestInitialPositionRequest[];
 }
 
+export interface BacktestClosedWindowRequest {
+  start: string;
+  end: string;
+  timezone: string;
+}
+
+export type BacktestMarketClosureRequest = string | BacktestClosedWindowRequest;
+
 // --- OANDA Account types ---
 
 export interface OandaAccounts {
@@ -134,6 +142,7 @@ export interface BacktestTaskRequest {
   oanda_candle_filter_account?: number | null;
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: string;
+  excluded_dates?: BacktestMarketClosureRequest[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
   in_memory_mode?: boolean;
@@ -157,6 +166,7 @@ export interface PatchedBacktestTaskCreateRequest {
   oanda_candle_filter_account?: number | null;
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: string;
+  excluded_dates?: BacktestMarketClosureRequest[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: BacktestInitialPositionCycleRequest[];
   in_memory_mode?: boolean;

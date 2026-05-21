@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DataSource } from '../../../types/common';
+import type { BacktestMarketClosure } from '../../../types/backtestTask';
 import {
   currencyCodeSchema,
   optionalCurrencyCodeSchema,
@@ -65,12 +66,67 @@ const optionalPositiveIntegerInputSchema = z
       (Number.isInteger(Number(value)) && Number(value) > 0),
     'Must be a positive integer'
   );
-const excludedDateSchema = z
+const legacyExcludedDateSchema = z
   .string()
   .regex(
     /^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/,
     'Each excluded date must be YYYY-MM-DD or MM-DD'
   );
+export const marketClosedWindowSchema = z
+  .object({
+    start: z.string().min(1, 'Start datetime is required'),
+    end: z.string().min(1, 'End datetime is required'),
+    timezone: z.string().min(1, 'Timezone is required'),
+  })
+  .superRefine((window, ctx) => {
+    if (!isValidTimezone(window.timezone)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['timezone'],
+        message: 'Timezone must be a valid IANA timezone',
+      });
+    }
+    const start = new Date(window.start);
+    const end = new Date(window.end);
+    if (Number.isNaN(start.getTime())) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['start'],
+        message: 'Start datetime is invalid',
+      });
+    }
+    if (Number.isNaN(end.getTime())) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['end'],
+        message: 'End datetime is invalid',
+      });
+    }
+    if (
+      !Number.isNaN(start.getTime()) &&
+      !Number.isNaN(end.getTime()) &&
+      start >= end
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['end'],
+        message: 'End datetime must be after start datetime',
+      });
+    }
+  });
+export const excludedMarketClosureSchema = z.union([
+  legacyExcludedDateSchema,
+  marketClosedWindowSchema,
+]);
+
+function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const initialPositionSchema = z
   .object({
@@ -357,7 +413,7 @@ export const backtestTaskSchema = z
       .positive('Candle tolerance must be greater than zero')
       .optional(),
     holidays_enabled: z.boolean().optional().default(false),
-    excluded_dates: z.array(excludedDateSchema).optional().default([]),
+    excluded_dates: z.array(excludedMarketClosureSchema).optional().default([]),
     in_memory_mode: z.boolean().optional().default(false),
     initial_positions_enabled: z.boolean().optional().default(false),
     initial_position_cycles: z
@@ -527,7 +583,7 @@ export type BacktestTaskSchemaOutput = {
   oanda_candle_filter_granularity?: string;
   oanda_candle_filter_tolerance_pips?: number;
   holidays_enabled?: boolean;
-  excluded_dates?: string[];
+  excluded_dates?: BacktestMarketClosure[];
   initial_positions_enabled?: boolean;
   initial_position_cycles?: z.infer<typeof initialPositionCycleSchema>[];
   in_memory_mode?: boolean;

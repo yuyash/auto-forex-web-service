@@ -99,3 +99,38 @@ class TestBacktestTaskCreateSerializer:
             serializer.update(task, {"name": "Updated"})
 
         assert exc_info.value.__cause__ is None
+
+    def test_validate_excluded_dates_accepts_closed_windows(self):
+        serializer = BacktestTaskCreateSerializer()
+
+        result = serializer.validate_excluded_dates(
+            [
+                {
+                    "start": "2024-12-24T16:59:00-05:00",
+                    "end": "2024-12-25T17:05:00-05:00",
+                    "timezone": "America/New_York",
+                }
+            ]
+        )
+
+        assert result == [
+            {
+                "start": "2024-12-24T21:59:00Z",
+                "end": "2024-12-25T22:05:00Z",
+                "timezone": "America/New_York",
+            }
+        ]
+
+    def test_validate_excluded_dates_rejects_invalid_closed_windows(self):
+        serializer = BacktestTaskCreateSerializer()
+
+        with pytest.raises(serializers.ValidationError):
+            serializer.validate_excluded_dates(
+                [
+                    {
+                        "start": "2024-12-25T17:05:00-05:00",
+                        "end": "2024-12-24T16:59:00-05:00",
+                        "timezone": "America/New_York",
+                    }
+                ]
+            )

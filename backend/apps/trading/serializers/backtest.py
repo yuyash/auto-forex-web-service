@@ -399,23 +399,59 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Account is not active")
         return value
 
-    def validate_excluded_dates(self, value: list | None) -> list[str]:
-        """Validate excluded_dates as unique YYYY-MM-DD or recurring MM-DD strings."""
+    def validate_excluded_dates(self, value: list | None) -> list:
+        """Validate legacy excluded dates and explicit market-closed windows."""
         from datetime import date
         import re
+        from zoneinfo import ZoneInfoNotFoundError
+
+        from apps.trading.services.market_holidays import (
+            parse_closed_window_datetime,
+            serialize_closed_window_datetime,
+        )
 
         if value in (None, ""):
             return []
         if not isinstance(value, list):
-            raise serializers.ValidationError("excluded_dates must be a list of date strings.")
+            raise serializers.ValidationError(
+                "excluded_dates must be a list of date strings or closed-window objects."
+            )
 
         month_day_pattern = re.compile(r"^\d{2}-\d{2}$")
-        seen: set[str] = set()
-        normalized: list[str] = []
+        seen: set[object] = set()
+        normalized: list = []
         for raw in value:
-            normalized_value: str
-            if isinstance(raw, date):
+            normalized_value: str | dict
+            if isinstance(raw, dict):
+                timezone = str(raw.get("timezone") or "").strip()
+                if not timezone:
+                    raise serializers.ValidationError("Closed window timezone is required.")
+                try:
+                    start = parse_closed_window_datetime(raw.get("start"), timezone=timezone)
+                    end = parse_closed_window_datetime(raw.get("end"), timezone=timezone)
+                except ZoneInfoNotFoundError:
+                    raise serializers.ValidationError(
+                        f"Invalid timezone '{timezone}'. Use an IANA timezone name."
+                    ) from None
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError(
+                        "Closed windows require valid start and end datetimes."
+                    ) from None
+                if start >= end:
+                    raise serializers.ValidationError("Closed window start must be before end.")
+                normalized_value = {
+                    "start": serialize_closed_window_datetime(start),
+                    "end": serialize_closed_window_datetime(end),
+                    "timezone": timezone,
+                }
+                dedupe_key = (
+                    normalized_value["start"],
+                    normalized_value["end"],
+                    normalized_value["timezone"],
+                )
+            elif isinstance(raw, date):
                 normalized_value = raw.isoformat()
+                dedupe_key = normalized_value
             else:
                 text = str(raw or "").strip()
                 if not text:
@@ -435,9 +471,10 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                             f"Invalid date '{raw}'. Expected YYYY-MM-DD or MM-DD."
                         ) from None
                     normalized_value = f"{month:02d}-{day:02d}"
-            if normalized_value in seen:
+                dedupe_key = normalized_value
+            if dedupe_key in seen:
                 continue
-            seen.add(normalized_value)
+            seen.add(dedupe_key)
             normalized.append(normalized_value)
         return normalized
 

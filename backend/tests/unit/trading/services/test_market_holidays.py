@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -12,6 +12,7 @@ from apps.trading.services.market_holidays import (
     major_fx_holidays,
     major_fx_holidays_between,
     parse_excluded_dates,
+    parse_excluded_windows,
     resolve_holiday_dates,
 )
 
@@ -116,6 +117,69 @@ class TestParseExcludedDates:
 
     def test_skips_month_day_rules_without_window(self) -> None:
         assert parse_excluded_dates(["12-25"]) == frozenset()
+
+    def test_skips_closed_window_objects(self) -> None:
+        result = parse_excluded_dates(
+            [
+                "2024-12-25",
+                {
+                    "start": "2024-12-24T16:59:00-05:00",
+                    "end": "2024-12-25T17:05:00-05:00",
+                    "timezone": "America/New_York",
+                },
+            ]
+        )
+
+        assert result == frozenset({date(2024, 12, 25)})
+
+
+class TestParseExcludedWindows:
+    """Tests for parse_excluded_windows."""
+
+    def test_parses_offset_aware_closed_windows(self) -> None:
+        windows = parse_excluded_windows(
+            [
+                {
+                    "start": "2024-12-24T16:59:00-05:00",
+                    "end": "2024-12-25T17:05:00-05:00",
+                    "timezone": "America/New_York",
+                }
+            ]
+        )
+
+        assert len(windows) == 1
+        assert windows[0].start == datetime(2024, 12, 24, 21, 59, tzinfo=UTC)
+        assert windows[0].end == datetime(2024, 12, 25, 22, 5, tzinfo=UTC)
+
+    def test_interprets_naive_datetimes_in_configured_timezone(self) -> None:
+        windows = parse_excluded_windows(
+            [
+                {
+                    "start": "2024-12-24T16:59:00",
+                    "end": "2024-12-25T17:05:00",
+                    "timezone": "America/New_York",
+                }
+            ]
+        )
+
+        assert len(windows) == 1
+        assert windows[0].start == datetime(2024, 12, 24, 21, 59, tzinfo=UTC)
+        assert windows[0].end == datetime(2024, 12, 25, 22, 5, tzinfo=UTC)
+
+    def test_skips_legacy_dates_and_invalid_windows(self) -> None:
+        windows = parse_excluded_windows(
+            [
+                "2024-12-25",
+                {"start": "2024-12-25T00:00:00Z", "end": "bad", "timezone": "UTC"},
+                {
+                    "start": "2024-12-25T10:00:00Z",
+                    "end": "2024-12-25T09:00:00Z",
+                    "timezone": "UTC",
+                },
+            ]
+        )
+
+        assert windows == ()
 
 
 class TestResolveHolidayDates:
