@@ -50,4 +50,25 @@ describe('backtestTaskSchema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  it('requires a max spread when the spread filter is enabled', () => {
+    const result = backtestTaskSchema.safeParse({
+      ...baseBacktestTask,
+      spread_filter_enabled: true,
+      max_spread_pips: undefined,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('requires an account when OANDA candle validation is enabled', () => {
+    const result = backtestTaskSchema.safeParse({
+      ...baseBacktestTask,
+      oanda_candle_filter_enabled: true,
+      oanda_candle_filter_granularity: 'M1',
+      oanda_candle_filter_tolerance_pips: 5,
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

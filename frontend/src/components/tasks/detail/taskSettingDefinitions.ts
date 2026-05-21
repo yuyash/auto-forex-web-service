@@ -330,6 +330,41 @@ export function buildBacktestTaskSettingDefinitions(
       ),
     },
     {
+      key: 'spread_filter_enabled',
+      label: t('backtest:form.spreadFilterEnabled', 'Skip wide-spread ticks'),
+      format: formatBoolean,
+    },
+    {
+      key: 'max_spread_pips',
+      label: t('backtest:form.maxSpreadPips', 'Max spread (pips)'),
+    },
+    {
+      key: 'oanda_candle_filter_enabled',
+      label: t(
+        'backtest:form.oandaCandleFilterEnabled',
+        'Validate ticks with OANDA candles'
+      ),
+      format: formatBoolean,
+    },
+    {
+      key: 'oanda_candle_filter_account_name',
+      label: t(
+        'backtest:form.oandaCandleFilterAccount',
+        'OANDA candle account'
+      ),
+    },
+    {
+      key: 'oanda_candle_filter_granularity',
+      label: t('backtest:form.oandaCandleGranularity', 'Candle granularity'),
+    },
+    {
+      key: 'oanda_candle_filter_tolerance_pips',
+      label: t(
+        'backtest:form.oandaCandleTolerancePips',
+        'Candle tolerance (pips)'
+      ),
+    },
+    {
       key: 'holidays_enabled',
       label: t('backtest:form.holidaysEnabled', 'Skip major FX holidays'),
       format: formatBoolean,

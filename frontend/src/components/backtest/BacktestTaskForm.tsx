@@ -55,6 +55,7 @@ import {
 } from '../../hooks/useMarketConfig';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import { useToast } from '../common/useToast';
 import { DEFAULT_ACCOUNT_CURRENCY } from '../../constants/currencies';
 import { formatMoneyAmount } from '../../utils/numberFormat';
@@ -97,6 +98,20 @@ const weekdayOptions: ReadonlyArray<{
   { value: 5, key: 'saturday', label: 'Saturday' },
   { value: 6, key: 'sunday', label: 'Sunday' },
 ];
+
+const oandaCandleGranularityOptions = [
+  'S5',
+  'S10',
+  'S15',
+  'S30',
+  'M1',
+  'M5',
+  'M15',
+  'M30',
+  'H1',
+  'H4',
+  'D',
+] as const;
 
 function getTodayAtMidnightForTimezone(timezone: string): Date {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -161,6 +176,12 @@ interface ReviewContentProps {
     instrument: string;
     tick_granularity: string;
     tick_window_value_mode: string;
+    spread_filter_enabled?: boolean;
+    max_spread_pips?: number;
+    oanda_candle_filter_enabled?: boolean;
+    oanda_candle_filter_account?: number | null;
+    oanda_candle_filter_granularity?: string;
+    oanda_candle_filter_tolerance_pips?: number;
     sell_at_completion?: boolean;
     hedging_enabled?: boolean;
     in_memory_mode?: boolean;
@@ -388,6 +409,47 @@ function ReviewContent({
           </Typography>
         </Grid>
       )}
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.spreadFilterEnabled')}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.spread_filter_enabled
+            ? t('common:labels.yes')
+            : t('common:labels.no')}
+        </Typography>
+        {formValues.spread_filter_enabled ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('backtest:form.maxSpreadPipsValue', {
+              defaultValue: 'Max {{value}} pips',
+              value: formValues.max_spread_pips,
+            })}
+          </Typography>
+        ) : null}
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.oandaCandleFilterEnabled')}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.oanda_candle_filter_enabled
+            ? t('common:labels.yes')
+            : t('common:labels.no')}
+        </Typography>
+        {formValues.oanda_candle_filter_enabled ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('backtest:form.oandaCandleFilterSummary', {
+              defaultValue:
+                'Account ID {{account}}, {{granularity}}, tolerance {{tolerance}} pips',
+              account: formValues.oanda_candle_filter_account ?? '-',
+              granularity: formValues.oanda_candle_filter_granularity ?? 'M1',
+              tolerance: formValues.oanda_candle_filter_tolerance_pips ?? 5,
+            })}
+          </Typography>
+        ) : null}
+      </Grid>
     </Grid>
   );
 }
@@ -450,6 +512,12 @@ export default function BacktestTaskForm({
       market_open_weekday: 6,
       market_open_hour_utc: 21,
       max_tick_gap_hours: 120,
+      spread_filter_enabled: false,
+      max_spread_pips: 10,
+      oanda_candle_filter_enabled: false,
+      oanda_candle_filter_account: null,
+      oanda_candle_filter_granularity: 'M1',
+      oanda_candle_filter_tolerance_pips: 5,
       holidays_enabled: false,
       excluded_dates: [],
     };
@@ -520,6 +588,8 @@ export default function BacktestTaskForm({
   const showTickWindowValueMode = watchedTickGranularity !== 'tick';
 
   const watchedMarketCloseEnabled = watch('market_close_enabled');
+  const watchedSpreadFilterEnabled = watch('spread_filter_enabled');
+  const watchedOandaCandleFilterEnabled = watch('oanda_candle_filter_enabled');
   const watchedInMemoryMode = watch('in_memory_mode');
   const watchedInitialPositionsEnabled = watch('initial_positions_enabled');
   const watchedPipSize = watch('pip_size');
@@ -563,6 +633,12 @@ export default function BacktestTaskForm({
     metadata: instrumentMetadata,
     usingFallback: usingInstrumentFallback,
   } = useSupportedInstruments();
+  const { accounts: oandaAccounts, isLoading: oandaAccountsLoading } =
+    useOandaAccounts();
+  const activeOandaAccounts = useMemo(
+    () => oandaAccounts.filter((account) => account.is_active),
+    [oandaAccounts]
+  );
 
   // config_id is now a UUID string
   const configIdString = selectedConfigId || '';
@@ -765,6 +841,12 @@ export default function BacktestTaskForm({
           'pip_size',
           'tick_granularity',
           'tick_window_value_mode',
+          'spread_filter_enabled',
+          'max_spread_pips',
+          'oanda_candle_filter_enabled',
+          'oanda_candle_filter_account',
+          'oanda_candle_filter_granularity',
+          'oanda_candle_filter_tolerance_pips',
           'in_memory_mode',
           'initial_positions_enabled',
           'initial_position_cycles',
@@ -844,6 +926,14 @@ export default function BacktestTaskForm({
         market_open_weekday: completeData.market_open_weekday,
         market_open_hour_utc: completeData.market_open_hour_utc,
         max_tick_gap_hours: completeData.max_tick_gap_hours,
+        spread_filter_enabled: completeData.spread_filter_enabled,
+        max_spread_pips: completeData.max_spread_pips,
+        oanda_candle_filter_enabled: completeData.oanda_candle_filter_enabled,
+        oanda_candle_filter_account: completeData.oanda_candle_filter_account,
+        oanda_candle_filter_granularity:
+          completeData.oanda_candle_filter_granularity,
+        oanda_candle_filter_tolerance_pips:
+          completeData.oanda_candle_filter_tolerance_pips,
         holidays_enabled: completeData.holidays_enabled,
         excluded_dates: completeData.excluded_dates,
         initial_positions_enabled: completeData.initial_positions_enabled,
@@ -880,6 +970,13 @@ export default function BacktestTaskForm({
           start_time: t('backtest:config.startDate'),
           end_time: t('backtest:config.endDate'),
           initial_balance: t('backtest:detail.initialBalance'),
+          max_spread_pips: t('backtest:form.maxSpreadPips'),
+          oanda_candle_filter_account: t(
+            'backtest:form.oandaCandleFilterAccount'
+          ),
+          oanda_candle_filter_tolerance_pips: t(
+            'backtest:form.oandaCandleTolerancePips'
+          ),
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -1276,6 +1373,217 @@ export default function BacktestTaskForm({
                   )}
                 />
               </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="spread_filter_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t('backtest:form.spreadFilterEnabled')}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t('backtest:form.spreadFilterDescription')}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              {watchedSpreadFilterEnabled ? (
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Controller
+                    name="max_spread_pips"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          field.onChange(val === '' ? undefined : Number(val));
+                        }}
+                        fullWidth
+                        label={t('backtest:form.maxSpreadPips')}
+                        type="text"
+                        inputMode="decimal"
+                        inputProps={{ min: 0, step: 0.1 }}
+                        error={!!errors.max_spread_pips}
+                        helperText={
+                          errors.max_spread_pips?.message ||
+                          t('backtest:form.maxSpreadPipsHelp')
+                        }
+                      />
+                    )}
+                  />
+                </Grid>
+              ) : null}
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="oanda_candle_filter_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t('backtest:form.oandaCandleFilterEnabled')}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t('backtest:form.oandaCandleFilterDescription')}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              {watchedOandaCandleFilterEnabled ? (
+                <>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Controller
+                      name="oanda_candle_filter_account"
+                      control={control}
+                      render={({ field }) => (
+                        <FormControl
+                          fullWidth
+                          error={!!errors.oanda_candle_filter_account}
+                        >
+                          <InputLabel id="backtest-oanda-candle-account-label">
+                            {t('backtest:form.oandaCandleFilterAccount')}
+                          </InputLabel>
+                          <Select
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            labelId="backtest-oanda-candle-account-label"
+                            label={t('backtest:form.oandaCandleFilterAccount')}
+                            disabled={oandaAccountsLoading}
+                          >
+                            {activeOandaAccounts.map((account) => {
+                              const accountApiType =
+                                account.api_type ??
+                                (account.is_practice === false
+                                  ? 'live'
+                                  : 'practice');
+                              const accountTypeLabel = t(
+                                `backtest:form.oandaCandleAccountTypes.${accountApiType}`
+                              );
+
+                              return (
+                                <MenuItem key={account.id} value={account.id}>
+                                  {t('backtest:form.oandaCandleAccountOption', {
+                                    accountId: account.account_id,
+                                    type: accountTypeLabel,
+                                  })}
+                                </MenuItem>
+                              );
+                            })}
+                          </Select>
+                          <Typography
+                            variant="caption"
+                            color={
+                              errors.oanda_candle_filter_account
+                                ? 'error'
+                                : 'text.secondary'
+                            }
+                            sx={{ mt: 0.5, ml: 1.75 }}
+                          >
+                            {errors.oanda_candle_filter_account?.message ||
+                              t('backtest:form.oandaCandleFilterAccountHelp')}
+                          </Typography>
+                        </FormControl>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Controller
+                      name="oanda_candle_filter_granularity"
+                      control={control}
+                      render={({ field }) => (
+                        <FormControl
+                          fullWidth
+                          error={!!errors.oanda_candle_filter_granularity}
+                        >
+                          <InputLabel id="backtest-oanda-candle-granularity-label">
+                            {t('backtest:form.oandaCandleGranularity')}
+                          </InputLabel>
+                          <Select
+                            {...field}
+                            labelId="backtest-oanda-candle-granularity-label"
+                            label={t('backtest:form.oandaCandleGranularity')}
+                          >
+                            {oandaCandleGranularityOptions.map((value) => (
+                              <MenuItem key={value} value={value}>
+                                {t(
+                                  `backtest:form.oandaCandleGranularityOptions.${value}`
+                                )}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Controller
+                      name="oanda_candle_filter_tolerance_pips"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.onChange(
+                              val === '' ? undefined : Number(val)
+                            );
+                          }}
+                          fullWidth
+                          label={t('backtest:form.oandaCandleTolerancePips')}
+                          type="text"
+                          inputMode="decimal"
+                          inputProps={{ min: 0, step: 0.1 }}
+                          error={!!errors.oanda_candle_filter_tolerance_pips}
+                          helperText={
+                            errors.oanda_candle_filter_tolerance_pips
+                              ?.message ||
+                            t('backtest:form.oandaCandleTolerancePipsHelp')
+                          }
+                        />
+                      )}
+                    />
+                  </Grid>
+                </>
+              ) : null}
 
               <Grid size={{ xs: 12 }}>
                 <Controller
@@ -1865,6 +2173,21 @@ export default function BacktestTaskForm({
           instrument: formData.instrument as string,
           tick_granularity: formData.tick_granularity as string,
           tick_window_value_mode: formData.tick_window_value_mode as string,
+          spread_filter_enabled: formData.spread_filter_enabled as
+            | boolean
+            | undefined,
+          max_spread_pips: formData.max_spread_pips as number | undefined,
+          oanda_candle_filter_enabled: formData.oanda_candle_filter_enabled as
+            | boolean
+            | undefined,
+          oanda_candle_filter_account: formData.oanda_candle_filter_account as
+            | number
+            | null
+            | undefined,
+          oanda_candle_filter_granularity:
+            formData.oanda_candle_filter_granularity as string | undefined,
+          oanda_candle_filter_tolerance_pips:
+            formData.oanda_candle_filter_tolerance_pips as number | undefined,
           sell_at_completion: formData.sell_at_completion as boolean,
           hedging_enabled: formData.hedging_enabled as boolean | undefined,
           initial_positions_enabled: formData.initial_positions_enabled as
@@ -1895,6 +2218,20 @@ export default function BacktestTaskForm({
           instrument: t('common:labels.instrument'),
           tick_granularity: t('backtest:form.tickGranularity'),
           tick_window_value_mode: t('backtest:form.tickWindowValueMode'),
+          spread_filter_enabled: t('backtest:form.spreadFilterEnabled'),
+          max_spread_pips: t('backtest:form.maxSpreadPips'),
+          oanda_candle_filter_enabled: t(
+            'backtest:form.oandaCandleFilterEnabled'
+          ),
+          oanda_candle_filter_account: t(
+            'backtest:form.oandaCandleFilterAccount'
+          ),
+          oanda_candle_filter_granularity: t(
+            'backtest:form.oandaCandleGranularity'
+          ),
+          oanda_candle_filter_tolerance_pips: t(
+            'backtest:form.oandaCandleTolerancePips'
+          ),
           in_memory_mode: t('backtest:form.inMemoryMode', {
             defaultValue: 'In-memory mode',
           }),

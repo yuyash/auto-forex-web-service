@@ -41,6 +41,13 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     initial_positions_enabled: task.initial_positions_enabled ?? false,
     initial_position_cycles: task.initial_position_cycles ?? [],
     in_memory_mode: task.in_memory_mode ?? false,
+    spread_filter_enabled: task.spread_filter_enabled ?? false,
+    oanda_candle_filter_enabled: task.oanda_candle_filter_enabled ?? false,
+    oanda_candle_filter_account: task.oanda_candle_filter_account ?? null,
+    oanda_candle_filter_account_name:
+      task.oanda_candle_filter_account_name ?? null,
+    oanda_candle_filter_granularity:
+      task.oanda_candle_filter_granularity ?? 'M1',
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,

@@ -62,6 +62,21 @@ class BacktestTask(ExecutableTaskModel):
         AVERAGE = "average", "Average"
         MEDIAN = "median", "Median"
 
+    class OandaCandleGranularity(models.TextChoices):
+        """OANDA candle granularity used for backtest tick validation."""
+
+        SECOND_5 = "S5", "5 Seconds"
+        SECOND_10 = "S10", "10 Seconds"
+        SECOND_15 = "S15", "15 Seconds"
+        SECOND_30 = "S30", "30 Seconds"
+        MINUTE_1 = "M1", "1 Minute"
+        MINUTE_5 = "M5", "5 Minutes"
+        MINUTE_15 = "M15", "15 Minutes"
+        MINUTE_30 = "M30", "30 Minutes"
+        HOUR_1 = "H1", "1 Hour"
+        HOUR_4 = "H4", "4 Hours"
+        DAY = "D", "1 Day"
+
     objects = BacktestTaskManager()
 
     user = models.ForeignKey(
@@ -182,6 +197,46 @@ class BacktestTask(ExecutableTaskModel):
         help_text=(
             "Maximum forward gap between replayed ticks, in hours, before the backtest "
             "is failed as suspicious. Default: 120 (5 days)."
+        ),
+    )
+    spread_filter_enabled = models.BooleanField(
+        default=False,
+        help_text="Skip backtest ticks whose bid/ask spread exceeds max_spread_pips.",
+    )
+    max_spread_pips = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=Decimal("0"),
+        help_text=(
+            "Maximum allowed bid/ask spread in pips when spread_filter_enabled is true. "
+            "Ticks above this threshold are skipped and logged."
+        ),
+    )
+    oanda_candle_filter_enabled = models.BooleanField(
+        default=False,
+        help_text="Compare replayed backtest ticks with OANDA candles and skip outliers.",
+    )
+    oanda_candle_filter_account = models.ForeignKey(
+        "market.OandaAccounts",
+        on_delete=models.SET_NULL,
+        related_name="backtest_candle_filter_tasks",
+        null=True,
+        blank=True,
+        help_text="OANDA account used to fetch candle data for backtest tick validation.",
+    )
+    oanda_candle_filter_granularity = models.CharField(
+        max_length=4,
+        choices=OandaCandleGranularity.choices,
+        default=OandaCandleGranularity.MINUTE_1,
+        help_text="OANDA candle granularity used for backtest tick validation.",
+    )
+    oanda_candle_filter_tolerance_pips = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=Decimal("5"),
+        help_text=(
+            "Allowed distance beyond the OANDA candle high/low in pips before "
+            "a replayed tick is treated as an outlier and skipped."
         ),
     )
     holidays_enabled = models.BooleanField(

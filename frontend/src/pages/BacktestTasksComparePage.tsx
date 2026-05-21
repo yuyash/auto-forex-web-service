@@ -73,6 +73,28 @@ function backtestTaskSettings(
   setIfPresent(settings, 'market_open_weekday', task.market_open_weekday);
   setIfPresent(settings, 'market_open_hour_utc', task.market_open_hour_utc);
   setIfPresent(settings, 'max_tick_gap_hours', task.max_tick_gap_hours);
+  setIfPresent(settings, 'spread_filter_enabled', task.spread_filter_enabled);
+  setIfPresent(settings, 'max_spread_pips', task.max_spread_pips);
+  setIfPresent(
+    settings,
+    'oanda_candle_filter_enabled',
+    task.oanda_candle_filter_enabled
+  );
+  setIfPresent(
+    settings,
+    'oanda_candle_filter_account_name',
+    task.oanda_candle_filter_account_name
+  );
+  setIfPresent(
+    settings,
+    'oanda_candle_filter_granularity',
+    task.oanda_candle_filter_granularity
+  );
+  setIfPresent(
+    settings,
+    'oanda_candle_filter_tolerance_pips',
+    task.oanda_candle_filter_tolerance_pips
+  );
   setIfPresent(settings, 'holidays_enabled', task.holidays_enabled);
   setIfPresent(settings, 'excluded_dates', task.excluded_dates);
   setIfPresent(
@@ -200,6 +222,42 @@ export default function BacktestTasksComparePage() {
           }),
         ],
         [
+          'spread_filter_enabled',
+          t('backtest:form.spreadFilterEnabled', {
+            defaultValue: 'Skip wide-spread ticks',
+          }),
+        ],
+        [
+          'max_spread_pips',
+          t('backtest:form.maxSpreadPips', {
+            defaultValue: 'Max spread (pips)',
+          }),
+        ],
+        [
+          'oanda_candle_filter_enabled',
+          t('backtest:form.oandaCandleFilterEnabled', {
+            defaultValue: 'Validate ticks with OANDA candles',
+          }),
+        ],
+        [
+          'oanda_candle_filter_account_name',
+          t('backtest:form.oandaCandleFilterAccount', {
+            defaultValue: 'OANDA candle account',
+          }),
+        ],
+        [
+          'oanda_candle_filter_granularity',
+          t('backtest:form.oandaCandleGranularity', {
+            defaultValue: 'Candle granularity',
+          }),
+        ],
+        [
+          'oanda_candle_filter_tolerance_pips',
+          t('backtest:form.oandaCandleTolerancePips', {
+            defaultValue: 'Candle tolerance (pips)',
+          }),
+        ],
+        [
           'holidays_enabled',
           t('backtest:form.holidaysEnabled', {
             defaultValue: 'Skip major FX holidays',
@@ -321,6 +379,12 @@ export default function BacktestTasksComparePage() {
             'market_open_weekday',
             'market_open_hour_utc',
             'max_tick_gap_hours',
+            'spread_filter_enabled',
+            'max_spread_pips',
+            'oanda_candle_filter_enabled',
+            'oanda_candle_filter_account_name',
+            'oanda_candle_filter_granularity',
+            'oanda_candle_filter_tolerance_pips',
             'holidays_enabled',
             'excluded_dates',
             'initial_positions_enabled',

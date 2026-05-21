@@ -215,7 +215,7 @@ class TestBacktestTickPublisherRunnerIntegration:
 
         runner = BacktestTickPublisherRunner()
         runner._publish_ticks = MagicMock(  # type: ignore[method-assign]
-            return_value=(0, None, True)
+            return_value=(0, 0, None, True)
         )
         runner._check_data_coverage = MagicMock(return_value="unexpected gap")  # type: ignore[method-assign]
         runner._mark_backtest_task_failed = MagicMock()  # type: ignore[method-assign]

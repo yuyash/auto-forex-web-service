@@ -30,6 +30,12 @@ export interface BacktestTaskPayloadFormData {
   market_open_weekday?: number;
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
+  spread_filter_enabled?: boolean;
+  max_spread_pips?: number | string;
+  oanda_candle_filter_enabled?: boolean;
+  oanda_candle_filter_account?: number | null;
+  oanda_candle_filter_granularity?: string;
+  oanda_candle_filter_tolerance_pips?: number | string;
   holidays_enabled?: boolean;
   excluded_dates?: string[];
   initial_positions_enabled?: boolean;
@@ -64,6 +70,15 @@ function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
     market_open_weekday: data.market_open_weekday,
     market_open_hour_utc: data.market_open_hour_utc,
     max_tick_gap_hours: data.max_tick_gap_hours,
+    spread_filter_enabled: data.spread_filter_enabled ?? false,
+    max_spread_pips: data.max_spread_pips,
+    oanda_candle_filter_enabled: data.oanda_candle_filter_enabled ?? false,
+    oanda_candle_filter_account: data.oanda_candle_filter_enabled
+      ? (data.oanda_candle_filter_account ?? null)
+      : null,
+    oanda_candle_filter_granularity:
+      data.oanda_candle_filter_granularity ?? 'M1',
+    oanda_candle_filter_tolerance_pips: data.oanda_candle_filter_tolerance_pips,
     holidays_enabled: data.holidays_enabled,
     excluded_dates: data.excluded_dates,
     in_memory_mode: data.in_memory_mode ?? false,
@@ -104,6 +119,14 @@ export function buildBacktestTaskUpdatePayload(
         ? undefined
         : String(payload.commission_per_trade),
     pip_size: payload.pip_size == null ? undefined : String(payload.pip_size),
+    max_spread_pips:
+      payload.max_spread_pips == null
+        ? undefined
+        : String(payload.max_spread_pips),
+    oanda_candle_filter_tolerance_pips:
+      payload.oanda_candle_filter_tolerance_pips == null
+        ? undefined
+        : String(payload.oanda_candle_filter_tolerance_pips),
     debug_options: options
       ? { tracemalloc: Boolean(options.tracemalloc) }
       : undefined,

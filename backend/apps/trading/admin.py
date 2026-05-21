@@ -34,11 +34,20 @@ class BacktestTaskAdmin(admin.ModelAdmin):
         "status",
         "data_source",
         "in_memory_mode",
+        "spread_filter_enabled",
+        "oanda_candle_filter_enabled",
         "start_time",
         "end_time",
         "created_at",
     )
-    list_filter = ("status", "data_source", "in_memory_mode", "created_at")
+    list_filter = (
+        "status",
+        "data_source",
+        "in_memory_mode",
+        "spread_filter_enabled",
+        "oanda_candle_filter_enabled",
+        "created_at",
+    )
     search_fields = ("name", "user__email", "user__username")
     ordering = ("-created_at",)
 

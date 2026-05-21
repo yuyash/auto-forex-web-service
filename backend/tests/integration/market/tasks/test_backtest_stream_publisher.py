@@ -103,6 +103,57 @@ class TestBacktestStreamPublisher:
         assert len(eof_entries) == 1
         assert tick_entries[0][1]["instrument"] == "USD_JPY"
 
+    def test_spread_filter_skips_wide_spread_ticks(self, settings) -> None:
+        settings.MARKET_BACKTEST_STREAM_MAXLEN = 1_000
+        settings.MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = 0
+
+        task = _make_task(suffix="spread")
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=task.start_time,
+            bid=Decimal("150.000"),
+            ask=Decimal("150.020"),
+            mid=Decimal("150.010"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=task.start_time.replace(second=1),
+            bid=Decimal("150.000"),
+            ask=Decimal("150.500"),
+            mid=Decimal("150.250"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=task.start_time.replace(second=2),
+            bid=Decimal("150.010"),
+            ask=Decimal("150.030"),
+            mid=Decimal("150.020"),
+        )
+
+        fake_server = fakeredis.FakeServer()
+        fake_client = fakeredis.FakeRedis(server=fake_server, decode_responses=True)
+
+        runner = BacktestTickPublisherRunner()
+
+        with patch("apps.market.tasks.backtest.redis_client", return_value=fake_client):
+            runner.run(
+                instrument="USD_JPY",
+                start=task.start_time.isoformat(),
+                end=task.end_time.isoformat(),
+                request_id=str(task.pk),
+                pip_size="0.01",
+                spread_filter_enabled=True,
+                max_spread_pips="5",
+            )
+
+        stream_key = backtest_stream_key_for_request(str(task.pk))
+        entries = fake_client.xrange(stream_key)
+        tick_entries = [e for e in entries if e[1].get("type") == "tick"]
+        eof_entries = [e for e in entries if e[1].get("type") == "eof"]
+        assert len(tick_entries) == 2
+        assert len(eof_entries) == 1
+        assert eof_entries[0][1]["count"] == "2"
+
     def test_publisher_creates_consumer_group(self, settings) -> None:
         """The consumer group must exist after ``run`` so XREADGROUP works."""
         settings.MARKET_BACKTEST_STREAM_MAXLEN = 1_000
